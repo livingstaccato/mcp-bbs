@@ -121,8 +121,8 @@ class TelnetClient:
             session_id=self._session_counter,
         )
         self._protocol = TelnetProtocol(writer, self._negotiated)
-        await self._protocol.send_will(OPT_BINARY)
-        await self._protocol.send_will(OPT_SGA)
+        # Don't send WILL commands immediately - wait for server to initiate negotiation
+        # The server will send DO/WILL commands, and we'll respond in _negotiate()
         self._log_event(
             "connect",
             {

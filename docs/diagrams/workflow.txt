@@ -1,0 +1,63 @@
+mcp-bbs Typical Workflow (ASCII)
+=================================
+
+AI Agent     mcp-bbs        BBS System   session.jsonl   Knowledge Base
+  (LLM)
+    │            │              │              │                 │
+    │──bbs_log_start("session.jsonl")─────────▶│                 │
+    │            │              │              │                 │
+    │──bbs_connect(host, port)───────────────▶ │                 │
+    │            │ Telnet       │              │                 │
+    │            ├─Connection──▶│              │                 │
+    │            │◀─Welcome─────┤              │                 │
+    │            │ (ANSI)       │              │                 │
+    │            ├─Log──────────────────────▶  │                 │
+    │            │              │              │                 │
+    │──bbs_auto_learn_enable(true)             │                 │
+    │──bbs_auto_learn_discover(true)           │                 │
+    │            │              │              │                 │
+    │──bbs_read_until_pattern("Main Menu")     │                 │
+    │            ├─Read────────▶│              │                 │
+    │            │◀─Raw bytes───┤              │                 │
+    │            │◀─ANSI codes──┤              │                 │
+    │            │              │              │                 │
+    │            │ Parse terminal               │                 │
+    │            │ Extract text                 │                 │
+    │            ├─Log──────────────────────▶  │                 │
+    │            ├─Discover [A],[B]─────────────────────────────▶│
+    │◀─screen + cursor + hash──┤              │                 │
+    │            │              │              │                 │
+    │  [LLM analyzes screen,    │              │                 │
+    │   decides to press 'M']   │              │                 │
+    │            │              │              │                 │
+    │──bbs_send("M\r")          │              │                 │
+    │            ├─Send 'M'────▶│              │                 │
+    │            ├─Log──────────────────────▶  │                 │
+    │            │              │              │                 │
+    │──bbs_read(250, 8192)      │              │                 │
+    │            │◀─Message─────┤              │                 │
+    │            │  list screen │              │                 │
+    │            ├─Log──────────────────────▶  │                 │
+    │◀─Full snapshot────────────┤              │                 │
+    │            │              │              │                 │
+    │  [If uncertain about      │              │                 │
+    │   screen content, LLM     │              │                 │
+    │   can refer to            │              │                 │
+    │   session.jsonl for       │              │                 │
+    │   raw bytes]              │              │                 │
+    │            │              │              │                 │
+    │──bbs_disconnect()         │              │                 │
+    │            ├─Close────────▶│              │                 │
+    │            ├─Log──────────────────────▶  │                 │
+    │──bbs_log_stop()           │              │                 │
+    │            │              │              │                 │
+
+
+Key Points:
+===========
+1. Always start session logging (bbs_log_start)
+2. Use bbs_read for everything - logs raw data in JSONL
+3. Enable auto-learning early to build knowledge base
+4. LLM can refer to logs if uncertain about screen content
+5. No separate "get screen" method - use bbs_read(timeout_ms=0)
+6. Knowledge base accumulates over multiple sessions
