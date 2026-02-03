@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__bbs__bbs_connect",
+      "mcp__bbs__bbs_read_until_nonblank",
+      "mcp__bbs__bbs_send",
+      "mcp__bbs__bbs_read",
+      "mcp__bbs__bbs_disconnect",
+      "mcp__bbs__bbs_wake",
+      "mcp__bbs__bbs_status",
+      "Bash(nc:*)",
+      "Bash(telnet:*)",
+      "mcp__bbs__bbs_log_start",
+      "mcp__bbs__bbs_read_until_pattern",
+      "Bash(while read b64)",
+      "Bash(do echo \"$b64\")",
+      "Bash(do echo \"=== Packet ===\")",
+      "Bash(xxd:*)",
+      "Bash(.venv/bin/pip:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}

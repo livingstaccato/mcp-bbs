@@ -58,6 +58,8 @@ class KeepaliveController:
     def _stop(self) -> None:
         if self._task:
             self._task.cancel()
+            # Note: We don't await here since this is sync. The task will be cleaned up.
+            # For proper cleanup, use async stop() method if available.
         self._task = None
 
     async def _loop(self) -> None:

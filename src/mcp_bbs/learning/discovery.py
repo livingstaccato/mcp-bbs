@@ -1,3 +1,5 @@
+"""Menu discovery from screen text."""
+
 from __future__ import annotations
 
 import re
@@ -14,6 +16,7 @@ _OPTION_PATTERNS = [
 
 
 def _first_nonblank(lines: Iterable[str]) -> str:
+    """Get first non-blank line."""
     for line in lines:
         if line.strip():
             return line.strip()
@@ -21,6 +24,7 @@ def _first_nonblank(lines: Iterable[str]) -> str:
 
 
 def _last_nonblank(lines: Iterable[str]) -> str:
+    """Get last non-blank line."""
     for line in reversed(list(lines)):
         if line.strip():
             return line.strip()
@@ -28,6 +32,17 @@ def _last_nonblank(lines: Iterable[str]) -> str:
 
 
 def discover_menu(screen: str) -> dict[str, Any]:
+    """Discover menu options from screen text.
+
+    Args:
+        screen: Screen text to analyze
+
+    Returns:
+        Dictionary containing:
+            - title: Menu title (first non-blank line)
+            - prompt: Menu prompt (last non-blank line if contains : or ?)
+            - options: List of discovered options with key, label, line number
+    """
     lines = screen.splitlines()
     title = _first_nonblank(lines)
     prompt = ""
