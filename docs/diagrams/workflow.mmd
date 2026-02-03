@@ -1,0 +1,43 @@
+sequenceDiagram
+    participant LLM as AI Agent (LLM)
+    participant MCP as mcp-bbs
+    participant BBS as BBS System
+    participant Log as session.jsonl
+    participant KB as Knowledge Base
+
+    LLM->>MCP: bbs_log_start("session.jsonl")
+    MCP->>Log: Create log file
+
+    LLM->>MCP: bbs_connect(host, port, ...)
+    MCP->>BBS: Telnet connection
+    BBS-->>MCP: Welcome screen (ANSI)
+    MCP->>Log: Log connection + raw bytes
+
+    LLM->>MCP: bbs_auto_learn_enable(true)
+    LLM->>MCP: bbs_auto_learn_discover(true)
+
+    LLM->>MCP: bbs_read_until_pattern("Main Menu")
+    MCP->>BBS: Read telnet stream
+    BBS-->>MCP: Raw bytes + ANSI codes
+    MCP->>MCP: Parse terminal, extract text
+    MCP->>Log: Log screen + raw bytes
+    MCP->>KB: Discover menu options [A], [B]
+    MCP-->>LLM: screen + cursor + hash
+
+    Note over LLM: LLM analyzes screen,<br/>decides to press 'M'
+
+    LLM->>MCP: bbs_send("M\r")
+    MCP->>BBS: Send 'M' + Enter
+    MCP->>Log: Log keystroke
+
+    LLM->>MCP: bbs_read(250, 8192)
+    BBS-->>MCP: Message list screen
+    MCP->>Log: Log screen + raw bytes
+    MCP-->>LLM: Full snapshot
+
+    Note over LLM: If LLM is uncertain about<br/>screen content, it can<br/>refer to session.jsonl<br/>for raw bytes
+
+    LLM->>MCP: bbs_disconnect()
+    MCP->>BBS: Close connection
+    MCP->>Log: Log disconnect
+    LLM->>MCP: bbs_log_stop()

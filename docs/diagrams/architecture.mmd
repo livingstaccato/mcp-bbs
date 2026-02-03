@@ -1,0 +1,41 @@
+graph TB
+    subgraph "AI Agent"
+        LLM[Claude/LLM]
+        MCP[MCP Client]
+    end
+
+    subgraph "mcp-bbs Server"
+        App[FastMCP App]
+        Client[TelnetClient]
+        Protocol[TelnetProtocol]
+        Screen[Terminal Emulator<br/>pyte]
+        Learn[Auto-Learning]
+        Log[Session Logger]
+    end
+
+    subgraph "BBS System"
+        Telnet[Telnet Server :23]
+        BBS[BBS Software]
+    end
+
+    subgraph "Knowledge Base"
+        Prompts[prompt-catalog.md]
+        Menus[menu-map.md]
+        Flows[navigation-flows.md]
+    end
+
+    LLM --> MCP
+    MCP -->|MCP Tools| App
+    App --> Client
+    Client --> Protocol
+    Protocol -->|Telnet Commands| Telnet
+    Telnet --> BBS
+    BBS -->|ANSI Output| Telnet
+    Telnet -->|Raw Bytes| Protocol
+    Protocol --> Screen
+    Screen --> Client
+    Client --> Learn
+    Learn --> Prompts
+    Learn --> Menus
+    Learn --> Flows
+    Client --> Log

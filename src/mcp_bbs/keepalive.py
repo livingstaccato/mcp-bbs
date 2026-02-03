@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class KeepaliveStatus:
+    interval_s: float | None
+    keys: str
+    running: bool
+
+
+class KeepaliveController:
+    def __init__(
+        self,
+        send_cb: Callable[[str], Awaitable[str]],
+        is_connected: Callable[[], bool],
+    ) -> None:
+        self._send_cb = send_cb
+        self._is_connected = is_connected
+        self._interval_s: float | None = 30.0
+        self._keys = "\r"
+        self._task: asyncio.Task[None] | None = None
+
+    def configure(self, interval_s: float | None, keys: str = "\r") -> str:
+        if interval_s is not None and interval_s <= 0:
+            self._interval_s = None
+        else:
+            self._interval_s = interval_s
+        self._keys = keys
+        if self._is_connected():
+            if self._interval_s:
+                self._start()
+            else:
+                self._stop()
+        return "ok"
+
+    def on_connect(self) -> None:
+        if self._interval_s:
+            self._start()
+
+    def on_disconnect(self) -> None:
+        self._stop()
+
+    def status(self) -> dict[str, Any]:
+        running = self._task is not None and not self._task.done()
+        return KeepaliveStatus(self._interval_s, self._keys, running).__dict__
+
+    def _start(self) -> None:
+        self._stop()
+        if not self._interval_s:
+            return
+        self._task = asyncio.create_task(self._loop())
+
+    def _stop(self) -> None:
+        if self._task:
+            self._task.cancel()
+        self._task = None
+
+    async def _loop(self) -> None:
+        try:
+            while self._is_connected() and self._interval_s:
+                await asyncio.sleep(self._interval_s)
+                if not self._is_connected():
+                    break
+                await self._send_cb(self._keys)
+        except asyncio.CancelledError:
+            return
