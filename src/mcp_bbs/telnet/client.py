@@ -121,10 +121,10 @@ class TelnetClient:
             session_id=self._session_counter,
         )
         self._protocol = TelnetProtocol(writer, self._negotiated)
-        # Send telnet commands immediately so BBS knows we're a telnet client
-        # Standard telnet clients announce their capabilities on connect
-        await self._protocol.send_do(OPT_SGA)
-        await self._protocol.send_do(OPT_ECHO)
+        # Send WILL commands to announce client capabilities
+        # This matches standard telnet client behavior that BBSes expect
+        await self._protocol.send_will(OPT_BINARY)
+        await self._protocol.send_will(OPT_SGA)
         self._log_event(
             "connect",
             {
