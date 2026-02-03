@@ -74,18 +74,17 @@ async def bbs_read_until_pattern(
 
 @app.tool()
 async def bbs_send(keys: str) -> str:
-    """Send keystrokes (include control codes like \r or \x1b)."""
-    # Decode escape sequences like \r, \n, \x1b to actual control characters
-    # This matches the pattern in expect_runner.py
-    decoded_keys = keys.encode("utf-8").decode("unicode_escape")
+    """Send keystrokes (include control codes like \r or \x1b).
+
+    Note: MCP's JSON parser already handles escape sequences, so strings arrive
+    with actual control characters. No additional decoding needed.
+    """
     log.debug(
         "bbs_send",
-        original=keys,
-        original_len=len(keys),
-        decoded=decoded_keys,
-        decoded_len=len(decoded_keys),
+        keys=keys,
+        keys_len=len(keys),
     )
-    return await client.send(decoded_keys)
+    return await client.send(keys)
 
 
 @app.tool()
