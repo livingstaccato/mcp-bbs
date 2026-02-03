@@ -27,7 +27,7 @@ class TerminalEmulator:
         self.rows = rows
         self.term = term
         self._screen = pyte.Screen(cols, rows)
-        self._stream = pyte.ByteStream(self._screen)
+        self._stream = pyte.Stream(self._screen)
 
     def process(self, data: bytes) -> None:
         """Process raw bytes through terminal emulator.
