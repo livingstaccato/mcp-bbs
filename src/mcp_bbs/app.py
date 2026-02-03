@@ -42,6 +42,51 @@ def _require_session() -> str:
     return _active_session_id
 
 
+async def _get_session() -> tuple[str, Any]:
+    """Get active session and its ID.
+
+    Returns:
+        Tuple of (session_id, session)
+    """
+    sid = _require_session()
+    session = await session_manager.get_session(sid)
+    return sid, session
+
+
+async def _ensure_learning(session: Any, sid: str) -> Any:
+    """Ensure learning is enabled for session and return engine.
+
+    Args:
+        session: Session object
+        sid: Session ID
+
+    Returns:
+        LearningEngine instance
+    """
+    if not session.learning:
+        await session_manager.enable_learning(sid, KNOWLEDGE_ROOT)
+    return session.learning
+
+
+def _parse_json_dict(value: str, label: str) -> dict[str, Any]:
+    """Parse and validate JSON dict.
+
+    Args:
+        value: JSON string
+        label: Label for error messages
+
+    Returns:
+        Parsed dict
+    """
+    try:
+        data = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Invalid JSON for {label}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{label} JSON must be an object.")
+    return data
+
+
 @app.tool()
 async def bbs_connect(
     host: str,
@@ -83,8 +128,7 @@ async def bbs_connect(
 @app.tool()
 async def bbs_read(timeout_ms: int = 250, max_bytes: int = 8192) -> dict[str, Any]:
     """Read output and return the current screen buffer."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    _, session = await _get_session()
     return await session.read(timeout_ms, max_bytes)
 
 
@@ -95,8 +139,7 @@ async def bbs_read_until_nonblank(
     max_bytes: int = 8192,
 ) -> dict[str, Any]:
     """Read until the screen buffer contains non-whitespace content."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    _, session = await _get_session()
 
     deadline = time.monotonic() + timeout_ms / 1000
     last_snapshot: dict[str, Any] = {}
@@ -120,8 +163,7 @@ async def bbs_read_until_pattern(
     max_bytes: int = 8192,
 ) -> dict[str, Any]:
     """Read until the screen matches a regex pattern."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    _, session = await _get_session()
 
     deadline = time.monotonic() + timeout_ms / 1000
     regex = re.compile(pattern, re.MULTILINE)
@@ -153,8 +195,7 @@ async def bbs_send(keys: str) -> str:
     Note: MCP's JSON parser already handles escape sequences, so strings arrive
     with actual control characters. No additional decoding needed.
     """
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    _, session = await _get_session()
 
     log.debug("bbs_send", keys=keys, keys_len=len(keys))
 
@@ -168,8 +209,7 @@ async def bbs_send(keys: str) -> str:
 @app.tool()
 async def bbs_set_size(cols: int, rows: int) -> str:
     """Set terminal size and send NAWS."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    _, session = await _get_session()
     await session.set_size(cols, rows)
     return "ok"
 
@@ -212,15 +252,8 @@ async def bbs_log_stop() -> str:
 @app.tool()
 async def bbs_log_note(data_json: str) -> str:
     """Append a structured note into the JSONL session log."""
-    try:
-        data = json.loads(data_json)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Invalid JSON for note: {exc}") from exc
-    if not isinstance(data, dict):
-        raise RuntimeError("Note JSON must be an object.")
-
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    data = _parse_json_dict(data_json, "note")
+    _, session = await _get_session()
 
     if session.logger:
         await session.logger.log_event("note", data)
@@ -231,15 +264,9 @@ async def bbs_log_note(data_json: str) -> str:
 @app.tool()
 async def bbs_auto_learn_enable(enabled: bool = True) -> str:
     """Enable or disable auto-learn rules on every screen snapshot."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
-
-    if not session.learning:
-        await session_manager.enable_learning(sid, KNOWLEDGE_ROOT)
-
-    if session.learning:
-        session.learning.set_enabled(enabled)
-
+    sid, session = await _get_session()
+    learning = await _ensure_learning(session, sid)
+    learning.set_enabled(enabled)
     return "ok"
 
 
@@ -247,16 +274,9 @@ async def bbs_auto_learn_enable(enabled: bool = True) -> str:
 async def bbs_auto_learn_prompts(rules_json: str) -> str:
     """Set auto-learn prompt rules from JSON."""
     rules = _parse_json(rules_json, "prompt rules")
-
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
-
-    if not session.learning:
-        await session_manager.enable_learning(sid, KNOWLEDGE_ROOT)
-
-    if session.learning:
-        session.learning.set_prompt_rules(rules)
-
+    sid, session = await _get_session()
+    learning = await _ensure_learning(session, sid)
+    learning.set_prompt_rules(rules)
     return "ok"
 
 
@@ -264,39 +284,25 @@ async def bbs_auto_learn_prompts(rules_json: str) -> str:
 async def bbs_auto_learn_menus(rules_json: str) -> str:
     """Set auto-learn menu rules from JSON."""
     rules = _parse_json(rules_json, "menu rules")
-
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
-
-    if not session.learning:
-        await session_manager.enable_learning(sid, KNOWLEDGE_ROOT)
-
-    if session.learning:
-        session.learning.set_menu_rules(rules)
-
+    sid, session = await _get_session()
+    learning = await _ensure_learning(session, sid)
+    learning.set_menu_rules(rules)
     return "ok"
 
 
 @app.tool()
 async def bbs_auto_learn_discover(enabled: bool = True) -> str:
     """Enable or disable auto-discovery of menus."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
-
-    if not session.learning:
-        await session_manager.enable_learning(sid, KNOWLEDGE_ROOT)
-
-    if session.learning:
-        session.learning.set_auto_discover(enabled)
-
+    sid, session = await _get_session()
+    learning = await _ensure_learning(session, sid)
+    learning.set_auto_discover(enabled)
     return "ok"
 
 
 @app.tool()
 async def bbs_auto_learn_namespace(namespace: str | None = None) -> str:
     """Set the auto-learn namespace (game folder name) or clear to use shared."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    sid, session = await _get_session()
 
     if not session.learning:
         await session_manager.enable_learning(sid, KNOWLEDGE_ROOT, namespace)
@@ -373,15 +379,8 @@ async def bbs_status() -> dict[str, Any]:
 @app.tool()
 async def bbs_set_context(context_json: str) -> str:
     """Set structured context that is embedded in JSONL logs."""
-    try:
-        data = json.loads(context_json)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Invalid JSON for context: {exc}") from exc
-    if not isinstance(data, dict):
-        raise RuntimeError("Context JSON must be an object.")
-
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    data = _parse_json_dict(context_json, "context")
+    _, session = await _get_session()
 
     if session.logger:
         session.logger.set_context(data)
@@ -408,8 +407,7 @@ async def bbs_discover_menu(screen_override: str = "") -> dict[str, Any]:
         screen = screen_override
     else:
         # Read with minimal timeout to get current screen state
-        sid = _require_session()
-        session = await session_manager.get_session(sid)
+        _, session = await _get_session()
         snapshot = await session.read(timeout_ms=10, max_bytes=0)
         screen = snapshot.get("screen", "")
 
@@ -424,8 +422,7 @@ async def bbs_wake(
     keys_sequence: str = "\r\n|\r|\n| ",
 ) -> dict[str, Any]:
     """Send a sequence of wake keys until the screen changes or becomes nonblank."""
-    sid = _require_session()
-    session = await session_manager.get_session(sid)
+    _, session = await _get_session()
 
     sequence = [item for item in keys_sequence.split("|") if item]
 
