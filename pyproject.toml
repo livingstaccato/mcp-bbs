@@ -1,6 +1,6 @@
 [project]
 name = "mcp-bbs"
-version = "0.2.0"
+version = "0.2.1"
 description = "FastMCP-based telnet client for BBS systems with auto-learning capabilities"
 readme = "README.md"
 license = "MIT"

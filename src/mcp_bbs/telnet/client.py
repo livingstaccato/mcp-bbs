@@ -121,8 +121,10 @@ class TelnetClient:
             session_id=self._session_counter,
         )
         self._protocol = TelnetProtocol(writer, self._negotiated)
-        # Don't send WILL commands immediately - wait for server to initiate negotiation
-        # The server will send DO/WILL commands, and we'll respond in _negotiate()
+        # Send telnet commands immediately so BBS knows we're a telnet client
+        # Standard telnet clients announce their capabilities on connect
+        await self._protocol.send_do(OPT_SGA)
+        await self._protocol.send_do(OPT_ECHO)
         self._log_event(
             "connect",
             {
