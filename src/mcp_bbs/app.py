@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import structlog
 from fastmcp import FastMCP
 
 from mcp_bbs.config import get_default_knowledge_root, validate_knowledge_root
 from mcp_bbs.discover import discover_menu
 from mcp_bbs.learn import append_md
 from mcp_bbs.telnet import TelnetClient
+
+log = structlog.get_logger()
 
 app = FastMCP("mcp-bbs")
 client = TelnetClient()
@@ -72,7 +75,17 @@ async def bbs_read_until_pattern(
 @app.tool()
 async def bbs_send(keys: str) -> str:
     """Send keystrokes (include control codes like \r or \x1b)."""
-    return await client.send(keys)
+    # Decode escape sequences like \r, \n, \x1b to actual control characters
+    # This matches the pattern in expect_runner.py
+    decoded_keys = keys.encode("utf-8").decode("unicode_escape")
+    log.debug(
+        "bbs_send",
+        original=keys,
+        original_len=len(keys),
+        decoded=decoded_keys,
+        decoded_len=len(decoded_keys),
+    )
+    return await client.send(decoded_keys)
 
 
 @app.tool()
@@ -174,7 +187,7 @@ async def bbs_set_context(context_json: str) -> str:
 
 
 @app.tool()
-async def bbs_keepalive(interval_s: float | None = 30.0, keys: str = "\\r") -> str:
+async def bbs_keepalive(interval_s: float | None = 30.0, keys: str = "\r") -> str:
     """Configure keepalive interval in seconds (<=0 disables)."""
     return client.set_keepalive(interval_s, keys)
 
@@ -199,7 +212,7 @@ async def bbs_wake(
     timeout_ms: int = 5000,
     interval_ms: int = 250,
     max_bytes: int = 8192,
-    keys_sequence: str = "\\r\\n|\\r|\\n| ",
+    keys_sequence: str = "\r\n|\r|\n| ",
 ) -> dict[str, Any]:
     """Send a sequence of wake keys until the screen changes or becomes nonblank."""
     sequence = [item for item in keys_sequence.split("|") if item]

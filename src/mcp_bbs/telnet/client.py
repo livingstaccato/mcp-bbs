@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pyte
+import structlog
 
 from mcp_bbs.config import get_default_knowledge_root
 from mcp_bbs.keepalive import KeepaliveController
@@ -28,6 +29,8 @@ from mcp_bbs.telnet.protocol import (
     WONT,
     TelnetProtocol,
 )
+
+log = structlog.get_logger()
 
 
 @dataclass
@@ -145,6 +148,13 @@ class TelnetClient:
     async def send(self, keys: str) -> str:
         session = self._require_session()
         payload = keys.encode(CP437, errors="replace")
+        log.debug(
+            "telnet_send",
+            keys=keys,
+            keys_len=len(keys),
+            payload_len=len(payload),
+            payload_b64=base64.b64encode(payload).decode("ascii"),
+        )
         try:
             session.writer.write(payload)
             await session.writer.drain()
@@ -170,9 +180,9 @@ class TelnetClient:
         if data:
             self._feed_terminal(data)
             self._last_rx_ts = time.time()
-        snapshot = self._snapshot(data)
-        self._log_event("read", snapshot)
-        return snapshot
+        full_snapshot, clean_snapshot = self._snapshot(data)
+        self._log_event("read", full_snapshot)  # Log full data to JSONL
+        return clean_snapshot  # Return clean data to MCP client
 
     async def read_until_nonblank(self, timeout_ms: int, interval_ms: int, max_bytes: int) -> dict[str, Any]:
         deadline = time.monotonic() + timeout_ms / 1000
@@ -431,22 +441,37 @@ class TelnetClient:
         text = data.decode(CP437, errors="replace")
         session.stream.feed(text)
 
-    def _snapshot(self, data: bytes) -> dict[str, Any]:
+    def _snapshot(self, data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
         session = self._require_session()
         screen_text = "\n".join(session.screen.display)
-        snapshot = {
+        screen_hash = hashlib.sha256(screen_text.encode("utf-8")).hexdigest()
+
+        # Full snapshot for JSONL logging
+        full_snapshot = {
             "raw": data.decode(CP437, errors="replace"),
             "raw_bytes_b64": base64.b64encode(data).decode("ascii"),
             "screen": screen_text,
-            "screen_hash": hashlib.sha256(screen_text.encode("utf-8")).hexdigest(),
+            "screen_hash": screen_hash,
             "cursor": {"x": session.screen.cursor.x, "y": session.screen.cursor.y},
             "cols": session.cols,
             "rows": session.rows,
             "term": session.term,
         }
+
         if self._auto_learn_enabled:
-            self.auto_learn(snapshot)
-        return snapshot
+            self.auto_learn(full_snapshot)
+
+        # Clean snapshot for MCP tool response (without raw data)
+        clean_snapshot = {
+            "screen": screen_text,
+            "screen_hash": screen_hash,
+            "cursor": {"x": session.screen.cursor.x, "y": session.screen.cursor.y},
+            "cols": session.cols,
+            "rows": session.rows,
+            "term": session.term,
+        }
+
+        return full_snapshot, clean_snapshot
 
     def _snapshot_disconnected(self) -> dict[str, Any]:
         return {
