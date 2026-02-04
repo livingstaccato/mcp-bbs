@@ -1,0 +1,203 @@
+{
+  "prompts": [
+    {
+      "id": "prompt.login_name",
+      "regex": "(?i)(enter|type)\\s+(your\\s+)?(name|user\\s*name|handle|alias)",
+      "input_type": "multi_key",
+      "expect_cursor_at_end": true,
+      "notes": "Username/handle prompt at login",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.login_password",
+      "regex": "(?i)(enter|type)\\s+(your\\s+)?password\\s*:?\\s*$",
+      "input_type": "multi_key",
+      "expect_cursor_at_end": true,
+      "notes": "Password prompt at login",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.press_any_key",
+      "regex": "(?i)press\\s+any\\s+key\\s+to\\s+continue",
+      "input_type": "any_key",
+      "expect_cursor_at_end": false,
+      "notes": "Common pause prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.pause_space_or_enter",
+      "regex": "(?i)\\[pause\\].*press\\s+space\\s+or\\s+enter",
+      "input_type": "any_key",
+      "expect_cursor_at_end": false,
+      "notes": "TW2002 pause prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.yes_no",
+      "regex": "(?i)\\(y/n\\)|\\[y/n\\]|\\(yes/no\\)",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Yes/No confirmation",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.show_todays_log",
+      "regex": "(?i)show\\s+today'?s\\s+log\\?\\s*\\(y/n\\)",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Daily log prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.include_timestamp",
+      "regex": "(?i)include\\s+time/date\\s+stamp\\?\\s*\\(y/n\\)",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Include time/date stamp",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.private_game_password",
+      "regex": "(?i)this\\s+is\\s+a\\s+private\\s+game\\.\\s+please\\s+enter\\s+a\\s+password",
+      "input_type": "multi_key",
+      "expect_cursor_at_end": true,
+      "notes": "TWGS private game password",
+      "auto_detected": false,
+      "negative_regex": "(?i)invalid\\s+password"
+    },
+    {
+      "id": "prompt.use_ansi_graphics",
+      "regex": "(?i)use\\s+ansi\\s+graphics\\?",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "ANSI graphics toggle",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.game_password",
+      "regex": "(?i)^password\\?\\s*$",
+      "input_type": "multi_key",
+      "expect_cursor_at_end": true,
+      "notes": "In-game password prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.enter_number",
+      "regex": "(?i)enter\\s+(a\\s+)?number\\s*:?\\s*$",
+      "input_type": "multi_key",
+      "expect_cursor_at_end": true,
+      "notes": "Numeric input prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.command_generic",
+      "regex": "(?i)command\\s*[:\\?]",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Generic command prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.sector_command",
+      "regex": "(?i)sector\\s+command\\s*[\\[\\(:]?\\s*\\??\\s*$",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Sector command prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.planet_command",
+      "regex": "(?i)planet\\s+command\\s*[\\[\\(:]?\\s*\\??\\s*$",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Planet command prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.menu_selection",
+      "regex": "(?i)selection\\s*\\(.*\\)?:?\\s*$",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Generic selection prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.more",
+      "regex": "(?i)(--\\s*more\\s*--|<more>|\\[more\\]|\\(more\\))",
+      "input_type": "any_key",
+      "expect_cursor_at_end": false,
+      "notes": "Pagination",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.any_key",
+      "regex": "(?i)\\[any key\\]",
+      "input_type": "any_key",
+      "expect_cursor_at_end": true,
+      "notes": "ANY KEY pause prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.port_menu",
+      "regex": "(?i)enter your choice \\[t\\] \\?",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Port action menu",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.autopilot_engage",
+      "regex": "(?i)engage the autopilot\\?",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Autopilot prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.stop_in_sector",
+      "regex": "(?i)stop in this sector",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "Stop-in-sector prompt during autopilot",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.navpoint_menu",
+      "regex": "(?i)choose navpoint",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "NavPoint selection menu",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.navpoint_settings",
+      "regex": "(?i)navpoint settings",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "NavPoint settings menu",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.stardock_buy",
+      "regex": "(?i)which item do you wish to buy\\?",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "StarDock purchase menu",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.start_over",
+      "regex": "(?i)start over from scratch",
+      "input_type": "any_key",
+      "expect_cursor_at_end": true,
+      "notes": "Death screen prompt",
+      "auto_detected": false
+    }
+  ],
+  "metadata": {
+    "game": "tw2002",
+    "description": "Trade Wars 2002 standardized prompt/menu rules",
+    "updated_at": "2026-02-04T00:25:00Z",
+    "version": "1.0"
+  }
+}

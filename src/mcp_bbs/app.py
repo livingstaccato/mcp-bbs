@@ -10,7 +10,7 @@ from typing import Any, cast
 import structlog
 from fastmcp import FastMCP
 
-from mcp_bbs.config import get_default_knowledge_root, validate_knowledge_root
+from mcp_bbs.config import find_repo_games_root, get_default_knowledge_root, validate_knowledge_root
 from mcp_bbs.core.session_manager import SessionManager
 from mcp_bbs.learning.discovery import discover_menu
 from mcp_bbs.learning.knowledge import append_md
@@ -441,8 +441,13 @@ async def bbs_load_prompts_json(namespace: str | None = None) -> dict[str, Any]:
             "patterns_loaded": 0,
         }
 
-    rules_file = KNOWLEDGE_ROOT / "games" / target_namespace / "rules.json"
-    patterns_file = KNOWLEDGE_ROOT / "games" / target_namespace / "prompts.json"
+    repo_games_root = find_repo_games_root()
+    if repo_games_root:
+        rules_file = repo_games_root / target_namespace / "rules.json"
+        patterns_file = repo_games_root / target_namespace / "prompts.json"
+    else:
+        rules_file = KNOWLEDGE_ROOT / "games" / target_namespace / "rules.json"
+        patterns_file = KNOWLEDGE_ROOT / "games" / target_namespace / "prompts.json"
 
     try:
         if rules_file.exists():

@@ -7,6 +7,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
+from mcp_bbs.config import find_repo_games_root
 from mcp_bbs.learning.buffer import BufferManager
 from mcp_bbs.learning.detector import PromptDetection, PromptDetector
 from mcp_bbs.learning.discovery import discover_menu
@@ -181,6 +182,32 @@ class LearningEngine:
     def _load_rules_or_patterns(self) -> RuleLoadResult:
         if not self._namespace:
             return RuleLoadResult(source="none", patterns=[], metadata={})
+
+        repo_games_root = find_repo_games_root()
+        if repo_games_root:
+            repo_rules = repo_games_root / self._namespace / "rules.json"
+            if repo_rules.exists():
+                try:
+                    rules = RuleSet.from_json_file(repo_rules)
+                    return RuleLoadResult(
+                        source=str(repo_rules),
+                        patterns=rules.to_prompt_patterns(),
+                        metadata={"game": rules.game, "version": rules.version, **rules.metadata},
+                    )
+                except (json.JSONDecodeError, OSError, ValueError):
+                    return RuleLoadResult(source=str(repo_rules), patterns=[], metadata={})
+
+            repo_prompts = repo_games_root / self._namespace / "prompts.json"
+            if repo_prompts.exists():
+                try:
+                    data = json.loads(repo_prompts.read_text())
+                    return RuleLoadResult(
+                        source=str(repo_prompts),
+                        patterns=data.get("prompts", []),
+                        metadata=data.get("metadata", {}),
+                    )
+                except (json.JSONDecodeError, OSError):
+                    return RuleLoadResult(source=str(repo_prompts), patterns=[], metadata={})
 
         rules_file = self._knowledge_root / "games" / self._namespace / "rules.json"
         if rules_file.exists():

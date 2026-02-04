@@ -1,0 +1,291 @@
+{
+  "version": "1.0",
+  "game": "tw2002",
+  "metadata": {
+    "description": "Trade Wars 2002 standardized prompt/menu rules",
+    "updated_at": "2026-02-04T00:25:00Z"
+  },
+  "prompts": [
+    {
+      "id": "prompt.login_name",
+      "kind": "login_name",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(enter|type)\\s+(your\\s+)?(name|user\\s*name|handle|alias)",
+        "match_mode": "regex"
+      },
+      "notes": "Username/handle prompt at login"
+    },
+    {
+      "id": "prompt.login_password",
+      "kind": "login_pass",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(enter|type)\\s+(your\\s+)?password\\s*:?\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "Password prompt at login"
+    },
+    {
+      "id": "prompt.press_any_key",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)press\\s+any\\s+key\\s+to\\s+continue",
+        "match_mode": "regex"
+      },
+      "screen": {
+        "expect_cursor_at_end": false
+      },
+      "notes": "Common pause prompt"
+    },
+    {
+      "id": "prompt.pause_space_or_enter",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)\\[pause\\].*press\\s+space\\s+or\\s+enter",
+        "match_mode": "regex"
+      },
+      "screen": {
+        "expect_cursor_at_end": false
+      },
+      "notes": "TW2002 pause prompt"
+    },
+    {
+      "id": "prompt.yes_no",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)\\(y/n\\)|\\[y/n\\]|\\(yes/no\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Yes/No confirmation"
+    },
+    {
+      "id": "prompt.show_todays_log",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)show\\s+today'?s\\s+log\\?\\s*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Daily log prompt"
+    },
+    {
+      "id": "prompt.include_timestamp",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)include\\s+time/date\\s+stamp\\?\\s*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Include time/date stamp"
+    },
+    {
+      "id": "prompt.private_game_password",
+      "kind": "login_pass",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)this\\s+is\\s+a\\s+private\\s+game\\.\\s+please\\s+enter\\s+a\\s+password",
+        "match_mode": "regex"
+      },
+      "negative_match": {
+        "pattern": "(?i)invalid\\s+password",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS private game password"
+    },
+    {
+      "id": "prompt.use_ansi_graphics",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)use\\s+ansi\\s+graphics\\?",
+        "match_mode": "regex"
+      },
+      "notes": "ANSI graphics toggle"
+    },
+    {
+      "id": "prompt.game_password",
+      "kind": "game_pass",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)^password\\?\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "In-game password prompt"
+    },
+    {
+      "id": "prompt.enter_number",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)enter\\s+(a\\s+)?number\\s*:?\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "Numeric input prompt"
+    },
+    {
+      "id": "prompt.command_generic",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)command\\s*[:\\?]",
+        "match_mode": "regex"
+      },
+      "notes": "Generic command prompt"
+    },
+    {
+      "id": "prompt.sector_command",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)sector\\s+command\\s*[\\[\\(:]?\\s*\\??\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "Sector command prompt"
+    },
+    {
+      "id": "prompt.planet_command",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)planet\\s+command\\s*[\\[\\(:]?\\s*\\??\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "Planet command prompt"
+    },
+    {
+      "id": "prompt.menu_selection",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)selection\\s*\\(.*\\)?:?\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "Generic selection prompt"
+    },
+    {
+      "id": "prompt.more",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(--\\s*more\\s*--|<more>|\\[more\\]|\\(more\\))",
+        "match_mode": "regex"
+      },
+      "screen": {
+        "expect_cursor_at_end": false
+      },
+      "notes": "Pagination"
+    },
+    {
+      "id": "prompt.any_key",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)\\[any key\\]",
+        "match_mode": "regex"
+      },
+      "notes": "ANY KEY pause prompt"
+    },
+    {
+      "id": "prompt.port_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)enter your choice \\[t\\] \\?",
+        "match_mode": "regex"
+      },
+      "notes": "Port action menu"
+    },
+    {
+      "id": "prompt.autopilot_engage",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)engage the autopilot\\?",
+        "match_mode": "regex"
+      },
+      "notes": "Autopilot prompt"
+    },
+    {
+      "id": "prompt.stop_in_sector",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)stop in this sector",
+        "match_mode": "regex"
+      },
+      "notes": "Stop-in-sector prompt during autopilot"
+    },
+    {
+      "id": "prompt.navpoint_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)choose navpoint",
+        "match_mode": "regex"
+      },
+      "notes": "NavPoint selection menu"
+    },
+    {
+      "id": "prompt.navpoint_settings",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)navpoint settings",
+        "match_mode": "regex"
+      },
+      "notes": "NavPoint settings menu"
+    },
+    {
+      "id": "prompt.stardock_buy",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)which item do you wish to buy\\?",
+        "match_mode": "regex"
+      },
+      "notes": "StarDock purchase menu"
+    },
+    {
+      "id": "prompt.start_over",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)start over from scratch",
+        "match_mode": "regex"
+      },
+      "notes": "Death screen prompt"
+    }
+  ],
+  "menus": [
+    {
+      "id": "menu.twgs_main",
+      "prompt_match": {
+        "pattern": "(?i)selection\\s*\\(.*\\)?:?\\s*$",
+        "match_mode": "regex"
+      },
+      "options": [
+        {
+          "key": "A",
+          "label": "My Game"
+        },
+        {
+          "key": "#",
+          "label": "Players Online"
+        },
+        {
+          "key": "!",
+          "label": "View game descriptions"
+        },
+        {
+          "key": "Q",
+          "label": "Quit"
+        }
+      ]
+    }
+  ],
+  "flows": []
+}

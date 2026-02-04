@@ -39,6 +39,16 @@ _HAGGLE_RESULT_RE = re.compile(
 _TRADE_QTY_RE = re.compile(r"How many holds of\s+(?P<item>Fuel Ore|Organics|Equipment)\s+do you want to (buy|sell)", re.IGNORECASE)
 _TRADE_AGREED_QTY_RE = re.compile(r"Agreed,\s+(?P<qty>\d+)\s+units\.", re.IGNORECASE)
 _PLANETS_RE = re.compile(r"Planets?\s*:\s*(?P<planets>.+)$", re.IGNORECASE)
+_ALIEN_TRADER_RE = re.compile(
+    r"Alien Tr:\s*(?P<menace>Menace\s+\d+(st|nd|rd|th)\s+Class)\s+(?P<name>[^,]+),\s*w/\s*(?P<ftrs>[\d,]+)\s+ftrs,\s*\n\s*in\s+(?P<ship>.+)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_WARP_INOUT_RE = re.compile(r"^(?P<name>[A-Za-z .]+)\s+warps\s+(?P<dir>into|out of)\s+the\s+sector\.", re.IGNORECASE | re.MULTILINE)
+_SHIP_INFO_RE = re.compile(r"Ship Info\s*:\s*(?P<info>.+)$", re.IGNORECASE | re.MULTILINE)
+_SHIP_NAME_RE = re.compile(r"Ship Name\s*:\s*(?P<name>.+)$", re.IGNORECASE | re.MULTILINE)
+_RANK_RE = re.compile(r"Rank and Exp\s*:\s*(?P<exp>[\d,]+)\s+points,\s*Alignment=(?P<align>[-\d]+)\s+(?P<align_label>.+)$", re.IGNORECASE)
+_HOLDS_RE = re.compile(r"Total Holds\s*:\s*(?P<total>\d+)\s*-\s*(?P<holds>.+)$", re.IGNORECASE)
+_BEACON_RE = re.compile(r"Beacon\s*:\s*(?P<beacon>.+)$", re.IGNORECASE | re.MULTILINE)
 
 
 @dataclass
@@ -207,5 +217,56 @@ class Tw2002Addon(Addon):
             planets = [p.strip() for p in match["planets"].split("-")]
             planets = [p for p in planets if p]
             events.append(AddonEvent("tw2002.planets", {"planets": planets}))
+
+        if match := _ALIEN_TRADER_RE.search(screen):
+            events.append(
+                AddonEvent(
+                    "tw2002.alien_trader",
+                    {
+                        "menace": match["menace"],
+                        "name": match["name"].strip(),
+                        "fighters": _to_int(match["ftrs"]),
+                        "ship": match["ship"].strip(),
+                    },
+                )
+            )
+
+        for match in _WARP_INOUT_RE.finditer(screen):
+            events.append(
+                AddonEvent(
+                    "tw2002.trader_warp",
+                    {"name": match["name"].strip(), "direction": match["dir"].lower()},
+                )
+            )
+
+        if match := _SHIP_NAME_RE.search(screen):
+            events.append(AddonEvent("tw2002.ship_name", {"name": match["name"].strip()}))
+
+        if match := _SHIP_INFO_RE.search(screen):
+            events.append(AddonEvent("tw2002.ship_info", {"info": match["info"].strip()}))
+
+        if match := _RANK_RE.search(screen):
+            events.append(
+                AddonEvent(
+                    "tw2002.rank",
+                    {
+                        "exp": _to_int(match["exp"]),
+                        "alignment": int(match["align"]),
+                        "alignment_label": match["align_label"].strip(),
+                    },
+                )
+            )
+
+        if match := _HOLDS_RE.search(screen):
+            holds = match["holds"].strip()
+            events.append(
+                AddonEvent(
+                    "tw2002.holds",
+                    {"total": int(match["total"]), "details": holds},
+                )
+            )
+
+        if match := _BEACON_RE.search(screen):
+            events.append(AddonEvent("tw2002.beacon", {"beacon": match["beacon"].strip()}))
 
         return events

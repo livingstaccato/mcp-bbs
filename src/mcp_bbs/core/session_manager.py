@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from mcp_bbs.config import get_default_knowledge_root
+from mcp_bbs.config import find_repo_games_root, get_default_knowledge_root
 from mcp_bbs.constants import (
     DEFAULT_COLS,
     DEFAULT_CONNECT_TIMEOUT_S,
@@ -20,6 +20,8 @@ from mcp_bbs.core.session import Session
 from mcp_bbs.learning.engine import LearningEngine
 from mcp_bbs.addons.manager import AddonManager
 from mcp_bbs.addons.tw2002 import Tw2002Addon
+from mcp_bbs.addons.tedit import TeditAddon
+from mcp_bbs.logging.session_logger import SessionLogger
 from mcp_bbs.logging.session_logger import SessionLogger
 from mcp_bbs.terminal.emulator import TerminalEmulator
 from mcp_bbs.transport.telnet import TelnetTransport
@@ -256,9 +258,20 @@ class SessionManager:
         if not knowledge_root:
             knowledge_root = get_default_knowledge_root()
 
+        if session.logger is None and namespace:
+            repo_games_root = find_repo_games_root()
+            if repo_games_root:
+                log_path = repo_games_root / namespace / "session.jsonl"
+            else:
+                log_path = knowledge_root / "games" / namespace / "session.jsonl"
+            session.logger = SessionLogger(log_path)
+            await session.logger.start(session.session_number)
+
         session.learning = LearningEngine(knowledge_root, namespace)
         if namespace == "tw2002":
             session.addons = AddonManager(addons=[Tw2002Addon()])
+        if namespace == "tedit":
+            session.addons = AddonManager(addons=[TeditAddon()])
 
         log.info(
             "learning_enabled",
