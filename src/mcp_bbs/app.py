@@ -279,6 +279,17 @@ async def bbs_send(keys: str) -> str:
 
     log.debug("bbs_send", keys=keys, keys_len=len(keys))
 
+    normalized = keys.replace("\r\n", "\n")
+    newline_count = normalized.count("\n") + normalized.count("\r")
+    if newline_count > 1:
+        return "error: multiple newline sequences in one send; send one prompt response at a time"
+    if ("\n" in normalized or "\r" in normalized) and len(normalized.strip("\r\n")) > 0:
+        if not (normalized.endswith("\n") or normalized.endswith("\r")):
+            return "error: newline must be the final character in a send"
+
+    if session.is_awaiting_read():
+        return "error: send blocked until a read occurs (one prompt -> one input -> read)"
+
     try:
         await session.send(keys)
         return "ok"

@@ -34,13 +34,14 @@ class Session:
     # State protection
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     keepalive: KeepaliveController = field(init=False)
+    _awaiting_read: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
         """Initialize keepalive controller after dataclass fields are set."""
 
         # Wrapper for keepalive that matches expected signature
         async def _send_with_result(keys: str) -> str:
-            await self.send(keys)
+            await self.send(keys, mark_awaiting=False)
             return "ok"
 
         self.keepalive = KeepaliveController(
@@ -51,7 +52,7 @@ class Session:
         if self.is_connected():
             self.keepalive.on_connect()
 
-    async def send(self, keys: str) -> None:
+    async def send(self, keys: str, *, mark_awaiting: bool = True) -> None:
         """Send keystrokes with CP437 encoding.
 
         Args:
@@ -65,6 +66,8 @@ class Session:
             await self.transport.send(payload)
             if self.logger:
                 await self.logger.log_send(keys)
+            if mark_awaiting:
+                self._awaiting_read = True
 
     async def read(self, timeout_ms: int, max_bytes: int) -> dict[str, Any]:
         """Read from transport, update emulator, return snapshot with detection.
@@ -121,7 +124,14 @@ class Session:
                 for event in self.addons.process(snapshot):
                     await self.logger.log_event(event.name, event.data)
 
+            # Clear send gate after any read attempt
+            self._awaiting_read = False
+
             return snapshot
+
+    def is_awaiting_read(self) -> bool:
+        """Return True if a send occurred without a subsequent read."""
+        return self._awaiting_read
 
     async def set_size(self, cols: int, rows: int) -> None:
         """Update terminal size.
