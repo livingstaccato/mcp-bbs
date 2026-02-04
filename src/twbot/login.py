@@ -26,13 +26,13 @@ def _check_kv_validation(kv_data: dict | None, prompt_id: str) -> str:
 async def login_sequence(
     bot,
     game_password: str = "game",
-    character_password: str = "tim",
-    username: str = "claude",
+    character_password: str = "test",
+    username: str = "testbot",
 ):
     """Complete login sequence from telnet login to game entry.
 
-    This is a reactive approach: detect the prompt, respond appropriately,
-    and continue based on what we see next.
+    Uses the working diagnostic structure: separate navigation from actions
+    to avoid loop detection and timing issues with wait_and_respond().
 
     Args:
         bot: TradingBot instance
@@ -45,151 +45,103 @@ async def login_sequence(
     print("=" * 80)
 
     step = 0
-    consecutive_same_menu = 0
-    last_menu = None
-    twgs_menu_attempts = 0
 
-    # Loop until we reach the game
-    for _ in range(50):  # Max 50 steps to prevent infinite loops
+    # PHASE 1: Navigate to game selection (menu_selection prompt)
+    print("\nNavigating to game selection menu...")
+    for _ in range(10):
         step += 1
-
         try:
-            # Use shorter timeout for initial prompts, longer for game loading
-            timeout_ms = 5000 if step <= 2 else 15000
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=timeout_ms
+                bot, timeout_ms=5000
             )
         except RuntimeError as e:
-            if "Stuck in loop" in str(e):
-                # Try to escape by sending Q (quit) or ESC
-                print(f"\n⚠️  Loop detected: {e}")
-                print("    → Attempting to escape with Q")
-                await bot.session.send("Q")
-                await asyncio.sleep(0.5)
-                # Reset loop detection
-                bot.loop_detection.clear()
-                bot.last_prompt_id = None
-                print(f"    → Retrying after loop escape")
-                continue
-            else:
-                print(f"\n⚠️  RuntimeError: {e}")
-                raise
+            print(f"✗ Navigation error: {e}")
+            raise
 
-        # Check for validation warnings
         validation_msg = _check_kv_validation(kv_data, prompt_id)
-        print(f"[{step}] {prompt_id} ({input_type}) {validation_msg}")
+        print(f"  [{step}] {prompt_id} ({input_type}) {validation_msg}")
 
-        # Track TWGS menu attempts to try alternate game
-        if "twgs_select_game" in prompt_id:
-            twgs_menu_attempts += 1
-        else:
-            twgs_menu_attempts = 0
-
-        # Track if we're stuck in the same menu
-        if prompt_id == last_menu:
-            consecutive_same_menu += 1
-            if consecutive_same_menu >= 2:
-                print(f"    ⚠️  Same menu {consecutive_same_menu} times - trying Q to quit")
-                await bot.session.send("Q")
-                await asyncio.sleep(0.5)
-                consecutive_same_menu = 0
-                continue
-        else:
-            consecutive_same_menu = 0
-            last_menu = prompt_id
-
-        # Extract key text for decision making
         screen_lower = screen.lower()
 
-        # Handle different prompts
-        if "login_name" in prompt_id and "telnet" not in screen_lower:
-            # Character name prompt (not telnet login)
-            print(f"    → Sending username: {username}")
+        # Handle prompts until we reach menu_selection
+        if "login_name" in prompt_id:
+            print(f"      → Sending username")
             await send_input(bot, username, input_type)
 
-        elif "login_name" in prompt_id and "telnet" in screen_lower:
-            # Telnet login - just press Enter
-            print("    → Skipping telnet login")
-            await bot.session.send("\r")
-            await asyncio.sleep(0.3)
+        elif "menu_selection" in prompt_id:
+            print(f"      ✓ Reached game selection menu!")
+            break
 
-        elif "twgs_select_game" in prompt_id:
-            # Check if this is actually the game selection menu
-            options = _extract_game_options(screen)
-            if not options:
-                # No options found - might be in wrong menu
-                print("    ⚠️  No game options found, sending Q to quit")
-                await bot.session.send("Q")
-                await asyncio.sleep(0.5)
-                continue
+        elif input_type == "any_key":
+            print("      → Pressing space to continue")
+            await send_input(bot, "", input_type)
 
-            # TWGS game selection menu - send JUST the letter, not with \r
-            # Try A first time, then try B on retry
-            if twgs_menu_attempts >= 3:
-                print(f"    → TWGS menu attempt {twgs_menu_attempts}: Trying B (alternate game)")
-                await bot.session.send("B")  # Try alternate game
-            else:
-                game_letter = _select_trade_wars_game(screen)
-                print(f"    → Sending {game_letter} to select game (single key, no return)")
-                await bot.session.send(game_letter)  # Single key - NO \r
-            await asyncio.sleep(0.5)
+        else:
+            print(f"      ⚠️  Unexpected prompt, pressing space")
+            await bot.session.send(" ")
+            await asyncio.sleep(0.2)
 
-        elif "private_game_password" in prompt_id:
-            # Game password prompt
-            print(f"    → Sending game password")
+    # PHASE 2: Send game selection
+    print("\nSending game selection...")
+    if "menu_selection" in prompt_id:
+        game_letter = _select_trade_wars_game(screen)
+        print(f"  → Sending {game_letter} (AI Apocalypse)")
+        await bot.session.send(game_letter)
+        # Reset state before Phase 3 to prevent loop detection false triggers
+        bot.loop_detection.clear()
+        bot.last_prompt_id = None
+        # Increase threshold for game loading phase (intro screens may repeat pause prompt)
+        original_threshold = bot.stuck_threshold
+        bot.stuck_threshold = 10
+        print(f"  ✓ Reset loop detection state")
+
+    # PHASE 3: Wait for game to load and reach command prompt
+    print("\nWaiting for game to load...")
+    for step_in_phase3 in range(50):
+        step += 1
+        try:
+            # Game loading takes 11+ seconds, need longer timeout
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(
+                bot, timeout_ms=20000
+            )
+        except RuntimeError as e:
+            print(f"✗ Game load error: {e}")
+            raise
+
+        validation_msg = _check_kv_validation(kv_data, prompt_id)
+        print(f"  [{step}] {prompt_id} ({input_type}) {validation_msg}")
+
+        screen_lower = screen.lower()
+
+        # Handle prompts while loading
+        if "private_game_password" in prompt_id:
+            print(f"      → Sending game password")
             await send_input(bot, game_password, input_type)
 
         elif "game_password" in prompt_id:
-            # In-game password (character password)
-            print(f"    → Sending character password")
+            print(f"      → Sending character password")
             await send_input(bot, character_password, input_type)
 
         elif "use_ansi_graphics" in prompt_id:
-            # ANSI graphics selection
-            print("    → Selecting ANSI graphics (y)")
+            print("      → Selecting ANSI graphics")
             await bot.session.send("y")
             await asyncio.sleep(0.3)
 
         elif input_type == "any_key":
-            # Pause/pagination prompt
-            # If we keep seeing any_key and cycling back, try Enter instead of space
-            if prompt_id == "prompt.any_key" and bot.last_prompt_id == "prompt.any_key":
-                print("    → any_key loop detected, trying Enter instead")
-                await bot.session.send("\r")
-            else:
-                print("    → Pressing space to continue")
-                await send_input(bot, "", input_type)
-
-        elif "menu_selection" in prompt_id:
-            # Game selection menu
-            if ("game" in screen_lower and "select" in screen_lower) or (
-                "my game" in screen_lower or "ai game" in screen_lower
-            ):
-                game_letter = _select_trade_wars_game(screen)
-                print(
-                    f"    → Sending {game_letter} to select game (single key)"
-                )
-                await bot.session.send(game_letter)  # Single key - NO \r
-                # IMPORTANT: continue here to loop immediately without executing
-                # other handlers. This matches the diagnostic's structure and
-                # prevents loop detection issues.
-                continue
-            else:
-                # Unknown menu - quit
-                print("    → menu_selection: Unknown menu, sending Q")
-                await bot.session.send("Q")
-                continue
+            print("      → Pressing space (loading)")
+            await send_input(bot, "", input_type)
 
         elif "command" in prompt_id or "sector_command" in prompt_id:
-            # Reached game - command prompt
-            print("    ✓ Reached game sector command prompt")
+            print(f"      ✓ Reached game!")
             break
 
         else:
-            # Unknown prompt - just press space/enter
-            print(f"    ⚠️  Unknown prompt, sending space")
+            print(f"      → Pressing space (unknown prompt)")
             await bot.session.send(" ")
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.2)
+
+    # Restore threshold after game loading phase
+    bot.stuck_threshold = original_threshold
 
     # Parse initial state
     from .parsing import _parse_sector_from_screen, _parse_credits_from_screen

@@ -63,8 +63,8 @@ async def wait_and_respond(
                     bot.error_count += 1
                     raise RuntimeError(f"Error detected: {error_type}")
 
-            # Check for loop
-            if _check_for_loop(bot, prompt_id):
+            # Check for loop (skip for prompts expected to repeat, like pause screens during game load)
+            if prompt_id != "prompt.pause_space_or_enter" and _check_for_loop(bot, prompt_id):
                 raise RuntimeError(f"Stuck in loop: {prompt_id}")
 
             # If pattern specified, check if it matches
