@@ -7,6 +7,40 @@ from .parsing import _parse_credits_from_screen, _parse_sector_from_screen
 from .logging_utils import logger
 
 
+def _validate_kv_data(kv_data: dict | None, prompt_id: str) -> tuple[bool, str]:
+    """Validate extracted K/V data before using.
+
+    Args:
+        kv_data: Extracted K/V data from prompt detection
+        prompt_id: The detected prompt ID
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not kv_data:
+        return True, ""  # No data to validate
+
+    # Check validation status
+    validation = kv_data.get("_validation", {})
+    if not validation.get("valid", True):
+        errors = validation.get("errors", ["Unknown validation error"])
+        return False, f"Validation failed for {prompt_id}: {errors[0]}"
+
+    # Check for sector validity if present
+    if "sector" in kv_data:
+        sector = kv_data["sector"]
+        if not (1 <= sector <= 1000):
+            return False, f"Invalid sector {sector} (must be 1-1000)"
+
+    # Check for credits validity if present
+    if "credits" in kv_data:
+        credits = kv_data["credits"]
+        if credits < 0:
+            return False, f"Invalid credits {credits} (must be >= 0)"
+
+    return True, ""
+
+
 async def _dock_and_buy(bot, sector: int, quantity: int = 500):
     """Dock at sector and buy commodities.
 
@@ -28,6 +62,11 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
     input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  At port: {prompt_id}")
 
+    # Validate port menu state
+    is_valid, error_msg = _validate_kv_data(kv_data, prompt_id)
+    if not is_valid:
+        print(f"  ⚠️  {error_msg}")
+
     # Send "B" for Buy
     print("  Selecting BUY...")
     await bot.session.send("B")  # Single key
@@ -40,6 +79,11 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
                 bot, timeout_ms=3000
             )
             print(f"    → {prompt_id} ({input_type})")
+
+            # Validate extracted data before using
+            is_valid, error_msg = _validate_kv_data(kv_data, prompt_id)
+            if not is_valid:
+                print(f"    ⚠️  {error_msg}")
 
             if "port_quantity" in prompt_id:
                 # How many units?
@@ -82,6 +126,11 @@ async def _dock_and_sell(bot, sector: int):
     input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  At port: {prompt_id}")
 
+    # Validate port menu state
+    is_valid, error_msg = _validate_kv_data(kv_data, prompt_id)
+    if not is_valid:
+        print(f"  ⚠️  {error_msg}")
+
     # Send "S" for Sell
     print("  Selecting SELL...")
     await bot.session.send("S")  # Single key
@@ -94,6 +143,11 @@ async def _dock_and_sell(bot, sector: int):
                 bot, timeout_ms=3000
             )
             print(f"    → {prompt_id} ({input_type})")
+
+            # Validate extracted data before using
+            is_valid, error_msg = _validate_kv_data(kv_data, prompt_id)
+            if not is_valid:
+                print(f"    ⚠️  {error_msg}")
 
             if "port_quantity" in prompt_id:
                 # How many units? Sell all - use high number

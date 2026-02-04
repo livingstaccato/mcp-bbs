@@ -7,6 +7,22 @@ from .parsing import _extract_game_options, _select_trade_wars_game
 from .logging_utils import logger
 
 
+def _check_kv_validation(kv_data: dict | None, prompt_id: str) -> str:
+    """Check if extracted K/V data passed validation.
+
+    Returns validation error message if invalid, empty string if valid.
+    """
+    if not kv_data:
+        return ""
+
+    validation = kv_data.get("_validation", {})
+    if not validation.get("valid", True):
+        errors = validation.get("errors", ["Unknown error"])
+        return f"[VALIDATION] {errors[0]}"
+
+    return ""
+
+
 async def login_sequence(
     bot,
     game_password: str = "game",
@@ -55,7 +71,9 @@ async def login_sequence(
             else:
                 raise
 
-        print(f"[{step}] {prompt_id} ({input_type})")
+        # Check for validation warnings
+        validation_msg = _check_kv_validation(kv_data, prompt_id)
+        print(f"[{step}] {prompt_id} ({input_type}) {validation_msg}")
 
         # Track TWGS menu attempts to try alternate game
         if "twgs_select_game" in prompt_id:
