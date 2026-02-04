@@ -144,7 +144,28 @@
         "pattern": "(?i)sector\\s+command\\s*[\\[\\(:]?\\s*\\??\\s*$",
         "match_mode": "regex"
       },
-      "notes": "Sector command prompt"
+      "kv_extract": [
+        {
+          "field": "sector",
+          "type": "int",
+          "regex": "Sector\\s+(\\d+)",
+          "validate": {
+            "min": 1,
+            "max": 1000
+          },
+          "required": true
+        },
+        {
+          "field": "credits",
+          "type": "int",
+          "regex": "Credits?:\\s*([\\d,]+)",
+          "validate": {
+            "min": 0
+          },
+          "required": true
+        }
+      ],
+      "notes": "Sector command prompt - with validated sector/credits extraction"
     },
     {
       "id": "prompt.planet_command",
@@ -197,7 +218,24 @@
         "pattern": "(?i)enter your choice \\[t\\] \\?",
         "match_mode": "regex"
       },
-      "notes": "Port action menu"
+      "kv_extract": [
+        {
+          "field": "sector",
+          "type": "int",
+          "regex": "Sector\\s+(\\d+)",
+          "validate": {
+            "min": 1,
+            "max": 1000
+          },
+          "required": true
+        },
+        {
+          "field": "port_name",
+          "type": "string",
+          "regex": "Port:\\s+([\\w\\s]+?)(?:[\\[\\(]|$)"
+        }
+      ],
+      "notes": "Port action menu - with validated sector extraction"
     },
     {
       "id": "prompt.autopilot_engage",
@@ -297,7 +335,18 @@
         "pattern": "(?i)enter.*sector",
         "match_mode": "regex"
       },
-      "notes": "Warping - enter destination sector"
+      "kv_extract": [
+        {
+          "field": "current_sector",
+          "type": "int",
+          "regex": "Sector\\s+(\\d+)",
+          "validate": {
+            "min": 1,
+            "max": 1000
+          }
+        }
+      ],
+      "notes": "Warping - enter destination sector with current sector context"
     },
     {
       "id": "prompt.start_over",

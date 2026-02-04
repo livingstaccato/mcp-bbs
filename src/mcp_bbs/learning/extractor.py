@@ -192,10 +192,12 @@ class KVExtractor:
             return value_str
 
         if target_type == "int":
-            return int(value_str)
+            # Remove commas for number parsing
+            return int(value_str.replace(",", ""))
 
         if target_type == "float":
-            return float(value_str)
+            # Remove commas for number parsing
+            return float(value_str.replace(",", ""))
 
         if target_type == "bool":
             # Boolean conversion
