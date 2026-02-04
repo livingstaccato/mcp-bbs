@@ -55,7 +55,7 @@ async def login_sequence(
 
         try:
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
+                bot, timeout_ms=10000
             )
         except RuntimeError as e:
             if "Stuck in loop" in str(e):
