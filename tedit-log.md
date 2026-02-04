@@ -153,3 +153,18 @@
 ## Incremental KV Export
 - Started incremental JSONL export: `tedit-kv.jsonl`
 - Entries will be appended as field prompts are triggered.
+- 2026-02-04: Aliens Editor (Standard) shows message: "Internal Alien Traders are disabled. They can only be enabled during BIGBANG!" then [Pause].
+- 2026-02-04: Ferrengi Editor (Standard) shows message: "Internal Ferrengi are disabled. They can only be enabled during BIGBANG!" then [Pause].
+- 2026-02-04: Visited General Editor One; captured current values into tedit-kv.jsonl (sysop name AUnknown, turns/day 65520, etc.).
+- 2026-02-04: Visited General Editor Two; captured current values into tedit-kv.jsonl. Some fields (Ferrengi HomeBase, Stardock/Rylos/Alpha Centauri sectors) were not displayed on-screen and logged as null for now.
+- 2026-02-04: Visited General Editor Three; captured current values into tedit-kv.jsonl (item costs, radiation lifetime, combat settings, etc.).
+- 2026-02-04: Planet Editor (Standard) prompts for Planet ID (0=Abort, range 0-200).
+- 2026-02-04: Port Editor (Standard) prompts for Port ID (0=Abort, range 0-400).
+- 2026-02-04: Sector Editor (Standard) prompts for Sector number (0=Abort, range 0-1,000).
+- 2026-02-04: Corporation Editor (Standard) prompts for Corporation ID (0=Abort, range 0-50).
+- 2026-02-04: User Editor (Standard) prompts for User ID (Name or Number, <CR>=Abort).
+- 2026-02-04: Ship Editor (Standard) prompts for Ship ID (0=Abort, range 0-800).
+- 2026-02-04: Emulation Editor values captured (input/output bandwidth 1 Mps Broadband, latency 150 ms).
+- 2026-02-04: Game Timing Editor values captured (delay settings list) into tedit-kv.jsonl.
+- 2026-02-04: Access Manager screen captured (access_modes: "All day : Multiplayer Access").
+- 2026-02-04: Report Manager screen captured (modes, blackout settings, report types).
