@@ -357,6 +357,286 @@
         "match_mode": "regex"
       },
       "notes": "Death screen prompt"
+    },
+    {
+      "id": "tedit.admin_password",
+      "kind": "login_pass",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)password\\s*:\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT admin password prompt"
+    },
+    {
+      "id": "tedit.main_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)Trade Wars 2002.*Editor.*\\[\\?\\]",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT main menu"
+    },
+    {
+      "id": "tedit.select_game",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(select|choose)\\s+(a\\s+)?game",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT game slot selection"
+    },
+    {
+      "id": "tedit.general_editor_one",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)General Editor One.*\\[Q\\]",
+        "match_mode": "regex"
+      },
+      "kv_extract": [
+        {
+          "field": "turns_per_day",
+          "type": "int",
+          "regex": "<A>\\s*Turns per day\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "initial_fighters",
+          "type": "int",
+          "regex": "<B>\\s*Initial fighters\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "initial_credits",
+          "type": "int",
+          "regex": "<C>\\s*Initial credits\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "initial_holds",
+          "type": "int",
+          "regex": "<D>\\s*Initial holds\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "max_planets_per_sector",
+          "type": "int",
+          "regex": "<M>\\s*Max planets per sector\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "max_traders_per_corp",
+          "type": "int",
+          "regex": "<N>\\s*Max traders per corp\\s*:\\s*(\\d+)"
+        }
+      ],
+      "notes": "TEDIT General Editor One - core game settings"
+    },
+    {
+      "id": "tedit.general_editor_two",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)General Editor Two.*\\[Q\\]",
+        "match_mode": "regex"
+      },
+      "kv_extract": [
+        {
+          "field": "inactivity_timeout",
+          "type": "int",
+          "regex": "<2>\\s*Inactivity Timeout\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "port_regen_rate",
+          "type": "int",
+          "regex": "<7>\\s*Port Regeneration Rate\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "max_regen_per_visit",
+          "type": "int",
+          "regex": "<8>\\s*Max Regen Per Visit\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "max_bank_credits",
+          "type": "int",
+          "regex": "<T>\\s*Max Bank Credits\\s*:\\s*([\\d,]+)"
+        },
+        {
+          "field": "cloak_fail_rate",
+          "type": "int",
+          "regex": "<U>\\s*Cloaking Fail Rate\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "navhaz_dispersion",
+          "type": "int",
+          "regex": "<V>\\s*NavHaz Dispersion\\s*:\\s*(\\d+)"
+        }
+      ],
+      "notes": "TEDIT General Editor Two - advanced settings"
+    },
+    {
+      "id": "tedit.general_editor_three",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)General Editor Three.*\\[Q\\]",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT General Editor Three"
+    },
+    {
+      "id": "tedit.user_editor",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)User Editor.*\\[Q\\]",
+        "match_mode": "regex"
+      },
+      "kv_extract": [
+        {
+          "field": "player_name",
+          "type": "string",
+          "regex": "<A>\\s*Player Name\\s*:\\s*(.+?)\\s*$"
+        },
+        {
+          "field": "sector",
+          "type": "int",
+          "regex": "<C>\\s*Sector\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "fighters",
+          "type": "int",
+          "regex": "<D>\\s*Fighters\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "shields",
+          "type": "int",
+          "regex": "<E>\\s*Shields\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "credits",
+          "type": "int",
+          "regex": "<G>\\s*Credits\\s*:\\s*([\\d,]+)"
+        },
+        {
+          "field": "turns",
+          "type": "int",
+          "regex": "<I>\\s*Turns\\s*:\\s*(\\d+)"
+        }
+      ],
+      "notes": "TEDIT User Editor - player data"
+    },
+    {
+      "id": "tedit.port_editor",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)Port Editor.*\\[Q\\]",
+        "match_mode": "regex"
+      },
+      "kv_extract": [
+        {
+          "field": "port_class",
+          "type": "int",
+          "regex": "<A>\\s*Port Class\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "fuel_ore",
+          "type": "int",
+          "regex": "<B>\\s*Fuel Ore\\s*:\\s*([\\d,]+)"
+        },
+        {
+          "field": "organics",
+          "type": "int",
+          "regex": "<C>\\s*Organics\\s*:\\s*([\\d,]+)"
+        },
+        {
+          "field": "equipment",
+          "type": "int",
+          "regex": "<D>\\s*Equipment\\s*:\\s*([\\d,]+)"
+        }
+      ],
+      "notes": "TEDIT Port Editor - port data"
+    },
+    {
+      "id": "tedit.sector_editor",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)Sector Editor.*\\[Q\\]",
+        "match_mode": "regex"
+      },
+      "kv_extract": [
+        {
+          "field": "warp_1",
+          "type": "int",
+          "regex": "<A>\\s*Warp 1\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "warp_2",
+          "type": "int",
+          "regex": "<B>\\s*Warp 2\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "warp_3",
+          "type": "int",
+          "regex": "<C>\\s*Warp 3\\s*:\\s*(\\d+)"
+        },
+        {
+          "field": "navhaz",
+          "type": "int",
+          "regex": "<N>\\s*NavHaz\\s*:\\s*(\\d+)"
+        }
+      ],
+      "notes": "TEDIT Sector Editor - sector connections"
+    },
+    {
+      "id": "tedit.game_timing",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)Game Timing.*\\[Q\\]",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT Game Timing Editor"
+    },
+    {
+      "id": "tedit.user_list",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)#\\s+Trader Name\\s+Sect\\s+Fghtrs",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT user list display"
+    },
+    {
+      "id": "tedit.enter_number",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(enter|input)\\s+(player|user|port|sector)\\s*(id|number|#)?\\s*[:\\?]?\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT numeric input prompt"
+    },
+    {
+      "id": "tedit.enter_value",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(new|enter)\\s+value\\s*[:\\?]?\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT value input prompt"
+    },
+    {
+      "id": "tedit.confirm",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(are you sure|confirm|save changes)\\s*\\?\\s*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "TEDIT confirmation prompt"
     }
   ],
   "menus": [
@@ -382,6 +662,111 @@
         {
           "key": "Q",
           "label": "Quit"
+        }
+      ]
+    },
+    {
+      "id": "menu.tedit_main",
+      "prompt_match": {
+        "pattern": "(?i)Trade Wars 2002.*Editor.*\\[\\?\\]",
+        "match_mode": "regex"
+      },
+      "options": [
+        {
+          "key": "A",
+          "label": "Aliens Editor"
+        },
+        {
+          "key": "F",
+          "label": "Ferrengi Editor"
+        },
+        {
+          "key": "G",
+          "label": "General Editor One"
+        },
+        {
+          "key": "H",
+          "label": "General Editor Two"
+        },
+        {
+          "key": "I",
+          "label": "General Editor Three"
+        },
+        {
+          "key": "N",
+          "label": "Planet Editor"
+        },
+        {
+          "key": "P",
+          "label": "Port Editor"
+        },
+        {
+          "key": "S",
+          "label": "Sector Editor"
+        },
+        {
+          "key": "T",
+          "label": "Corporation Editor"
+        },
+        {
+          "key": "U",
+          "label": "User Editor"
+        },
+        {
+          "key": "V",
+          "label": "Ship Editor"
+        },
+        {
+          "key": "Y",
+          "label": "Emulation Editor"
+        },
+        {
+          "key": "Z",
+          "label": "Game Timing Editor"
+        },
+        {
+          "key": "B",
+          "label": "Access Manager"
+        },
+        {
+          "key": "R",
+          "label": "Report Manager"
+        },
+        {
+          "key": "1",
+          "label": "Gold Ship Editor"
+        },
+        {
+          "key": "2",
+          "label": "Gold Planet Editor"
+        },
+        {
+          "key": "3",
+          "label": "Gold Alien Race Editor"
+        },
+        {
+          "key": "4",
+          "label": "Gold Active Aliens Editor"
+        },
+        {
+          "key": "D",
+          "label": "Remove derelict spacecraft"
+        },
+        {
+          "key": "L",
+          "label": "List current users"
+        },
+        {
+          "key": "C",
+          "label": "Add player to closed game"
+        },
+        {
+          "key": "E",
+          "label": "Repair Gold data"
+        },
+        {
+          "key": "Q",
+          "label": "Quit editor"
         }
       ]
     }
