@@ -55,7 +55,7 @@ async def login_sequence(
 
         try:
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=20000
+                bot, timeout_ms=15000
             )
         except RuntimeError as e:
             if "Stuck in loop" in str(e):
@@ -189,6 +189,7 @@ async def login_sequence(
                     )
                     await bot.session.send(game_letter)  # Single key - NO \r
                     bot.last_game_letter = game_letter
+                    await asyncio.sleep(0.2)  # Let session settle before next wait
                 elif (
                     bot.menu_selection_attempts == 2
                     and len(game_options_only) > 1
@@ -209,13 +210,10 @@ async def login_sequence(
                     print("    → menu_selection: Too many game selection attempts, quitting")
                     bot.menu_selection_attempts = 0
                     await bot.session.send("Q")
-
-                await asyncio.sleep(0.5)
             else:
                 # Unknown menu - quit
                 print("    → menu_selection: Unknown menu, sending Q")
                 await bot.session.send("Q")
-                await asyncio.sleep(0.5)
 
         elif "command" in prompt_id or "sector_command" in prompt_id:
             # Reached game - command prompt

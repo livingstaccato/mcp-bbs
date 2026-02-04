@@ -23,8 +23,11 @@ def _check_for_loop(bot, prompt_id: str) -> bool:
 
     count = bot.loop_detection.get(prompt_id, 0)
     if count >= bot.stuck_threshold:
-        print(f"  ⚠️  LOOP DETECTED: {prompt_id} seen {count} times")
+        print(f"  ⚠️  LOOP DETECTED: {prompt_id} seen {count} times", flush=True)
         return True
+
+    if count > 0:
+        print(f"    [Loop detection: {prompt_id} seen {count}/{bot.stuck_threshold}]", flush=True)
 
     return False
 
