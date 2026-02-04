@@ -116,7 +116,8 @@ def _print_session_summary(bot):
     print(f"Cycles completed: {bot.cycle_count}")
     print(f"Initial credits:  {bot.initial_credits:,}")
     print(f"Final credits:    {bot.current_credits:,}")
-    print(f"Profit:           {profit:,} ({profit / bot.initial_credits * 100:.1f}%)")
+    profit_pct = (profit / bot.initial_credits * 100) if bot.initial_credits > 0 else 0
+    print(f"Profit:           {profit:,} ({profit_pct:.1f}%)")
     print(f"Credits/min:      {profit_per_min:,.0f}")
     print(f"Turns used:       {bot.turns_used}")
     print(f"Errors:           {bot.error_count}")
