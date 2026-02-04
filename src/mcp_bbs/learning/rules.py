@@ -51,7 +51,10 @@ class ScreenConstraint(BaseModel):
 class KVExtractRule(BaseModel):
     field: str
     regex: str
+    type: str = "string"
     flags: int = re.MULTILINE | re.IGNORECASE
+    validate: dict[str, Any] | None = None
+    required: bool = False
 
 
 class PromptRule(BaseModel):
@@ -126,7 +129,14 @@ class RuleSet(BaseModel):
                 pattern["negative_regex"] = prompt.negative_match.to_regex()
             if prompt.kv_extract:
                 pattern["kv_extract"] = [
-                    {"field": item.field, "regex": item.regex, "flags": item.flags}
+                    {
+                        "field": item.field,
+                        "regex": item.regex,
+                        "type": item.type,
+                        "flags": item.flags,
+                        "validate": item.validate,
+                        "required": item.required,
+                    }
                     for item in prompt.kv_extract
                 ]
             patterns.append(pattern)

@@ -10,16 +10,22 @@ class KVExtractor:
     """Extract structured key-value data from screen text."""
 
     @staticmethod
-    def extract(screen: str, kv_config: dict[str, Any] | None) -> dict[str, Any] | None:
+    def extract(
+        screen: str,
+        kv_config: dict[str, Any] | None,
+        run_validation: bool = True,
+    ) -> dict[str, Any] | None:
         """Extract key-value data from screen using configured patterns.
 
         Args:
             screen: Screen text to extract from
             kv_config: Extraction configuration from prompt pattern
                 Can be a single field config or list of field configs
+            run_validation: Whether to validate extracted values (default True)
 
         Returns:
             Dictionary of extracted values, None if config invalid or extraction failed
+            May include "_validation" key with validation results
         """
         if not kv_config:
             return None
@@ -61,7 +67,110 @@ class KVExtractor:
                 # Conversion failed, skip this field
                 continue
 
-        return extracted if extracted else None
+        if not extracted:
+            return None
+
+        # Run validation if requested
+        if run_validation and kv_config:
+            validation_result = KVExtractor._validate(extracted, kv_config)
+            extracted["_validation"] = validation_result
+
+        return extracted
+
+    @staticmethod
+    def _validate(
+        extracted: dict[str, Any],
+        kv_config: dict[str, Any] | list,
+    ) -> dict[str, Any]:
+        """Validate extracted values against constraints.
+
+        Args:
+            extracted: Dictionary of extracted values
+            kv_config: Extraction configuration (single dict or list)
+
+        Returns:
+            Dictionary with keys:
+                valid: bool - True if all validations pass
+                errors: list - Validation error messages
+        """
+        errors: list[str] = []
+        configs = kv_config if isinstance(kv_config, list) else [kv_config]
+
+        for cfg in configs:
+            field = cfg.get("field")
+            value = extracted.get(field)
+            validate_rules = cfg.get("validate", {})
+            is_required = cfg.get("required", False)
+            field_type = cfg.get("type", "string")
+
+            # Check required fields
+            if is_required and value is None:
+                errors.append(f"{field}: required but not found")
+                continue
+
+            # Skip validation if value is None and not required
+            if value is None:
+                continue
+
+            # Type validation
+            if field_type == "int":
+                if not isinstance(value, int):
+                    errors.append(
+                        f"{field}: expected int, got {type(value).__name__}"
+                    )
+                    continue
+
+                # Check min/max constraints
+                if "min" in validate_rules and value < validate_rules["min"]:
+                    errors.append(
+                        f"{field}: value {value} below min {validate_rules['min']}"
+                    )
+                if "max" in validate_rules and value > validate_rules["max"]:
+                    errors.append(
+                        f"{field}: value {value} exceeds max {validate_rules['max']}"
+                    )
+
+            elif field_type == "float":
+                if not isinstance(value, float):
+                    errors.append(
+                        f"{field}: expected float, got {type(value).__name__}"
+                    )
+                    continue
+
+                # Check min/max constraints
+                if "min" in validate_rules and value < validate_rules["min"]:
+                    errors.append(
+                        f"{field}: value {value} below min {validate_rules['min']}"
+                    )
+                if "max" in validate_rules and value > validate_rules["max"]:
+                    errors.append(
+                        f"{field}: value {value} exceeds max {validate_rules['max']}"
+                    )
+
+            elif field_type == "string":
+                if not isinstance(value, str):
+                    errors.append(
+                        f"{field}: expected string, got {type(value).__name__}"
+                    )
+                    continue
+
+                # Check pattern constraint if present
+                if "pattern" in validate_rules:
+                    pattern = validate_rules["pattern"]
+                    if not re.match(pattern, value):
+                        errors.append(
+                            f"{field}: value '{value}' does not match pattern {pattern}"
+                        )
+
+                # Check allowed values
+                if "allowed_values" in validate_rules:
+                    allowed = validate_rules["allowed_values"]
+                    if value not in allowed:
+                        errors.append(
+                            f"{field}: value '{value}' not in allowed values {allowed}"
+                        )
+
+        return {"valid": len(errors) == 0, "errors": errors}
 
     @staticmethod
     def _convert_type(value_str: str, target_type: str) -> Any:

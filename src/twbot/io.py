@@ -11,8 +11,8 @@ async def wait_and_respond(
     bot,
     prompt_id_pattern: Optional[str] = None,
     timeout_ms: int = 10000,
-) -> tuple[Optional[str], Optional[str], str]:
-    """Wait for prompt and return (input_type, prompt_id, screen).
+) -> tuple[Optional[str], Optional[str], str, Optional[dict]]:
+    """Wait for prompt and return (input_type, prompt_id, screen, kv_data).
 
     Args:
         bot: TradingBot instance
@@ -20,7 +20,8 @@ async def wait_and_respond(
         timeout_ms: Timeout in milliseconds
 
     Returns:
-        Tuple of (input_type, prompt_id, screen_text)
+        Tuple of (input_type, prompt_id, screen_text, kv_data)
+        where kv_data may include "_validation" field with extraction status
 
     Raises:
         TimeoutError: If no prompt detected within timeout
@@ -39,6 +40,7 @@ async def wait_and_respond(
             detected = snapshot["prompt_detected"]
             prompt_id = detected.get("prompt_id")
             input_type = detected.get("input_type")
+            kv_data = detected.get("kv_data")
 
             # Only check for context-specific errors (not menu-wide error text)
             # Check for errors ONLY if we're at a password/login prompt
@@ -70,7 +72,7 @@ async def wait_and_respond(
                             "input_type": input_type,
                         }
                     )
-                    return (input_type, prompt_id, screen)
+                    return (input_type, prompt_id, screen, kv_data)
             else:
                 # Any prompt is acceptable
                 bot.detected_prompts.append(
@@ -80,7 +82,7 @@ async def wait_and_respond(
                         "input_type": input_type,
                     }
                 )
-                return (input_type, prompt_id, screen)
+                return (input_type, prompt_id, screen, kv_data)
 
         await asyncio.sleep(0.1)
 

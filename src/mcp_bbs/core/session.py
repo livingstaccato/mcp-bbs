@@ -118,6 +118,7 @@ class Session:
                     "prompt_id": prompt_detection.prompt_id,
                     "input_type": prompt_detection.input_type,
                     "is_idle": prompt_detection.is_idle,
+                    "kv_data": prompt_detection.kv_data,
                 }
 
             if self.addons and self.logger:

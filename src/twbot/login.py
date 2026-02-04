@@ -38,7 +38,7 @@ async def login_sequence(
         step += 1
 
         try:
-            input_type, prompt_id, screen = await wait_and_respond(
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(
                 bot, timeout_ms=5000
             )
         except RuntimeError as e:

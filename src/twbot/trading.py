@@ -16,7 +16,7 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
         quantity: Number of units to buy
     """
     # Get to port menu
-    input_type, prompt_id, screen = await wait_and_respond(bot)
+    input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  Got prompt: {prompt_id}")
 
     # Send "P" for Port/Dock
@@ -25,7 +25,7 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
     await asyncio.sleep(0.3)
 
     # Wait for port menu
-    input_type, prompt_id, screen = await wait_and_respond(bot)
+    input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  At port: {prompt_id}")
 
     # Send "B" for Buy
@@ -36,7 +36,7 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
     # Handle commodity/quantity prompts
     for attempt in range(10):
         try:
-            input_type, prompt_id, screen = await wait_and_respond(
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(
                 bot, timeout_ms=3000
             )
             print(f"    → {prompt_id} ({input_type})")
@@ -70,7 +70,7 @@ async def _dock_and_sell(bot, sector: int):
         sector: Current sector
     """
     # Get to port menu
-    input_type, prompt_id, screen = await wait_and_respond(bot)
+    input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  Got prompt: {prompt_id}")
 
     # Send "P" for Port/Dock
@@ -79,7 +79,7 @@ async def _dock_and_sell(bot, sector: int):
     await asyncio.sleep(0.3)
 
     # Wait for port menu
-    input_type, prompt_id, screen = await wait_and_respond(bot)
+    input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  At port: {prompt_id}")
 
     # Send "S" for Sell
@@ -90,7 +90,7 @@ async def _dock_and_sell(bot, sector: int):
     # Handle commodity/quantity prompts
     for attempt in range(10):
         try:
-            input_type, prompt_id, screen = await wait_and_respond(
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(
                 bot, timeout_ms=3000
             )
             print(f"    → {prompt_id} ({input_type})")
@@ -124,7 +124,7 @@ async def _warp_to_sector(bot, target_sector: int):
         target_sector: Destination sector number
     """
     # Get to command menu
-    input_type, prompt_id, screen = await wait_and_respond(bot)
+    input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  Got prompt: {prompt_id}")
 
     # Send "M" for Move/Warp
@@ -133,7 +133,7 @@ async def _warp_to_sector(bot, target_sector: int):
     await asyncio.sleep(0.3)
 
     # Wait for sector input prompt
-    input_type, prompt_id, screen = await wait_and_respond(bot)
+    input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  Warp prompt: {prompt_id}")
 
     # Send destination sector (multi_key)
@@ -141,7 +141,7 @@ async def _warp_to_sector(bot, target_sector: int):
 
     # Wait for arrival confirmation
     try:
-        input_type, prompt_id, screen = await wait_and_respond(
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(
             bot, timeout_ms=5000
         )
         print(f"  Warp status: {prompt_id}")
@@ -299,7 +299,7 @@ async def run_trading_loop(
             await single_trading_cycle(bot, start_sector=499)
 
             # Update credits from screen
-            input_type, prompt_id, screen = await wait_and_respond(bot)
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
             bot.current_credits = _parse_credits_from_screen(bot, screen)
             bot.current_sector = _parse_sector_from_screen(bot, screen)
 
