@@ -54,8 +54,10 @@ async def login_sequence(
         step += 1
 
         try:
+            # Use shorter timeout for initial prompts, longer for game loading
+            timeout_ms = 5000 if step <= 2 else 15000
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=15000
+                bot, timeout_ms=timeout_ms
             )
         except RuntimeError as e:
             if "Stuck in loop" in str(e):
@@ -159,61 +161,24 @@ async def login_sequence(
                 await send_input(bot, "", input_type)
 
         elif "menu_selection" in prompt_id:
-            # Generic menu selection - check what menu we're at
+            # Game selection menu
             if ("game" in screen_lower and "select" in screen_lower) or (
                 "my game" in screen_lower or "ai game" in screen_lower
             ):
-                # Game selection - if we just tried this and got back here, try different letter
-                if "menu_selection_attempts" not in bot.__dict__:
-                    bot.menu_selection_attempts = 0
-
-                bot.menu_selection_attempts += 1
-
-                # Try B (AI Game) first if available, then A
-                game_options = _extract_game_options(screen)
-                # Filter out quit/menu options
-                game_options_only = [
-                    (letter, desc)
-                    for letter, desc in game_options
-                    if letter not in ["Q", "X", "!"]
-                    and "quit" not in desc.lower()
-                    and "back" not in desc.lower()
-                ]
-
-                if bot.menu_selection_attempts == 1:
-                    # First attempt - use normal selection (single key, no \r)
-                    game_letter = _select_trade_wars_game(screen)
-                    print(
-                        f"    → menu_selection game (attempt {bot.menu_selection_attempts}): "
-                        f"Sending {game_letter} (single key)"
-                    )
-                    await bot.session.send(game_letter)  # Single key - NO \r
-                    bot.last_game_letter = game_letter
-                    await asyncio.sleep(0.2)  # Let session settle before next wait
-                elif (
-                    bot.menu_selection_attempts == 2
-                    and len(game_options_only) > 1
-                ):
-                    # Second attempt - try the other game
-                    other_letter = (
-                        game_options_only[1][0]
-                        if game_options_only[0][0] == bot.last_game_letter
-                        else game_options_only[0][0]
-                    )
-                    print(
-                        f"    → menu_selection game (attempt {bot.menu_selection_attempts}): "
-                        f"Trying alternate: {other_letter} (single key)"
-                    )
-                    await bot.session.send(other_letter)  # Single key - NO \r
-                else:
-                    # Too many attempts - quit
-                    print("    → menu_selection: Too many game selection attempts, quitting")
-                    bot.menu_selection_attempts = 0
-                    await bot.session.send("Q")
+                game_letter = _select_trade_wars_game(screen)
+                print(
+                    f"    → Sending {game_letter} to select game (single key)"
+                )
+                await bot.session.send(game_letter)  # Single key - NO \r
+                # IMPORTANT: continue here to loop immediately without executing
+                # other handlers. This matches the diagnostic's structure and
+                # prevents loop detection issues.
+                continue
             else:
                 # Unknown menu - quit
                 print("    → menu_selection: Unknown menu, sending Q")
                 await bot.session.send("Q")
+                continue
 
         elif "command" in prompt_id or "sector_command" in prompt_id:
             # Reached game - command prompt
