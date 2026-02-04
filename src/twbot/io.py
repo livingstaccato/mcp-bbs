@@ -2,16 +2,15 @@
 
 import asyncio
 import time
-from typing import Optional
 
 from .errors import _detect_error_in_screen, _check_for_loop
 
 
 async def wait_and_respond(
     bot,
-    prompt_id_pattern: Optional[str] = None,
+    prompt_id_pattern: str | None = None,
     timeout_ms: int = 10000,
-) -> tuple[Optional[str], Optional[str], str, Optional[dict]]:
+) -> tuple[str | None, str | None, str, dict | None]:
     """Wait for prompt and return (input_type, prompt_id, screen, kv_data).
 
     Args:
@@ -90,7 +89,7 @@ async def wait_and_respond(
 
 
 async def send_input(
-    bot, keys: str, input_type: Optional[str], wait_after: float = 0.2
+    bot, keys: str, input_type: str | None, wait_after: float = 0.2
 ):
     """Send input based on input_type metadata.
 

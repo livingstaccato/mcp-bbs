@@ -1,7 +1,5 @@
 """Error detection and loop checking utilities."""
 
-from typing import Optional
-
 from .logging_utils import logger
 
 
@@ -31,7 +29,7 @@ def _check_for_loop(bot, prompt_id: str) -> bool:
     return False
 
 
-def _detect_error_in_screen(screen: str) -> Optional[str]:
+def _detect_error_in_screen(screen: str) -> str | None:
     """Detect common error messages in screen text.
 
     Args:

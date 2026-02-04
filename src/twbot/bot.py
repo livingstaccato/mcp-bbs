@@ -1,7 +1,6 @@
 """Main TradingBot class with state management."""
 
 import time
-from typing import Optional
 
 from mcp_bbs.config import get_default_knowledge_root
 from mcp_bbs.core.session_manager import SessionManager
@@ -20,11 +19,11 @@ class TradingBot:
     def __init__(self):
         self.session_manager = SessionManager()
         self.knowledge_root = get_default_knowledge_root()
-        self.session_id: Optional[str] = None
+        self.session_id: str | None = None
         self.session = None
 
         # State tracking
-        self.current_sector: Optional[int] = None
+        self.current_sector: int | None = None
         self.current_credits: int = 0
         self.cycle_count = 0
         self.step_count = 0
@@ -35,7 +34,7 @@ class TradingBot:
         # Error tracking
         self.error_count = 0
         self.loop_detection: dict[str, int] = {}  # prompt_id -> count
-        self.last_prompt_id: Optional[str] = None
+        self.last_prompt_id: str | None = None
         self.stuck_threshold = 3  # Max times to see same prompt before declaring stuck
 
         # Session tracking
@@ -47,7 +46,7 @@ class TradingBot:
 
         # Menu navigation tracking
         self.menu_selection_attempts = 0
-        self.last_game_letter: Optional[str] = None
+        self.last_game_letter: str | None = None
 
     # Connection methods
     async def connect(self, host="localhost", port=2002):
@@ -78,11 +77,11 @@ class TradingBot:
         await trading.run_trading_loop(self, target_credits, max_cycles)
 
     # I/O methods
-    async def wait_and_respond(self, prompt_id_pattern: Optional[str] = None, timeout_ms: int = 10000):
+    async def wait_and_respond(self, prompt_id_pattern: str | None = None, timeout_ms: int = 10000):
         """Wait for prompt and return (input_type, prompt_id, screen)."""
         return await io.wait_and_respond(self, prompt_id_pattern, timeout_ms)
 
-    async def send_input(self, keys: str, input_type: Optional[str], wait_after: float = 0.2):
+    async def send_input(self, keys: str, input_type: str | None, wait_after: float = 0.2):
         """Send input based on input_type metadata."""
         await io.send_input(self, keys, input_type, wait_after)
 
@@ -108,7 +107,7 @@ class TradingBot:
         return parsing._clean_screen_for_display(screen, max_lines)
 
     # Error handling methods
-    def _detect_error_in_screen(self, screen: str) -> Optional[str]:
+    def _detect_error_in_screen(self, screen: str) -> str | None:
         """Detect common error messages in screen text."""
         from . import errors
         return errors._detect_error_in_screen(screen)
