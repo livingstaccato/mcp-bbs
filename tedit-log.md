@@ -168,3 +168,64 @@
 - 2026-02-04: Game Timing Editor values captured (delay settings list) into tedit-kv.jsonl.
 - 2026-02-04: Access Manager screen captured (access_modes: "All day : Multiplayer Access").
 - 2026-02-04: Report Manager screen captured (modes, blackout settings, report types).
+- 2026-02-04: Remove derelict spacecraft: confirmation prompt seen (answered N).
+- 2026-02-04: List current users output paged; mostly "Unused record" entries; returned to main menu after multiple [Pause] screens.
+- 2026-02-04: Add player to closed game: message "This isn't a closed game. Enable \"Closed Game\" in General Editor Two." then [Pause].
+- 2026-02-04: Repair Gold data confirmation prompt seen (answered N).
+- 2026-02-04: Gold Ship Editor opened (class Escape Pod, make Standard Manufacture, max values tab). Captured to tedit-kv.jsonl.
+- 2026-02-04: Gold Planet Editor opened (Earth Type class, max values tab). Captured to tedit-kv.jsonl.
+- 2026-02-04: Alien Race Editor opened (Alien Traders race, settings tab). Captured to tedit-kv.jsonl.
+- 2026-02-04: Active Aliens Editor opened (Alien Traders, Alien #1 Cuni Sheushes, traits tab). Captured to tedit-kv.jsonl.
+- 2026-02-04: Gold Ship/Planet/Alien Race tabs 2-6 and Active Aliens tabs 2-3 captured to tedit-kv.jsonl (initial values, settings, costs, misc, behaviors, spawning profile, resources, rankings, etc.).
+- 2026-02-04: Sector 1: set Nebulae field to blank via <Z> in Sector Editor.
+- 2026-02-04: Sector 1: marker beacon prompt seen; set beacon to "FedSpace, FedLaw Enforced".
+- 2026-02-04: Corp #3 initialize failed; prompt for CEO name and trader; "Unknown Trader!" then "Corp must have a valid CEO!".
+- 2026-02-04: Corporation Editor input appears to jump to Gold Ship Editor after entering ID (1) at prompt; unable to reach corp detail screen from this prompt (possible desync/bug).
+- 2026-02-04: Access Manager edit flow prompts captured (select entry, access mode, time). Left defaults unchanged.
+- 2026-02-04: Planet Editor (Standard) ID 1 captured (Terra, sector 1, Federation, 50,152 colonists on hand).
+- 2026-02-04: Port Editor (Standard) ID 1 captured (Corp, class 0, sector 1, firepower 10%).
+- 2026-02-04: Sector Editor (Standard) ID 1 captured; edited Nebulae to blank; beacon seen as None; warp F shows 0.
+- 2026-02-04: User Editor (Standard) captured user #7 (Alpha/alpha) and #9 (Gamma/gamma) records.
+- 2026-02-04: Ship Editor (Standard) ID 1 captured (tim2 ship details).
+- 2026-02-04: Report Manager prompts captured for rankings mode and game log blackout; high score mode/entry blackout/port report delay did not prompt (possibly due to interactive subprompt setting). 
+- 2026-02-04: Access Manager add (+) flow: entered mode=1 at 01:00 AM, but list did not display new entry afterward (possible desync). Insert (I) key unexpectedly dropped into General Editor Three screen.
+- 2026-02-04: Planet Editor selection (N -> Planet ID 1) intermittently drops into Gold Ship Editor (Escape Pod) instead of planet detail screen; possible desync/bug.
+- 2026-02-04: Port Editor (Standard) ID 1: attempting <L> to edit firepower unexpectedly triggered "List current users" paging; no port change confirmed.
+- 2026-02-04: General Editor Two: Interactive Sub-Prompts prompt shown; answered Y, but value still shows No afterward. Closed Game toggle ([) did not change value.
+- 2026-02-04: General Editor One Sysop name set to "TimSysop".
+- 2026-02-04: General Editor Three: Beacon cost changed from 25 to 30.
+- 2026-02-04: Port Editor selection (P -> Port ID 1) intermittently drops into Gold Ship Editor (Escape Pod) instead of port detail screen; possible desync/bug.
+- 2026-02-04: Access Manager remove (-) prompts captured; declined removal. Insert (I) again unexpectedly jumped to General Editor Three (desync).
+- 2026-02-04: General Editor Three prompts captured for Port Report Delay, Startup Asset Dropoff, Multiple Photon Fire, Who's Online. Beacon cost set to 30.
+- 2026-02-04: Game Timing Editor: Ship Move/Attack delay mode prompt captured (kept default CONSTANT).
+- 2026-02-04: Emulation Editor latency prompt captured (kept 150 ms).
+- 2026-02-04: Planet Editor (Standard) ID 2 captured (Ferrengal details, production, treasury, citadel project). 
+- 2026-02-04: Port Editor selection (P -> Port ID 2) jumped into Gold Planet Editor (Earth Type) instead of port detail screen; desync.
+- 2026-02-04: Corporation Editor ID 1 selection returned to main menu (no corp detail screen). Likely desync/bug persists.
+- 2026-02-04: Ship Editor ID 2 selection did not open ship detail (desync); screen returned to partial main menu.
+- 2026-02-04: Screen saving disabled after disk full error; deleted old screen captures from /Users/tim/Library/Application Support/mcp-bbs/shared/screens.
+- 2026-02-04: Maintenance: Remove derelict spacecraft confirmed (Y).
+- 2026-02-04: User Editor selection (ID 7) returned to main menu without user detail screen (desync).
+- 2026-02-04: Screen saving disabled again after disk-full error when reconnecting; cleared /tmp and screen files to recover space.
+- 2026-02-04: Sector Editor selection (ID 3) returned to main menu without sector detail screen (desync).
+- 2026-02-04: User Editor selection (ID 7) still returning to main menu (desync).
+- 2026-02-04: Planet Editor selection (ID 3) returned to main menu without planet detail screen (desync).
+- 2026-02-04: Sector Editor selection (ID 4) jumped into Active Alien Editor (desync).
+- 2026-02-04: Alien Race Editor Ferrengi: captured settings/behaviors/spawning/resources and sample available ships (day 0).
+- 2026-02-04: Active Aliens Editor: Ferrengi race (ID 1) alien #1 Darog captured (traits, ship, inventory).
+- 2026-02-04: Active Aliens Editor: Ferrengi alien #2 Serpor captured (traits, ship, inventory).
+- 2026-02-04: Active Aliens Editor: Ferrengi alien #3 Seret captured (traits, ship, inventory).
+- 2026-02-04: Active Aliens Editor: Ferrengi alien #4 Larton captured (traits, ship, inventory).
+- 2026-02-04: Active Aliens Editor: Ferrengi aliens #5-#15 shown as NOT SPAWNED; recorded in tedit-kv.jsonl.
+- 2026-02-04: Active Aliens Editor: Ferrengi aliens #16-#25 shown as NOT SPAWNED; recorded in tedit-kv.jsonl.
+- 2026-02-04: Active Aliens Editor: Ferrengi aliens #26-#30 shown as NOT SPAWNED; recorded in tedit-kv.jsonl.
+- 2026-02-04: Active Aliens Editor: Ferrengi aliens #31-#35 shown as NOT SPAWNED; recorded in tedit-kv.jsonl.
+- 2026-02-04: Fresh TEDIT session: Planet Editor ID 1 still returns to main menu (desync persists).
+- 2026-02-04: Fresh TEDIT session: Port Editor ID 1 still jumps to Gold Ship Editor (desync persists).
+[2026-02-04] Sector Editor: entered 3 -> returned to main menu (no sector details). Desync persists.
+[2026-02-04] User Editor: entered user id 1 -> jumped to Gold Ship Editor class screen (desync).
+[2026-02-04] Port Editor: entered port id 1 -> jumped to Gold Ship Editor class screen (desync).
+[2026-02-04] Active Aliens: Ferrengi #36-#40 all NOT SPAWNED.
+[2026-02-04] Closed Game set to Yes. Added closed-game users: TESTPLAYER1 (pw testpw1), TESTPLAYER2 (pw testpw2; confirmed prompt).
+[2026-02-04] Corp init: Corp #2 created with CEO tim2, name TestCorpA, password CORPPW; Corp #3 created with CEO ThePlayer, name TestCorpB, password CORPPW2. Deleted corp #2 via ! (confirmed Y).
+[2026-02-04] Access Manager: Edit entry 0 (All day Multiplayer Access) viewed; left mode/time unchanged (0, 12:00 AM). Report Manager: High Score Mode prompt viewed, left at On demand.

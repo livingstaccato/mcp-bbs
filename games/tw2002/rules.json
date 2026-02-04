@@ -250,6 +250,56 @@
       "notes": "StarDock purchase menu"
     },
     {
+      "id": "prompt.twgs_select_game",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)select\\s+game",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS game selection menu"
+    },
+    {
+      "id": "prompt.port_quantity",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many.*units",
+        "match_mode": "regex"
+      },
+      "notes": "Port buy/sell quantity prompt"
+    },
+    {
+      "id": "prompt.port_price",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)offer.*price",
+        "match_mode": "regex"
+      },
+      "notes": "Port commodity price prompt"
+    },
+    {
+      "id": "prompt.port_action",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)\\[t\\].*transaction",
+        "match_mode": "regex"
+      },
+      "notes": "Port action menu (T for transaction)"
+    },
+    {
+      "id": "prompt.warp_sector",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)enter.*sector",
+        "match_mode": "regex"
+      },
+      "notes": "Warping - enter destination sector"
+    },
+    {
       "id": "prompt.start_over",
       "kind": "pause",
       "input_type": "any_key",
