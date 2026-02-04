@@ -40,6 +40,11 @@ async def wait_and_respond(
             prompt_id = detected.get("prompt_id")
             input_type = detected.get("input_type")
             kv_data = detected.get("kv_data")
+            is_idle = detected.get("is_idle", False)
+
+            # Wait for screen to stabilize before returning
+            if not is_idle:
+                continue
 
             # Only check for context-specific errors (not menu-wide error text)
             # Check for errors ONLY if we're at a password/login prompt
