@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -18,9 +18,14 @@ from mcp_bbs.constants import (
 )
 from mcp_bbs.core.session import Session
 from mcp_bbs.learning.engine import LearningEngine
+from mcp_bbs.addons.manager import AddonManager
+from mcp_bbs.addons.tw2002 import Tw2002Addon
 from mcp_bbs.logging.session_logger import SessionLogger
 from mcp_bbs.terminal.emulator import TerminalEmulator
 from mcp_bbs.transport.telnet import TelnetTransport
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 log = structlog.get_logger()
 
@@ -51,7 +56,7 @@ class SessionManager:
         reuse: bool = False,
         send_newline: bool = False,
         session_id: str | None = None,
-        **options,
+        **options: Any,
     ) -> str:
         """Create new session or reuse existing one.
 
@@ -106,7 +111,7 @@ class SessionManager:
                     transport.connect(host, port, cols=cols, rows=rows, term=term, **options),
                     timeout=timeout,
                 )
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 raise ConnectionError(f"Connection timeout to {host}:{port}") from e
 
             # Create session components
@@ -185,7 +190,7 @@ class SessionManager:
             except Exception as e:
                 log.warning("session_close_failed", session_id=session_id, error=str(e))
 
-    def list_sessions(self) -> list[dict]:
+    def list_sessions(self) -> list[dict[str, Any]]:
         """List all sessions.
 
         Returns:
@@ -252,6 +257,8 @@ class SessionManager:
             knowledge_root = get_default_knowledge_root()
 
         session.learning = LearningEngine(knowledge_root, namespace)
+        if namespace == "tw2002":
+            session.addons = AddonManager(addons=[Tw2002Addon()])
 
         log.info(
             "learning_enabled",

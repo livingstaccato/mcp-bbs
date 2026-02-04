@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+import contextlib
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -63,7 +64,7 @@ class TelnetTransport(ConnectionTransport):
         rows: int = 25,
         term: str = "ANSI",
         timeout: float = DEFAULT_CONNECT_TIMEOUT_S,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Establish telnet connection to remote host.
 
@@ -350,10 +351,8 @@ class TelnetTransport(ConnectionTransport):
             return
 
         self._writer.write(bytes([IAC, cmd, opt]))
-        try:
+        with contextlib.suppress(ConnectionResetError, BrokenPipeError):
             await self._writer.drain()
-        except (ConnectionResetError, BrokenPipeError):
-            pass
 
     async def _send_will(self, opt: int) -> None:
         """Send WILL command for option."""
@@ -391,10 +390,8 @@ class TelnetTransport(ConnectionTransport):
             return
 
         self._writer.write(msg)
-        try:
+        with contextlib.suppress(ConnectionResetError, BrokenPipeError):
             await self._writer.drain()
-        except (ConnectionResetError, BrokenPipeError):
-            pass
 
     async def _send_ttype(self, term: str) -> None:
         """Send terminal type subnegotiation."""
@@ -407,7 +404,5 @@ class TelnetTransport(ConnectionTransport):
             return
 
         self._writer.write(bytes([IAC, SB]) + payload + bytes([IAC, SE]))
-        try:
+        with contextlib.suppress(ConnectionResetError, BrokenPipeError):
             await self._writer.drain()
-        except (ConnectionResetError, BrokenPipeError):
-            pass

@@ -1,0 +1,72 @@
+{
+  "timestamp": 1770170996,
+  "target_turns": 1000,
+  "turns_played": 10,
+  "total_actions": 11,
+  "elapsed_time": 32.94577622413635,
+  "pattern_matches": {
+    "twgs_select_game": 11
+  },
+  "errors": [],
+  "final_state": {
+    "sector": 1,
+    "credits": 0
+  },
+  "actions_sample": [
+    {
+      "turn": 0,
+      "action": "Enter player: Bot1000",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 0,
+      "action": "Port report",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 1,
+      "action": "Long range scan",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 2,
+      "action": "Check inventory",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 3,
+      "action": "Computer scan",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 4,
+      "action": "Long range scan",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 5,
+      "action": "Computer scan",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 6,
+      "action": "Display computer",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 7,
+      "action": "Move to random sector",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 8,
+      "action": "Check inventory",
+      "prompt_detected": "twgs_select_game"
+    },
+    {
+      "turn": 9,
+      "action": "Display computer",
+      "prompt_detected": "twgs_select_game"
+    }
+  ]
+}

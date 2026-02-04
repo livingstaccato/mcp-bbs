@@ -1,0 +1,122 @@
+================================================================================
+TW2002 - 1000 TURN AUTONOMOUS PLAYTHROUGH
+================================================================================
+Target: 1000 turns
+Server: localhost:2002
+
+2026-02-03 17:40:03 [info     ] telnet_connected               cols=80 host=localhost port=2002 rows=25 term=ANSI
+2026-02-03 17:40:03 [info     ] session_created                cols=80 host=localhost port=2002 rows=25 session_id=dcf6dfd9-4204-44ae-9f66-e86acf65f686 session_number=1 term=ANSI
+2026-02-03 17:40:03 [info     ] learning_enabled               knowledge_root='/Users/tim/Library/Application Support/mcp-bbs' namespace=tw2002 session_id=dcf6dfd9-4204-44ae-9f66-e86acf65f686
+✓ Connected to localhost:2002
+✓ Learning enabled with 13 patterns
+
+
+🎮 Phase 1: Navigate to Game
+================================================================================
+  At login prompt
+  → Enter player: Bot1000
+  TWGS game selection menu detected
+  → Select 'A' - My Game
+✓ Entered game
+
+🎲 Phase 2: Playing 1000 Turns
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+Turn 0/1000
+Elapsed: 0.0s | Rate: 0.0 turns/sec | ETA: 0.0s
+Sector: 1 | Credits: 0
+Patterns detected: 1
+Errors: 0
+────────────────────────────────────────────────────────────────────────────────
+  → Move to random sector
+  → Computer scan
+  → Move to random sector
+  → Move to random sector
+  → Display computer
+  → Display computer
+  → Display computer
+  → Computer scan
+  → Port report
+  → Help/Commands
+  → Computer scan
+  → Computer scan
+  → Display computer
+  → Check inventory
+  → Display computer
+  → Move to random sector
+  → Help/Commands
+  → Computer scan
+  → Move to random sector
+  → Display computer
+  → Display computer
+  → Move to random sector
+  → Port report
+  → Move to random sector
+  → Long range scan
+  → Computer scan
+  → Move to random sector
+  → Display computer
+  → Move to random sector
+  → Port report
+  → Move to random sector
+  → Move to random sector
+  → Computer scan
+  → Move to random sector
+  → Long range scan
+  → Move to random sector
+  → Long range scan
+  → Computer scan
+  → Check inventory
+  → Move to random sector
+  → Long range scan
+  → Display computer
+  → Help/Commands
+  → Move to random sector
+  → Long range scan
+  → Move to random sector
+  → Display computer
+  → Help/Commands
+  → Port report
+  → Move to random sector
+
+────────────────────────────────────────────────────────────────────────────────
+Turn 50/1000
+Elapsed: 145.2s | Rate: 0.3 turns/sec | ETA: 2759.5s
+Sector: 1 | Credits: 0
+Patterns detected: 1
+Errors: 0
+────────────────────────────────────────────────────────────────────────────────
+  → Move to random sector
+  → Display computer
+  → Move to random sector
+  → Help/Commands
+  → Move to random sector
+  → Long range scan
+  → Move to random sector
+  → Help/Commands
+  → Display computer
+  → Move to random sector
+  → Move to random sector
+  → Long range scan
+  → Display computer
+  → Long range scan
+  → Corporate report
+  → Move to random sector
+  → Move to random sector
+  → Check inventory
+  → Help/Commands
+  → Help/Commands
+  → Display computer
+  → Computer scan
+  → Move to random sector
+  → Check inventory
+  → Help/Commands
+  → Help/Commands
+  → Display computer
+  → Move to random sector
+  → Move to random sector
+  → Display computer
+  → Check inventory
+  → Long range scan

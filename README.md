@@ -17,6 +17,8 @@ mcp-bbs bridges modern AI agents with vintage BBS systems by providing:
 
 ## Architecture
 
+mcp-bbs uses a clean layered architecture with proper separation of concerns:
+
 ```mermaid
 graph TB
     subgraph "AI Agent"
@@ -26,11 +28,28 @@ graph TB
 
     subgraph "mcp-bbs Server"
         App[FastMCP App]
-        Client[TelnetClient]
-        Protocol[TelnetProtocol]
-        Screen[Terminal Emulator<br/>pyte]
-        Learn[Auto-Learning]
-        Log[Session Logger]
+        SM[SessionManager]
+
+        subgraph "Core Layer"
+            Session[Session]
+        end
+
+        subgraph "Transport Layer"
+            Transport[TelnetTransport]
+        end
+
+        subgraph "Terminal Layer"
+            Emulator[TerminalEmulator<br/>pyte]
+        end
+
+        subgraph "Learning Layer"
+            Engine[LearningEngine]
+            Discovery[Menu Discovery]
+        end
+
+        subgraph "Logging Layer"
+            Logger[SessionLogger]
+        end
     end
 
     subgraph "BBS System"
@@ -46,20 +65,30 @@ graph TB
 
     LLM --> MCP
     MCP -->|MCP Tools| App
-    App --> Client
-    Client --> Protocol
-    Protocol -->|Telnet Commands| Telnet
+    App --> SM
+    SM --> Session
+    Session --> Transport
+    Session --> Emulator
+    Session --> Engine
+    Session --> Logger
+    Transport -->|RFC 854 + IAC Escaping| Telnet
     Telnet --> BBS
-    BBS -->|ANSI Output| Telnet
-    Telnet -->|Raw Bytes| Protocol
-    Protocol --> Screen
-    Screen --> Client
-    Client --> Learn
-    Learn --> Prompts
-    Learn --> Menus
-    Learn --> Flows
-    Client --> Log
+    BBS -->|ANSI/CP437| Telnet
+    Telnet -->|Raw Bytes| Transport
+    Transport --> Emulator
+    Engine --> Discovery
+    Engine --> Prompts
+    Engine --> Menus
+    Engine --> Flows
 ```
+
+### Architecture Layers
+
+- **Transport Layer** (`transport/`): Protocol abstraction (telnet with RFC 854 compliance, IAC byte escaping)
+- **Terminal Layer** (`terminal/`): ANSI/CP437 terminal emulation using pyte
+- **Core Layer** (`core/`): Session management with resource limits and state isolation
+- **Learning Layer** (`learning/`): Auto-discovery of menus/prompts, knowledge base management
+- **Logging Layer** (`logging/`): Structured JSONL session logging with raw bytes
 
 ## Features
 
@@ -183,12 +212,12 @@ mcp-bbs --host localhost --port 2002
 Direct Python API usage without MCP:
 
 ```python
-from mcp_bbs.telnet_client import TelnetClient
+from mcp_bbs.core.session_manager import SessionManager
 
-client = TelnetClient()
+manager = SessionManager(max_sessions=10)
 
-# Connect
-await client.connect(
+# Connect and create session
+session_id = await manager.create_session(
     host="bbs.example.com",
     port=23,
     cols=80,
@@ -198,13 +227,14 @@ await client.connect(
     reuse=False
 )
 
+# Get session
+session = await manager.get_session(session_id)
+
 # Read screen with timeout
-snapshot = await client.read(timeout_ms=250, max_bytes=8192)
+snapshot = await session.read(timeout_ms=250, max_bytes=8192)
 
 # Snapshot contains:
 # - screen: formatted text (80x25)
-# - raw: raw terminal output
-# - raw_bytes_b64: base64 encoded raw bytes
 # - screen_hash: SHA256 of screen text
 # - cursor: {x, y} position
 # - cols, rows, term
@@ -213,22 +243,34 @@ print(snapshot["screen"])
 print(f"Cursor at: {snapshot['cursor']}")
 
 # Send keys
-await client.send("A\r\n")
+await session.send("A\r\n")
 
-# Wait for specific pattern
-result = await client.read_until_pattern(
-    pattern=r"Enter your name:",
-    timeout_ms=5000,
-    interval_ms=100,
-    max_bytes=8192
-)
+# Wait for specific pattern (manual implementation)
+import re
+import asyncio
 
-if result["matched"]:
+pattern = re.compile(r"Enter your name:")
+timeout = 5.0
+interval = 0.1
+start_time = asyncio.get_event_loop().time()
+
+matched = False
+while asyncio.get_event_loop().time() - start_time < timeout:
+    snapshot = await session.read(timeout_ms=int(interval * 1000), max_bytes=8192)
+    if pattern.search(snapshot["screen"]):
+        matched = True
+        break
+    await asyncio.sleep(interval)
+
+if matched:
     print("Found prompt!")
-    await client.send("Alice\r")
+    await session.send("Alice\r")
 
-await client.disconnect()
+# Disconnect
+await manager.close_session(session_id)
 ```
+
+**Note:** For convenience, use the MCP tools which provide higher-level operations like `bbs_read_until_pattern`. The direct API is lower-level and requires manual pattern matching loops.
 
 ## MCP Tools Reference
 
@@ -556,11 +598,21 @@ export BBS_KNOWLEDGE_ROOT=$(pwd)/.bbs-knowledge
 
 ### Terminal Settings
 
-Configure terminal size and keepalive:
+Configure terminal size and keepalive via MCP tools:
 
 ```python
-await client.set_size(cols=80, rows=25)
-await client.set_keepalive(interval_s=30.0, keys="\r")
+# Using MCP client
+await client.call_tool("bbs_set_size", {"cols": 80, "rows": 25})
+await client.call_tool("bbs_set_keepalive", {"interval_s": 30.0, "keys": "\r"})
+```
+
+Or programmatically:
+
+```python
+# Using SessionManager
+session = await manager.get_session(session_id)
+await session.set_size(cols=80, rows=25)
+# Keepalive is configured per-session through the session manager
 ```
 
 ## Development
@@ -592,15 +644,99 @@ pytest
 
 ### Regenerate Diagrams
 
-The architecture and workflow diagrams are generated from Mermaid files using `mermaid-py`:
+The architecture and workflow diagrams are generated from Mermaid files using `mermaid-py`.
+
+Generate SVG diagrams using make:
 
 ```bash
-python3 docs/generate_diagrams.py
+make diagrams
+```
+
+Available targets:
+- `make diagrams` or `make diagrams-svg` - Generate SVG diagrams (default)
+- `make diagrams-png` - Generate PNG diagrams
+- `make clean` - Remove all generated diagram files
+- `make help` - Show all available targets
+
+Alternatively, run the script directly:
+
+```bash
+python3 docs/generate_diagrams.py --format svg
 ```
 
 Source files:
 - `docs/diagrams/architecture.mmd` → `architecture.svg`
 - `docs/diagrams/workflow.mmd` → `workflow.svg`
+- `docs/diagrams/session-flow.mmd` → `session-flow.svg`
+
+## Intelligent Bot & Pattern Testing
+
+mcp-bbs includes an intelligent bot system that uses prompt detection to autonomously navigate BBS games and test prompt patterns.
+
+### Quick Start
+
+```bash
+# Run intelligent bot with pattern testing
+python play_tw2002_intelligent.py
+
+# Run systematic pattern validation
+python test_all_patterns.py
+```
+
+### Features
+
+- **Reactive Detection**: Bot waits for prompts, detects them, and responds appropriately
+- **Auto-Pagination**: Automatically handles "more" prompts and pagination
+- **Pattern Validation**: Tests all 13 defined prompt patterns
+- **Flow Tracking**: Records action→prompt sequences
+- **Comprehensive Reports**: Generates JSON and Markdown results
+
+### Architecture
+
+The intelligent bot uses a **hybrid reactive approach**:
+
+1. **Phase 1**: Pure reactive - detect prompts as they appear
+2. **Phase 2**: Track prompt sequences and flows
+3. **Phase 3**: Add prediction for common patterns (future)
+
+See [.provide/INTELLIGENT-BOT-README.md](.provide/INTELLIGENT-BOT-README.md) for complete documentation.
+
+### Example Bot Usage
+
+```python
+from play_tw2002_intelligent import IntelligentTW2002Bot
+
+bot = IntelligentTW2002Bot()
+await bot.connect()
+
+# Navigate to game
+await bot.navigate_twgs_to_game()
+await bot.enter_game_as_player("BotName")
+
+# Test commands with automatic prompt detection
+await bot.test_command("D\r", "Display computer")
+await bot.test_command("I\r", "Show inventory")
+
+# Auto-handles pagination
+snapshot = await bot.send_and_wait("L\r", "Long range scan")
+snapshot = await bot.handle_pagination(snapshot)
+
+# Generate results
+await bot.generate_report()
+```
+
+### Pattern Testing
+
+13 patterns tested:
+- `login_username`, `login_password`
+- `twgs_main_menu`, `twgs_select_game`
+- `main_menu`, `command_prompt_generic`
+- `sector_command`, `planet_command`
+- `press_any_key`, `more_prompt`
+- `yes_no_prompt`, `quit_confirm`
+- `enter_number`
+
+Results saved to `.provide/intelligent-bot-{timestamp}.json`
 
 ## License
 

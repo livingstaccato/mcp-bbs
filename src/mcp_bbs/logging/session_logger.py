@@ -67,7 +67,7 @@ class SessionLogger:
         }
         await self._write_event("send", data)
 
-    async def log_screen(self, snapshot: dict, raw: bytes) -> None:
+    async def log_screen(self, snapshot: dict[str, Any], raw: bytes) -> None:
         """Log screen snapshot with raw bytes.
 
         Args:

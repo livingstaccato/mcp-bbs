@@ -18,7 +18,8 @@
       "Bash(xxd:*)",
       "Bash(.venv/bin/pip:*)",
       "Bash(ls:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(uv pip install:*)"
     ]
   }
 }

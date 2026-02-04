@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _OPTION_PATTERNS = [
     re.compile(r"^\s*<(?P<key>[A-Za-z0-9])>\s*(?P<label>.+?)\s*$"),

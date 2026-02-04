@@ -950,12 +950,13 @@ wheels = [
 
 [[package]]
 name = "mcp-bbs"
-version = "0.1.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
     { name = "pexpect" },
     { name = "platformdirs" },
+    { name = "pydantic" },
     { name = "pyte" },
     { name = "structlog" },
 ]
@@ -983,6 +984,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "pexpect", specifier = ">=4.9.0" },
     { name = "platformdirs", specifier = ">=4.0.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
     { name = "pyte", specifier = ">=0.8.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },

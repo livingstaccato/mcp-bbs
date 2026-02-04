@@ -21,7 +21,7 @@ async def test_keepalive_configure_enabled() -> None:
         return True
 
     controller = KeepaliveController(mock_send, is_connected)
-    result = controller.configure(1.0, "\r")
+    result = await controller.configure(1.0, "\r")
 
     assert result == "ok"
     status = controller.status()
@@ -40,7 +40,7 @@ async def test_keepalive_configure_disabled() -> None:
         return False
 
     controller = KeepaliveController(mock_send, is_connected)
-    result = controller.configure(0, "\r")
+    result = await controller.configure(0, "\r")
 
     assert result == "ok"
     status = controller.status()
@@ -58,14 +58,15 @@ async def test_keepalive_on_connect() -> None:
         return True
 
     controller = KeepaliveController(mock_send, is_connected)
-    controller.configure(30.0, "\r")
+    await controller.configure(30.0, "\r")
     controller.on_connect()
 
     status = controller.status()
     assert status["running"] is True
 
 
-def test_keepalive_on_disconnect() -> None:
+@pytest.mark.asyncio
+async def test_keepalive_on_disconnect() -> None:
     """Test keepalive stops on disconnect."""
 
     async def mock_send(keys: str) -> str:
@@ -75,7 +76,7 @@ def test_keepalive_on_disconnect() -> None:
         return False
 
     controller = KeepaliveController(mock_send, is_connected)
-    controller.on_disconnect()
+    await controller.on_disconnect()
 
     status = controller.status()
     assert status["running"] is False

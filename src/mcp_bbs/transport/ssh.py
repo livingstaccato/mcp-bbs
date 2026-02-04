@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from mcp_bbs.transport.base import ConnectionTransport
 
 
 class SSHTransport(ConnectionTransport):
     """SSH protocol transport implementation (stub for future development)."""
 
-    async def connect(self, host: str, port: int, **kwargs) -> None:
+    async def connect(self, host: str, port: int, **kwargs: Any) -> None:
         """Establish SSH connection to remote host."""
         raise NotImplementedError("SSH transport not yet implemented")
 

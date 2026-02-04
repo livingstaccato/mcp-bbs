@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+import contextlib
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 @dataclass
@@ -25,7 +28,7 @@ class KeepaliveController:
         self._keys = "\r"
         self._task: asyncio.Task[None] | None = None
 
-    def configure(self, interval_s: float | None, keys: str = "\r") -> str:
+    async def configure(self, interval_s: float | None, keys: str = "\r") -> str:
         if interval_s is not None and interval_s <= 0:
             self._interval_s = None
         else:
@@ -35,31 +38,34 @@ class KeepaliveController:
             if self._interval_s:
                 self._start()
             else:
-                self._stop()
+                await self._stop()
         return "ok"
 
     def on_connect(self) -> None:
         if self._interval_s:
             self._start()
 
-    def on_disconnect(self) -> None:
-        self._stop()
+    async def on_disconnect(self) -> None:
+        await self._stop()
 
     def status(self) -> dict[str, Any]:
         running = self._task is not None and not self._task.done()
         return KeepaliveStatus(self._interval_s, self._keys, running).__dict__
 
     def _start(self) -> None:
-        self._stop()
+        # Note: _stop is now async, but we can't await in sync _start.
+        # Instead, cancel synchronously and let caller handle cleanup if needed.
+        if self._task and not self._task.done():
+            self._task.cancel()
         if not self._interval_s:
             return
         self._task = asyncio.create_task(self._loop())
 
-    def _stop(self) -> None:
-        if self._task:
+    async def _stop(self) -> None:
+        if self._task and not self._task.done():
             self._task.cancel()
-            # Note: We don't await here since this is sync. The task will be cleaned up.
-            # For proper cleanup, use async stop() method if available.
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
         self._task = None
 
     async def _loop(self) -> None:

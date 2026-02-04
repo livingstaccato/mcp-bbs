@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from mcp_bbs.telnet import TelnetClient
+from mcp_bbs.core.session_manager import SessionManager
 
 
 @dataclass
@@ -40,22 +42,47 @@ async def run_script(
     expect_timeout_ms: int,
     expect_interval_ms: int,
 ) -> None:
-    client = TelnetClient()
-    await client.connect(host, port, cols, rows, term, True, True)
+    manager = SessionManager()
+    session_id = await manager.create_session(
+        host=host,
+        port=port,
+        cols=cols,
+        rows=rows,
+        term=term,
+        send_newline=True,
+        reuse=True,
+    )
+    session = await manager.get_session(session_id)
     steps = parse_script(script)
     try:
         for step in steps:
             if step.kind == "send":
-                await client.send(step.payload.encode("utf-8").decode("unicode_escape"))
+                await session.send(step.payload.encode("utf-8").decode("unicode_escape"))
                 continue
             if step.kind == "expect":
-                result = await client.expect(step.payload, expect_timeout_ms, expect_interval_ms)
-                if not result.get("matched"):
-                    screen_text = result.get("screen", "")
+                # Implement expect functionality inline (read_until_pattern)
+                pattern = re.compile(step.payload)
+                deadline = time.monotonic() + expect_timeout_ms / 1000
+                matched = False
+                last_snapshot = {}
+
+                while time.monotonic() < deadline:
+                    snapshot = await session.read(expect_interval_ms, 8192)
+                    if snapshot.get("disconnected"):
+                        break
+                    screen = snapshot.get("screen", "")
+                    if pattern.search(screen):
+                        matched = True
+                        last_snapshot = snapshot
+                        break
+                    last_snapshot = snapshot
+
+                if not matched:
+                    screen_text = last_snapshot.get("screen", "")
                     raise RuntimeError(f"EXPECT failed: {step.payload}\n\n{screen_text}")
                 continue
     finally:
-        await client.disconnect()
+        await manager.close_session(session_id)
 
 
 def main() -> None:

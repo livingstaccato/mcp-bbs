@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp_bbs.discover import discover_menu
+from mcp_bbs.learning.discovery import discover_menu
 
 
 def test_discover_menu_with_brackets() -> None:

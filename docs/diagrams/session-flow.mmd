@@ -1,0 +1,240 @@
+sequenceDiagram
+    participant AI as AI Agent
+    participant MCP as MCP Layer<br/>(app.py)
+    participant SM as SessionManager
+    participant S as Session
+    participant T as TelnetTransport
+    participant TE as TerminalEmulator
+    participant LE as LearningEngine
+    participant SL as SessionLogger
+    participant BBS as BBS Server
+
+    %% PHASE 1: CONNECTION SETUP
+    rect rgb(200, 220, 255)
+    Note over AI,BBS: PHASE 1: CONNECTION SETUP
+
+    AI->>MCP: bbs_connect(host, port, cols, rows)
+    MCP->>SM: create_session()
+
+    alt Session Reuse Check
+        SM->>SM: Check existing sessions
+        SM-->>MCP: Return existing session_id
+    else New Session
+        SM->>T: Create TelnetTransport
+        T->>BBS: TCP connect (asyncio.open_connection)
+        BBS-->>T: Connection established
+
+        Note over T,BBS: Telnet Negotiation (RFC 854)
+        T->>BBS: IAC WILL BINARY (255 251 0)
+        T->>BBS: IAC WILL SGA (255 251 3)
+
+        SM->>S: Create Session object
+        S->>TE: Create TerminalEmulator (pyte 80x25)
+        S->>S: Initialize KeepaliveController (30s)
+
+        SM->>LE: Enable LearningEngine
+        LE->>LE: Setup knowledge base dirs
+
+        alt send_newline=True
+            S->>T: send("\r\n")
+            T->>BBS: Send newline
+        end
+
+        SM-->>MCP: Return new session_id
+    end
+    MCP-->>AI: "ok"
+    end
+
+    %% PHASE 2: TELNET NEGOTIATION
+    rect rgb(255, 240, 200)
+    Note over AI,BBS: PHASE 2: TELNET NEGOTIATION
+
+    BBS->>T: IAC DO BINARY
+    T->>T: _negotiate(): Add to _negotiated
+    T->>BBS: IAC WILL BINARY
+
+    BBS->>T: IAC DO SGA
+    T->>BBS: IAC WILL SGA
+
+    BBS->>T: IAC DO NAWS (request window size)
+    T->>BBS: IAC WILL NAWS
+    T->>BBS: IAC SB NAWS 0 80 0 25 IAC SE
+
+    BBS->>T: IAC DO TTYPE (request terminal type)
+    T->>BBS: IAC WILL TTYPE
+    T->>T: Queue TTYPE response
+
+    BBS->>T: IAC SB TTYPE SEND IAC SE
+    T->>BBS: IAC SB TTYPE IS "ANSI" IAC SE
+
+    BBS->>T: IAC WILL ECHO
+    T->>BBS: IAC DO ECHO
+    end
+
+    %% PHASE 3: INITIAL SCREEN
+    rect rgb(200, 255, 200)
+    Note over AI,BBS: PHASE 3: INITIAL SCREEN RECEPTION
+
+    BBS->>T: Welcome screen (ANSI + CP437 bytes)
+    Note over T: Strip IAC commands<br/>Unescape 0xFF 0xFF → 0xFF
+    T->>T: Buffer in _rx_buf
+
+    AI->>MCP: bbs_read_until_pattern("Enter name:")
+    MCP->>S: read(timeout_ms, max_bytes)
+    S->>S: Acquire _lock
+    S->>T: receive(max_bytes, timeout)
+    T-->>S: Raw bytes (IAC commands stripped)
+
+    S->>TE: process(bytes)
+    Note over TE: Decode CP437<br/>Feed to pyte.Stream<br/>Parse ANSI escapes
+    TE->>TE: Update screen buffer
+
+    S->>TE: get_snapshot()
+    TE-->>S: {screen, cursor, hash, raw_bytes_b64}
+
+    alt Logging Enabled
+        S->>SL: log_screen(snapshot, raw)
+        SL->>SL: Append JSONL record
+        Note over SL: {"ts":..., "event":"read",<br/>"data":{...}, "ctx":{...}}
+    end
+
+    alt Learning Enabled
+        S->>LE: process_screen(snapshot)
+        LE->>LE: Extract screen & hash
+
+        LE->>LE: Apply prompt rules (regex)
+        alt Match found & not seen
+            LE->>LE: Append to prompt-catalog.md
+            LE->>LE: Track in _seen set
+        end
+
+        LE->>LE: Apply menu rules (regex)
+        alt Match found & not seen
+            LE->>LE: Append to menu-map.md
+        end
+
+        alt Auto-discover enabled
+            LE->>LE: discover_menu(screen)
+            Note over LE: Find [A], (1), <X> patterns<br/>Extract title & prompt
+            alt Menu found & not seen
+                LE->>LE: Append to menu-map.md
+            end
+        end
+    end
+
+    S-->>MCP: snapshot
+
+    loop Pattern Match Loop
+        MCP->>MCP: Check regex against screen
+        alt Pattern matched
+            MCP-->>AI: snapshot (matched=True)
+        else Not matched & time remaining
+            Note over MCP: Sleep interval_ms
+            MCP->>S: read() again
+        end
+    end
+    end
+
+    %% PHASE 4: MAIN GAME LOOP
+    rect rgb(255, 220, 255)
+    Note over AI,BBS: PHASE 4: MAIN GAME LOOP
+
+    loop Game Interaction Cycle
+        Note over AI: Analyze screen<br/>Decide action
+
+        AI->>MCP: bbs_send("A\r")
+        MCP->>S: send(keys)
+        S->>S: Acquire _lock
+
+        Note over S: Encode CP437<br/>keys.encode("cp437")
+        S->>T: send(payload)
+
+        Note over T: Escape IAC bytes<br/>0xFF → 0xFF 0xFF
+        T->>BBS: Write escaped bytes
+        T->>T: await writer.drain()
+
+        alt Logging Enabled
+            S->>SL: log_send(keys)
+            SL->>SL: Append JSONL {"event":"send"}
+        end
+
+        S->>S: Reset keepalive timer
+        S-->>MCP: "ok" | "disconnected"
+        MCP-->>AI: result
+
+        Note over BBS: Process input<br/>Update game state
+        BBS->>T: Send new screen (ANSI)
+
+        AI->>MCP: bbs_read(timeout_ms=250)
+        Note over MCP,S: Repeat PHASE 3 flow
+        MCP-->>AI: New snapshot
+    end
+    end
+
+    %% BACKGROUND: KEEPALIVE
+    rect rgb(240, 240, 240)
+    Note over S: BACKGROUND PROCESS: Keepalive
+
+    loop Every 30 seconds (if enabled)
+        S->>S: Check connection alive
+        alt Connected & idle
+            S->>T: send("\r")
+            T->>BBS: Keepalive keystroke
+        end
+    end
+    end
+
+    %% PHASE 5: LOGOUT (OPTIONAL)
+    rect rgb(255, 255, 200)
+    Note over AI,BBS: PHASE 5: LOGOUT (Optional)
+
+    Note over AI: Detect logout option<br/>(e.g., [Q] Quit)
+
+    AI->>MCP: bbs_send("Q\r")
+    MCP->>S: send("Q\r")
+    S->>T: send()
+    T->>BBS: Send quit command
+
+    BBS->>T: "Are you sure? (Y/N)"
+    AI->>MCP: bbs_read()
+    MCP-->>AI: Confirmation prompt
+
+    AI->>MCP: bbs_send("Y\r")
+    MCP->>S: send("Y\r")
+    S->>T: send()
+    T->>BBS: Send confirmation
+
+    BBS->>T: Goodbye message
+    BBS->>T: Close connection
+    end
+
+    %% PHASE 6: DISCONNECT
+    rect rgb(255, 200, 200)
+    Note over AI,BBS: PHASE 6: DISCONNECT & CLEANUP
+
+    AI->>MCP: bbs_disconnect()
+    MCP->>SM: close_session(session_id)
+    SM->>S: disconnect()
+    S->>S: Acquire _lock
+
+    S->>S: keepalive.on_disconnect()
+    Note over S: Cancel background task<br/>Await completion
+
+    alt Logging Enabled
+        S->>SL: log_event("disconnect")
+        S->>SL: stop()
+        SL->>SL: Write {"event":"log_stop"}
+        SL->>SL: Close file handle
+    end
+
+    S->>T: disconnect()
+    T->>T: writer.close()
+    T->>T: await writer.wait_closed()
+    T->>T: Clear _rx_buf, _negotiated
+    T->>T: _reader = None, _writer = None
+
+    SM->>SM: Remove from _sessions dict
+    SM-->>MCP: Session closed
+    MCP->>MCP: _active_session_id = None
+    MCP-->>AI: "ok"
+    end

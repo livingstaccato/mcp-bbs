@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "fastmcp>=0.1.0",
     "pexpect>=4.9.0",
+    "pydantic>=2.6.0",
     "pyte>=0.8.1",
     "platformdirs>=4.0.0",
     "structlog>=24.1.0",

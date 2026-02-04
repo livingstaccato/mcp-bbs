@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class ConnectionTransport(ABC):
     """Abstract base for BBS transport protocols (telnet, SSH, etc)."""
 
     @abstractmethod
-    async def connect(self, host: str, port: int, **kwargs) -> None:
+    async def connect(self, host: str, port: int, **kwargs: Any) -> None:
         """Establish connection to remote host.
 
         Args:

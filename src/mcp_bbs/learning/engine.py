@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from mcp_bbs.learning.buffer import BufferManager
+from mcp_bbs.learning.detector import PromptDetection, PromptDetector
 from mcp_bbs.learning.discovery import discover_menu
+from mcp_bbs.learning.extractor import extract_kv
 from mcp_bbs.learning.knowledge import append_md
+from mcp_bbs.learning.rules import RuleLoadResult, RuleSet
+from mcp_bbs.learning.screen_saver import ScreenSaver
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _build_prompt_body(rule_id: str, screen: str, pattern: str, rule: dict[str, str]) -> str:
@@ -84,6 +92,19 @@ class LearningEngine:
         self._seen: set[tuple[str, str]] = set()
         self._lock = asyncio.Lock()
 
+        # NEW: Always-on screen buffering and prompt detection
+        self._buffer_manager = BufferManager(max_size=50)
+        self._prompt_detector: PromptDetector | None = None
+        self._idle_threshold_seconds = 2.0
+
+        # NEW: Screen saving to disk
+        self._screen_saver = ScreenSaver(
+            base_dir=knowledge_root, namespace=namespace, enabled=True
+        )
+
+        # Auto-load prompt patterns from JSON
+        self._load_prompt_patterns()
+
     @property
     def enabled(self) -> bool:
         """Check if learning is enabled."""
@@ -108,6 +129,30 @@ class LearningEngine:
     def set_namespace(self, namespace: str | None) -> None:
         """Set namespace for knowledge base."""
         self._namespace = namespace
+        # Update screen saver namespace
+        if self._screen_saver:
+            self._screen_saver.set_namespace(namespace)
+
+    def set_screen_saving(self, enabled: bool) -> None:
+        """Enable or disable screen saving to disk."""
+        if self._screen_saver:
+            self._screen_saver.set_enabled(enabled)
+
+    def get_screen_saver_status(self) -> dict[str, Any]:
+        """Get screen saver status.
+
+        Returns:
+            Dictionary with screen saver status
+        """
+        if not self._screen_saver:
+            return {"enabled": False}
+
+        return {
+            "enabled": self._screen_saver._enabled,
+            "screens_dir": str(self._screen_saver.get_screens_dir()),
+            "saved_count": self._screen_saver.get_saved_count(),
+            "namespace": self._screen_saver._namespace,
+        }
 
     def get_base_dir(self) -> Path:
         """Get base directory for knowledge files.
@@ -119,27 +164,109 @@ class LearningEngine:
             return self._knowledge_root / "shared" / "bbs"
         return self._knowledge_root / "games" / self._namespace / "docs"
 
-    async def process_screen(self, snapshot: dict[str, Any]) -> None:
-        """Process screen snapshot for learning.
+    def _load_prompt_patterns(self) -> None:
+        """Load prompt patterns from JSON file (auto-called on init).
+
+        Patterns are loaded from:
+        - .bbs-knowledge/games/{namespace}/rules.json (if namespace set)
+        - .bbs-knowledge/games/{namespace}/prompts.json (legacy)
+        - Falls back to empty detector if file doesn't exist
+        """
+        result = self._load_rules_or_patterns()
+        patterns = result.patterns
+
+        # Create detector (empty if no patterns found)
+        self._prompt_detector = PromptDetector(patterns)
+
+    def _load_rules_or_patterns(self) -> RuleLoadResult:
+        if not self._namespace:
+            return RuleLoadResult(source="none", patterns=[], metadata={})
+
+        rules_file = self._knowledge_root / "games" / self._namespace / "rules.json"
+        if rules_file.exists():
+            try:
+                rules = RuleSet.from_json_file(rules_file)
+                return RuleLoadResult(
+                    source=str(rules_file),
+                    patterns=rules.to_prompt_patterns(),
+                    metadata={"game": rules.game, "version": rules.version, **rules.metadata},
+                )
+            except (json.JSONDecodeError, OSError, ValueError):
+                return RuleLoadResult(source=str(rules_file), patterns=[], metadata={})
+
+        patterns_file = self._knowledge_root / "games" / self._namespace / "prompts.json"
+        if patterns_file.exists():
+            try:
+                data = json.loads(patterns_file.read_text())
+                return RuleLoadResult(
+                    source=str(patterns_file),
+                    patterns=data.get("prompts", []),
+                    metadata=data.get("metadata", {}),
+                )
+            except (json.JSONDecodeError, OSError):
+                return RuleLoadResult(source=str(patterns_file), patterns=[], metadata={})
+
+        return RuleLoadResult(source="none", patterns=[], metadata={})
+
+    async def process_screen(self, snapshot: dict[str, Any]) -> PromptDetection | None:
+        """Process screen snapshot with enhanced detection.
+
+        Always buffers screens and detects prompts regardless of learning state.
+        Legacy auto-discovery runs only if enabled.
 
         Args:
-            snapshot: Screen snapshot dictionary
+            snapshot: Screen snapshot dictionary with timing metadata
+
+        Returns:
+            PromptDetection if a prompt is detected, None otherwise
         """
-        if not self._enabled:
-            return
+        # Always buffer screens (even if learning disabled)
+        buffer = self._buffer_manager.add_screen(snapshot)
 
-        screen = snapshot.get("screen", "")
-        screen_hash = snapshot.get("screen_hash", "")
+        # Detect idle state
+        is_idle = self._buffer_manager.detect_idle_state(self._idle_threshold_seconds)
 
-        if not screen or not screen_hash:
-            return
+        # Detect prompt (always try)
+        prompt_match = self._prompt_detector.detect_prompt(snapshot) if self._prompt_detector else None
+        if prompt_match:
+            buffer.matched_prompt_id = prompt_match.prompt_id
 
-        async with self._lock:
-            await self._apply_prompt_rules(screen, screen_hash)
-            await self._apply_menu_rules(screen, screen_hash)
+        # Legacy learning (only if enabled)
+        if self._enabled:
+            screen = snapshot.get("screen", "")
+            screen_hash = snapshot.get("screen_hash", "")
 
-            if self._auto_discover:
-                await self._apply_auto_discover(screen, screen_hash)
+            if screen and screen_hash:
+                async with self._lock:
+                    await self._apply_prompt_rules(screen, screen_hash)
+                    await self._apply_menu_rules(screen, screen_hash)
+
+                    if self._auto_discover:
+                        await self._apply_auto_discover(screen, screen_hash)
+
+        # Return detection result
+        if prompt_match:
+            # Extract K/V data if configured
+            kv_data = None
+            if prompt_match.kv_extract:
+                screen = snapshot.get("screen", "")
+                kv_data = extract_kv(screen, prompt_match.kv_extract)
+
+            # Save screen to disk (with prompt ID)
+            self._screen_saver.save_screen(snapshot, prompt_id=prompt_match.prompt_id)
+
+            return PromptDetection(
+                prompt_id=prompt_match.prompt_id,
+                input_type=prompt_match.input_type,
+                is_idle=is_idle,
+                buffer=buffer,
+                kv_data=kv_data,
+            )
+
+        # Save screen even if no prompt detected (deduplication prevents duplicates)
+        self._screen_saver.save_screen(snapshot)
+
+        return None
 
     async def _apply_prompt_rules(self, screen: str, screen_hash: str) -> None:
         """Apply prompt matching rules.

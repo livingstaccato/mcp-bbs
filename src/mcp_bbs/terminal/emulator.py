@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import time
+from typing import Any
 
 import pyte
 
@@ -39,7 +41,32 @@ class TerminalEmulator:
         text = data.decode(CP437, errors="replace")
         self._stream.feed(text)
 
-    def get_snapshot(self) -> dict:
+    def _is_cursor_at_end(self) -> bool:
+        """Check if cursor is at the end of visible content.
+
+        Returns:
+            True if cursor is at or near the end of the last line with content
+        """
+        cursor_x = self._screen.cursor.x
+        cursor_y = self._screen.cursor.y
+
+        # Find last line with content using display
+        lines = self._screen.display
+        for row_idx in range(len(lines) - 1, -1, -1):
+            line = lines[row_idx].rstrip()
+            if line:
+                # Found last non-empty line
+                if cursor_y == row_idx:
+                    # Cursor is on last content line
+                    # Check if at or near end (within 2 chars of line end)
+                    return cursor_x >= len(line) - 2
+                # Cursor is on a line below last content
+                return cursor_y > row_idx
+
+        # No content found, cursor is "at end"
+        return True
+
+    def get_snapshot(self) -> dict[str, Any]:
         """Get current screen state snapshot.
 
         Returns:
@@ -50,6 +77,9 @@ class TerminalEmulator:
                 - cols: Terminal columns
                 - rows: Terminal rows
                 - term: Terminal type
+                - captured_at: Unix timestamp when snapshot was captured
+                - cursor_at_end: True if cursor is at end of visible content
+                - has_trailing_space: True if screen ends with space or colon
         """
         screen_text = parse_screen_text(self._screen)
         screen_hash = hashlib.sha256(screen_text.encode("utf-8")).hexdigest()
@@ -61,6 +91,9 @@ class TerminalEmulator:
             "cols": self.cols,
             "rows": self.rows,
             "term": self.term,
+            "captured_at": time.time(),
+            "cursor_at_end": self._is_cursor_at_end(),
+            "has_trailing_space": screen_text.rstrip() != screen_text.rstrip(" :"),
         }
 
     def reset(self) -> None:

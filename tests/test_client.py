@@ -34,5 +34,5 @@ async def test_bbs_connection(bbs_host: str, bbs_port: int) -> None:
                 "timeout_ms": 8000,
             },
         )
-        assert "screen" in snap
+        assert snap.data is not None and "screen" in snap.data
         await client.call_tool("bbs_disconnect", {})
