@@ -55,7 +55,7 @@ async def login_sequence(
 
         try:
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=10000
+                bot, timeout_ms=20000
             )
         except RuntimeError as e:
             if "Stuck in loop" in str(e):
@@ -67,8 +67,10 @@ async def login_sequence(
                 # Reset loop detection
                 bot.loop_detection.clear()
                 bot.last_prompt_id = None
+                print(f"    → Retrying after loop escape")
                 continue
             else:
+                print(f"\n⚠️  RuntimeError: {e}")
                 raise
 
         # Check for validation warnings

@@ -1,6 +1,7 @@
 """Core I/O operations for TW2002 Trading Bot."""
 
 import asyncio
+import sys
 import time
 
 from .errors import _detect_error_in_screen, _check_for_loop
