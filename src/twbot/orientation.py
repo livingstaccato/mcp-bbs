@@ -107,6 +107,7 @@ class SectorInfo:
     has_planet: bool = False
     planet_names: list[str] = field(default_factory=list)
     last_visited: float | None = None
+    last_scanned: float | None = None  # When D command was last run here
 
 
 class SectorKnowledge:
@@ -157,6 +158,7 @@ class SectorKnowledge:
                     has_planet=info.get("has_planet", False),
                     planet_names=info.get("planet_names", []),
                     last_visited=info.get("last_visited"),
+                    last_scanned=info.get("last_scanned"),
                 )
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Warning: Failed to load sector cache: {e}")
@@ -178,6 +180,7 @@ class SectorKnowledge:
                     "has_planet": info.has_planet,
                     "planet_names": info.planet_names,
                     "last_visited": info.last_visited,
+                    "last_scanned": info.last_scanned,
                 }
                 for sector, info in self._sectors.items()
             },
@@ -275,6 +278,49 @@ class SectorKnowledge:
         if self._twerk_sectors:
             count = max(count, len(self._twerk_sectors))
         return count
+
+    def needs_scan(self, sector: int, rescan_hours: float = 0) -> bool:
+        """Check if a sector needs to be scanned with D command.
+
+        Args:
+            sector: Sector to check
+            rescan_hours: Hours after which to rescan (0 = never rescan)
+
+        Returns:
+            True if sector should be scanned
+        """
+        info = self._sectors.get(sector)
+        if info is None or info.last_scanned is None:
+            return True
+
+        if rescan_hours <= 0:
+            return False
+
+        hours_since = (time() - info.last_scanned) / 3600
+        return hours_since >= rescan_hours
+
+    def mark_scanned(self, sector: int) -> None:
+        """Mark a sector as having been scanned with D command.
+
+        Args:
+            sector: Sector that was scanned
+        """
+        if sector not in self._sectors:
+            self._sectors[sector] = SectorInfo()
+
+        self._sectors[sector].last_scanned = time()
+        self._save_cache()
+
+    def get_scanned_sectors(self) -> set[int]:
+        """Get all sectors that have been scanned.
+
+        Returns:
+            Set of sector numbers that have been scanned
+        """
+        return {
+            sector for sector, info in self._sectors.items()
+            if info.last_scanned is not None
+        }
 
 
 # =============================================================================
@@ -524,15 +570,16 @@ async def where_am_i(bot: "TradingBot", timeout_ms: int = 500) -> QuickState:
 
     # Extract sector from screen if possible
     sector = None
-    # Try prompt format: [123]
-    sector_match = re.search(r'\[(\d+)\]\s*\(\?', screen)
-    if sector_match:
-        sector = int(sector_match.group(1))
+    # Try prompt format: [123] - use findall and take LAST match
+    # because screen buffer may contain old sector info at top
+    sector_matches = re.findall(r'\[(\d+)\]\s*\(\?', screen)
+    if sector_matches:
+        sector = int(sector_matches[-1])  # Take LAST match (current prompt)
     else:
-        # Try "Sector 123" format
-        sector_match = re.search(r'sector\s+(\d+)', screen, re.IGNORECASE)
-        if sector_match:
-            sector = int(sector_match.group(1))
+        # Try "Sector 123" format - also take last match
+        sector_matches = re.findall(r'sector\s+(\d+)', screen, re.IGNORECASE)
+        if sector_matches:
+            sector = int(sector_matches[-1])
 
     # Determine safety and suggested action
     is_safe = context in SAFE_CONTEXTS

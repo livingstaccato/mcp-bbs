@@ -28,6 +28,7 @@ dependencies = [
     "platformdirs>=4.0.0",
     "structlog>=24.1.0",
     "hypothesis>=6.151.5",
+    "pyyaml>=6.0.0",
 ]
 # Note: twerk (TW2002 data file library) is available via _twerk.pth in the venv
 # Location: /Users/tim/code/gh/livingstaccato/tw2002/twerk-py/src
@@ -46,6 +47,7 @@ dev = [
 
 [project.scripts]
 mcp-bbs = "mcp_bbs.cli:main"
+tw2002-bot = "twbot.cli:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -53,7 +55,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mcp_bbs"]
+packages = ["mcp_bbs", "twbot", "twbot.strategies"]
 
 [tool.ruff]
 line-length = 120

@@ -7,7 +7,14 @@ This script plays the game actively:
 3. Navigate between ports
 4. Handle encounters
 5. If character dies, create new one and continue
+
+Now supports configuration via YAML file and the new systems:
+- Multi-character management with knowledge sharing
+- Configurable trading strategies
+- D command optimization (only scan new sectors)
+- Banking, upgrades, and combat avoidance
 """
+import argparse
 import asyncio
 import random
 import re
@@ -18,6 +25,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from twbot.bot import TradingBot
+from twbot.config import BotConfig, load_config
+from twbot.character import CharacterManager, CharacterState
+from twbot.multi_character import MultiCharacterManager
 
 
 @dataclass
@@ -46,12 +56,22 @@ class GameSession:
 class TradeWarPlayer:
     """Automated TradeWars player."""
 
-    def __init__(self, host: str = "localhost", port: int = 2002):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 2002,
+        config: BotConfig | None = None,
+    ):
         self.host = host
         self.port = port
+        self.config = config or BotConfig()
         self.bot: TradingBot | None = None
         self.session = GameSession()
         self.character_num = 1
+
+        # Multi-character support
+        self.multi_char: MultiCharacterManager | None = None
+        self.char_state: CharacterState | None = None
 
     async def start_game(self) -> bool:
         """Connect and login to start playing."""
@@ -59,10 +79,26 @@ class TradeWarPlayer:
         print(f"STARTING GAME SESSION (Character #{self.character_num})")
         print("=" * 60, flush=True)
 
-        # Use a unique character name (not "Trader" prefix - that's reserved)
-        import time
-        char_name = f"bot{int(time.time()) % 10000}"
-        self.bot = TradingBot(character_name=char_name)
+        # Initialize multi-character manager if not done
+        if self.multi_char is None:
+            from mcp_bbs.config import get_default_knowledge_root
+            knowledge_root = get_default_knowledge_root()
+            data_dir = knowledge_root / "tw2002" / f"{self.host}_{self.port}"
+            self.multi_char = MultiCharacterManager(
+                config=self.config,
+                data_dir=data_dir,
+            )
+
+        # Create character using multi-char manager
+        prefix = self.config.character.name_prefix
+        self.char_state = self.multi_char.create_character()
+        char_name = self.char_state.name
+
+        # Create bot with config
+        self.bot = TradingBot(
+            character_name=char_name,
+            config=self.config,
+        )
 
         try:
             # Connect
@@ -70,11 +106,14 @@ class TradeWarPlayer:
             await self.bot.connect(host=self.host, port=self.port)
             print("  Connected!", flush=True)
 
+            # Initialize sector knowledge
+            self.bot.init_knowledge(self.host, self.port)
+
             # Login with unique name
             print(f"\n[Login] Logging in as {char_name}...", flush=True)
             await self.bot.login_sequence(
-                game_password="game",
-                character_password="trade123",
+                game_password=self.config.connection.game_password,
+                character_password=self.config.character.password,
                 username=char_name,
             )
             print("  Logged in!", flush=True)
@@ -193,7 +232,33 @@ class TradeWarPlayer:
         await self.bot.recover()
 
     async def scan_sector(self) -> dict:
-        """Get info about current sector."""
+        """Get info about current sector.
+
+        Uses D command optimization - only scans if sector hasn't been scanned
+        or if we need fresh data (configurable rescan interval).
+        """
+        sector = self.session.sector
+
+        # Check if we need to scan (D command optimization)
+        needs_scan = True
+        if self.bot.sector_knowledge and sector:
+            needs_scan = self.bot.needs_scan(sector)
+            if not needs_scan:
+                # Use cached knowledge
+                info = self.bot.sector_knowledge.get_sector_info(sector)
+                if info:
+                    print(f"  [Using cached info for sector {sector}]", flush=True)
+                    return {
+                        "has_port": info.has_port,
+                        "has_planet": info.has_planet,
+                        "warps": info.warps,
+                        "raw": "",
+                        "from_cache": True,
+                    }
+                # Cache miss, need to scan
+                needs_scan = True
+
+        # Run D command
         await self.bot.session.send("D")
         await asyncio.sleep(0.5)
         result = await self.bot.session.read(timeout_ms=2000, max_bytes=8192)
@@ -204,6 +269,7 @@ class TradeWarPlayer:
             "has_planet": False,
             "warps": [],
             "raw": screen,
+            "from_cache": False,
         }
 
         # Check for port - look for "Commerce" which indicates a trading port
@@ -224,6 +290,10 @@ class TradeWarPlayer:
         if warp_match:
             warp_text = warp_match.group(1)
             info["warps"] = [int(x) for x in re.findall(r'\d+', warp_text)]
+
+        # Mark sector as scanned
+        if sector:
+            self.bot.mark_scanned(sector)
 
         return info
 
@@ -437,6 +507,10 @@ class TradeWarPlayer:
             self.session.total_profit += profit
             print(f"    [Trade complete: {trades_made} transactions, profit: {profit:,}]", flush=True)
 
+            # Track in character state
+            if self.char_state:
+                self.char_state.record_trade(profit)
+
         return profit
 
     async def warp_to(self, sector: int) -> bool:
@@ -459,10 +533,15 @@ class TradeWarPlayer:
 
         # Handle any prompts during warp
         max_prompts = 8
-        for _ in range(max_prompts):
+        for i in range(max_prompts):
             result = await self.bot.session.read(timeout_ms=1500, max_bytes=8192)
             screen = result.get("screen", "")
             screen_lower = screen.lower()
+
+            # Debug: show last line of screen
+            lines = [l.strip() for l in screen.split('\n') if l.strip()]
+            if lines and i < 3:
+                print(f"      [warp debug {i}] last line: {lines[-1][:60]}", flush=True)
 
             # Check if we arrived (sector command prompt)
             if "command" in screen_lower and ("sector" in screen_lower or "?" in screen):
@@ -608,9 +687,12 @@ class TradeWarPlayer:
         """Play a full session."""
         print("\n" + "=" * 60, flush=True)
         print("TRADEWARS 2002 - PLAY TO WIN", flush=True)
+        print(f"Strategy: {self.config.trading.strategy}", flush=True)
+        print(f"Target: {self.config.session.target_credits:,} credits", flush=True)
         print("=" * 60, flush=True)
 
-        max_characters = 50  # Max characters to try (play to win!)
+        max_characters = self.config.multi_character.max_characters
+        target_credits = self.config.session.target_credits
 
         while self.character_num <= max_characters:
             # Start game
@@ -619,9 +701,12 @@ class TradeWarPlayer:
                 self.character_num += 1
                 continue
 
-            # Play until we hit 5 million or run out of turns
+            # Play until we hit target or run out of turns
             try:
-                await self.explore_and_trade(max_moves=500, target_credits=5_000_000)
+                await self.explore_and_trade(
+                    max_moves=self.config.session.max_turns_per_session,
+                    target_credits=target_credits,
+                )
             except Exception as e:
                 print(f"\nError during gameplay: {e}", flush=True)
                 import traceback
@@ -632,6 +717,13 @@ class TradeWarPlayer:
                 reason = "Death" if self.session.death_count > 0 else "Low credits"
                 print(f"\n[{reason}] Starting new character...", flush=True)
                 self.character_num += 1
+
+                # Handle death with multi-character manager (for knowledge inheritance)
+                if self.char_state and self.multi_char and self.session.death_count > 0:
+                    self.char_state = self.multi_char.handle_death(self.char_state)
+                elif self.char_state and self.multi_char:
+                    # Save state if just low credits
+                    self.multi_char.save_character(self.char_state)
 
                 # Close old session
                 if self.bot and self.bot.session_id:
@@ -648,7 +740,7 @@ class TradeWarPlayer:
                 self.session.total_profit = old_profit
                 self.session.trades_completed = old_trades
                 self.session.death_count = old_deaths
-            elif self.session.credits >= 5_000_000:
+            elif self.session.credits >= target_credits:
                 print(f"\n🎉🎉🎉 WON THE GAME! {self.session.credits:,} credits! 🎉🎉🎉", flush=True)
                 break
             else:
@@ -681,8 +773,52 @@ class TradeWarPlayer:
         print("=" * 60, flush=True)
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Play TW2002 to win - automated trading bot"
+    )
+    parser.add_argument(
+        "-c", "--config",
+        type=Path,
+        help="Path to YAML configuration file",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="Server host (default: localhost)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=2002,
+        help="Server port (default: 2002)",
+    )
+    return parser.parse_args()
+
+
 async def main():
-    player = TradeWarPlayer(host="localhost", port=2002)
+    args = parse_args()
+
+    # Load config
+    if args.config:
+        config = load_config(args.config)
+        # Override host/port from args if specified
+        if args.host != "localhost":
+            config.connection.host = args.host
+        if args.port != 2002:
+            config.connection.port = args.port
+    else:
+        config = BotConfig()
+        config.connection.host = args.host
+        config.connection.port = args.port
+
+    player = TradeWarPlayer(
+        host=config.connection.host,
+        port=config.connection.port,
+        config=config,
+    )
     await player.play_session()
 
 

@@ -275,6 +275,7 @@ async def login_sequence(
     # PHASE 2: Send game selection
     print("\nSending game selection...")
     game_letter = "B"  # Default
+    original_threshold = bot.stuck_threshold  # Save before any modifications
     if "menu_selection" in prompt_id:
         options = _extract_game_options(screen)
         print(f"  Available games: {options}")
@@ -285,7 +286,6 @@ async def login_sequence(
         bot.loop_detection.clear()
         bot.last_prompt_id = None
         # Increase threshold for game loading phase (intro screens may repeat pause prompt)
-        original_threshold = bot.stuck_threshold
         bot.stuck_threshold = 15  # Increased for complex flows
         print(f"  ✓ Reset loop detection state")
 

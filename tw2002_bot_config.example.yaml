@@ -1,0 +1,78 @@
+# TW2002 Bot Configuration
+# Copy this file to tw2002_bot_config.yaml and customize for your setup
+
+# Connection settings
+connection:
+  host: localhost
+  port: 2002
+  game_password: "game"
+
+# Character settings
+character:
+  name_prefix: "bot"
+  password: "trade123"
+
+# Trading strategy configuration
+trading:
+  # Strategy options: profitable_pairs, opportunistic, twerk_optimized
+  strategy: "opportunistic"
+
+  # Mode A: Find adjacent buy/sell port pairs
+  profitable_pairs:
+    max_hop_distance: 2
+    min_profit_per_turn: 100
+
+  # Mode B: Explore while trading opportunistically
+  opportunistic:
+    explore_chance: 0.3
+    max_wander_without_trade: 5
+
+  # Mode C: Use twerk data analysis for optimal routes
+  twerk_optimized:
+    data_dir: ""  # Path to TW2002 data files (e.g., /opt/tw2002/data)
+    recalculate_interval: 50  # Recalculate routes every N trades
+
+# D command scanning optimization
+scanning:
+  scan_on_first_visit: true
+  scan_when_lost: true
+  rescan_interval_hours: 0  # 0 = never rescan known sectors
+
+# Auto-banking settings
+banking:
+  enabled: true
+  deposit_threshold: 50000  # Deposit when credits exceed this
+  keep_on_hand: 5000  # Always keep this much on hand
+
+# Ship upgrade settings
+upgrades:
+  enabled: true
+  auto_buy_holds: true
+  max_holds: 75
+  auto_buy_fighters: true
+  min_fighters: 50
+  auto_buy_shields: true
+  min_shields: 100
+
+# Combat avoidance settings
+combat:
+  enabled: true
+  avoid_hostile_sectors: true
+  danger_threshold: 100  # Hostile fighters threshold
+  retreat_health_percent: 25
+  enemy_cooldown_minutes: 30
+
+# Multi-character settings
+multi_character:
+  enabled: true
+  max_characters: 50
+  # Knowledge sharing options:
+  # - shared: All characters share the same sector knowledge
+  # - independent: Each character has isolated knowledge
+  # - inherit_on_death: New character inherits from dead one
+  knowledge_sharing: "shared"
+
+# Session goals and limits
+session:
+  target_credits: 5000000  # 5 million credits goal
+  max_turns_per_session: 500

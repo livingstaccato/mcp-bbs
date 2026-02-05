@@ -16,6 +16,7 @@ from . import trading
 from . import io
 from . import parsing
 from . import logging_utils
+from .config import BotConfig, load_config
 from .orientation import (
     GameState,
     SectorKnowledge,
@@ -32,6 +33,10 @@ from .orientation import (
 
 if TYPE_CHECKING:
     from twerk.analysis import SectorGraph, TradeRoute
+    from .strategies.base import TradingStrategy
+    from .banking import BankingManager
+    from .upgrades import UpgradeManager
+    from .combat import CombatManager
 
 
 class TradingBot:
@@ -41,6 +46,7 @@ class TradingBot:
         self,
         character_name: str = "unknown",
         twerk_data_dir: Path | None = None,
+        config: BotConfig | None = None,
     ):
         self.session_manager = SessionManager()
         self.knowledge_root = get_default_knowledge_root()
@@ -48,10 +54,24 @@ class TradingBot:
         self.session = None
         self.character_name = character_name
 
+        # Configuration
+        self.config = config or BotConfig()
+
         # Orientation system
         self.game_state: GameState | None = None
         self.sector_knowledge: SectorKnowledge | None = None
-        self.twerk_data_dir = twerk_data_dir
+        self.twerk_data_dir = twerk_data_dir or (
+            Path(self.config.trading.twerk_optimized.data_dir)
+            if self.config.trading.twerk_optimized.data_dir else None
+        )
+
+        # Strategy system
+        self._strategy: TradingStrategy | None = None
+
+        # Subsystems (initialized lazily)
+        self._banking: BankingManager | None = None
+        self._upgrades: UpgradeManager | None = None
+        self._combat: CombatManager | None = None
 
         # State tracking (legacy - use game_state instead)
         self.current_sector: int | None = None
@@ -75,9 +95,108 @@ class TradingBot:
         self.turns_used = 0
         self.sectors_visited: set[int] = set()
 
+        # Scan tracking for D command optimization
+        self._rescan_hours = self.config.scanning.rescan_interval_hours
+
         # Menu navigation tracking
         self.menu_selection_attempts = 0
         self.last_game_letter: str | None = None
+
+    # -------------------------------------------------------------------------
+    # Subsystem properties (lazy initialization)
+    # -------------------------------------------------------------------------
+
+    @property
+    def strategy(self) -> TradingStrategy | None:
+        """Get the current trading strategy."""
+        return self._strategy
+
+    @property
+    def banking(self) -> BankingManager:
+        """Get the banking manager."""
+        if self._banking is None:
+            from .banking import BankingManager
+            self._banking = BankingManager(self.config, self.sector_knowledge)
+        return self._banking
+
+    @property
+    def upgrades(self) -> UpgradeManager:
+        """Get the upgrade manager."""
+        if self._upgrades is None:
+            from .upgrades import UpgradeManager
+            self._upgrades = UpgradeManager(self.config, self.sector_knowledge)
+        return self._upgrades
+
+    @property
+    def combat(self) -> CombatManager:
+        """Get the combat manager."""
+        if self._combat is None:
+            from .combat import CombatManager
+            self._combat = CombatManager(self.config, self.sector_knowledge)
+        return self._combat
+
+    def init_strategy(self) -> TradingStrategy:
+        """Initialize trading strategy based on config.
+
+        Returns:
+            The initialized TradingStrategy
+        """
+        strategy_name = self.config.trading.strategy
+
+        if strategy_name == "profitable_pairs":
+            from .strategies.profitable_pairs import ProfitablePairsStrategy
+            self._strategy = ProfitablePairsStrategy(self.config, self.sector_knowledge)
+        elif strategy_name == "twerk_optimized":
+            from .strategies.twerk_optimized import TwerkOptimizedStrategy
+            self._strategy = TwerkOptimizedStrategy(self.config, self.sector_knowledge)
+        else:  # Default to opportunistic
+            from .strategies.opportunistic import OpportunisticStrategy
+            self._strategy = OpportunisticStrategy(self.config, self.sector_knowledge)
+
+        print(f"  [Strategy] Initialized: {self._strategy.name}")
+        return self._strategy
+
+    # -------------------------------------------------------------------------
+    # Scanning optimization
+    # -------------------------------------------------------------------------
+
+    def needs_scan(self, sector: int | None = None) -> bool:
+        """Check if current or specified sector needs scanning.
+
+        Uses config settings for scan_on_first_visit and rescan_interval.
+
+        Args:
+            sector: Sector to check (uses current sector if None)
+
+        Returns:
+            True if D command should be run
+        """
+        if sector is None:
+            sector = self.current_sector
+        if sector is None:
+            return True  # Unknown sector, definitely scan
+
+        if not self.sector_knowledge:
+            return True
+
+        # Check config settings
+        if not self.config.scanning.scan_on_first_visit:
+            return False
+
+        return self.sector_knowledge.needs_scan(sector, self._rescan_hours)
+
+    def mark_scanned(self, sector: int | None = None) -> None:
+        """Mark current or specified sector as scanned.
+
+        Args:
+            sector: Sector to mark (uses current sector if None)
+        """
+        if sector is None:
+            sector = self.current_sector
+        if sector is None or not self.sector_knowledge:
+            return
+
+        self.sector_knowledge.mark_scanned(sector)
 
     # Connection methods
     async def connect(self, host="localhost", port=2002):
@@ -110,12 +229,15 @@ class TradingBot:
         print(f"  [Knowledge] Initialized for {self.character_name} @ {host}:{port}")
         print(f"  [Knowledge] Known sectors: {self.sector_knowledge.known_sector_count()}")
 
-    async def orient(self) -> GameState:
+    async def orient(self, force_scan: bool = False) -> GameState:
         """Run full orientation sequence.
 
         1. Safety - Reach a known stable state
-        2. Context - Gather comprehensive game state
+        2. Context - Gather comprehensive game state (D command if needed)
         3. Navigation - Record observations for future pathfinding
+
+        Args:
+            force_scan: If True, always run D command regardless of scan state
 
         Returns:
             Complete GameState
@@ -123,7 +245,39 @@ class TradingBot:
         Raises:
             OrientationError if unable to establish safe state
         """
-        self.game_state = await orient(self, self.sector_knowledge)
+        # Check if we need to scan before full orient
+        should_scan = force_scan or self.needs_scan()
+
+        if should_scan:
+            self.game_state = await orient(self, self.sector_knowledge)
+            # Mark as scanned after successful orient
+            if self.game_state.sector:
+                self.mark_scanned(self.game_state.sector)
+        else:
+            # Fast path: skip D command, just check context
+            quick_state = await self.where_am_i()
+            if quick_state.is_safe:
+                # Use cached knowledge
+                self.game_state = GameState(
+                    context=quick_state.context,
+                    sector=quick_state.sector,
+                    raw_screen=quick_state.screen,
+                    prompt_id=quick_state.prompt_id,
+                )
+                # Fill in from knowledge if available
+                if self.sector_knowledge and quick_state.sector:
+                    info = self.sector_knowledge.get_sector_info(quick_state.sector)
+                    if info:
+                        self.game_state.warps = info.warps
+                        self.game_state.has_port = info.has_port
+                        self.game_state.port_class = info.port_class
+                        self.game_state.has_planet = info.has_planet
+                        self.game_state.planet_names = info.planet_names
+            else:
+                # Not safe, need full orient
+                self.game_state = await orient(self, self.sector_knowledge)
+                if self.game_state.sector:
+                    self.mark_scanned(self.game_state.sector)
 
         # Sync legacy state tracking
         if self.game_state.sector:
@@ -131,6 +285,10 @@ class TradingBot:
             self.sectors_visited.add(self.game_state.sector)
         if self.game_state.credits:
             self.current_credits = self.game_state.credits
+
+        # Update combat tracking
+        if self._combat:
+            self._combat.update_from_state(self.game_state)
 
         return self.game_state
 
