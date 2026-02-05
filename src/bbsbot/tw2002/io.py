@@ -11,6 +11,7 @@ async def wait_and_respond(
     bot,
     prompt_id_pattern: str | None = None,
     timeout_ms: int = 10000,
+    ignore_loop_for: set[str] | None = None,
 ) -> tuple[str | None, str | None, str, dict | None]:
     """Wait for prompt and return (input_type, prompt_id, screen, kv_data).
 
@@ -75,8 +76,11 @@ async def wait_and_respond(
                     bot.error_count += 1
                     raise RuntimeError(f"Error detected: {error_type}")
 
-            # Check for loop (skip for prompts expected to repeat, like pause screens during game load)
-            if prompt_id != "prompt.pause_space_or_enter" and _check_for_loop(bot, prompt_id):
+            # Check for loop (skip for prompts expected to repeat)
+            loop_ignore = {"prompt.pause_space_or_enter", "prompt.pause_simple"}
+            if ignore_loop_for:
+                loop_ignore = loop_ignore | set(ignore_loop_for)
+            if prompt_id not in loop_ignore and _check_for_loop(bot, prompt_id):
                 raise RuntimeError(f"Stuck in loop: {prompt_id}")
 
             # If pattern specified, check if it matches

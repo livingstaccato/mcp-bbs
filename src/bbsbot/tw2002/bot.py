@@ -522,18 +522,25 @@ class TradingBot:
         """Run trading loop until target credits or max cycles."""
         await trading.run_trading_loop(self, target_credits, max_cycles)
 
-    async def execute_route(self, route, quantity: int | None = None, max_retries: int = 2) -> dict:
+    async def execute_route(
+        self,
+        route,
+        quantity: int | None = None,
+        max_retries: int = 2,
+        data_dir: Path | None = None,
+    ) -> dict:
         """Execute a twerk-analyzed trade route via terminal.
 
         Args:
             route: TradeRoute from twerk analysis
             quantity: Units to trade (defaults to route.max_quantity or ship holds)
             max_retries: Maximum retry attempts for recoverable errors
+            data_dir: Optional TW2002 data directory for twerk pathing
 
         Returns:
             Dictionary with trade results including success, profit, etc.
         """
-        return await trading.execute_route(self, route, quantity, max_retries)
+        return await trading.execute_route(self, route, quantity, max_retries, data_dir)
 
     # I/O methods
     async def wait_and_respond(self, prompt_id_pattern: str | None = None, timeout_ms: int = 10000):

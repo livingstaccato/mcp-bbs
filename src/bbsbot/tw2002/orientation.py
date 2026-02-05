@@ -1101,7 +1101,11 @@ async def _gather_state(
     # Read display output
     from .io import wait_and_respond
     try:
-        _, _, display_screen, _ = await wait_and_respond(bot, timeout_ms=5000)
+        _, _, display_screen, _ = await wait_and_respond(
+            bot,
+            timeout_ms=5000,
+            ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
+        )
 
         # Parse display output
         display_info = _parse_display_screen(display_screen)

@@ -77,11 +77,19 @@ class ColonizationManager:
             state: Current game state
 
         Returns:
-            List of colonizable planets (empty - not implemented)
+            List of colonizable planets discovered in current sector
         """
-        # TODO: Implement planet discovery
-        logger.debug("Colonization not yet implemented")
-        return []
+        if not state.has_planet or not state.planet_names or state.sector is None:
+            return []
+
+        discovered: list[PlanetInfo] = []
+        for name in state.planet_names:
+            planet = PlanetInfo(name=name, sector=state.sector)
+            self.update_planet_info(planet)
+            discovered.append(planet)
+
+        logger.debug("Discovered %d planet(s) in sector %s", len(discovered), state.sector)
+        return discovered
 
     def should_colonize(self, state: GameState) -> bool:
         """Check if we should attempt colonization.

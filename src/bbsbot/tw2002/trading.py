@@ -1,10 +1,12 @@
 """Trading operations for TW2002."""
 
 import asyncio
+from pathlib import Path
 
 from .io import wait_and_respond, send_input
 from .parsing import _parse_credits_from_screen, _parse_sector_from_screen
 from .logging_utils import logger
+from . import cli_impl
 
 
 def _validate_kv_data(kv_data: dict | None, prompt_id: str) -> tuple[bool, str]:
@@ -225,7 +227,51 @@ async def _navigate_path(bot, path: list[int]):
         await _warp_to_sector(bot, sector)
 
 
-async def execute_route(bot, route, quantity: int | None = None, max_retries: int = 2) -> dict:
+async def _resolve_paths(
+    bot,
+    route,
+    data_dir: Path | None,
+) -> tuple[list[int] | None, list[int] | None]:
+    """Resolve navigation paths for current->buy and buy->sell."""
+    path_to_buy: list[int] | None = None
+    path_buy_to_sell: list[int] | None = None
+
+    # Prefer twerk data if available.
+    if data_dir:
+        try:
+            graph = await bot.get_sector_map(data_dir)
+            if bot.current_sector and route.buy_sector:
+                path_to_buy = graph.bfs_path(bot.current_sector, route.buy_sector)
+            if route.path and len(route.path) > 1:
+                path_buy_to_sell = route.path
+            else:
+                path_buy_to_sell = graph.bfs_path(route.buy_sector, route.sell_sector)
+            return path_to_buy, path_buy_to_sell
+        except Exception:
+            pass
+
+    # Fall back to in-game knowledge if available.
+    if bot.sector_knowledge and bot.current_sector:
+        try:
+            path_to_buy = bot.sector_knowledge.find_path(
+                bot.current_sector, route.buy_sector
+            )
+            path_buy_to_sell = bot.sector_knowledge.find_path(
+                route.buy_sector, route.sell_sector
+            )
+        except Exception:
+            pass
+
+    return path_to_buy, path_buy_to_sell
+
+
+async def execute_route(
+    bot,
+    route,
+    quantity: int | None = None,
+    max_retries: int = 2,
+    data_dir: Path | None = None,
+) -> dict:
     """Execute a twerk-analyzed trade route via terminal.
 
     This method takes a TradeRoute from twerk analysis and executes it
@@ -242,6 +288,7 @@ async def execute_route(bot, route, quantity: int | None = None, max_retries: in
             - max_quantity: Maximum available quantity
         quantity: Units to trade (defaults to route.max_quantity or ship holds)
         max_retries: Maximum retry attempts for recoverable errors
+        data_dir: Optional TW2002 data directory for twerk pathing
 
     Returns:
         Dictionary with trade results:
@@ -279,12 +326,24 @@ async def execute_route(bot, route, quantity: int | None = None, max_retries: in
 
     for attempt in range(max_retries + 1):
         try:
+            path_to_buy, path_buy_to_sell = await _resolve_paths(bot, route, data_dir)
+
             # Navigate to buy sector if not already there
             if bot.current_sector != route.buy_sector:
                 print(f"\n🚀 NAVIGATE to buy sector {route.buy_sector}")
-                # Build path from current to buy sector
-                # For now, direct warp - could use route.path if starting from there
-                await _warp_to_sector(bot, route.buy_sector)
+                if path_to_buy:
+                    print(f"  Using path: {' -> '.join(str(s) for s in path_to_buy)}")
+                    success = await cli_impl.warp_along_path(bot, path_to_buy)
+                    if not success:
+                        raise RuntimeError("path_navigation_failed")
+                else:
+                    await _warp_to_sector(bot, route.buy_sector)
+
+            # Update state after navigation
+            state = await bot.orient()
+            bot.current_sector = state.sector
+            if state.credits is not None:
+                bot.current_credits = state.credits
 
             # BUY PHASE
             print(f"\n📍 BUY PHASE (Sector {route.buy_sector})")
@@ -292,12 +351,20 @@ async def execute_route(bot, route, quantity: int | None = None, max_retries: in
             result["quantity_bought"] = trade_quantity
 
             # NAVIGATE to sell sector
-            if route.path and len(route.path) > 1:
+            if path_buy_to_sell and len(path_buy_to_sell) > 1:
                 print(f"\n🚀 NAVIGATE via route path")
-                await _navigate_path(bot, route.path)
+                success = await cli_impl.warp_along_path(bot, path_buy_to_sell)
+                if not success:
+                    raise RuntimeError("path_navigation_failed")
             else:
                 print(f"\n🚀 WARP to {route.sell_sector}")
                 await _warp_to_sector(bot, route.sell_sector)
+
+            # Update state after navigation
+            state = await bot.orient()
+            bot.current_sector = state.sector
+            if state.credits is not None:
+                bot.current_credits = state.credits
 
             # SELL PHASE
             print(f"\n📍 SELL PHASE (Sector {route.sell_sector})")
