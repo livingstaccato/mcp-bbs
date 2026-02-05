@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from bbsbot.addons.base import Addon, AddonEvent
 
 
-class AddonManager(BaseModel):
-    addons: list[Addon] = Field(default_factory=list)
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class AddonManager:
+    def __init__(self) -> None:
+        self.addons: list[Addon] = []
 
     def process(self, snapshot: dict[str, object]) -> list[AddonEvent]:
         events: list[AddonEvent] = []

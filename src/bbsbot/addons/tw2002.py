@@ -51,7 +51,7 @@ _HOLDS_RE = re.compile(r"Total Holds\s*:\s*(?P<total>\d+)\s*-\s*(?P<holds>.+)$",
 _BEACON_RE = re.compile(r"Beacon\s*:\s*(?P<beacon>.+)$", re.IGNORECASE | re.MULTILINE)
 
 
-class Tw2002Addon(BaseModel, Addon):
+class Tw2002Addon(BaseModel):
     name: str = "tw2002"
     last_port: str | None = None
     last_item: str | None = None

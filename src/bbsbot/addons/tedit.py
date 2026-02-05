@@ -16,7 +16,7 @@ _SIMPLE_KV_RE = re.compile(r"^(?P<label>[A-Za-z0-9 /#'\-\[\]<>]+)\s*:\s*(?P<valu
 _PROMPT_RE = re.compile(r"^(?P<prompt>.+?\[[^\]]*\]\s*:\s*)$")
 
 
-class TeditAddon(BaseModel, Addon):
+class TeditAddon(BaseModel):
     name: str = "tedit"
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
