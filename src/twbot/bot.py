@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,7 +16,19 @@ from . import trading
 from . import io
 from . import parsing
 from . import logging_utils
-from .orientation import GameState, SectorKnowledge, OrientationError, orient
+from .orientation import (
+    GameState,
+    SectorKnowledge,
+    OrientationError,
+    QuickState,
+    orient,
+    where_am_i,
+    recover_to_safe_state,
+    SAFE_CONTEXTS,
+    ACTION_CONTEXTS,
+    DANGER_CONTEXTS,
+    INFO_CONTEXTS,
+)
 
 if TYPE_CHECKING:
     from twerk.analysis import SectorGraph, TradeRoute
@@ -121,6 +134,213 @@ class TradingBot:
 
         return self.game_state
 
+    async def where_am_i(self, timeout_ms: int = 500) -> QuickState:
+        """Fast state check - quickly determine where we are.
+
+        This is the FAST "where am I" function. It reads the screen once,
+        detects context, and returns immediately. Use this when you need
+        to quickly check state without full orientation.
+
+        For full state gathering, use orient() instead.
+
+        Args:
+            timeout_ms: Max time to wait for screen data
+
+        Returns:
+            QuickState with context and basic info
+        """
+        return await where_am_i(self, timeout_ms)
+
+    async def recover(self, max_attempts: int = 20) -> QuickState:
+        """Attempt to recover to a safe state from any situation.
+
+        This is the fail-safe recovery function. It will try various
+        escape sequences to get back to a command prompt.
+
+        Args:
+            max_attempts: Maximum recovery attempts
+
+        Returns:
+            QuickState after recovery
+
+        Raises:
+            OrientationError if recovery fails
+        """
+        return await recover_to_safe_state(self, max_attempts)
+
+    def is_safe(self) -> bool:
+        """Quick check if we're in a safe state based on last game_state."""
+        if not self.game_state:
+            return False
+        return self.game_state.context in SAFE_CONTEXTS
+
+    def is_in_danger(self) -> bool:
+        """Quick check if we're in a dangerous state."""
+        if not self.game_state:
+            return False
+        return self.game_state.context in DANGER_CONTEXTS
+
+    # -------------------------------------------------------------------------
+    # Navigation shortcuts - common game locations
+    # -------------------------------------------------------------------------
+
+    async def go_to_computer(self) -> bool:
+        """Navigate to Computer menu from sector command.
+
+        Returns:
+            True if successfully at Computer menu
+        """
+        state = await self.where_am_i()
+        if state.context != "sector_command":
+            print(f"  [Computer] Not at sector command (at {state.context})")
+            return False
+
+        await self.session.send("C")
+        await asyncio.sleep(0.5)
+
+        state = await self.where_am_i()
+        return state.context == "computer_menu"
+
+    async def go_to_cim(self) -> bool:
+        """Navigate to CIM (Computer Interrogation Mode).
+
+        CIM provides machine-readable data dumps for:
+        - Port data (zero-turn port enumeration)
+        - Sector data (universe mapping)
+        - Ship data (scanner results)
+
+        Returns:
+            True if successfully in CIM mode
+        """
+        # First get to computer menu
+        if not await self.go_to_computer():
+            return False
+
+        # Enter CIM mode (^ character or ALT-200)
+        await self.session.send("^")
+        await asyncio.sleep(0.3)
+
+        state = await self.where_am_i()
+        return state.context == "cim_mode"
+
+    async def get_port_report(self) -> str:
+        """Get human-readable port report from Computer menu.
+
+        Returns:
+            Port report text or empty string on failure
+        """
+        if not await self.go_to_computer():
+            return ""
+
+        # Request port report
+        await self.session.send("R")
+        await asyncio.sleep(1.0)
+
+        result = await self.session.read(timeout_ms=2000, max_bytes=16384)
+        screen = result.get("screen", "")
+
+        # Return to safe state
+        await self.recover()
+
+        return screen
+
+    async def plot_course(self, destination: int) -> bool:
+        """Use course plotter to plan route (zero turns).
+
+        Args:
+            destination: Target sector number
+
+        Returns:
+            True if course was successfully plotted
+        """
+        if not await self.go_to_computer():
+            return False
+
+        # Access course plotter
+        await self.session.send("F")
+        await asyncio.sleep(0.5)
+
+        # Enter destination
+        await self.session.send(f"{destination}\r")
+        await asyncio.sleep(1.0)
+
+        # Read result
+        result = await self.session.read(timeout_ms=2000, max_bytes=8192)
+        screen = result.get("screen", "")
+
+        # Check if path was found
+        success = "path" in screen.lower() or "route" in screen.lower()
+
+        # Return to safe state
+        await self.recover()
+
+        return success
+
+    async def go_to_stardock(self) -> bool:
+        """Navigate to StarDock (must be in StarDock sector).
+
+        Returns:
+            True if successfully at StarDock
+        """
+        state = await self.where_am_i()
+        if state.context != "sector_command":
+            return False
+
+        # Try to enter StarDock
+        await self.session.send("S")
+        await asyncio.sleep(0.5)
+
+        state = await self.where_am_i()
+        return state.context == "stardock"
+
+    async def go_to_tavern(self) -> bool:
+        """Navigate to Lost Trader's Tavern (must be at StarDock).
+
+        Returns:
+            True if successfully at Tavern
+        """
+        state = await self.where_am_i()
+
+        # If not at StarDock, try to get there
+        if state.context != "stardock":
+            if not await self.go_to_stardock():
+                return False
+
+        # Enter Tavern
+        await self.session.send("T")
+        await asyncio.sleep(0.5)
+
+        state = await self.where_am_i()
+        return state.context == "tavern"
+
+    async def ask_grimy_trader(self, topic: str) -> str:
+        """Ask Grimy Trader for information.
+
+        Args:
+            topic: One of "TRADER", "FEDERATION", "MAFIA"
+
+        Returns:
+            Information received or empty string on failure
+        """
+        if not await self.go_to_tavern():
+            return ""
+
+        # Talk to Grimy Trader
+        await self.session.send("T")
+        await asyncio.sleep(0.5)
+
+        # Ask about topic
+        await self.session.send(f"{topic}\r")
+        await asyncio.sleep(1.0)
+
+        result = await self.session.read(timeout_ms=2000, max_bytes=8192)
+        screen = result.get("screen", "")
+
+        # Return to safe state
+        await self.recover()
+
+        return screen
+
     def find_path(self, destination: int) -> list[int] | None:
         """Find path from current sector to destination.
 
@@ -143,6 +363,19 @@ class TradingBot:
     async def run_trading_loop(self, target_credits: int = 5_000_000, max_cycles: int = 20):
         """Run trading loop until target credits or max cycles."""
         await trading.run_trading_loop(self, target_credits, max_cycles)
+
+    async def execute_route(self, route, quantity: int | None = None, max_retries: int = 2) -> dict:
+        """Execute a twerk-analyzed trade route via terminal.
+
+        Args:
+            route: TradeRoute from twerk analysis
+            quantity: Units to trade (defaults to route.max_quantity or ship holds)
+            max_retries: Maximum retry attempts for recoverable errors
+
+        Returns:
+            Dictionary with trade results including success, profit, etc.
+        """
+        return await trading.execute_route(self, route, quantity, max_retries)
 
     # I/O methods
     async def wait_and_respond(self, prompt_id_pattern: str | None = None, timeout_ms: int = 10000):

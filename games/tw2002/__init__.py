@@ -3,6 +3,10 @@
 This package provides tools for interacting with Trade Wars 2002 via MCP-BBS,
 including TEDIT (Sysop Editor) automation and game settings management.
 
+Two access methods are supported:
+- Direct file access via twerk library (for local servers)
+- Terminal automation via MCP-BBS (for remote/legacy servers)
+
 Modules:
     tedit_manager: High-level session management for TEDIT
     settings_diff: Compare settings between games or baselines
@@ -13,6 +17,7 @@ from .tedit_manager import TEDITManager
 from .settings_diff import (
     diff_games,
     diff_from_baseline,
+    diff_from_files,
     diff_settings,
     format_diff_report,
     DiffReport,
@@ -32,12 +37,22 @@ from .data_mapper import (
     get_file_info,
 )
 
+# Import TW2002Admin from twbot for unified admin access
+try:
+    from twbot.admin import TW2002Admin
+except ImportError:
+    # twbot may not be installed in all environments
+    TW2002Admin = None  # type: ignore[misc, assignment]
+
 __all__ = [
+    # Unified Admin Interface
+    "TW2002Admin",
     # TEDIT Manager
     "TEDITManager",
     # Settings Diff
     "diff_games",
     "diff_from_baseline",
+    "diff_from_files",
     "diff_settings",
     "format_diff_report",
     "DiffReport",

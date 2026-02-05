@@ -197,13 +197,71 @@ async def login_sequence(
         screen_lower = screen.lower()
 
         # Handle prompts until we reach menu_selection
-        if "login_name" in prompt_id:
-            print(f"      → Sending username")
+        if "twgs_begin_adventure" in prompt_id:
+            # Final prompt before entering game - just press Enter
+            print(f"      → Begin adventure prompt, pressing Enter")
+            await bot.session.send("\r")
+            await asyncio.sleep(0.3)
+
+        elif "twgs_ship_selection" in prompt_id:
+            # Ship/sector selection during character creation - requires Enter
+            print(f"      → Ship/sector selection prompt, choosing 1")
+            await send_input(bot, "1", input_type)
+
+        elif "twgs_gender" in prompt_id:
+            # Gender prompt during character creation
+            # Note: TWGS needs Enter even though it seems like single_key
+            print(f"      → Gender prompt, sending M+Enter")
+            await bot.session.send("M\r")
+            await asyncio.sleep(0.3)
+
+        elif "twgs_real_name" in prompt_id:
+            # Real name prompt during character creation
+            print(f"      → Real name prompt, sending: {username}")
             await send_input(bot, username, input_type)
+
+        elif "character_password" in prompt_id:
+            # Character password for new character
+            print(f"      → Character password prompt, sending password")
+            await send_input(bot, character_password, input_type)
+
+        elif "create_character" in prompt_id:
+            # Character creation confirmation - answer Y
+            # Note: Even single_key prompts may need Enter on some systems
+            print(f"      → Create character confirmation, answering Y")
+            await bot.session.send("Y\r")
+            await asyncio.sleep(0.5)
+
+        elif "new_player_name" in prompt_id:
+            # Creating a new character - send the desired character name
+            print(f"      → New player name prompt, entering: {username}")
+            await send_input(bot, username, input_type)
+
+        elif "login_name" in prompt_id:
+            # Check if we got "Player not found" - need to create character
+            if "player not found" in screen_lower:
+                print(f"      → Player not found, sending 'new' to create character")
+                await send_input(bot, "new", input_type)
+            else:
+                print(f"      → Sending username")
+                await send_input(bot, username, input_type)
 
         elif "menu_selection" in prompt_id:
             print(f"      ✓ Reached game selection menu!")
             break
+
+        elif "sector_command" in prompt_id:
+            # Already in game! Existing character logged in directly.
+            print(f"      ✓ Already in game! (existing character)")
+            # Skip to phase 3 end - parse state and return
+            from .parsing import _parse_sector_from_screen, _parse_credits_from_screen
+            bot.current_sector = _parse_sector_from_screen(bot, screen)
+            bot.current_credits = _parse_credits_from_screen(bot, screen)
+            print(
+                f"\n✓ Login complete (existing character) - Sector {bot.current_sector}, "
+                f"Credits: {bot.current_credits:,}"
+            )
+            return  # Early return - already logged in
 
         elif input_type == "any_key":
             print("      → Pressing space to continue")
@@ -372,6 +430,12 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         # Fallback: if actual_prompt is empty, use pattern-based detection
+        elif "twgs_begin_adventure" in prompt_id:
+            # This prompt says "Press ENTER to begin" - needs Enter, not space
+            print(f"      → Begin adventure prompt, pressing Enter")
+            await bot.session.send("\r")
+            await asyncio.sleep(0.3)
+
         elif "private_game_password" in prompt_id:
             print(f"      → Sending game password (pattern)")
             await send_input(bot, game_password, input_type)

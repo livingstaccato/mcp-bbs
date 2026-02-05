@@ -1,11 +1,103 @@
 {
-  "version": "1.0",
+  "version": "2.0",
   "game": "tw2002",
   "metadata": {
-    "description": "Trade Wars 2002 standardized prompt/menu rules",
-    "updated_at": "2026-02-04T00:25:00Z"
+    "description": "Trade Wars 2002 comprehensive prompt/menu rules - full gameplay coverage",
+    "updated_at": "2026-02-05T04:20:00Z",
+    "prompt_count": 193,
+    "coverage": "login, navigation, trading, combat (retreat/surrender/capture/tow), banking, planets (citadel/colonists/build/shields), corporations, tavern, CIM, computer, underground, weapons (disruptor/limpets/beacons/probes/genesis/atomic), ships (catalog/equipment/yard), aliens (Ferrengi), sector hazards (nebula/blackhole/asteroid), towing, mail, rankings, T-warp, help, bounty, special locations (StarDock/Hardware/McPlasma), cloaking, scanning, avoid sectors, settings"
   },
   "prompts": [
+    {
+      "id": "prompt.twgs_begin_adventure",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)press\\s+enter\\s+to\\s+begin\\s+your\\s+adventure",
+        "match_mode": "regex"
+      },
+      "negative_match": {
+        "pattern": "(?i)command\\s*\\[TL=",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS character creation final prompt - exclude when command prompt visible"
+    },
+    {
+      "id": "prompt.twgs_ship_selection",
+      "kind": "menu",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)your\\s+choice\\s*\\(1-3\\)\\s*\\[\\d\\]\\s*:\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS character creation ship/sector selection - requires Enter after choice"
+    },
+    {
+      "id": "prompt.twgs_gender",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)gender\\s*\\(m/f\\):\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS character creation gender prompt - needs Enter after M/F"
+    },
+    {
+      "id": "prompt.twgs_real_name",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)real\\s+name:\\s*$",
+        "match_mode": "regex"
+      },
+      "negative_match": {
+        "pattern": "(?i)gender\\s*\\(m/f\\)",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS character creation real name prompt"
+    },
+    {
+      "id": "prompt.character_password",
+      "kind": "login_pass",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)password:\\s*$",
+        "match_mode": "regex"
+      },
+      "negative_match": {
+        "pattern": "(?i)real\\s+name:",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS character password prompt (after character creation confirmation)"
+    },
+    {
+      "id": "prompt.create_character",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)create\\s+new\\s+character\\?\\s*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "negative_match": {
+        "pattern": "(?i)(password:\\s*$|gender\\s*\\(m/f\\))",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS character creation confirmation - exclude when password or gender visible"
+    },
+    {
+      "id": "prompt.new_player_name",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)enter\\s+new\\s+player\\s+name",
+        "match_mode": "regex"
+      },
+      "negative_match": {
+        "pattern": "(?i)create\\s+new\\s+character\\?",
+        "match_mode": "regex"
+      },
+      "notes": "TWGS new character name prompt - must match before generic login_name"
+    },
     {
       "id": "prompt.login_name",
       "kind": "login_name",
@@ -14,7 +106,11 @@
         "pattern": "(?i)(enter|type)\\s+(your\\s+)?(name|user\\s*name|handle|alias)",
         "match_mode": "regex"
       },
-      "notes": "Username/handle prompt at login"
+      "negative_match": {
+        "pattern": "(?i)(gender\\s*\\(m/f\\)|your\\s+choice\\s*\\(1-3\\)|password:|real\\s+name:)",
+        "match_mode": "regex"
+      },
+      "notes": "Username/handle prompt at login - exclude when later creation prompts visible"
     },
     {
       "id": "prompt.login_password",
@@ -86,7 +182,11 @@
         "pattern": "(?i)\\(y/n\\)|\\[y/n\\]|\\(yes/no\\)",
         "match_mode": "regex"
       },
-      "notes": "Yes/No confirmation"
+      "negative_match": {
+        "pattern": "(?i)(gender\\s*\\(m/f\\)|your\\s+choice\\s*\\(1-3\\)|password:|real\\s+name:|ship\\s+selection|merchant\\s+cruiser)",
+        "match_mode": "regex"
+      },
+      "notes": "Yes/No confirmation - exclude when later creation prompts or ship selection visible"
     },
     {
       "id": "prompt.show_todays_log",
@@ -167,7 +267,7 @@
       "kind": "menu",
       "input_type": "single_key",
       "match": {
-        "pattern": "(?i)sector\\s+command\\s*[\\[\\(:]?\\s*\\??\\s*$",
+        "pattern": "(?i)(sector\\s+command|command\\s*\\[TL=).*\\?\\s*:\\s*$",
         "match_mode": "regex"
       },
       "kv_extract": [
@@ -693,6 +793,1426 @@
         "match_mode": "regex"
       },
       "notes": "TEDIT confirmation prompt"
+    },
+
+    {
+      "id": "prompt.combat_attack",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(attack|fire|retreat|surrender).*\\?",
+        "match_mode": "regex"
+      },
+      "notes": "Combat action prompt - attack/retreat choices"
+    },
+    {
+      "id": "prompt.combat_target",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many fighters.*to.*attack",
+        "match_mode": "regex"
+      },
+      "notes": "Combat - number of fighters to deploy"
+    },
+    {
+      "id": "prompt.combat_result",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(you destroyed|you were destroyed|victory|defeated|fled)",
+        "match_mode": "regex"
+      },
+      "notes": "Combat outcome display"
+    },
+    {
+      "id": "prompt.ship_destroyed",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(ship.*destroyed|been killed|start over from scratch)",
+        "match_mode": "regex"
+      },
+      "notes": "Death screen - ship destroyed"
+    },
+    {
+      "id": "prompt.restart_character",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)do you wish to (start|begin) (over|again|anew)",
+        "match_mode": "regex"
+      },
+      "notes": "Character restart confirmation after death"
+    },
+
+    {
+      "id": "prompt.port_commodity",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(fuel ore|organics|equipment).*\\(buying|selling\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Port commodity selection during trading"
+    },
+    {
+      "id": "prompt.port_buy_sell",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)\\[b\\]uy.*\\[s\\]ell|buy or sell",
+        "match_mode": "regex"
+      },
+      "notes": "Port buy/sell choice"
+    },
+    {
+      "id": "prompt.port_haggle",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(your offer|counter.?offer|final price|how much will you (pay|accept))",
+        "match_mode": "regex"
+      },
+      "notes": "Port haggling - price negotiation"
+    },
+    {
+      "id": "prompt.port_accept_offer",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)is this acceptable.*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Port price acceptance confirmation"
+    },
+    {
+      "id": "prompt.port_transaction_complete",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(transaction complete|goods loaded|goods unloaded|cargo transferred)",
+        "match_mode": "regex"
+      },
+      "notes": "Port transaction completed message"
+    },
+    {
+      "id": "prompt.port_no_goods",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(no goods|none available|out of stock|empty holds)",
+        "match_mode": "regex"
+      },
+      "notes": "Port - no goods available"
+    },
+    {
+      "id": "prompt.port_insufficient_funds",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(insufficient (funds|credits)|can't afford|not enough (credits|money))",
+        "match_mode": "regex"
+      },
+      "notes": "Port - insufficient credits"
+    },
+
+    {
+      "id": "prompt.bank_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)\\[d\\]eposit.*\\[w\\]ithdraw",
+        "match_mode": "regex"
+      },
+      "notes": "Bank menu - deposit/withdraw options"
+    },
+    {
+      "id": "prompt.bank_amount",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many credits.*(deposit|withdraw)",
+        "match_mode": "regex"
+      },
+      "notes": "Bank amount entry"
+    },
+    {
+      "id": "prompt.bank_balance",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)bank balance:?\\s*[\\d,]+",
+        "match_mode": "regex"
+      },
+      "notes": "Bank balance display"
+    },
+
+    {
+      "id": "prompt.planet_land",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)land on (this )?planet.*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Planet landing confirmation"
+    },
+    {
+      "id": "prompt.planet_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)planet (surface )?menu|citadel menu|\\[l\\]ift.?off",
+        "match_mode": "regex"
+      },
+      "notes": "Planet surface menu"
+    },
+    {
+      "id": "prompt.planet_colonists",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many colonists",
+        "match_mode": "regex"
+      },
+      "notes": "Planet colonist transfer"
+    },
+    {
+      "id": "prompt.planet_fighters",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many fighters.*(deploy|transfer|planet)",
+        "match_mode": "regex"
+      },
+      "notes": "Planet fighter deployment"
+    },
+
+    {
+      "id": "prompt.warp_destination",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(enter|warp to|destination) sector:?\\s*$",
+        "match_mode": "regex"
+      },
+      "notes": "Warp destination entry"
+    },
+    {
+      "id": "prompt.warp_confirm",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)warp to sector \\d+.*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Warp confirmation"
+    },
+    {
+      "id": "prompt.course_plot",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(plot course to|course destination|enter destination)",
+        "match_mode": "regex"
+      },
+      "notes": "Course plotting destination"
+    },
+    {
+      "id": "prompt.course_engage",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)engage (course|autopilot).*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Course/autopilot engagement"
+    },
+    {
+      "id": "prompt.sector_scan",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)sector scan|scanning sector",
+        "match_mode": "regex"
+      },
+      "notes": "Sector scan results"
+    },
+    {
+      "id": "prompt.density_scan",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)density scan|holo.?scan",
+        "match_mode": "regex"
+      },
+      "notes": "Density/holo scan results"
+    },
+
+    {
+      "id": "prompt.message_read",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(subspace )?message from|you have.*message",
+        "match_mode": "regex"
+      },
+      "notes": "Message received/reading"
+    },
+    {
+      "id": "prompt.message_compose",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)(enter|type) (your )?message|message text",
+        "match_mode": "regex"
+      },
+      "notes": "Message composition"
+    },
+    {
+      "id": "prompt.message_recipient",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)send (message )?to|recipient",
+        "match_mode": "regex"
+      },
+      "notes": "Message recipient selection"
+    },
+
+    {
+      "id": "prompt.stardock_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)stardock.*menu|welcome to (the )?stardock",
+        "match_mode": "regex"
+      },
+      "notes": "StarDock main menu"
+    },
+    {
+      "id": "prompt.ship_buy",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(buy|purchase) (a )?ship|ship (dealer|yard)",
+        "match_mode": "regex"
+      },
+      "notes": "Ship purchase menu"
+    },
+    {
+      "id": "prompt.ship_select",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)which ship|select ship|ship number",
+        "match_mode": "regex"
+      },
+      "notes": "Ship selection for purchase"
+    },
+    {
+      "id": "prompt.hardware_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)hardware (emporium|shop)|upgrade.*ship",
+        "match_mode": "regex"
+      },
+      "notes": "Hardware/upgrade shop menu"
+    },
+    {
+      "id": "prompt.hardware_buy",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many (holds|fighters|shields)|quantity to (buy|purchase)",
+        "match_mode": "regex"
+      },
+      "notes": "Hardware quantity purchase"
+    },
+
+    {
+      "id": "prompt.corp_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)corporation (menu|options)|corp (headquarters|hq)",
+        "match_mode": "regex"
+      },
+      "notes": "Corporation menu"
+    },
+    {
+      "id": "prompt.corp_join",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)join (this )?corporation.*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Corporation join confirmation"
+    },
+    {
+      "id": "prompt.corp_deposit",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)credits to (deposit|contribute) to corp",
+        "match_mode": "regex"
+      },
+      "notes": "Corporation treasury deposit"
+    },
+
+    {
+      "id": "prompt.alien_encounter",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(ferrengi|alien|cabal).*(attack|encounter|spotted)",
+        "match_mode": "regex"
+      },
+      "notes": "Alien/Ferrengi encounter"
+    },
+    {
+      "id": "prompt.navhaz_warning",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)nav(igation)?.*haz(ard)?|navigational hazard",
+        "match_mode": "regex"
+      },
+      "notes": "Navigation hazard warning"
+    },
+    {
+      "id": "prompt.mine_hit",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(hit a mine|mine (damage|exploded)|armid mine|limpet)",
+        "match_mode": "regex"
+      },
+      "notes": "Mine/limpet damage notification"
+    },
+
+    {
+      "id": "prompt.computer_info",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)ship'?s? computer|trade (report|summary)|port report",
+        "match_mode": "regex"
+      },
+      "notes": "Computer/information display"
+    },
+    {
+      "id": "prompt.player_info",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)player (info|status|record)|personal record",
+        "match_mode": "regex"
+      },
+      "notes": "Player information display"
+    },
+    {
+      "id": "prompt.rankings",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(player|trader) ranking|top (traders|players)",
+        "match_mode": "regex"
+      },
+      "notes": "Rankings display"
+    },
+    {
+      "id": "prompt.help_menu",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)help menu|command (list|help)|available commands",
+        "match_mode": "regex"
+      },
+      "notes": "Help/command list display"
+    },
+
+    {
+      "id": "prompt.deploy_fighters",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many fighters.*(deploy|leave|drop)",
+        "match_mode": "regex"
+      },
+      "notes": "Fighter deployment prompt"
+    },
+    {
+      "id": "prompt.deploy_mines",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many (mines|limpets).*(deploy|drop)",
+        "match_mode": "regex"
+      },
+      "notes": "Mine deployment prompt"
+    },
+    {
+      "id": "prompt.collect_fighters",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how many fighters.*(collect|pick up|retrieve)",
+        "match_mode": "regex"
+      },
+      "notes": "Fighter collection prompt"
+    },
+
+    {
+      "id": "prompt.photon_fire",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)fire photon.*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Photon torpedo firing confirmation"
+    },
+    {
+      "id": "prompt.genesis_deploy",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)deploy genesis.*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Genesis torpedo deployment"
+    },
+    {
+      "id": "prompt.cloak_engage",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)engage cloak.*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Cloaking device engagement"
+    },
+
+    {
+      "id": "prompt.out_of_turns",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(out of turns|no turns left|turns.*exhausted)",
+        "match_mode": "regex"
+      },
+      "notes": "Out of turns notification"
+    },
+    {
+      "id": "prompt.session_end",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(quit game|log off|exit).*\\(y/n\\)",
+        "match_mode": "regex"
+      },
+      "notes": "Session end/quit confirmation"
+    },
+
+    {
+      "id": "prompt.computer_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)computer\\s+(command|menu)|\\[c\\]omputer",
+        "match_mode": "regex"
+      },
+      "notes": "Computer main menu - access to CIM, port reports, etc."
+    },
+    {
+      "id": "prompt.computer_submenu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(navigation|miscellaneous|displays)\\s+(<[A-Z]>|menu)",
+        "match_mode": "regex"
+      },
+      "notes": "Computer submenu selection"
+    },
+    {
+      "id": "prompt.course_plotter",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)course\\s+plotter|plot\\s+(a\\s+)?course|destination\\s+sector",
+        "match_mode": "regex"
+      },
+      "notes": "Course plotter destination entry"
+    },
+    {
+      "id": "prompt.port_report",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)port\\s+report|trading\\s+ports?\\s+in",
+        "match_mode": "regex"
+      },
+      "notes": "Port report display"
+    },
+    {
+      "id": "prompt.known_universe",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)known\\s+universe|explored\\s+sectors",
+        "match_mode": "regex"
+      },
+      "notes": "Known universe display"
+    },
+
+    {
+      "id": "prompt.cim_mode",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)computer\\s+interrogation|cim\\s+(mode|menu)|data\\s+retrieval",
+        "match_mode": "regex"
+      },
+      "notes": "CIM (Computer Interrogation Mode) - machine-readable data dumps"
+    },
+    {
+      "id": "prompt.cim_port_data",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)cim.*port\\s+(data|report)|downloading\\s+port",
+        "match_mode": "regex"
+      },
+      "notes": "CIM port data download"
+    },
+    {
+      "id": "prompt.cim_sector_data",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)cim.*sector\\s+(data|map)|downloading\\s+sector",
+        "match_mode": "regex"
+      },
+      "notes": "CIM sector data download"
+    },
+    {
+      "id": "prompt.cim_ship_data",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)cim.*ship\\s+(data|scan)|downloading\\s+ship",
+        "match_mode": "regex"
+      },
+      "notes": "CIM ship/scanner data download"
+    },
+
+    {
+      "id": "prompt.tavern_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(lost\\s+)?trader'?s?\\s+tavern|tavern\\s+menu|\\[t\\]avern",
+        "match_mode": "regex"
+      },
+      "notes": "Lost Trader's Tavern main menu"
+    },
+    {
+      "id": "prompt.tavern_bar",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)bar\\s+service|what.*drink|order.*beverage",
+        "match_mode": "regex"
+      },
+      "notes": "Tavern bar service menu"
+    },
+    {
+      "id": "prompt.tavern_food",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)food\\s+service|what.*eat|order.*meal|blue\\s+plate",
+        "match_mode": "regex"
+      },
+      "notes": "Tavern food service menu"
+    },
+    {
+      "id": "prompt.grimy_trader",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)grimy\\s+(trader|man)|what.*want.*know|information.*cost",
+        "match_mode": "regex"
+      },
+      "notes": "Grimy Trader intelligence service - paid information"
+    },
+    {
+      "id": "prompt.grimy_topic",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)what\\s+(topic|subject)|ask\\s+about|trader.*federation.*mafia",
+        "match_mode": "regex"
+      },
+      "notes": "Grimy Trader topic selection (TRADER, FEDERATION, MAFIA)"
+    },
+    {
+      "id": "prompt.grimy_payment",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)cost.*credits.*\\(y/n\\)|pay.*information",
+        "match_mode": "regex"
+      },
+      "notes": "Grimy Trader payment confirmation"
+    },
+    {
+      "id": "prompt.tricron_game",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)tri-?cron|gambling|place.*bet|wager",
+        "match_mode": "regex"
+      },
+      "notes": "Tri-Cron gambling game"
+    },
+    {
+      "id": "prompt.tricron_bet",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how\\s+much.*bet|wager\\s+amount|bet.*credits",
+        "match_mode": "regex"
+      },
+      "notes": "Tri-Cron bet amount entry"
+    },
+    {
+      "id": "prompt.eavesdrop",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)eavesdrop|corner\\s+table|overhear|conversation",
+        "match_mode": "regex"
+      },
+      "notes": "Tavern eavesdropping on conversations"
+    },
+    {
+      "id": "prompt.announcement_post",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)post.*announcement|message.*board|enter.*announcement",
+        "match_mode": "regex"
+      },
+      "notes": "Post announcement (100 credits)"
+    },
+
+    {
+      "id": "prompt.underground",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)underground|secret.*area|hidden.*section",
+        "match_mode": "regex"
+      },
+      "notes": "Underground area (accessed via Grimy Trader MAFIA password)"
+    },
+    {
+      "id": "prompt.underground_password",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)underground\\s+password|secret\\s+password|mafia.*password",
+        "match_mode": "regex"
+      },
+      "notes": "Underground area password entry"
+    },
+
+    {
+      "id": "prompt.fedspace",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)fed(eration)?\\s*space|fedspace|protected\\s+zone",
+        "match_mode": "regex"
+      },
+      "notes": "FedSpace notification"
+    },
+    {
+      "id": "prompt.fedpolice",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)fed(eration)?\\s*(police|patrol)|illegal.*activity",
+        "match_mode": "regex"
+      },
+      "notes": "Federation Police encounter"
+    },
+
+    {
+      "id": "prompt.combat_retreat",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)retreat\\?|flee\\?|run\\s+away",
+        "match_mode": "regex"
+      },
+      "notes": "Combat retreat confirmation"
+    },
+    {
+      "id": "prompt.combat_surrender",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)surrender|give\\s+up|yield",
+        "match_mode": "regex"
+      },
+      "notes": "Combat surrender option"
+    },
+    {
+      "id": "prompt.combat_captured",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)captured|taken\\s+prisoner|you\\s+are\\s+now\\s+a\\s+prisoner",
+        "match_mode": "regex"
+      },
+      "notes": "Captured by enemy"
+    },
+    {
+      "id": "prompt.combat_tow_offer",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)tow.*ship|attach.*limpet|capture.*ship",
+        "match_mode": "regex"
+      },
+      "notes": "Offer to tow disabled ship"
+    },
+    {
+      "id": "prompt.combat_victory",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)(enemy|opponent).*destroyed|you\\s+(win|won|have\\s+won)",
+        "match_mode": "regex"
+      },
+      "notes": "Combat victory notification"
+    },
+    {
+      "id": "prompt.combat_loss",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)your\\s+ship.*destroyed|you\\s+(lose|lost|have\\s+been\\s+destroyed)",
+        "match_mode": "regex"
+      },
+      "notes": "Combat loss notification"
+    },
+    {
+      "id": "prompt.combat_escape_pod",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)escape\\s+pod|eject|emergency\\s+evacuation",
+        "match_mode": "regex"
+      },
+      "notes": "Escape pod ejection"
+    },
+
+    {
+      "id": "prompt.weapon_disruptor",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)use.*disruptor|disruptor.*mine|clear.*mines",
+        "match_mode": "regex"
+      },
+      "notes": "Mine disruptor usage"
+    },
+    {
+      "id": "prompt.weapon_limpet",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)attach.*limpet|limpet.*how\\s+many|deploy.*limpet",
+        "match_mode": "regex"
+      },
+      "notes": "Limpet mine deployment"
+    },
+    {
+      "id": "prompt.weapon_beacon",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)deploy.*beacon|place.*beacon|beacon.*message",
+        "match_mode": "regex"
+      },
+      "notes": "Beacon deployment"
+    },
+    {
+      "id": "prompt.weapon_probe",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)launch.*probe|probe.*sector|ether\\s+probe",
+        "match_mode": "regex"
+      },
+      "notes": "Probe launch"
+    },
+    {
+      "id": "prompt.weapon_psychic_probe",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)psychic\\s+probe|probe.*player|scan.*player",
+        "match_mode": "regex"
+      },
+      "notes": "Psychic probe usage"
+    },
+    {
+      "id": "prompt.weapon_genesis",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)genesis.*torpedo|create.*planet|terraform",
+        "match_mode": "regex"
+      },
+      "notes": "Genesis torpedo usage"
+    },
+    {
+      "id": "prompt.weapon_atomic",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)atomic.*detonator|destroy.*planet|detonate",
+        "match_mode": "regex"
+      },
+      "notes": "Atomic detonator usage"
+    },
+
+    {
+      "id": "prompt.ship_catalog",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)ship\\s+catalog|available\\s+ships|ship\\s+types",
+        "match_mode": "regex"
+      },
+      "notes": "Ship catalog display"
+    },
+    {
+      "id": "prompt.ship_equipment",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)ship\\s+equipment|hardware.*menu|upgrade.*menu",
+        "match_mode": "regex"
+      },
+      "notes": "Ship equipment/hardware menu"
+    },
+    {
+      "id": "prompt.ship_purchase_confirm",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)purchase.*ship|buy.*ship|confirm.*purchase",
+        "match_mode": "regex"
+      },
+      "notes": "Ship purchase confirmation"
+    },
+    {
+      "id": "prompt.ship_trade_in",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)trade.*in|sell.*current|exchange.*ship",
+        "match_mode": "regex"
+      },
+      "notes": "Ship trade-in offer"
+    },
+    {
+      "id": "prompt.ship_yard_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)ship\\s*yard|starship\\s+yard|shipyard.*menu",
+        "match_mode": "regex"
+      },
+      "notes": "Ship Yard menu"
+    },
+
+    {
+      "id": "prompt.planet_citadel_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)citadel\\s+command|citadel.*menu|fortress",
+        "match_mode": "regex"
+      },
+      "notes": "Planet citadel command menu"
+    },
+    {
+      "id": "prompt.planet_colonist_transport",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how\\s+many\\s+colonists|colonists.*transport|move.*colonists",
+        "match_mode": "regex"
+      },
+      "notes": "Colonist transport quantity"
+    },
+    {
+      "id": "prompt.planet_build_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)construction|build.*menu|planetary.*development",
+        "match_mode": "regex"
+      },
+      "notes": "Planet construction menu"
+    },
+    {
+      "id": "prompt.planet_treasury",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)treasury|planet.*credits|deposit.*planet",
+        "match_mode": "regex"
+      },
+      "notes": "Planet treasury operations"
+    },
+    {
+      "id": "prompt.planet_product_pick",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)pick\\s+up|load.*product|take.*from\\s+planet",
+        "match_mode": "regex"
+      },
+      "notes": "Planet product pickup"
+    },
+    {
+      "id": "prompt.planet_product_drop",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)drop|unload|leave.*on\\s+planet",
+        "match_mode": "regex"
+      },
+      "notes": "Planet product drop-off"
+    },
+    {
+      "id": "prompt.planet_shields",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)planetary\\s+shields|shield.*level|defense.*shields",
+        "match_mode": "regex"
+      },
+      "notes": "Planetary shield configuration"
+    },
+
+    {
+      "id": "prompt.ferrengi_encounter",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)ferrengi|alien.*vessel|hostile.*alien",
+        "match_mode": "regex"
+      },
+      "notes": "Ferrengi alien encounter"
+    },
+    {
+      "id": "prompt.ferrengi_attack",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)attack.*ferrengi|engage.*alien|fight.*ferrengi",
+        "match_mode": "regex"
+      },
+      "notes": "Ferrengi attack option"
+    },
+
+    {
+      "id": "prompt.sector_nebula",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)nebula|space\\s+anomaly|ion\\s+storm",
+        "match_mode": "regex"
+      },
+      "notes": "Nebula sector hazard"
+    },
+    {
+      "id": "prompt.sector_blackhole",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)black\\s+hole|singularity|event\\s+horizon",
+        "match_mode": "regex"
+      },
+      "notes": "Black hole sector hazard"
+    },
+    {
+      "id": "prompt.sector_asteroid",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)asteroid.*field|space\\s+debris|asteroid.*hit",
+        "match_mode": "regex"
+      },
+      "notes": "Asteroid field hazard"
+    },
+
+    {
+      "id": "prompt.tow_ship",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)tow.*ship|towing|release.*tow",
+        "match_mode": "regex"
+      },
+      "notes": "Ship towing operations"
+    },
+    {
+      "id": "prompt.tow_release",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)release.*tow|drop.*ship|let.*go",
+        "match_mode": "regex"
+      },
+      "notes": "Release towed ship"
+    },
+
+    {
+      "id": "prompt.mail_list",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)message\\s+list|mail.*list|inbox",
+        "match_mode": "regex"
+      },
+      "notes": "Mail message list"
+    },
+    {
+      "id": "prompt.mail_delete",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)delete.*message|remove.*mail|erase.*message",
+        "match_mode": "regex"
+      },
+      "notes": "Delete mail message"
+    },
+    {
+      "id": "prompt.mail_reply",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)reply|respond.*message|send.*reply",
+        "match_mode": "regex"
+      },
+      "notes": "Reply to mail message"
+    },
+
+    {
+      "id": "prompt.rankings_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)rankings|scores|leaderboard",
+        "match_mode": "regex"
+      },
+      "notes": "Rankings/scores menu"
+    },
+    {
+      "id": "prompt.rankings_display",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)top\\s+\\d+|rank.*#\\d+|position.*\\d+",
+        "match_mode": "regex"
+      },
+      "notes": "Rankings display with positions"
+    },
+
+    {
+      "id": "prompt.twarp_engage",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)transwarp|t-warp.*sector|warp\\s+drive",
+        "match_mode": "regex"
+      },
+      "notes": "Transwarp destination input"
+    },
+    {
+      "id": "prompt.twarp_confirm",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)engage.*transwarp|confirm.*t-warp|jump.*sector",
+        "match_mode": "regex"
+      },
+      "notes": "Transwarp confirmation"
+    },
+
+    {
+      "id": "prompt.interdict",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)interdict|warp\\s+blocked|cannot\\s+warp",
+        "match_mode": "regex"
+      },
+      "notes": "Interdictor preventing warp"
+    },
+
+    {
+      "id": "prompt.help_topic",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)help.*topic|which.*topic|enter.*subject",
+        "match_mode": "regex"
+      },
+      "notes": "Help topic selection"
+    },
+    {
+      "id": "prompt.help_display",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)help\\s+on|information\\s+about|--- help ---",
+        "match_mode": "regex"
+      },
+      "notes": "Help information display"
+    },
+
+    {
+      "id": "prompt.daily_log_display",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)daily\\s+log|activity\\s+log|log\\s+entry",
+        "match_mode": "regex"
+      },
+      "notes": "Daily log display"
+    },
+
+    {
+      "id": "prompt.bounty_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)bounty|wanted|federal\\s+reward",
+        "match_mode": "regex"
+      },
+      "notes": "Bounty/wanted menu"
+    },
+    {
+      "id": "prompt.bounty_collect",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)collect.*bounty|bounty.*paid|reward.*credits",
+        "match_mode": "regex"
+      },
+      "notes": "Bounty collection"
+    },
+
+    {
+      "id": "prompt.class0_port",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)class\\s+0|special.*port|stardock",
+        "match_mode": "regex"
+      },
+      "notes": "Class 0 special port (StarDock)"
+    },
+    {
+      "id": "prompt.hardware_emporium",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)hardware\\s+emporium|equipment.*store|upgrade.*shop",
+        "match_mode": "regex"
+      },
+      "notes": "Hardware Emporium menu"
+    },
+    {
+      "id": "prompt.mcplasma",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)mcplasma|plasma.*factory|fuel.*depot",
+        "match_mode": "regex"
+      },
+      "notes": "McPlasma fuel station"
+    },
+
+    {
+      "id": "prompt.cloak_status",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)cloak.*engaged|cloaked|cloak.*disabled|invisible",
+        "match_mode": "regex"
+      },
+      "notes": "Cloaking device status"
+    },
+    {
+      "id": "prompt.scanner_result",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)scanner.*result|scan.*complete|detected.*sector",
+        "match_mode": "regex"
+      },
+      "notes": "Scanner results display"
+    },
+
+    {
+      "id": "prompt.corp_create",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)create.*corporation|form.*corp|corporation.*name",
+        "match_mode": "regex"
+      },
+      "notes": "Corporation creation"
+    },
+    {
+      "id": "prompt.corp_members",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)corp.*members|corporation.*roster|member.*list",
+        "match_mode": "regex"
+      },
+      "notes": "Corporation member list"
+    },
+    {
+      "id": "prompt.corp_treasury",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)corp.*treasury|corporate.*funds|team.*credits",
+        "match_mode": "regex"
+      },
+      "notes": "Corporation treasury operations"
+    },
+    {
+      "id": "prompt.corp_planets",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)corp.*planets|corporate.*holdings|team.*planets",
+        "match_mode": "regex"
+      },
+      "notes": "Corporation planets list"
+    },
+
+    {
+      "id": "prompt.avoid_sector_add",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)avoid.*sector|mark.*hazardous|sector.*avoid",
+        "match_mode": "regex"
+      },
+      "notes": "Add sector to avoid list"
+    },
+    {
+      "id": "prompt.avoid_sector_remove",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)remove.*avoid|clear.*hazard|unmark.*sector",
+        "match_mode": "regex"
+      },
+      "notes": "Remove sector from avoid list"
+    },
+
+    {
+      "id": "prompt.photon_quantity",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how\\s+many\\s+photons|photon.*quantity|fire.*how\\s+many",
+        "match_mode": "regex"
+      },
+      "notes": "Photon torpedo quantity input"
+    },
+    {
+      "id": "prompt.fighters_quantity",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how\\s+many\\s+fighters|fighters.*deploy|deploy.*how\\s+many",
+        "match_mode": "regex"
+      },
+      "notes": "Fighter deployment quantity"
+    },
+    {
+      "id": "prompt.mines_quantity",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)how\\s+many\\s+mines|mines.*deploy|lay.*how\\s+many",
+        "match_mode": "regex"
+      },
+      "notes": "Mine deployment quantity"
+    },
+
+    {
+      "id": "prompt.settings_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)personal\\s+settings|player\\s+settings|preferences",
+        "match_mode": "regex"
+      },
+      "notes": "Personal settings menu"
+    },
+    {
+      "id": "prompt.settings_toggle",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)toggle|enable|disable|turn.*on|turn.*off",
+        "match_mode": "regex"
+      },
+      "notes": "Toggle setting on/off"
+    },
+
+    {
+      "id": "prompt.known_universe_display",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)known\\s+sectors|explored|your\\s+map",
+        "match_mode": "regex"
+      },
+      "notes": "Known universe/explored sectors"
+    },
+
+    {
+      "id": "prompt.intersector_warp",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)inter.?sector.*warp|warp.*between|sector.*link",
+        "match_mode": "regex"
+      },
+      "notes": "Inter-sector warp input"
     }
   ],
   "menus": [

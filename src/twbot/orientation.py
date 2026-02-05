@@ -284,9 +284,38 @@ class SectorKnowledge:
 def _detect_context(screen: str) -> str:
     """Detect game context from screen content.
 
-    Returns one of:
-        sector_command, planet_command, citadel_command,
-        port_menu, combat, menu, unknown
+    Returns one of the CONTEXT constants below. This is the core "where am I"
+    logic that powers fail-safe recovery.
+
+    SAFE STATES (can issue commands):
+        sector_command  - At sector prompt, ready for navigation/actions
+        planet_command  - On planet surface, can interact
+        citadel_command - At citadel prompt
+        stardock        - At StarDock facility
+
+    ACTION STATES (mid-transaction):
+        port_menu       - At port trading menu
+        port_trading    - In buy/sell transaction
+        bank            - At bank interface
+        ship_shop       - At ship purchasing
+        hardware_shop   - Buying ship upgrades
+        combat          - In combat situation
+        message_system  - Reading/writing messages
+
+    TRANSITION STATES (need to press key/continue):
+        pause           - [Pause] screen
+        more            - Pagination prompt
+        confirm         - Y/N confirmation pending
+
+    NAVIGATION STATES:
+        warping         - Moving between sectors
+        autopilot       - Autopilot engaged
+
+    OTHER:
+        login           - At login prompts
+        menu            - Generic menu
+        death           - Ship destroyed
+        unknown         - Can't determine
     """
     lines = [l.strip() for l in screen.split('\n') if l.strip()]
     if not lines:
@@ -294,33 +323,345 @@ def _detect_context(screen: str) -> str:
 
     last_line = lines[-1].lower()
     last_lines = '\n'.join(lines[-5:]).lower()
+    full_screen = screen.lower()
 
-    # Command prompts (safe states)
+    # === DEATH STATE (highest priority - need to recognize immediately) ===
+    if "ship destroyed" in full_screen or "been killed" in full_screen:
+        return "death"
+    if "start over from scratch" in full_screen:
+        return "death"
+
+    # === SAFE COMMAND STATES ===
+    # These are stable states where we can issue commands
+
+    # Sector command prompt: "Command [TL=00:00:00]:[123] (?=Help)? :"
+    # Computer command prompt: "Computer command [TL=00:00:00]:[123] (?=Help)?"
     if "command" in last_line and "?" in last_line:
+        if "computer" in last_line:
+            return "computer_menu"
         if "planet" in last_line:
             return "planet_command"
         if "citadel" in last_line:
             return "citadel_command"
-        # Default to sector command
         return "sector_command"
 
-    # Port menu
-    if "enter your choice" in last_line and ("port" in last_lines or "trading" in last_lines):
-        return "port_menu"
+    # StarDock - special facility
+    if "stardock" in last_lines and "enter your choice" in last_line:
+        return "stardock"
 
-    # Combat
+    # === COMBAT STATE ===
     if "attack" in last_lines and ("fighters" in last_lines or "shields" in last_lines):
         return "combat"
+    if "combat" in last_lines and ("fire" in last_lines or "retreat" in last_lines):
+        return "combat"
 
-    # Generic menu
-    if "selection" in last_line or "enter your choice" in last_line:
-        return "menu"
+    # === PORT STATES ===
+    # Port menu: "Enter your choice [T] ?"
+    if "[t]" in last_line and "?" in last_line:
+        return "port_menu"
+    if "enter your choice" in last_line and "port" in last_lines:
+        return "port_menu"
 
-    # Pause/continue screens
+    # Port trading: buying/selling commodities
+    if "how many" in last_line and "units" in last_line:
+        return "port_trading"
+    if "offer" in last_line and "price" in last_line:
+        return "port_trading"
+    if "fuel ore" in last_lines or "organics" in last_lines or "equipment" in last_lines:
+        if "buy" in last_lines or "sell" in last_lines:
+            return "port_trading"
+
+    # === FINANCIAL STATES ===
+    # Bank
+    if "bank" in last_lines and ("deposit" in last_lines or "withdraw" in last_lines):
+        return "bank"
+
+    # Ship shop
+    if "ship" in last_lines and "purchase" in last_lines:
+        return "ship_shop"
+
+    # Hardware/upgrades
+    if "hardware" in last_lines and "buy" in last_lines:
+        return "hardware_shop"
+
+    # === MESSAGE SYSTEM ===
+    if "message" in last_lines and ("read" in last_lines or "send" in last_lines):
+        return "message_system"
+    if "subspace" in last_lines and "message" in last_lines:
+        return "message_system"
+
+    # === COMPUTER / CIM ===
+    if "computer" in last_lines and ("navigation" in last_lines or "displays" in last_lines or "miscellaneous" in last_lines):
+        return "computer_menu"
+    if "cim" in last_lines or "interrogation" in last_lines:
+        return "cim_mode"
+    if "course plotter" in last_lines or "plot course" in last_lines:
+        return "course_plotter"
+    if "port report" in last_lines and "sector" in last_lines:
+        return "port_report"
+
+    # === TAVERN ===
+    if "tavern" in last_lines or "lost trader" in last_lines:
+        return "tavern"
+    if "grimy" in last_lines and ("trader" in last_lines or "man" in last_lines):
+        return "grimy_trader"
+    if "tri-cron" in last_lines or "tricron" in last_lines:
+        return "gambling"
+    if "eavesdrop" in last_lines or "corner table" in last_lines:
+        return "eavesdrop"
+
+    # === UNDERGROUND ===
+    if "underground" in last_lines and ("password" in last_lines or "secret" in last_lines):
+        return "underground"
+
+    # === NAVIGATION STATES ===
+    # Warping
+    if "warping to sector" in full_screen:
+        return "warping"
+    if "autopilot" in last_lines and "engaged" in last_lines:
+        return "autopilot"
+    if "stop in this sector" in last_line:
+        return "autopilot"
+
+    # === TRANSITION STATES ===
+    # Pause screens
     if "[pause]" in last_line or "[any key]" in last_line:
         return "pause"
+    if "press" in last_line and ("key" in last_line or "enter" in last_line):
+        return "pause"
+
+    # Pagination
+    if "-- more --" in last_line or "[more]" in last_line or "<more>" in last_line:
+        return "more"
+
+    # Y/N confirmation
+    if "(y/n)" in last_line or "[y/n]" in last_line:
+        return "confirm"
+
+    # === LOGIN STATES ===
+    if "enter your name" in last_line or "password:" in last_line:
+        return "login"
+    if "create new character" in last_lines:
+        return "login"
+
+    # === GENERIC MENU ===
+    if "selection" in last_line or "enter your choice" in last_line:
+        return "menu"
+    if "?" in last_line and ":" in last_line:
+        return "menu"
 
     return "unknown"
+
+
+# Context categories for quick checks
+SAFE_CONTEXTS = {"sector_command", "planet_command", "citadel_command", "stardock"}
+ACTION_CONTEXTS = {
+    "port_menu", "port_trading", "bank", "ship_shop", "hardware_shop",
+    "combat", "message_system", "tavern", "grimy_trader", "gambling",
+    "computer_menu", "cim_mode", "course_plotter", "underground"
+}
+TRANSITION_CONTEXTS = {"pause", "more", "confirm", "port_report", "eavesdrop"}
+NAVIGATION_CONTEXTS = {"warping", "autopilot"}
+DANGER_CONTEXTS = {"combat", "death"}
+INFO_CONTEXTS = {"computer_menu", "cim_mode", "port_report", "course_plotter"}
+
+
+# =============================================================================
+# Fast "Where Am I?" - Quick state check without full orientation
+# =============================================================================
+
+@dataclass
+class QuickState:
+    """Minimal state info from quick check."""
+    context: str
+    sector: int | None = None
+    prompt_id: str | None = None
+    screen: str = ""
+    is_safe: bool = False
+    is_danger: bool = False
+    suggested_action: str | None = None
+
+    def __str__(self) -> str:
+        loc = f"Sector {self.sector}" if self.sector else "?"
+        return f"[{self.context}] {loc}"
+
+
+async def where_am_i(bot: "TradingBot", timeout_ms: int = 500) -> QuickState:
+    """Fast state check - quickly determine where we are.
+
+    This is the FAST "where am I" function. It reads the screen once,
+    detects context, and returns immediately. Use this when you need
+    to quickly check state without full orientation.
+
+    For full state gathering, use orient() instead.
+
+    Args:
+        bot: TradingBot instance
+        timeout_ms: Max time to wait for screen data
+
+    Returns:
+        QuickState with context and basic info
+    """
+    try:
+        result = await bot.session.read(timeout_ms=timeout_ms, max_bytes=8192)
+        screen = result.get("screen", "")
+        prompt_detected = result.get("prompt_detected", {})
+        prompt_id = prompt_detected.get("prompt_id", "")
+    except Exception:
+        return QuickState(context="unknown", suggested_action="reconnect")
+
+    # Detect context
+    context = _detect_context(screen)
+
+    # Extract sector from screen if possible
+    sector = None
+    # Try prompt format: [123]
+    sector_match = re.search(r'\[(\d+)\]\s*\(\?', screen)
+    if sector_match:
+        sector = int(sector_match.group(1))
+    else:
+        # Try "Sector 123" format
+        sector_match = re.search(r'sector\s+(\d+)', screen, re.IGNORECASE)
+        if sector_match:
+            sector = int(sector_match.group(1))
+
+    # Determine safety and suggested action
+    is_safe = context in SAFE_CONTEXTS
+    is_danger = context in DANGER_CONTEXTS
+
+    # Suggest action based on context
+    suggested_action = None
+    if context == "pause":
+        suggested_action = "send_space"
+    elif context == "more":
+        suggested_action = "send_space"
+    elif context == "confirm":
+        suggested_action = "send_n_or_check"
+    elif context == "death":
+        suggested_action = "handle_death"
+    elif context == "combat":
+        suggested_action = "handle_combat"
+    elif context == "unknown":
+        suggested_action = "try_orient"
+    elif context in ("port_menu", "menu"):
+        suggested_action = "send_q_to_exit"
+
+    return QuickState(
+        context=context,
+        sector=sector,
+        prompt_id=prompt_id,
+        screen=screen,
+        is_safe=is_safe,
+        is_danger=is_danger,
+        suggested_action=suggested_action,
+    )
+
+
+async def recover_to_safe_state(
+    bot: "TradingBot",
+    max_attempts: int = 20,
+) -> QuickState:
+    """Attempt to recover to a safe state from any situation.
+
+    This is the fail-safe recovery function. It will try various
+    escape sequences to get back to a command prompt.
+
+    Args:
+        bot: TradingBot instance
+        max_attempts: Maximum recovery attempts
+
+    Returns:
+        QuickState after recovery
+
+    Raises:
+        OrientationError if recovery fails
+    """
+    # Recovery key sequences - increasingly aggressive
+    recovery_sequences = [
+        # Gentle escapes
+        (" ", 0.2),      # Space for pause/more
+        ("\r", 0.2),     # Enter for prompts
+        ("Q", 0.3),      # Q to exit menus
+        ("N", 0.2),      # N for Y/N prompts
+        # More aggressive
+        ("\x1b", 0.3),   # Escape key
+        ("Q", 0.3),      # Q again
+        ("\r", 0.2),     # Enter
+        (" ", 0.2),      # Space
+        # Really aggressive
+        ("Q", 0.5),
+        ("\r", 0.3),
+        (" ", 0.3),
+        ("\x1b", 0.5),   # Multiple escapes
+        ("\x1b", 0.3),
+    ]
+
+    print(f"\n[Recovery] Attempting to recover to safe state...")
+
+    last_state = None
+    attempt = 0
+
+    while attempt < max_attempts:
+        # Check current state
+        state = await where_am_i(bot)
+        last_state = state
+
+        print(f"  [{attempt}] {state.context} (sector: {state.sector})")
+
+        # Success!
+        if state.is_safe:
+            print(f"  [Recovery] ✓ Reached safe state: {state.context}")
+            return state
+
+        # Handle specific contexts
+        if state.context == "death":
+            print(f"  [Recovery] ✗ Ship destroyed - need to restart")
+            # Press space to acknowledge death
+            await bot.session.send(" ")
+            await asyncio.sleep(1.0)
+            # This should take us to character restart
+            raise OrientationError(
+                "Ship destroyed during recovery",
+                screen=state.screen,
+                attempts=attempt,
+            )
+
+        if state.context == "combat":
+            print(f"  [Recovery] ⚠ In combat - attempting retreat")
+            # Try R for retreat
+            await bot.session.send("R")
+            await asyncio.sleep(0.5)
+            attempt += 1
+            continue
+
+        if state.context == "computer_menu":
+            print(f"  [Recovery] Exiting computer menu (Q+Enter)...")
+            await bot.session.send("Q\r")
+            await asyncio.sleep(0.5)
+            attempt += 1
+            continue
+
+        # Use recovery sequence
+        if attempt < len(recovery_sequences):
+            key, delay = recovery_sequences[attempt]
+            key_name = repr(key).replace("'", "")
+            print(f"    → Sending {key_name}")
+            await bot.session.send(key)
+            await asyncio.sleep(delay)
+        else:
+            # Cycle through basic escapes
+            key, delay = recovery_sequences[attempt % len(recovery_sequences[:4])]
+            await bot.session.send(key)
+            await asyncio.sleep(delay)
+
+        attempt += 1
+
+    # Failed to recover
+    raise OrientationError(
+        f"Failed to recover to safe state after {max_attempts} attempts",
+        screen=last_state.screen if last_state else "",
+        attempts=max_attempts,
+    )
 
 
 # =============================================================================

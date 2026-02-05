@@ -208,6 +208,165 @@ async def _warp_to_sector(bot, target_sector: int):
     await asyncio.sleep(0.5)
 
 
+async def _navigate_path(bot, path: list[int]):
+    """Navigate through a series of sectors.
+
+    Args:
+        bot: TradingBot instance
+        path: List of sector IDs to traverse
+    """
+    if len(path) < 2:
+        return  # Already at destination or no path
+
+    print(f"  Navigating: {' -> '.join(str(s) for s in path)}")
+
+    # Skip first sector (current location)
+    for sector in path[1:]:
+        await _warp_to_sector(bot, sector)
+
+
+async def execute_route(bot, route, quantity: int | None = None, max_retries: int = 2) -> dict:
+    """Execute a twerk-analyzed trade route via terminal.
+
+    This method takes a TradeRoute from twerk analysis and executes it
+    through the terminal, navigating to buy sector, buying commodities,
+    navigating to sell sector, and selling.
+
+    Args:
+        bot: TradingBot instance
+        route: TradeRoute object from twerk.analysis containing:
+            - buy_sector: Sector ID to buy at
+            - sell_sector: Sector ID to sell at
+            - commodity: What to trade (fuel_ore, organics, equipment)
+            - path: List of sectors from buy to sell
+            - max_quantity: Maximum available quantity
+        quantity: Units to trade (defaults to route.max_quantity or ship holds)
+        max_retries: Maximum retry attempts for recoverable errors
+
+    Returns:
+        Dictionary with trade results:
+            - success: bool
+            - initial_credits: int
+            - final_credits: int
+            - profit: int
+            - commodity: str
+            - quantity_bought: int
+            - buy_sector: int
+            - sell_sector: int
+    """
+    print("\n" + "=" * 80)
+    print(f"EXECUTING ROUTE: {route.commodity}")
+    print(f"  Buy at: {route.buy_sector}")
+    print(f"  Sell at: {route.sell_sector}")
+    print(f"  Path: {' -> '.join(str(s) for s in route.path)}")
+    print("=" * 80)
+
+    # Determine quantity
+    trade_quantity = quantity or min(route.max_quantity, 500)  # Default 500 max
+
+    # Track initial state
+    initial_credits = bot.current_credits
+    result = {
+        "success": False,
+        "initial_credits": initial_credits,
+        "final_credits": initial_credits,
+        "profit": 0,
+        "commodity": route.commodity,
+        "quantity_bought": 0,
+        "buy_sector": route.buy_sector,
+        "sell_sector": route.sell_sector,
+    }
+
+    for attempt in range(max_retries + 1):
+        try:
+            # Navigate to buy sector if not already there
+            if bot.current_sector != route.buy_sector:
+                print(f"\n🚀 NAVIGATE to buy sector {route.buy_sector}")
+                # Build path from current to buy sector
+                # For now, direct warp - could use route.path if starting from there
+                await _warp_to_sector(bot, route.buy_sector)
+
+            # BUY PHASE
+            print(f"\n📍 BUY PHASE (Sector {route.buy_sector})")
+            await _dock_and_buy(bot, route.buy_sector, quantity=trade_quantity)
+            result["quantity_bought"] = trade_quantity
+
+            # NAVIGATE to sell sector
+            if route.path and len(route.path) > 1:
+                print(f"\n🚀 NAVIGATE via route path")
+                await _navigate_path(bot, route.path)
+            else:
+                print(f"\n🚀 WARP to {route.sell_sector}")
+                await _warp_to_sector(bot, route.sell_sector)
+
+            # SELL PHASE
+            print(f"\n📍 SELL PHASE (Sector {route.sell_sector})")
+            await _dock_and_sell(bot, route.sell_sector)
+
+            # Update state
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
+            bot.current_credits = _parse_credits_from_screen(bot, screen)
+            bot.current_sector = _parse_sector_from_screen(bot, screen)
+
+            # Calculate profit
+            result["final_credits"] = bot.current_credits
+            result["profit"] = bot.current_credits - initial_credits
+            result["success"] = True
+
+            bot.cycle_count += 1
+            print(f"\n✓ Route complete - Profit: {result['profit']:,}")
+
+            return result
+
+        except RuntimeError as e:
+            error_msg = str(e)
+            print(f"\n⚠️  Route error (attempt {attempt + 1}/{max_retries + 1}): {e}")
+
+            if "insufficient_credits" in error_msg:
+                # Reduce quantity and retry
+                trade_quantity = max(50, trade_quantity // 2)
+                print(f"  → Reducing quantity to {trade_quantity}")
+                if attempt < max_retries:
+                    continue
+
+            elif "hold_full" in error_msg:
+                # Skip to sell phase
+                print("  → Hold full, attempting to sell")
+                try:
+                    await _warp_to_sector(bot, route.sell_sector)
+                    await _dock_and_sell(bot, route.sell_sector)
+                except Exception:
+                    pass
+
+            elif "out_of_turns" in error_msg or "ship_destroyed" in error_msg:
+                print(f"  ✗ Fatal error - stopping")
+                result["error"] = error_msg
+                return result
+
+            if attempt < max_retries:
+                wait_time = 2 ** attempt
+                print(f"  → Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            else:
+                result["error"] = error_msg
+                return result
+
+        except TimeoutError as e:
+            print(f"\n⚠️  Timeout (attempt {attempt + 1}/{max_retries + 1}): {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(1.0)
+            else:
+                result["error"] = str(e)
+                return result
+
+        except Exception as e:
+            print(f"\n✗ Unexpected error: {e}")
+            result["error"] = str(e)
+            return result
+
+    return result
+
+
 async def single_trading_cycle(
     bot, start_sector: int = 499, max_retries: int = 2
 ):
