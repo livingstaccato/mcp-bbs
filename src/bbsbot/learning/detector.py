@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-if TYPE_CHECKING:
-    from bbsbot.learning.buffer import ScreenBuffer
+from bbsbot.learning.buffer import ScreenBuffer
 
 
 class PromptMatch(BaseModel):

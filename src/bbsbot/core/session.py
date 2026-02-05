@@ -4,21 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
+
+from collections.abc import Callable
 
 from bbsbot.addons.manager import AddonManager
 from bbsbot.constants import CP437
 from bbsbot.keepalive import KeepaliveController
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from bbsbot.learning.engine import LearningEngine
-    from bbsbot.logging.session_logger import SessionLogger
-    from bbsbot.terminal.emulator import TerminalEmulator
-    from bbsbot.transport.base import ConnectionTransport
+from bbsbot.learning.engine import LearningEngine
+from bbsbot.logging.session_logger import SessionLogger
+from bbsbot.terminal.emulator import TerminalEmulator
+from bbsbot.transport.base import ConnectionTransport
 
 
 class Session(BaseModel):
