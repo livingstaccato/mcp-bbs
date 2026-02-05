@@ -62,6 +62,8 @@ class TradeResult(BaseModel):
     message: str = ""
     new_sector: int | None = None
     turns_used: int = 0
+    from_sector: int | None = None  # For tracking failed warps
+    to_sector: int | None = None    # For tracking failed warps
 
     model_config = ConfigDict(extra="ignore")
 
@@ -158,6 +160,8 @@ class TradingStrategy(ABC):
     def should_upgrade(self, state: GameState) -> tuple[bool, str | None]:
         """Check if we should buy upgrades.
 
+        Only recommends upgrades when we have known state and sufficient credits.
+
         Args:
             state: Current game state
 
@@ -167,22 +171,24 @@ class TradingStrategy(ABC):
         if not self.config.upgrades.enabled:
             return False, None
 
-        # Check holds
-        if self.config.upgrades.auto_buy_holds:
-            holds = state.holds_total or 0
-            if holds < self.config.upgrades.max_holds:
+        # Need credits to upgrade - don't recommend with unknown or zero credits
+        credits = state.credits
+        if credits is None or credits < 1000:
+            return False, None
+
+        # Check holds (only if we actually know current holds)
+        if self.config.upgrades.auto_buy_holds and state.holds_total is not None:
+            if state.holds_total < self.config.upgrades.max_holds:
                 return True, "holds"
 
-        # Check fighters
-        if self.config.upgrades.auto_buy_fighters:
-            fighters = state.fighters or 0
-            if fighters < self.config.upgrades.min_fighters:
+        # Check fighters (only if we actually know current fighters)
+        if self.config.upgrades.auto_buy_fighters and state.fighters is not None:
+            if state.fighters < self.config.upgrades.min_fighters:
                 return True, "fighters"
 
-        # Check shields
-        if self.config.upgrades.auto_buy_shields:
-            shields = state.shields or 0
-            if shields < self.config.upgrades.min_shields:
+        # Check shields (only if we actually know current shields)
+        if self.config.upgrades.auto_buy_shields and state.shields is not None:
+            if state.shields < self.config.upgrades.min_shields:
                 return True, "shields"
 
         return False, None

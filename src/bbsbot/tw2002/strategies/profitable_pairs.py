@@ -53,6 +53,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._pairs_dirty = True  # Need to recalculate
         self._current_pair: PortPair | None = None
         self._pair_phase: str = "idle"  # "idle", "going_to_buy", "going_to_sell"
+        self._failed_warps: set[tuple[int, int]] = set()  # (from_sector, to_sector)
 
     @property
     def name(self) -> str:
@@ -339,16 +340,31 @@ class ProfitablePairsStrategy(TradingStrategy):
         if not state.warps:
             return TradeAction.WAIT, {}
 
-        # Pick an unexplored direction
+        current = state.sector or 0
+
+        # Pick an unexplored direction (skip failed warps)
         for warp in state.warps:
+            if (current, warp) in self._failed_warps:
+                continue
             if self.knowledge.get_warps(warp) is None:
                 return TradeAction.EXPLORE, {"direction": warp}
 
-        # All adjacent explored, pick random
+        # All unexplored are failed; try explored warps we haven't failed on
         import random
+        viable = [w for w in state.warps if (current, w) not in self._failed_warps]
+        if viable:
+            target = random.choice(viable)
+            return TradeAction.MOVE, {
+                "target_sector": target,
+                "path": [current, target],
+            }
+
+        # All warps from this sector have failed; clear failures and retry
+        self._failed_warps = {(f, t) for f, t in self._failed_warps if f != current}
+        target = random.choice(state.warps)
         return TradeAction.MOVE, {
-            "target_sector": random.choice(state.warps),
-            "path": [state.sector, random.choice(state.warps)],
+            "target_sector": target,
+            "path": [current, target],
         }
 
     def _find_safe_sector(self, state: GameState) -> int | None:
@@ -363,6 +379,15 @@ class ProfitablePairsStrategy(TradingStrategy):
     def record_result(self, result) -> None:
         """Record result and potentially invalidate pairs."""
         super().record_result(result)
+
+        # Track failed warps (EXPLORE/MOVE that didn't change sector)
+        if result.action in (TradeAction.EXPLORE, TradeAction.MOVE) and not result.success:
+            # result should have from_sector and to_sector for tracking
+            from_sector = getattr(result, 'from_sector', None)
+            to_sector = getattr(result, 'to_sector', None)
+            if from_sector and to_sector:
+                self._failed_warps.add((from_sector, to_sector))
+                logger.debug(f"Marked warp {from_sector} -> {to_sector} as failed")
 
         # If trade failed, might need to recalculate pairs
         if result.action == TradeAction.TRADE and not result.success:

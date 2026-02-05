@@ -17,7 +17,7 @@ class PromptMatch(BaseModel):
     pattern: dict[str, Any]
     input_type: str  # "single_key" | "multi_key" | "any_key"
     eol_pattern: str
-    kv_extract: dict[str, Any] | None = None
+    kv_extract: list[dict[str, Any]] | dict[str, Any] | None = None
 
 
 class PromptDetection(BaseModel):

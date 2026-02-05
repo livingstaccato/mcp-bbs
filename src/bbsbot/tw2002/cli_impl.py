@@ -80,6 +80,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         elif action == TradeAction.MOVE:
             target = params.get("target_sector")
             path = params.get("path")
+            from_sector = state.sector
             if path and len(path) > 1:
                 print(f"  Navigating: {' -> '.join(str(s) for s in path)}")
                 success = await warp_along_path(bot, path)
@@ -89,6 +90,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         elif action == TradeAction.EXPLORE:
             direction = params.get("direction")
+            from_sector = state.sector
             if direction:
                 print(f"  Exploring sector {direction}")
                 success = await warp_to_sector(bot, direction)
@@ -129,6 +131,15 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             new_sector=bot.current_sector,
             turns_used=1,
         )
+
+        # Add from/to sector for failed warp tracking
+        if action in (TradeAction.EXPLORE, TradeAction.MOVE):
+            result.from_sector = from_sector
+            if action == TradeAction.EXPLORE:
+                result.to_sector = params.get("direction")
+            elif action == TradeAction.MOVE:
+                result.to_sector = params.get("target_sector")
+
         strategy.record_result(result)
 
         await asyncio.sleep(0.2)
