@@ -143,12 +143,12 @@ Enter your choice:"""
         assert _get_actual_prompt(screen) == "ship_name_prompt"
 
     @pytest.mark.asyncio
-    async def test_handles_ship_name_confirm(self) -> None:
+    async def test_handles_name_confirm(self) -> None:
         """Test that ship name confirmation sends Y."""
         from twbot.login import _get_actual_prompt
 
         screen = '"testbot\'s Ship"\nIs what you want?'
-        assert _get_actual_prompt(screen) == "ship_name_confirm"
+        assert _get_actual_prompt(screen) == "name_confirm"
 
     @pytest.mark.asyncio
     async def test_handles_password_prompt(self) -> None:
@@ -205,7 +205,7 @@ class TestLoginSequenceFlow:
             ("Password?", "password_prompt"),
             ("(N)ew Name or (B)BS Name", "name_selection"),
             ("What do you want to name your ship?", "ship_name_prompt"),
-            ("Is what you want?", "ship_name_confirm"),
+            ("Is what you want?", "name_confirm"),
             ("Command [?=Help]?", "command_prompt"),
         ]
 

@@ -1,4 +1,14 @@
-"""Login sequence handling for TW2002."""
+"""Login sequence handling for TW2002.
+
+IMPORTANT: See games/tw2002/TWGS_LOGIN_FLOW.md for the complete TWGS flow documentation.
+
+The TWGS login flow is complex:
+1. May or may not show login prompt depending on connection type
+2. Game selection shows description first, then enters "Show Game Descriptions" mode
+3. Must send Q to exit description mode before game actually loads
+4. Private games require password
+5. Multiple pause screens during game loading
+"""
 
 import asyncio
 
@@ -19,6 +29,125 @@ def _check_kv_validation(kv_data: dict | None, prompt_id: str) -> str:
     if not validation.get("valid", True):
         errors = validation.get("errors", ["Unknown error"])
         return f"[VALIDATION] {errors[0]}"
+
+    return ""
+
+
+def _is_description_mode(screen: str) -> bool:
+    """Check if we're stuck in 'Show Game Descriptions' mode.
+
+    This happens after selecting a game - TWGS shows description then
+    enters a mode where you select MORE games to view descriptions.
+    Must send Q to exit this mode.
+    """
+    screen_lower = screen.lower()
+    return (
+        "show game descriptions" in screen_lower
+        or "select game (q for none)" in screen_lower
+        or ("select game" in screen_lower and "q for none" in screen_lower)
+    )
+
+
+def _get_actual_prompt(screen: str) -> str:
+    """Analyze the LAST LINES of the screen to determine the actual prompt.
+
+    This is critical because the prompt detector may match stale text anywhere
+    in the screen buffer (like old "[Pause]" text from ANSI graphics).
+    The actual prompt is always at or near the bottom of the screen.
+
+    Returns a prompt identifier based on last-line content, or empty string if unknown.
+    """
+    # Get the last 5 non-empty lines
+    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    if not lines:
+        return ""
+
+    # Join last 5 lines for analysis
+    last_lines = '\n'.join(lines[-5:]).lower()
+    last_line = lines[-1].lower() if lines else ""
+
+    # Check prompts in priority order (most specific first)
+
+    # Command prompt - we've reached the game!
+    if "command" in last_line and "?" in last_line:
+        return "command_prompt"
+
+    # Planet command prompt - also indicates we're in the game
+    if "planet command" in last_line:
+        return "command_prompt"
+
+    # TW2002 pre-game menu
+    if "enter your choice:" in last_line or "enter your choice" in last_line:
+        return "tw_game_menu"
+
+    # Alias prompt (when chosen name is taken) - check BEFORE name_selection
+    # This appears when the BBS name is already in use
+    if "alias" in last_line and ("want to use" in last_line or "do you want" in last_line):
+        return "alias_prompt"
+
+    # Name selection (new character) - only if it's the actual prompt on last line
+    # Check last_line first to avoid matching stale buffer content
+    if "(n)ew name or (b)bs name" in last_line:
+        return "name_selection"
+    # Also check last_lines but only if alias prompt wasn't detected
+    if "(n)ew name or (b)bs name" in last_lines and "alias" not in last_line:
+        return "name_selection"
+
+    # Password prompt (check last line only to avoid matching completed passwords)
+    if last_line.startswith("password?"):
+        return "password_prompt"
+
+    # New character creation prompt
+    if "start a new character" in last_lines and "(type y or n)" in last_lines:
+        # Only if not already answered (check for "Yes" on the line)
+        for line in lines[-3:]:
+            if "(type y or n)" in line.lower() and "yes" not in line.lower():
+                return "new_character_prompt"
+
+    # Show today's log?
+    if "show today's log" in last_line and "(y/n)" in last_line:
+        return "show_log_prompt"
+
+    # Name/alias confirmation prompt - check BEFORE generic Y/N
+    # This catches both ship name and alias confirmation
+    if "is what you want?" in last_line:
+        return "name_confirm"
+
+    # Generic Y/N prompt
+    if "(y/n)" in last_line or "(type y or n)" in last_line:
+        return "yes_no_prompt"
+
+    # What is your name?
+    if "what is your name" in last_line:
+        return "what_is_your_name"
+
+    # Use ANSI graphics?
+    if "use ansi graphics" in last_line:
+        return "use_ansi"
+
+    # Ship naming prompt (new character creation) - check last few lines since partial input may be on last line
+    if "what do you want to name your ship" in last_lines:
+        return "ship_name_prompt"
+
+    # Planet naming prompt (new character with home planet)
+    if "what do you want to name your home planet" in last_lines:
+        return "planet_name_prompt"
+
+    # [ANY KEY] style prompts
+    if "[any key]" in last_line:
+        return "any_key"
+
+    # [Pause] - but ONLY if it's on the LAST LINE (not stale buffer)
+    if "[pause]" in last_line:
+        return "pause"
+
+    # Game selection menu
+    if "selection (? for menu):" in last_line:
+        return "menu_selection"
+
+    # Description mode
+    if "select game (q for none)" in last_line:
+        return "description_mode"
 
     return ""
 
@@ -83,20 +212,26 @@ async def login_sequence(
 
     # PHASE 2: Send game selection
     print("\nSending game selection...")
+    game_letter = "B"  # Default
     if "menu_selection" in prompt_id:
+        options = _extract_game_options(screen)
+        print(f"  Available games: {options}")
         game_letter = _select_trade_wars_game(screen)
-        print(f"  → Sending {game_letter} (AI Apocalypse)")
+        print(f"  → Sending {game_letter}")
         await bot.session.send(game_letter)
         # Reset state before Phase 3 to prevent loop detection false triggers
         bot.loop_detection.clear()
         bot.last_prompt_id = None
         # Increase threshold for game loading phase (intro screens may repeat pause prompt)
         original_threshold = bot.stuck_threshold
-        bot.stuck_threshold = 10
+        bot.stuck_threshold = 15  # Increased for complex flows
         print(f"  ✓ Reset loop detection state")
 
     # PHASE 3: Wait for game to load and reach command prompt
+    # IMPORTANT: See games/tw2002/TWGS_LOGIN_FLOW.md for flow documentation
     print("\nWaiting for game to load...")
+    description_mode_exits = 0  # Track how many times we exit description mode
+
     for step_in_phase3 in range(50):
         step += 1
         try:
@@ -109,34 +244,119 @@ async def login_sequence(
             raise
 
         validation_msg = _check_kv_validation(kv_data, prompt_id)
-        print(f"  [{step}] {prompt_id} ({input_type}) {validation_msg}")
 
-        screen_lower = screen.lower()
+        # CRITICAL: Use last-line analysis to determine ACTUAL prompt
+        # The pattern matcher may match stale text (like old [Pause]) anywhere in buffer
+        actual_prompt = _get_actual_prompt(screen)
 
-        # Handle prompts while loading
-        if "private_game_password" in prompt_id:
-            print(f"      → Sending game password")
-            await send_input(bot, game_password, input_type)
+        print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}")
 
-        elif "game_password" in prompt_id:
-            print(f"      → Sending character password")
-            await send_input(bot, character_password, input_type)
+        # Debug: Show screen content periodically
+        if step_in_phase3 % 10 == 0 or step_in_phase3 < 5 or step_in_phase3 >= 28:
+            lines = [l.strip() for l in screen.split('\n') if l.strip()]
+            print(f"      [DEBUG] Screen ({len(lines)} lines), last 5:")
+            for line in lines[-5:]:
+                print(f"        | {line[:75]}")
 
-        elif "use_ansi_graphics" in prompt_id:
-            print("      → Selecting ANSI graphics")
-            await bot.session.send("y")
-            await asyncio.sleep(0.3)
+        # Handle prompts based on ACTUAL PROMPT (last-line analysis), not pattern ID
+        # This prevents confusion from stale buffer content
 
-        elif input_type == "any_key":
-            print("      → Pressing space (loading)")
-            await send_input(bot, "", input_type)
-
-        elif "command" in prompt_id or "sector_command" in prompt_id:
+        if actual_prompt == "command_prompt":
             print(f"      ✓ Reached game!")
             break
 
+        elif actual_prompt == "description_mode" or _is_description_mode(screen):
+            description_mode_exits += 1
+            if description_mode_exits > 3:
+                print(f"      ✗ Stuck in description mode after {description_mode_exits} attempts")
+                raise RuntimeError("Stuck in game description mode - check game selection")
+            print(f"      → Exiting description mode (attempt {description_mode_exits})")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt == "tw_game_menu":
+            print(f"      → At game menu, pressing T to play Trade Wars")
+            await bot.session.send("T")
+            await asyncio.sleep(0.5)  # Slightly longer wait for menu response
+
+        elif actual_prompt == "name_selection":
+            print("      → Name selection prompt, choosing (B)BS Name")
+            await bot.session.send("B")
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt == "alias_prompt":
+            # Name was taken, need to provide a unique alias
+            import uuid
+            # Use short UUID to ensure uniqueness
+            short_id = uuid.uuid4().hex[:8]
+            alias = f"Trader{short_id}"
+            print(f"      → Alias prompt (name taken), entering: {alias}")
+            await send_input(bot, alias, "multi_key")
+
+        elif actual_prompt == "ship_name_prompt":
+            ship_name = f"{username}'s Ship"
+            print(f"      → Ship naming prompt, entering: {ship_name}")
+            await send_input(bot, ship_name, "multi_key")
+
+        elif actual_prompt == "planet_name_prompt":
+            planet_name = f"{username}'s World"
+            print(f"      → Planet naming prompt, entering: {planet_name}")
+            await send_input(bot, planet_name, "multi_key")
+
+        elif actual_prompt == "name_confirm":
+            print(f"      → Confirming name/alias: Y")
+            await bot.session.send("Y")
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt == "password_prompt":
+            print(f"      → Password prompt, sending password")
+            await send_input(bot, character_password, "multi_key")
+
+        elif actual_prompt == "new_character_prompt":
+            print("      → New character prompt, answering Y to create character")
+            await bot.session.send("Y")
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt == "show_log_prompt":
+            print("      → Answering N to 'Show today's log?'")
+            await bot.session.send("N")
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt == "yes_no_prompt":
+            print(f"      → Generic Y/N prompt, answering N")
+            await bot.session.send("N")
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt == "what_is_your_name":
+            print(f"      → Entering character name: {username}")
+            await send_input(bot, username, "multi_key")
+
+        elif actual_prompt == "use_ansi":
+            print("      → Selecting ANSI graphics: Y")
+            await bot.session.send("Y")
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt == "menu_selection":
+            print(f"      → At menu, selecting game {game_letter}")
+            await bot.session.send(game_letter)
+            await asyncio.sleep(0.3)
+
+        elif actual_prompt in ("any_key", "pause"):
+            print("      → Pressing space to continue")
+            await bot.session.send(" ")
+            await asyncio.sleep(0.3)
+
+        # Fallback: if actual_prompt is empty, use pattern-based detection
+        elif "private_game_password" in prompt_id:
+            print(f"      → Sending game password (pattern)")
+            await send_input(bot, game_password, input_type)
+
+        elif input_type == "any_key":
+            print("      → Pressing space (any_key input_type)")
+            await send_input(bot, "", input_type)
+
         else:
-            print(f"      → Pressing space (unknown prompt)")
+            print(f"      → Unknown state, pressing space")
             await bot.session.send(" ")
             await asyncio.sleep(0.2)
 

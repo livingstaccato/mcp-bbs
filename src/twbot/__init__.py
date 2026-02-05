@@ -26,11 +26,16 @@ from .parsing import (
 )
 from .errors import _check_for_loop, _detect_error_in_screen
 from .logging_utils import logger, _log_trade, _save_trade_history, _print_session_summary
+from .orientation import GameState, SectorKnowledge, OrientationError, orient
 
 __version__ = "1.0.0"
 
 __all__ = [
     "TradingBot",
+    "GameState",
+    "SectorKnowledge",
+    "OrientationError",
+    "orient",
     "connect",
     "login_sequence",
     "test_login",

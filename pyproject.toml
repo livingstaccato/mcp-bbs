@@ -27,7 +27,11 @@ dependencies = [
     "pyte>=0.8.1",
     "platformdirs>=4.0.0",
     "structlog>=24.1.0",
+    "hypothesis>=6.151.5",
 ]
+# Note: twerk (TW2002 data file library) is available via _twerk.pth in the venv
+# Location: /Users/tim/code/gh/livingstaccato/tw2002/twerk-py/src
+# Used by twbot for direct file access to TW2002 game data
 
 [project.optional-dependencies]
 dev = [

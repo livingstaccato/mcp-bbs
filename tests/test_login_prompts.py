@@ -138,14 +138,14 @@ Welcome to Trade Wars 2002!
 Use ANSI graphics?"""
         assert _get_actual_prompt(screen) == "use_ansi"
 
-    def test_ship_name_confirm(self) -> None:
+    def test_name_confirm(self) -> None:
         """Test detection of ship name confirmation."""
         screen = """
 You have chosen to name your ship:
   "testbot's Ship"
 
 Is what you want?"""
-        assert _get_actual_prompt(screen) == "ship_name_confirm"
+        assert _get_actual_prompt(screen) == "name_confirm"
 
     def test_ship_name_prompt(self) -> None:
         """Test detection of ship naming prompt."""
@@ -222,6 +222,32 @@ Select game (Q for none):"""
         """Test handling of empty screen."""
         assert _get_actual_prompt("") == ""
         assert _get_actual_prompt("   \n   \n   ") == ""
+
+    def test_alias_prompt(self) -> None:
+        """Test detection of alias prompt when name is taken."""
+        screen = """
+Sorry, you cannot use the name claude, its already in use.
+You must use an Alias.
+What Alias do you want to use?"""
+        assert _get_actual_prompt(screen) == "alias_prompt"
+
+    def test_alias_prompt_with_partial_input(self) -> None:
+        """Test alias prompt detection with partial input."""
+        screen = """
+Sorry, you cannot use the name claude, its already in use.
+You must use an Alias.
+What Alias do you want to use? clau"""
+        assert _get_actual_prompt(screen) == "alias_prompt"
+
+    def test_alias_prompt_priority_over_name_selection(self) -> None:
+        """Test that alias prompt takes priority over stale name_selection."""
+        screen = """
+Use (N)ew Name or (B)BS Name [B] ? B
+Sorry, you cannot use the name claude, its already in use.
+You must use an Alias.
+What Alias do you want to use?"""
+        # Should detect alias_prompt, not name_selection
+        assert _get_actual_prompt(screen) == "alias_prompt"
 
     def test_unknown_prompt(self) -> None:
         """Test that unknown content returns empty string."""
