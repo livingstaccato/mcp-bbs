@@ -335,7 +335,8 @@ async def login_sequence(
         # Handle prompts based on ACTUAL PROMPT (last-line analysis), not pattern ID
         # This prevents confusion from stale buffer content
 
-        if actual_prompt == "command_prompt":
+        if actual_prompt == "command_prompt" or actual_prompt == "planet_prompt":
+            # Reached game! (either sector command or planet command for new chars)
             print(f"      ✓ Reached game!")
             break
 

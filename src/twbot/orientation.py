@@ -611,6 +611,8 @@ async def recover_to_safe_state(
         # Success!
         if state.is_safe:
             print(f"  [Recovery] ✓ Reached safe state: {state.context}")
+            # Clear loop detection counter after successful recovery
+            bot.loop_detection.clear()
             return state
 
         # Handle specific contexts

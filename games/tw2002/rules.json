@@ -298,10 +298,10 @@
       "kind": "menu",
       "input_type": "single_key",
       "match": {
-        "pattern": "(?i)planet\\s+command\\s*[\\[\\(:]?\\s*\\??\\s*$",
+        "pattern": "(?i)planet\\s+command.*\\?",
         "match_mode": "regex"
       },
-      "notes": "Planet command prompt"
+      "notes": "Planet command prompt - matches 'Planet command (?=help) [D]'"
     },
     {
       "id": "prompt.menu_selection",
@@ -493,6 +493,26 @@
         "match_mode": "regex"
       },
       "notes": "TW2002 new character ship naming prompt"
+    },
+    {
+      "id": "prompt.planet_name",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)what do you want to name your (home )?planet",
+        "match_mode": "regex"
+      },
+      "notes": "TW2002 new character planet naming prompt"
+    },
+    {
+      "id": "prompt.name_confirm",
+      "kind": "confirm",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)is what you want\\?",
+        "match_mode": "regex"
+      },
+      "notes": "TW2002 name/alias confirmation prompt (Y/N)"
     },
     {
       "id": "prompt.name_or_bbs",
