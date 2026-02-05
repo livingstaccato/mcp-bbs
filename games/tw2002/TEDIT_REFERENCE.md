@@ -11,6 +11,48 @@ Trade Wars 2002 Sysop Editor v3.34b
 
 ---
 
+## Login Flow (CRITICAL)
+
+The admin login screen displays **two prompts simultaneously**:
+
+```
+Telnet connection detected.
+
+Please enter your name (ENTER for none):
+Enter admin password:
+```
+
+**The input order is sequential, not based on cursor position:**
+
+1. First input goes to **name prompt** - send Enter (empty) for anonymous
+2. Wait for the name to be processed
+3. Second input goes to **password prompt** - send "admin" + Enter
+
+### Working Login Sequence (expect/bash)
+
+```bash
+expect -c '
+spawn telnet localhost 2003
+expect "name (ENTER for none):"
+send "\r"
+expect "password:"
+send "admin\r"
+expect "Selection"
+'
+```
+
+### MCP-BBS Issue
+
+**IMPORTANT**: MCP-BBS has a bug where escape sequences like `\r` and `\n` are sent as literal characters instead of control codes. This causes the TWGS admin login to fail because:
+
+1. `\r` is echoed as `\r` (two characters) instead of submitting input
+2. The name prompt never receives a proper Enter keystroke
+3. All input accumulates as "password" characters
+
+**Workaround**: Use `expect` or standard telnet for TEDIT automation until MCP-BBS escape handling is fixed.
+
+---
+
 ## Main Menu Structure
 
 ```
@@ -228,7 +270,29 @@ Controls game scheduling and timing.
 
 3. **Navigation Pattern**:
    ```
-   Connect → Password → Admin Menu → E (TEDIT) → Select Game → Editor → Q (back)
+   Connect → Enter (name) → admin + Enter (password) → Admin Menu → E (TEDIT) → Select Game → Editor → Q (back)
    ```
 
-4. **Keepalive Consideration**: MCP-BBS keepalive sends `\r` which can submit input prematurely. Consider disabling or adjusting keepalive interval during TEDIT sessions.
+4. **Recommended Automation Method**: Use `expect` for reliable TEDIT automation:
+   ```bash
+   expect -c '
+   set timeout 10
+   spawn telnet localhost 2003
+   expect "name (ENTER for none):"
+   send "\r"
+   expect "password:"
+   send "admin\r"
+   expect "Selection"
+   send "E"
+   expect "Select game"
+   send "A"
+   expect "Editor"
+   # ... your TEDIT commands here
+   send "Q"
+   expect eof
+   '
+   ```
+
+5. **MCP-BBS Limitation**: MCP-BBS currently does not properly convert `\r` and `\n` escape sequences to control characters. Use `expect` or native telnet until this is fixed.
+
+6. **Keepalive Consideration**: If using MCP-BBS, disable keepalive (`bbs_keepalive` with `interval_s=0`) to prevent `\r` interference during TEDIT sessions.
