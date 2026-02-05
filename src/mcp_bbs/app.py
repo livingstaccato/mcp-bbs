@@ -27,6 +27,42 @@ structlog.configure(
 
 log = structlog.get_logger()
 
+
+def decode_escape_sequences(s: str) -> str:
+    """Decode common escape sequences in a string.
+
+    Converts literal backslash sequences to actual control characters:
+    - \\r -> CR (0x0d)
+    - \\n -> LF (0x0a)
+    - \\t -> TAB (0x09)
+    - \\x## -> hex byte
+    - \\\\ -> single backslash
+
+    This is needed because MCP JSON transport may not decode escape sequences.
+    """
+    # Use a regex to find and replace escape sequences
+    def replace_escape(match: re.Match[str]) -> str:
+        seq = match.group(0)
+        if seq == "\\r":
+            return "\r"
+        elif seq == "\\n":
+            return "\n"
+        elif seq == "\\t":
+            return "\t"
+        elif seq == "\\\\":
+            return "\\"
+        elif seq.startswith("\\x") and len(seq) == 4:
+            try:
+                return chr(int(seq[2:], 16))
+            except ValueError:
+                return seq
+        return seq
+
+    # Match \r, \n, \t, \\, or \xHH
+    pattern = r"\\r|\\n|\\t|\\\\|\\x[0-9a-fA-F]{2}"
+    return re.sub(pattern, replace_escape, s)
+
+
 app = FastMCP("mcp-bbs")
 session_manager = SessionManager()
 
@@ -272,14 +308,21 @@ async def bbs_wait_for_prompt(
 async def bbs_send(keys: str) -> str:
     """Send keystrokes (include control codes like \\r or \\x1b).
 
-    Note: MCP's JSON parser already handles escape sequences, so strings arrive
-    with actual control characters. No additional decoding needed.
+    Escape sequences are decoded before sending:
+    - \\r -> carriage return
+    - \\n -> line feed
+    - \\t -> tab
+    - \\x## -> hex byte (e.g., \\x1b for ESC)
+    - \\\\ -> literal backslash
     """
     _, session = await _get_session()
 
-    log.debug("bbs_send", keys=keys, keys_len=len(keys))
+    # Decode escape sequences (e.g., literal "\\r" -> actual CR)
+    decoded_keys = decode_escape_sequences(keys)
 
-    normalized = keys.replace("\r\n", "\n")
+    log.debug("bbs_send", keys_raw=keys, keys_decoded=repr(decoded_keys), keys_len=len(decoded_keys))
+
+    normalized = decoded_keys.replace("\r\n", "\n")
     newline_count = normalized.count("\n") + normalized.count("\r")
     if newline_count > 1:
         return "error: multiple newline sequences in one send; send one prompt response at a time"
@@ -291,7 +334,7 @@ async def bbs_send(keys: str) -> str:
         return "error: send blocked until a read occurs (one prompt -> one input -> read)"
 
     try:
-        await session.send(keys)
+        await session.send(decoded_keys)
         return "ok"
     except ConnectionError:
         return "disconnected"
