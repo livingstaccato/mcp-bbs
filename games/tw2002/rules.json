@@ -159,7 +159,11 @@
       "screen": {
         "expect_cursor_at_end": false
       },
-      "notes": "Simple [Pause] anywhere on screen"
+      "notes": "Simple [Pause] anywhere on screen",
+      "llm_hints": {
+        "screen_buffer_warning": "[Pause] may appear in ANSI art at TOP of screen buffer (stale). Check if [Pause] is on the LAST LINE before treating as actual pause prompt.",
+        "stuck_detection": "If seeing same pause repeatedly without progress, try sending Q or ESC to escape nested menus."
+      }
     },
     {
       "id": "prompt.tw_game_menu",
@@ -291,7 +295,11 @@
           "required": true
         }
       ],
-      "notes": "Sector command prompt - with validated sector/credits extraction"
+      "notes": "Sector command prompt - with validated sector/credits extraction",
+      "llm_hints": {
+        "screen_buffer_warning": "Screen buffer may contain OLD sector numbers from previous screens. Use re.findall() and take LAST match, not re.search() which finds FIRST match.",
+        "parsing_pattern": "For sector: re.findall(r'\\\\[(\\\\d+)\\\\]', screen)[-1]. For credits: pattern 'You have X credits' or 'Credits: X'."
+      }
     },
     {
       "id": "prompt.planet_command",
@@ -431,7 +439,11 @@
         "pattern": "(?i)how many.*units",
         "match_mode": "regex"
       },
-      "notes": "Port buy/sell quantity prompt"
+      "notes": "Port buy/sell quantity prompt",
+      "llm_hints": {
+        "pending_trade_tracking": "Set pending_trade=True when entering non-zero quantity. Set pending_trade=False when entering 0 or skipping. Only accept price offers when pending_trade is True.",
+        "screen_buffer_warning": "Screen buffer may have old content. Use last match when parsing numbers."
+      }
     },
     {
       "id": "prompt.port_price",
@@ -441,7 +453,11 @@
         "pattern": "(?i)offer.*price",
         "match_mode": "regex"
       },
-      "notes": "Port commodity price prompt"
+      "notes": "Port commodity price prompt",
+      "llm_hints": {
+        "pending_trade_check": "Only accept/negotiate prices if pending_trade=True. Skip price screens when pending_trade=False (we entered 0 quantity).",
+        "response_format": "Send Enter (\\r) to accept default price, NOT 'Y'. 'Y' is for accept/reject confirmations."
+      }
     },
     {
       "id": "prompt.port_action",
@@ -894,7 +910,11 @@
         "pattern": "(?i)(your offer|counter.?offer|final price|how much will you (pay|accept))",
         "match_mode": "regex"
       },
-      "notes": "Port haggling - price negotiation"
+      "notes": "Port haggling - price negotiation",
+      "llm_hints": {
+        "pending_trade_check": "Only respond to price negotiation if pending_trade=True. If we skipped a commodity (entered 0), ignore price screens.",
+        "response_format": "For 'Your offer [X]?' prompts, send Enter (\\r) to accept the default price in brackets."
+      }
     },
     {
       "id": "prompt.port_accept_offer",

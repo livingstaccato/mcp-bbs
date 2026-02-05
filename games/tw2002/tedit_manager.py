@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass, field
 from typing import Any
 
-from mcp_bbs.config import get_default_knowledge_root
-from mcp_bbs.core.session_manager import SessionManager
+from pydantic import BaseModel, ConfigDict, Field
+
+from bbsbot.paths import default_knowledge_root
+from bbsbot.core.session_manager import SessionManager
 
 
 # Regex patterns for parsing TEDIT screens
@@ -25,23 +26,24 @@ _EDITOR_HEADER_PATTERN = re.compile(r"Trade Wars 2002.*Editor", re.IGNORECASE)
 _PROMPT_PATTERN = re.compile(r"\[.\]\s*[:\?]?\s*$")
 
 
-@dataclass
-class TEDITManager:
+class TEDITManager(BaseModel):
     """Manage TEDIT sessions via MCP-BBS."""
 
     host: str = "localhost"
     port: int = 2003  # Admin port
     password: str = "admin"
 
-    session_manager: SessionManager = field(default_factory=SessionManager)
+    session_manager: SessionManager = Field(default_factory=SessionManager)
     session_id: str | None = None
     session: Any = None
-    knowledge_root: Any = field(default_factory=get_default_knowledge_root)
+    knowledge_root: Any = Field(default_factory=default_knowledge_root)
 
     # State tracking
     current_game: str | None = None
     current_editor: str | None = None
     connected: bool = False
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     async def connect(
         self,

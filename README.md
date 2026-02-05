@@ -1,4 +1,4 @@
-# mcp-bbs
+# bbsbot
 
 FastMCP-based telnet client for BBS (Bulletin Board System) interactions with auto-learning capabilities. Enables AI agents to interact with legacy telnet-based systems through the Model Context Protocol (MCP).
 
@@ -8,7 +8,7 @@ FastMCP-based telnet client for BBS (Bulletin Board System) interactions with au
 
 ## Overview
 
-mcp-bbs bridges modern AI agents with vintage BBS systems by providing:
+bbsbot bridges modern AI agents with vintage BBS systems by providing:
 - Full terminal emulation with ANSI/CP437 support
 - Pattern-based screen reading and navigation
 - Automatic discovery and documentation of menus and prompts
@@ -17,7 +17,7 @@ mcp-bbs bridges modern AI agents with vintage BBS systems by providing:
 
 ## Architecture
 
-mcp-bbs uses a clean layered architecture with proper separation of concerns:
+bbsbot uses a clean layered architecture with proper separation of concerns:
 
 ```mermaid
 graph TB
@@ -26,7 +26,7 @@ graph TB
         MCP[MCP Client]
     end
 
-    subgraph "mcp-bbs Server"
+    subgraph "bbsbot Server"
         App[FastMCP App]
         SM[SessionManager]
 
@@ -112,14 +112,14 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 Or see [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for other methods.
 
-### Installing mcp-bbs
+### Installing bbsbot
 
-mcp-bbs is an MCP server that must be configured in your MCP client (Claude Desktop, Cline, etc.).
+bbsbot is an MCP server that must be configured in your MCP client (Claude Desktop, Cline, etc.).
 
 ### Option 1: Install as a tool (recommended)
 
 ```bash
-uv tool install mcp-bbs
+uv tool install bbsbot
 ```
 
 Then add to your MCP client configuration:
@@ -127,8 +127,8 @@ Then add to your MCP client configuration:
 ```json
 {
   "mcpServers": {
-    "mcp-bbs": {
-      "command": "mcp-bbs"
+    "bbsbot": {
+      "command": "bbsbot"
     }
   }
 }
@@ -137,16 +137,16 @@ Then add to your MCP client configuration:
 ### Option 2: Install with pip
 
 ```bash
-pip install mcp-bbs
+pip install bbsbot
 ```
 
-Then configure your MCP client to run `mcp-bbs` as a server.
+Then configure your MCP client to run `bbsbot` as a server.
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/livingstaccato/mcp-bbs.git
-cd mcp-bbs
+git clone https://github.com/livingstaccato/bbsbot.git
+cd bbsbot
 uv pip install -e ".[dev]"
 ```
 
@@ -158,8 +158,8 @@ Here's a complete example of an AI agent connecting to a BBS, navigating menus, 
 from fastmcp import Client
 from fastmcp.mcp_config import StdioMCPServer
 
-# Start mcp-bbs server
-server = StdioMCPServer(command="mcp-bbs", args=[])
+# Start bbsbot server
+server = StdioMCPServer(command="bbsbot", args=[])
 
 async with Client(server.to_transport()) as client:
     # Connect to BBS
@@ -201,10 +201,10 @@ Run as an MCP server to expose BBS tools:
 
 ```bash
 # Start the server (stdio transport)
-mcp-bbs
+bbsbot
 
 # Or specify config
-mcp-bbs --host localhost --port 2002
+bbsbot --host localhost --port 2002
 ```
 
 ### Programmatic Usage
@@ -212,7 +212,7 @@ mcp-bbs --host localhost --port 2002
 Direct Python API usage without MCP:
 
 ```python
-from mcp_bbs.core.session_manager import SessionManager
+from bbsbot.core.session_manager import SessionManager
 
 manager = SessionManager(max_sessions=10)
 
@@ -514,7 +514,7 @@ Set `interval_s` to `0` or `null` to disable.
 ```mermaid
 sequenceDiagram
     participant LLM as AI Agent (LLM)
-    participant MCP as mcp-bbs
+    participant MCP as bbsbot
     participant BBS as BBS System
     participant Log as session.jsonl
     participant KB as Knowledge Base
@@ -580,20 +580,20 @@ Previously, there were separate methods for reading new data vs. getting current
 
 By default, learned knowledge is stored in platform-specific user data directories following the XDG Base Directory Specification:
 
-- **Linux/BSD**: `~/.local/share/mcp-bbs` (or `$XDG_DATA_HOME/mcp-bbs`)
-- **macOS**: `~/Library/Application Support/mcp-bbs`
-- **Windows**: `%LOCALAPPDATA%\mcp-bbs`
+- **Linux/BSD**: `~/.local/share/bbsbot` (or `$XDG_DATA_HOME/bbsbot`)
+- **macOS**: `~/Library/Application Support/bbsbot`
+- **Windows**: `%LOCALAPPDATA%\bbsbot`
 
 Override the default location with:
 
 ```bash
-export BBS_KNOWLEDGE_ROOT=/path/to/knowledge
+export BBSBOT_KNOWLEDGE_ROOT=/path/to/knowledge
 ```
 
 To keep knowledge bases per-project (instead of user-wide):
 
 ```bash
-export BBS_KNOWLEDGE_ROOT=$(pwd)/.bbs-knowledge
+export BBSBOT_KNOWLEDGE_ROOT=$(pwd)/.bbs-knowledge
 ```
 
 ### Terminal Settings
@@ -627,18 +627,18 @@ uv pip install -e ".[dev]"
 
 This project uses modern Python 3.11+ features and strict quality tools:
 
-- **Type Checking**: `mypy src/mcp_bbs`
-- **Linting**: `ruff check src/mcp_bbs`
-- **Formatting**: `ruff format src/mcp_bbs`
+- **Type Checking**: `mypy src/bbsbot`
+- **Linting**: `ruff check src/bbsbot`
+- **Formatting**: `ruff format src/bbsbot`
 - **Testing**: `pytest`
-- **Type Validation**: `ty src/mcp_bbs`
+- **Type Validation**: `ty src/bbsbot`
 
 ### Run All Checks
 
 ```bash
-ruff check src/mcp_bbs
-ruff format --check src/mcp_bbs
-mypy src/mcp_bbs
+ruff check src/bbsbot
+ruff format --check src/bbsbot
+mypy src/bbsbot
 pytest
 ```
 
@@ -671,7 +671,7 @@ Source files:
 
 ## Intelligent Bot & Pattern Testing
 
-mcp-bbs includes an intelligent bot system that uses prompt detection to autonomously navigate BBS games and test prompt patterns.
+bbsbot includes an intelligent bot system that uses prompt detection to autonomously navigate BBS games and test prompt patterns.
 
 ### Quick Start
 
@@ -742,5 +742,4 @@ Results saved to `.provide/intelligent-bot-{timestamp}.json`
 
 MIT License - Copyright (c) 2026 Tim Perkins
 
-See [LICENSE](https://github.com/livingstaccato/mcp-bbs/blob/main/LICENSE) for details.
-
+See [LICENSE](https://github.com/livingstaccato/bbsbot/blob/main/LICENSE) for details.

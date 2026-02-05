@@ -19,7 +19,9 @@
       "Bash(.venv/bin/pip:*)",
       "Bash(ls:*)",
       "Bash(wc:*)",
-      "Bash(uv pip install:*)"
+      "Bash(uv pip install:*)",
+      "Bash(git remote add:*)",
+      "Bash(git cat-file:*)"
     ]
   }
 }

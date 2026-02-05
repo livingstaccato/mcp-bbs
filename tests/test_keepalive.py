@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_bbs.keepalive import KeepaliveController
+from bbsbot.keepalive import KeepaliveController
 
 
 @pytest.mark.asyncio

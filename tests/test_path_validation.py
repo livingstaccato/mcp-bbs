@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_bbs.learning.knowledge import append_md, validate_knowledge_path
+from bbsbot.learning.knowledge import append_md, validate_knowledge_path
 
 
 def test_validate_knowledge_path_valid(tmp_path: Path) -> None:

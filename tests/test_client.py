@@ -11,7 +11,7 @@ from fastmcp.mcp_config import StdioMCPServer
 async def test_bbs_connection(bbs_host: str, bbs_port: int) -> None:
     """Test basic BBS connection and interaction."""
     server = StdioMCPServer(
-        command="mcp-bbs",
+        command="bbsbot",
         args=[],
     )
     async with Client(server.to_transport()) as client:

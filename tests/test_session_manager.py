@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_bbs.core.session_manager import SessionManager
+from bbsbot.core.session_manager import SessionManager
 
 from .mock_bbs_server import MockBBS
 

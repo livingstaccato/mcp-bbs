@@ -1,7 +1,7 @@
-mcp-bbs Typical Workflow (ASCII)
+bbsbot Typical Workflow (ASCII)
 =================================
 
-AI Agent     mcp-bbs        BBS System   session.jsonl   Knowledge Base
+AI Agent     bbsbot        BBS System   session.jsonl   Knowledge Base
   (LLM)
     │            │              │              │                 │
     │──bbs_log_start("session.jsonl")─────────▶│                 │

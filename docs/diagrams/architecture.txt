@@ -1,4 +1,4 @@
-mcp-bbs Architecture (ASCII)
+bbsbot Architecture (ASCII)
 ==============================
 
 ┌────────────────────────────────────────────────────────────────────┐
@@ -10,7 +10,7 @@ mcp-bbs Architecture (ASCII)
                                               │ MCP Tools
                                               ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│                       mcp-bbs Server                               │
+│                       bbsbot Server                               │
 │                                                                    │
 │  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     │
 │  │  FastMCP App │────▶│TelnetClient  │────▶│TelnetProtocol│     │

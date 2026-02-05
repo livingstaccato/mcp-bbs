@@ -1,5 +1,5 @@
 [project]
-name = "mcp-bbs"
+name = "bbsbot"
 version = "0.2.1"
 description = "FastMCP-based telnet client for BBS systems with auto-learning capabilities"
 readme = "README.md"
@@ -22,8 +22,10 @@ classifiers = [
 
 dependencies = [
     "fastmcp>=0.1.0",
+    "click>=8.1.7",
     "pexpect>=4.9.0",
     "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.1",
     "pyte>=0.8.1",
     "platformdirs>=4.0.0",
     "structlog>=24.1.0",
@@ -32,7 +34,7 @@ dependencies = [
 ]
 # Note: twerk (TW2002 data file library) is available via _twerk.pth in the venv
 # Location: /Users/tim/code/gh/livingstaccato/tw2002/twerk-py/src
-# Used by twbot for direct file access to TW2002 game data
+# Used by bbsbot for direct file access to TW2002 game data
 
 [project.optional-dependencies]
 dev = [
@@ -46,8 +48,7 @@ dev = [
 ]
 
 [project.scripts]
-mcp-bbs = "mcp_bbs.cli:main"
-tw2002-bot = "twbot.cli:main"
+bbsbot = "bbsbot.cli:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -55,7 +56,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["mcp_bbs", "twbot", "twbot.strategies"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 120
@@ -116,7 +119,7 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=mcp_bbs",
+    "--cov=bbsbot",
     "--cov-report=term-missing",
     "--cov-report=html",
 ]

@@ -5,10 +5,10 @@ Maps the relationship between TEDIT settings and underlying data files.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
 
 class DataFileType(Enum):
     """TW2002 data file types."""
@@ -25,8 +25,7 @@ class DataFileType(Enum):
     FERRENGI = "ferrengi.dat"
 
 
-@dataclass
-class FieldMapping:
+class FieldMapping(BaseModel):
     """Maps a TEDIT field to its data file location."""
 
     tedit_editor: str  # Editor key (G, H, I, etc.)
@@ -37,6 +36,8 @@ class FieldMapping:
     size: int | None = None  # Field size in bytes if known
     data_type: str = "string"  # int, string, bool, etc.
     notes: str = ""
+
+    model_config = ConfigDict(extra="ignore")
 
 
 # Known mappings between TEDIT fields and data files

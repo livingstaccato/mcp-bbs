@@ -11,7 +11,7 @@ import socket
 
 import pytest
 
-from mcp_bbs.core.session_manager import SessionManager
+from bbsbot.core.session_manager import SessionManager
 
 
 def is_port_open(host: str, port: int) -> bool:

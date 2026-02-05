@@ -6,15 +6,14 @@ Supports both terminal automation (remote) and direct file access (local via twe
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
 from .tedit_manager import TEDITManager
 
 
-@dataclass
-class SettingDiff:
+class SettingDiff(BaseModel):
     """Represents a difference in a single setting."""
 
     key: str
@@ -22,6 +21,8 @@ class SettingDiff:
     value_a: str | None
     value_b: str | None
     changed: bool
+
+    model_config = ConfigDict(extra="ignore")
 
     @property
     def diff_type(self) -> str:
@@ -35,8 +36,7 @@ class SettingDiff:
         return "unchanged"
 
 
-@dataclass
-class DiffReport:
+class DiffReport(BaseModel):
     """Complete diff report between two configurations."""
 
     source_a: str
@@ -45,6 +45,8 @@ class DiffReport:
     general_two: list[SettingDiff]
     general_three: list[SettingDiff]
     game_timing: list[SettingDiff]
+
+    model_config = ConfigDict(extra="ignore")
 
     @property
     def total_changes(self) -> int:

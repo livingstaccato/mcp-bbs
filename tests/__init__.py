@@ -1,1 +1,1 @@
-"""Tests for mcp-bbs."""
+"""Tests for bbsbot."""

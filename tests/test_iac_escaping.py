@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from mcp_bbs.transport.telnet import TelnetTransport
+from bbsbot.transport.telnet import TelnetTransport
 
 
 @pytest.mark.asyncio

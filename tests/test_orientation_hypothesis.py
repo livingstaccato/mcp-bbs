@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from hypothesis import given, strategies as st, assume, settings
 
-from twbot.orientation import (
+from bbsbot.tw2002.orientation import (
     GameState,
     SectorInfo,
     SectorKnowledge,

@@ -37,9 +37,9 @@ from .data_mapper import (
     get_file_info,
 )
 
-# Import TW2002Admin from twbot for unified admin access
+# Import TW2002Admin from bbsbot.tw2002 for unified admin access
 try:
-    from twbot.admin import TW2002Admin
+    from bbsbot.tw2002.admin import TW2002Admin
 except ImportError:
     # twbot may not be installed in all environments
     TW2002Admin = None  # type: ignore[misc, assignment]
