@@ -104,6 +104,10 @@ def _get_actual_prompt(screen: str) -> str:
             if "(type y or n)" in line.lower() and "yes" not in line.lower():
                 return "new_character_prompt"
 
+    # Private game password prompt - check both last line and recent lines
+    if "private game" in last_lines and ("enter a password" in last_lines or "password" in last_line):
+        return "private_game_password"
+
     # Show today's log?
     if "show today's log" in last_line and "(y/n)" in last_line:
         return "show_log_prompt"
@@ -242,6 +246,18 @@ async def login_sequence(
         except RuntimeError as e:
             print(f"✗ Game load error: {e}")
             raise
+        except TimeoutError as e:
+            # Print screen on timeout for debugging
+            try:
+                result = await bot.session.read(timeout_ms=500, max_bytes=8192)
+                timeout_screen = result.get("screen", "")
+                lines = [l.strip() for l in timeout_screen.split('\n') if l.strip()]
+                print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
+                for line in lines[-10:]:
+                    print(f"        | {line[:75]}")
+            except Exception:
+                pass
+            raise
 
         validation_msg = _check_kv_validation(kv_data, prompt_id)
 
@@ -251,11 +267,11 @@ async def login_sequence(
 
         print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}")
 
-        # Debug: Show screen content periodically
-        if step_in_phase3 % 10 == 0 or step_in_phase3 < 5 or step_in_phase3 >= 28:
+        # Debug: Show screen content periodically (more frequently now)
+        if step_in_phase3 % 5 == 0 or step_in_phase3 < 10 or step_in_phase3 >= 28:
             lines = [l.strip() for l in screen.split('\n') if l.strip()]
-            print(f"      [DEBUG] Screen ({len(lines)} lines), last 5:")
-            for line in lines[-5:]:
+            print(f"      [DEBUG] Screen ({len(lines)} lines), last 8:")
+            for line in lines[-8:]:
                 print(f"        | {line[:75]}")
 
         # Handle prompts based on ACTUAL PROMPT (last-line analysis), not pattern ID
@@ -275,9 +291,14 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "tw_game_menu":
-            print(f"      → At game menu, pressing T to play Trade Wars")
-            await bot.session.send("T")
-            await asyncio.sleep(0.5)  # Slightly longer wait for menu response
+            # Check if we already entered T (echoed on screen)
+            if "choice: t" in screen.lower() or "choice:t" in screen.lower():
+                print(f"      → T already entered, sending Enter to submit")
+                await bot.session.send("\r")
+            else:
+                print(f"      → At game menu, pressing T to play Trade Wars")
+                await bot.session.send("T")
+            await asyncio.sleep(0.5)  # Wait for menu response
 
         elif actual_prompt == "name_selection":
             print("      → Name selection prompt, choosing (B)BS Name")
@@ -311,6 +332,10 @@ async def login_sequence(
         elif actual_prompt == "password_prompt":
             print(f"      → Password prompt, sending password")
             await send_input(bot, character_password, "multi_key")
+
+        elif actual_prompt == "private_game_password":
+            print(f"      → Private game password prompt, sending game password")
+            await send_input(bot, game_password, "multi_key")
 
         elif actual_prompt == "new_character_prompt":
             print("      → New character prompt, answering Y to create character")

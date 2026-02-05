@@ -33,6 +33,22 @@
       "auto_detected": false
     },
     {
+      "id": "prompt.pause_simple",
+      "regex": "(?i)\\[pause\\]",
+      "input_type": "any_key",
+      "expect_cursor_at_end": false,
+      "notes": "Simple [Pause] anywhere",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.tw_game_menu",
+      "regex": "(?i)enter your choice\\s*:?\\s*$",
+      "input_type": "single_key",
+      "expect_cursor_at_end": false,
+      "notes": "TW2002 game menu (T to play, etc.)",
+      "auto_detected": false
+    },
+    {
       "id": "prompt.yes_no",
       "regex": "(?i)\\(y/n\\)|\\[y/n\\]|\\(yes/no\\)",
       "input_type": "single_key",
@@ -91,10 +107,10 @@
     },
     {
       "id": "prompt.command_generic",
-      "regex": "(?i)command\\s*[:\\?]",
+      "regex": "(?i)command\\s.*\\?\\s*$",
       "input_type": "single_key",
       "expect_cursor_at_end": true,
-      "notes": "Generic command prompt",
+      "notes": "Generic command prompt - matches 'Command [TL=...]:[1234] (?=Help)?'",
       "auto_detected": false
     },
     {
@@ -119,6 +135,14 @@
       "input_type": "single_key",
       "expect_cursor_at_end": true,
       "notes": "Generic selection prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.game_description_select",
+      "regex": "(?i)select\\s+game\\s*\\(Q\\s+for\\s+none\\)",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "TWGS game description mode - send Q to exit. See TWGS_LOGIN_FLOW.md",
       "auto_detected": false
     },
     {
@@ -191,6 +215,38 @@
       "input_type": "any_key",
       "expect_cursor_at_end": true,
       "notes": "Death screen prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.tw_game_menu",
+      "regex": "(?i)enter your choice\\s*:",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "TW2002 pre-game menu (S/H/M/X options). Press Enter to proceed to game.",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.what_is_your_name",
+      "regex": "(?i)what is your name\\??",
+      "input_type": "multi_key",
+      "expect_cursor_at_end": true,
+      "notes": "TW2002 character name prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.ship_name",
+      "regex": "(?i)what do you want to name your ship",
+      "input_type": "multi_key",
+      "expect_cursor_at_end": true,
+      "notes": "TW2002 new character ship naming prompt",
+      "auto_detected": false
+    },
+    {
+      "id": "prompt.name_or_bbs",
+      "regex": "(?i)\\(n\\)ew name or \\(b\\)bs name",
+      "input_type": "single_key",
+      "expect_cursor_at_end": true,
+      "notes": "TW2002 new character name selection (N for new, B for BBS)",
       "auto_detected": false
     }
   ],

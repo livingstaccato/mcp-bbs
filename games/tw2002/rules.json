@@ -53,6 +53,32 @@
       "notes": "TW2002 pause prompt"
     },
     {
+      "id": "prompt.pause_simple",
+      "kind": "pause",
+      "input_type": "any_key",
+      "match": {
+        "pattern": "(?i)\\[pause\\]",
+        "match_mode": "regex"
+      },
+      "screen": {
+        "expect_cursor_at_end": false
+      },
+      "notes": "Simple [Pause] anywhere on screen"
+    },
+    {
+      "id": "prompt.tw_game_menu",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)enter your choice\\s*:?\\s*$",
+        "match_mode": "regex"
+      },
+      "screen": {
+        "expect_cursor_at_end": false
+      },
+      "notes": "TW2002 game menu (T to play, etc.)"
+    },
+    {
       "id": "prompt.yes_no",
       "kind": "confirm",
       "input_type": "single_key",
@@ -357,6 +383,36 @@
         "match_mode": "regex"
       },
       "notes": "Death screen prompt"
+    },
+    {
+      "id": "prompt.ship_name",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)what do you want to name your ship",
+        "match_mode": "regex"
+      },
+      "notes": "TW2002 new character ship naming prompt"
+    },
+    {
+      "id": "prompt.name_or_bbs",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)\\(n\\)ew name or \\(b\\)bs name",
+        "match_mode": "regex"
+      },
+      "notes": "TW2002 new character name selection (N for new, B for BBS)"
+    },
+    {
+      "id": "prompt.what_is_your_name",
+      "kind": "input",
+      "input_type": "multi_key",
+      "match": {
+        "pattern": "(?i)what is your name\\??",
+        "match_mode": "regex"
+      },
+      "notes": "TW2002 character name prompt"
     },
     {
       "id": "tedit.admin_password",

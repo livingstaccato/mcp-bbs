@@ -43,9 +43,20 @@ async def wait_and_respond(
             kv_data = detected.get("kv_data")
             is_idle = detected.get("is_idle", False)
 
-            # Wait for screen to stabilize before returning
+            # Debug: show detection even if not idle
             if not is_idle:
+                elapsed = time.time() - start_time
+                if elapsed > 5 and elapsed % 5 < 0.2:  # Print every 5 seconds
+                    print(f"      [DEBUG] Detected {prompt_id} but waiting for idle (elapsed: {elapsed:.1f}s)")
+
+            # Wait for screen to stabilize before returning
+            # But don't be too strict - if we've been waiting a while, accept non-idle
+            elapsed = time.time() - start_time
+            if not is_idle and elapsed < timeout_sec * 0.8:
                 continue
+            # Accept prompt after 80% of timeout even if not fully idle
+            if not is_idle:
+                print(f"      [DEBUG] Accepting {prompt_id} despite not idle (elapsed: {elapsed:.1f}s >= 80% of {timeout_sec}s)")
 
             # Only check for context-specific errors (not menu-wide error text)
             # Check for errors ONLY if we're at a password/login prompt
