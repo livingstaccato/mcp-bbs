@@ -345,6 +345,14 @@ def _detect_context(screen: str) -> str:
             return "citadel_command"
         return "sector_command"
 
+    # Alternative sector command detection - look for the prompt format pattern
+    # e.g., "[123] (?=Help)?" or just "[123]" with help text
+    if re.search(r'\[\d+\]\s*\(\?', last_line):
+        return "sector_command"
+    # Also check for "Command" at start of line with sector number
+    if re.search(r'command.*\[\d+\]', last_line, re.IGNORECASE):
+        return "sector_command"
+
     # StarDock - special facility
     if "stardock" in last_lines and "enter your choice" in last_line:
         return "stardock"
@@ -415,8 +423,9 @@ def _detect_context(screen: str) -> str:
         return "underground"
 
     # === NAVIGATION STATES ===
-    # Warping
-    if "warping to sector" in full_screen:
+    # Warping - only check last line to avoid false positives from scrollback
+    # The actual warp message appears on the current line when warping
+    if "warping to sector" in last_line:
         return "warping"
     if "autopilot" in last_lines and "engaged" in last_lines:
         return "autopilot"
@@ -576,22 +585,20 @@ async def recover_to_safe_state(
     Raises:
         OrientationError if recovery fails
     """
-    # Recovery key sequences - increasingly aggressive
+    # Recovery key sequences - avoid Enter which can trigger warps
     recovery_sequences = [
-        # Gentle escapes
-        (" ", 0.2),      # Space for pause/more
-        ("\r", 0.2),     # Enter for prompts
+        # Gentle escapes - NO ENTER to avoid triggering warps
+        (" ", 0.3),      # Space for pause/more
         ("Q", 0.3),      # Q to exit menus
-        ("N", 0.2),      # N for Y/N prompts
-        # More aggressive
+        ("N", 0.3),      # N for Y/N prompts
         ("\x1b", 0.3),   # Escape key
+        # More aggressive
         ("Q", 0.3),      # Q again
-        ("\r", 0.2),     # Enter
-        (" ", 0.2),      # Space
-        # Really aggressive
-        ("Q", 0.5),
-        ("\r", 0.3),
-        (" ", 0.3),
+        (" ", 0.3),      # Space
+        ("\x1b", 0.5),   # Escape
+        ("Q", 0.5),      # Q with longer wait
+        # Really aggressive - still no Enter
+        (" ", 0.5),
         ("\x1b", 0.5),   # Multiple escapes
         ("\x1b", 0.3),
     ]
@@ -642,6 +649,84 @@ async def recover_to_safe_state(
             await asyncio.sleep(0.5)
             attempt += 1
             continue
+
+        if state.context == "warping":
+            # Mid-warp - just wait for it to complete, don't send keys that trigger more warps
+            print(f"  [Recovery] Waiting for warp to complete...")
+            await asyncio.sleep(1.0)
+            attempt += 1
+            continue
+
+        if state.context == "autopilot":
+            # Autopilot engaged - try to stop it
+            print(f"  [Recovery] Autopilot engaged - trying to stop...")
+            await bot.session.send("\r")  # Enter often stops autopilot
+            await asyncio.sleep(1.0)
+            attempt += 1
+            continue
+
+        if state.context in ("pause", "more"):
+            # Press space to continue
+            print(f"  [Recovery] {state.context} - pressing space...")
+            await bot.session.send(" ")
+            await asyncio.sleep(0.5)
+            attempt += 1
+            continue
+
+        if state.context == "confirm":
+            # Y/N prompt - usually N is safer
+            print(f"  [Recovery] Confirm prompt - sending N...")
+            await bot.session.send("N")
+            await asyncio.sleep(0.3)
+            attempt += 1
+            continue
+
+        if state.context in ("port_menu", "port_trading"):
+            # Port menu - try Q then Enter to fully exit
+            print(f"  [Recovery] Port menu - sending Q+Enter to exit...")
+            await bot.session.send("Q\r")  # Q to quit menu, Enter to confirm
+            await asyncio.sleep(0.5)
+            attempt += 1
+            continue
+
+        if state.context == "menu":
+            # Generic menu - try Q to exit
+            print(f"  [Recovery] Menu - sending Q to exit...")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.5)
+            attempt += 1
+            continue
+
+        if state.context == "unknown":
+            # Unknown state - be very conservative to avoid triggering warps
+            # Track if we're changing sectors (which means we're navigating accidentally)
+            if attempt == 0:
+                print(f"  [Recovery] Unknown state - clearing input buffer with Escape...")
+                await bot.session.send("\x1b")  # Escape to clear buffer
+                await asyncio.sleep(0.5)
+                attempt += 1
+                continue
+            elif attempt == 1:
+                # Try Q to exit any menu
+                print(f"  [Recovery] Trying Q to exit menu...")
+                await bot.session.send("Q")
+                await asyncio.sleep(0.5)
+                attempt += 1
+                continue
+            elif attempt == 2:
+                # Try space (for pause screens)
+                print(f"  [Recovery] Trying space...")
+                await bot.session.send(" ")
+                await asyncio.sleep(0.5)
+                attempt += 1
+                continue
+            elif attempt < 6:
+                # Wait longer - we might be in a warp or transition
+                print(f"  [Recovery] Waiting for state to settle...")
+                await asyncio.sleep(1.0)
+                attempt += 1
+                continue
+            # After that, fall through to normal recovery sequence but skip Enter/numbers
 
         # Use recovery sequence
         if attempt < len(recovery_sequences):

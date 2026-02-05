@@ -323,7 +323,7 @@ async def login_sequence(
         # The pattern matcher may match stale text (like old [Pause]) anywhere in buffer
         actual_prompt = _get_actual_prompt(screen)
 
-        print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}")
+        print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}", flush=True)
 
         # Debug: Show screen content periodically (more frequently now)
         if step_in_phase3 % 5 == 0 or step_in_phase3 < 10 or step_in_phase3 >= 28:
@@ -337,7 +337,7 @@ async def login_sequence(
 
         if actual_prompt == "command_prompt" or actual_prompt == "planet_prompt":
             # Reached game! (either sector command or planet command for new chars)
-            print(f"      ✓ Reached game!")
+            print(f"      ✓ Reached game!", flush=True)
             break
 
         elif actual_prompt == "description_mode" or _is_description_mode(screen):
@@ -452,14 +452,19 @@ async def login_sequence(
 
     # Restore threshold after game loading phase
     bot.stuck_threshold = original_threshold
+    print(f"  [DEBUG] Threshold restored", flush=True)
 
     # Parse initial state
+    print(f"  [DEBUG] Importing parsing...", flush=True)
     from .parsing import _parse_sector_from_screen, _parse_credits_from_screen
+    print(f"  [DEBUG] Parsing sector...", flush=True)
     bot.current_sector = _parse_sector_from_screen(bot, screen)
+    print(f"  [DEBUG] Parsing credits...", flush=True)
     bot.current_credits = _parse_credits_from_screen(bot, screen)
     print(
         f"\n✓ Login complete - Sector {bot.current_sector}, "
-        f"Credits: {bot.current_credits:,}"
+        f"Credits: {bot.current_credits:,}",
+        flush=True
     )
 
 

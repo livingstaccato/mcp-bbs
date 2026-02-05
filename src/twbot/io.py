@@ -43,9 +43,10 @@ async def wait_and_respond(
             kv_data = detected.get("kv_data")
             is_idle = detected.get("is_idle", False)
 
-            # Debug: show detection even if not idle
+            # Wait for screen to stabilize before returning
+            # But don't be too strict - if we've been waiting a while, accept non-idle
+            elapsed = time.time() - start_time
             if not is_idle:
-                elapsed = time.time() - start_time
                 if elapsed > 5 and elapsed % 5 < 0.2:  # Print every 5 seconds
                     print(f"      [DEBUG] Detected {prompt_id} but waiting for idle (elapsed: {elapsed:.1f}s)")
 

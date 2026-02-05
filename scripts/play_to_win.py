@@ -55,9 +55,9 @@ class TradeWarPlayer:
 
     async def start_game(self) -> bool:
         """Connect and login to start playing."""
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 60, flush=True)
         print(f"STARTING GAME SESSION (Character #{self.character_num})")
-        print("=" * 60)
+        print("=" * 60, flush=True)
 
         # Use a unique character name (not "Trader" prefix - that's reserved)
         import time
@@ -66,27 +66,27 @@ class TradeWarPlayer:
 
         try:
             # Connect
-            print(f"\n[Connect] Connecting to {self.host}:{self.port}...")
+            print(f"\n[Connect] Connecting to {self.host}:{self.port}...", flush=True)
             await self.bot.connect(host=self.host, port=self.port)
-            print("  Connected!")
+            print("  Connected!", flush=True)
 
             # Login with unique name
-            print(f"\n[Login] Logging in as {char_name}...")
+            print(f"\n[Login] Logging in as {char_name}...", flush=True)
             await self.bot.login_sequence(
                 game_password="game",
                 character_password="trade123",
                 username=char_name,
             )
-            print("  Logged in!")
+            print("  Logged in!", flush=True)
 
             # Skip full orient() to avoid loop detection issue
             # Just get quick state from where_am_i()
-            print("\n[Quick Check] Getting position...")
+            print("\n[Quick Check] Getting position...", flush=True)
             state = await self.bot.where_am_i()
 
             # If on planet, leave to sector
             if state.context == "planet_command":
-                print("  On planet - leaving to space...")
+                print("  On planet - leaving to space...", flush=True)
                 await self.leave_planet()
                 state = await self.bot.where_am_i()
 
@@ -95,13 +95,13 @@ class TradeWarPlayer:
             self.session.credits = 1000  # Will be updated by get_ship_status
             self.session.turns_left = 250  # Will be updated by get_ship_status
 
-            print(f"  Context: {state.context}")
-            print(f"  Sector: {self.session.sector}")
+            print(f"  Context: {state.context}", flush=True)
+            print(f"  Sector: {self.session.sector}", flush=True)
 
             return True
 
         except Exception as e:
-            print(f"  ERROR: {e}")
+            print(f"  ERROR: {e}", flush=True)
             import traceback
             traceback.print_exc()
             return False
@@ -133,17 +133,17 @@ class TradeWarPlayer:
         # Check where we are
         state = await self.bot.where_am_i()
         if state.context == "sector_command":
-            print("    Left planet - now in sector space")
+            print("    Left planet - now in sector space", flush=True)
             return True
         else:
-            print(f"    Still at: {state.context}")
+            print(f"    Still at: {state.context}", flush=True)
             # Try alternative: send Q again then Enter
             await self.bot.session.send("Q\r")
             await asyncio.sleep(0.5)
             await self.bot.recover()
             state = await self.bot.where_am_i()
             if state.context == "sector_command":
-                print("    Left planet after retry")
+                print("    Left planet after retry", flush=True)
                 return True
             return False
 
@@ -298,19 +298,19 @@ class TradeWarPlayer:
 
         # Check if no port
         if "no port" in screen_lower or "isn't a port" in screen_lower:
-            print("    No port here!")
+            print("    No port here!", flush=True)
             return 0
 
         # Check if we're at port menu (look for typical port menu indicators)
         if "port" not in screen_lower and "commerce" not in screen_lower:
-            print("    Port menu not detected, recovering...")
+            print("    Port menu not detected, recovering...", flush=True)
             await self.bot.recover()
             return 0
 
         # Trade (T) - enter trade mode
-        print("    Entering trade menu...")
+        print("    Entering trade menu...", flush=True)
         await self.bot.session.send("T")
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(1.5)  # Wait longer for port menu to load
 
         # Handle trading prompts with better flow
         trades_made = 0
@@ -327,34 +327,43 @@ class TradeWarPlayer:
             if screen == last_screen:
                 stuck_count += 1
                 if stuck_count >= 3:
-                    print(f"    [Stuck at same screen, breaking out]")
+                    print(f"    [Stuck at same screen, breaking out]", flush=True)
                     break
             else:
                 stuck_count = 0
             last_screen = screen
 
-            # Check if back at sector command (done)
-            if "sector" in screen_lower and "command" in screen_lower:
-                print("    [Back at sector command]")
-                break
+            # Check if back at sector command (done) - check LAST LINE for actual prompt
+            # Only check after we've done at least 1 trade to avoid premature exit
+            lines = [l.strip() for l in screen.split('\n') if l.strip()]
+            if lines and trades_made > 0:
+                last_line = lines[-1].lower()
+                # Sector command prompt format: "Command [TL=00:00:00]:[123] (?=Help)? :"
+                if "command" in last_line and "?" in last_line:
+                    print("    [Back at sector command]", flush=True)
+                    break
 
             # Check for port menu exit indicator
             if "quit" in screen_lower and "[q]" in screen_lower:
                 # At main port menu, exit
-                print("    [At port menu, exiting]")
+                print("    [At port menu, exiting]", flush=True)
                 await self.bot.session.send("Q")
                 await asyncio.sleep(0.3)
                 break
 
             # Handle quantity prompts - "how many" or "you can afford"
             if "how many" in screen_lower or "you can afford" in screen_lower:
+                # Safety check - don't do more than 6 transactions per port visit
+                if trades_made >= 6:
+                    print(f"    [Max transactions reached ({trades_made}), exiting]")
+                    break
                 # Extract max amount if shown
                 max_match = re.search(r'you can afford\s+(\d+)', screen_lower)
                 if max_match:
                     amount = int(max_match.group(1))
                 else:
                     amount = self.session.holds
-                print(f"    Buying/selling {amount} units...")
+                print(f"    Buying/selling {amount} units...", flush=True)
                 await self.bot.session.send(f"{amount}\r")
                 await asyncio.sleep(0.5)
                 trades_made += 1
@@ -372,7 +381,7 @@ class TradeWarPlayer:
                 offered_price = int(price_match.group(1).replace(',', ''))
                 if offered_price > 100:  # Actual price, not holds count
                     # Accept the offer (Y)
-                    print(f"    Price: {offered_price:,} credits - accepting...")
+                    print(f"    Price: {offered_price:,} credits - accepting...", flush=True)
                     await self.bot.session.send("Y")
                     await asyncio.sleep(0.5)
                     trades_made += 1
@@ -407,9 +416,10 @@ class TradeWarPlayer:
             # Unrecognized - wait a bit
             await asyncio.sleep(0.3)
 
-        # Exit port if still there
-        await self.bot.session.send("Q")
-        await asyncio.sleep(0.5)
+        # Exit port if still there - send multiple Q's to escape any nested menu state
+        for _ in range(3):
+            await self.bot.session.send("Q\r")  # Q + Enter to exit and confirm
+            await asyncio.sleep(0.3)
 
         # Recover to safe state (this also clears loop detection)
         await self.bot.recover()
@@ -425,7 +435,7 @@ class TradeWarPlayer:
         if trades_made > 0:
             self.session.trades_completed += 1
             self.session.total_profit += profit
-            print(f"    [Trade complete: {trades_made} transactions, profit: {profit:,}]")
+            print(f"    [Trade complete: {trades_made} transactions, profit: {profit:,}]", flush=True)
 
         return profit
 
@@ -443,7 +453,7 @@ class TradeWarPlayer:
         current_sector = state.sector
 
         # Use single-hop warp (number only, not M command for direct adjacent warps)
-        print(f"    Warping to sector {sector}...")
+        print(f"    Warping to sector {sector}...", flush=True)
         await self.bot.session.send(f"{sector}\r")
         await asyncio.sleep(1.5)
 
@@ -501,7 +511,7 @@ class TradeWarPlayer:
 
         if new_sector == sector:
             self.session.sector = sector
-            print(f"    Arrived at sector {sector}")
+            print(f"    Arrived at sector {sector}", flush=True)
             return True
         elif new_sector and new_sector != current_sector:
             # We moved somewhere, even if not target
@@ -509,27 +519,27 @@ class TradeWarPlayer:
             self.session.sector = new_sector
             return True
         else:
-            print(f"    Warp failed - still at {current_sector}")
+            print(f"    Warp failed - still at {current_sector}", flush=True)
             return False
 
-    async def explore_and_trade(self, max_moves: int = 50) -> None:
+    async def explore_and_trade(self, max_moves: int = 50, target_credits: int = 5_000_000) -> None:
         """Main gameplay loop - explore and trade."""
-        print("\n" + "=" * 60)
-        print("STARTING TRADING RUN")
-        print("=" * 60)
+        print("\n" + "=" * 60, flush=True)
+        print(f"STARTING TRADING RUN (Target: {target_credits:,} credits)")
+        print("=" * 60, flush=True)
 
         # Get accurate ship status first
-        print("\n[Ship Status] Getting current stats...")
+        print("\n[Ship Status] Getting current stats...", flush=True)
         await self.get_ship_status()
-        print(f"  Credits: {self.session.credits:,}")
-        print(f"  Turns: {self.session.turns_left}")
-        print(f"  Holds: {self.session.holds}")
-        print(f"  Sector: {self.session.sector}")
+        print(f"  Credits: {self.session.credits:,}", flush=True)
+        print(f"  Turns: {self.session.turns_left}", flush=True)
+        print(f"  Holds: {self.session.holds}", flush=True)
+        print(f"  Sector: {self.session.sector}", flush=True)
 
         moves = 0
         consecutive_no_trade = 0
 
-        while moves < max_moves and self.session.turns_left > 0:
+        while moves < max_moves and self.session.turns_left > 0 and self.session.credits < target_credits:
             moves += 1
             # Clear loop detection at start of each turn
             self.bot.loop_detection.clear()
@@ -537,15 +547,20 @@ class TradeWarPlayer:
             print(f"\n[Turn {moves}] Sector {self.session.sector}, " +
                   f"Credits: {self.session.credits:,}, Turns: {self.session.turns_left}")
 
+            # Check if we hit target
+            if self.session.credits >= target_credits:
+                print(f"\n🎉 TARGET REACHED: {self.session.credits:,} credits!", flush=True)
+                break
+
             # Scan current sector
             sector_info = await self.scan_sector()
-            print(f"  Has port: {sector_info['has_port']}, Warps: {sector_info['warps']}")
+            print(f"  Has port: {sector_info['has_port']}, Warps: {sector_info['warps']}", flush=True)
 
             # Trade if port available
             if sector_info["has_port"]:
-                print("  Trading at port...")
+                print("  Trading at port...", flush=True)
                 profit = await self.execute_trade()
-                print(f"  Profit: {profit:,} credits")
+                print(f"  Profit: {profit:,} credits", flush=True)
 
                 if profit > 0:
                     consecutive_no_trade = 0
@@ -574,47 +589,48 @@ class TradeWarPlayer:
 
                 await self.warp_to(next_sector)
             else:
-                print("  No warps available!")
+                print("  No warps available!", flush=True)
                 break
 
             # Check for death
             result = await self.bot.session.read(timeout_ms=500, max_bytes=4096)
             screen = result.get("screen", "").lower()
             if "destroyed" in screen or "killed" in screen or "dead" in screen:
-                print("\n*** CHARACTER DIED! ***")
+                print("\n*** CHARACTER DIED! ***", flush=True)
                 self.session.death_count += 1
                 return
 
             await asyncio.sleep(0.2)
 
-        print(f"\n[Trading run complete] Made {moves} moves")
+        print(f"\n[Trading run complete] Made {moves} moves", flush=True)
 
     async def play_session(self) -> None:
         """Play a full session."""
-        print("\n" + "=" * 60)
-        print("TRADEWARS 2002 - PLAY TO WIN")
-        print("=" * 60)
+        print("\n" + "=" * 60, flush=True)
+        print("TRADEWARS 2002 - PLAY TO WIN", flush=True)
+        print("=" * 60, flush=True)
 
-        max_characters = 5  # Max characters to try
+        max_characters = 50  # Max characters to try (play to win!)
 
         while self.character_num <= max_characters:
             # Start game
             if not await self.start_game():
-                print(f"\nFailed to start game with character {self.character_num}")
+                print(f"\nFailed to start game with character {self.character_num}", flush=True)
                 self.character_num += 1
                 continue
 
-            # Play
+            # Play until we hit 5 million or run out of turns
             try:
-                await self.explore_and_trade(max_moves=100)
+                await self.explore_and_trade(max_moves=500, target_credits=5_000_000)
             except Exception as e:
-                print(f"\nError during gameplay: {e}")
+                print(f"\nError during gameplay: {e}", flush=True)
                 import traceback
                 traceback.print_exc()
 
-            # Check if died
-            if self.session.death_count > 0:
-                print(f"\n[Death #{self.session.death_count}] Starting new character...")
+            # Check if died or need to restart
+            if self.session.death_count > 0 or self.session.credits < 100:
+                reason = "Death" if self.session.death_count > 0 else "Low credits"
+                print(f"\n[{reason}] Starting new character...", flush=True)
                 self.character_num += 1
 
                 # Close old session
@@ -632,7 +648,13 @@ class TradeWarPlayer:
                 self.session.total_profit = old_profit
                 self.session.trades_completed = old_trades
                 self.session.death_count = old_deaths
+            elif self.session.credits >= 5_000_000:
+                print(f"\n🎉🎉🎉 WON THE GAME! {self.session.credits:,} credits! 🎉🎉🎉", flush=True)
+                break
             else:
+                # Continue playing if we have credits and turns
+                if self.session.turns_left > 0:
+                    continue
                 break
 
         # Final report
@@ -647,16 +669,16 @@ class TradeWarPlayer:
 
     async def report(self) -> None:
         """Print session report."""
-        print("\n" + "=" * 60)
-        print("SESSION REPORT")
-        print("=" * 60)
-        print(f"  Characters used: {self.character_num}")
-        print(f"  Deaths: {self.session.death_count}")
-        print(f"  Trades completed: {self.session.trades_completed}")
-        print(f"  Total profit: {self.session.total_profit:,} credits")
-        print(f"  Final credits: {self.session.credits:,}")
+        print("\n" + "=" * 60, flush=True)
+        print("SESSION REPORT", flush=True)
+        print("=" * 60, flush=True)
+        print(f"  Characters used: {self.character_num}", flush=True)
+        print(f"  Deaths: {self.session.death_count}", flush=True)
+        print(f"  Trades completed: {self.session.trades_completed}", flush=True)
+        print(f"  Total profit: {self.session.total_profit:,} credits", flush=True)
+        print(f"  Final credits: {self.session.credits:,}", flush=True)
         print(f"  Known ports: {len(self.session.known_ports)}")
-        print("=" * 60)
+        print("=" * 60, flush=True)
 
 
 async def main():
