@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
@@ -38,9 +40,14 @@ class Session(BaseModel):
 
     _lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
     _awaiting_read: bool = PrivateAttr(default=False)
-    _watcher: Callable[[dict[str, Any]], None] | None = PrivateAttr(default=None)
-    _watch_interval_s: float = PrivateAttr(default=0.0)
-    _watch_last: float = PrivateAttr(default=0.0)
+    @dataclass
+    class _WatchEntry:
+        callback: Callable[..., None]
+        interval_s: float
+        last_ts: float
+        arity: int
+
+    _watchers: list[_WatchEntry] = PrivateAttr(default_factory=list)
 
     def model_post_init(self, __context: Any) -> None:
         """Initialize keepalive controller after model fields are set."""
@@ -59,11 +66,39 @@ class Session(BaseModel):
         if self.is_connected():
             self.keepalive.on_connect()
 
-    def set_watch(self, callback: Callable[[dict[str, Any]], None] | None, interval_s: float = 0.0) -> None:
-        """Attach a screen watcher callback to every read."""
-        self._watcher = callback
-        self._watch_interval_s = max(interval_s, 0.0)
-        self._watch_last = 0.0
+    def set_watch(self, callback: Callable[..., None] | None, interval_s: float = 0.0) -> None:
+        """Attach a screen watcher callback to every read (replaces existing watchers)."""
+        self._watchers = []
+        if callback is not None:
+            self.add_watch(callback, interval_s=interval_s)
+
+    def add_watch(self, callback: Callable[..., None], interval_s: float = 0.0) -> None:
+        """Add a screen watcher callback without replacing existing watchers."""
+        arity = 1
+        try:
+            sig = inspect.signature(callback)
+            params = list(sig.parameters.values())
+            if any(p.kind == p.VAR_POSITIONAL for p in params):
+                arity = 2
+            else:
+                positional = [
+                    p
+                    for p in params
+                    if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+                ]
+                if len(positional) >= 2:
+                    arity = 2
+        except (TypeError, ValueError):
+            arity = 1
+
+        self._watchers.append(
+            Session._WatchEntry(
+                callback=callback,
+                interval_s=max(interval_s, 0.0),
+                last_ts=0.0,
+                arity=arity,
+            )
+        )
 
     async def send(self, keys: str, *, mark_awaiting: bool = True) -> None:
         """Send keystrokes with CP437 encoding.
@@ -141,23 +176,25 @@ class Session(BaseModel):
             # Clear send gate after any read attempt
             self._awaiting_read = False
 
-            self._emit_watch(snapshot)
+            self._emit_watch(snapshot, raw)
 
             return snapshot
 
-    def _emit_watch(self, snapshot: dict[str, Any]) -> None:
-        if not self._watcher:
+    def _emit_watch(self, snapshot: dict[str, Any], raw: bytes) -> None:
+        if not self._watchers:
             return
-        try:
-            if self._watch_interval_s <= 0:
-                self._watcher(snapshot)
-                return
-            now = time.monotonic()
-            if now - self._watch_last >= self._watch_interval_s:
-                self._watch_last = now
-                self._watcher(snapshot)
-        except Exception:
-            return
+        now = time.monotonic()
+        for watcher in self._watchers:
+            try:
+                if watcher.interval_s > 0 and now - watcher.last_ts < watcher.interval_s:
+                    continue
+                watcher.last_ts = now
+                if watcher.arity >= 2:
+                    watcher.callback(snapshot, raw)
+                else:
+                    watcher.callback(snapshot)
+            except Exception:
+                continue
 
     def is_awaiting_read(self) -> bool:
         """Return True if a send occurred without a subsequent read."""

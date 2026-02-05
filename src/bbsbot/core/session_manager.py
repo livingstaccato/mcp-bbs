@@ -131,6 +131,7 @@ class SessionManager:
             )
 
             self._sessions[session_id] = session
+            self._emit_session_created(session)
 
             # Send newline if requested
             if send_newline:
@@ -218,6 +219,20 @@ class SessionManager:
         await session.logger.start(session.session_number)
 
         log.info("logging_enabled", session_id=session_id, log_path=str(log_path))
+
+    def register_session_callback(self, callback: Callable[[Session], None]) -> None:
+        """Register a callback invoked for every new session."""
+        if not hasattr(self, "_session_callbacks"):
+            self._session_callbacks: list[Callable[[Session], None]] = []
+        self._session_callbacks.append(callback)
+
+    def _emit_session_created(self, session: Session) -> None:
+        callbacks: list[Callable[[Session], None]] = getattr(self, "_session_callbacks", [])
+        for callback in callbacks:
+            try:
+                callback(session)
+            except Exception as exc:
+                log.warning("session_callback_failed", session_id=session.session_id, error=str(exc))
 
     async def disable_logging(self, session_id: str) -> None:
         """Disable logging for a session.

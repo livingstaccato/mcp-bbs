@@ -13,6 +13,7 @@ from fastmcp import FastMCP
 from bbsbot.paths import find_repo_games_root, validate_knowledge_root
 from bbsbot.settings import Settings
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.watch.registry import watch_settings
 from bbsbot.learning.discovery import discover_menu
 from bbsbot.learning.knowledge import append_md
 
@@ -78,6 +79,21 @@ def create_app(settings: Settings) -> FastMCP:
     global KNOWLEDGE_ROOT
     KNOWLEDGE_ROOT = validate_knowledge_root(settings.knowledge_root)
     return app
+
+
+def _attach_watch(session: Any) -> None:
+    try:
+        watch_manager = app.state.get("watch_manager")
+    except Exception:
+        watch_manager = None
+    if watch_manager is not None:
+        watch_manager.attach_session(session)
+
+
+@app.on_startup
+async def _watch_register() -> None:
+    if watch_settings.enabled:
+        session_manager.register_session_callback(_attach_watch)
 
 
 def _parse_json(value: str, label: str) -> list[dict[str, str]]:

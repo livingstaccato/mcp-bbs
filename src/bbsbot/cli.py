@@ -17,8 +17,34 @@ def cli() -> None:
 
 
 @cli.command("serve")
-def serve() -> None:
+@click.option("--watch-socket/--no-watch-socket", default=False, show_default=True)
+@click.option("--watch-host", default="127.0.0.1", show_default=True)
+@click.option("--watch-port", type=int, default=8765, show_default=True)
+@click.option("--watch-protocol", type=click.Choice(["raw", "json"]), default="raw", show_default=True)
+@click.option("--watch-clear/--no-watch-clear", default=False, show_default=True)
+@click.option("--watch-metadata/--no-watch-metadata", default=False, show_default=True)
+@click.option("--watch-include-text/--no-watch-include-text", default=False, show_default=True)
+def serve(
+    watch_socket: bool,
+    watch_host: str,
+    watch_port: int,
+    watch_protocol: str,
+    watch_clear: bool,
+    watch_metadata: bool,
+    watch_include_text: bool,
+) -> None:
     """Run the FastMCP server (stdio transport)."""
+    if watch_socket:
+        from bbsbot.watch import watch_settings
+
+        watch_settings.enabled = True
+        watch_settings.host = watch_host
+        watch_settings.port = watch_port
+        watch_settings.protocol = watch_protocol
+        watch_settings.send_clear = watch_clear
+        watch_settings.metadata = watch_metadata
+        watch_settings.include_snapshot_text = watch_include_text
+
     app = create_app(Settings())
     app.run()
 
@@ -35,6 +61,11 @@ def serve() -> None:
 @click.option("--once", is_flag=True, help="Read once and exit.")
 @click.option("--learning/--no-learning", default=True, show_default=True)
 @click.option("--show-prompt/--no-prompt", default=True, show_default=True)
+@click.option("--broadcast/--no-broadcast", default=False, show_default=True)
+@click.option("--broadcast-host", default="127.0.0.1", show_default=True)
+@click.option("--broadcast-port", type=int, default=8765, show_default=True)
+@click.option("--broadcast-protocol", type=click.Choice(["raw", "json"]), default="raw", show_default=True)
+@click.option("--broadcast-clear/--no-broadcast-clear", default=False, show_default=True)
 def watch(
     host: str,
     port: int,
@@ -47,13 +78,29 @@ def watch(
     once: bool,
     learning: bool,
     show_prompt: bool,
+    broadcast: bool,
+    broadcast_host: str,
+    broadcast_port: int,
+    broadcast_protocol: str,
+    broadcast_clear: bool,
 ) -> None:
     """Watch the live screen output from a BBS session."""
     from bbsbot.core.session_manager import SessionManager
+    from bbsbot.watch import WatchManager, watch_settings
 
     settings = Settings()
 
     async def _run() -> None:
+        watch_manager: WatchManager | None = None
+        if broadcast:
+            watch_settings.enabled = True
+            watch_settings.host = broadcast_host
+            watch_settings.port = broadcast_port
+            watch_settings.protocol = broadcast_protocol
+            watch_settings.send_clear = broadcast_clear
+            watch_manager = WatchManager()
+            await watch_manager.start()
+
         manager = SessionManager()
         session_id = await manager.create_session(
             host=host,
@@ -67,6 +114,8 @@ def watch(
         session = await manager.get_session(session_id)
         if learning:
             await manager.enable_learning(session_id, settings.knowledge_root, namespace="tw2002")
+        if watch_manager is not None:
+            watch_manager.attach_session(session)
 
         try:
             while True:
@@ -82,6 +131,8 @@ def watch(
                     break
         finally:
             await manager.close_all_sessions()
+            if watch_manager is not None:
+                await watch_manager.stop()
 
     asyncio.run(_run())
 
@@ -131,6 +182,11 @@ def tw2002_group() -> None:
 @click.option("--watch", is_flag=True, help="Print live screens as the bot runs.")
 @click.option("--watch-interval", type=float, default=0.0, show_default=True)
 @click.option("--watch-clear/--no-watch-clear", default=True, show_default=True)
+@click.option("--watch-socket", is_flag=True, help="Broadcast ANSI screens over TCP for spying.")
+@click.option("--watch-socket-host", default="127.0.0.1", show_default=True)
+@click.option("--watch-socket-port", type=int, default=8765, show_default=True)
+@click.option("--watch-socket-protocol", type=click.Choice(["raw", "json"]), default="raw", show_default=True)
+@click.option("--watch-socket-clear/--no-watch-socket-clear", default=False, show_default=True)
 def tw2002_bot(
     config_path: str | None,
     generate_config: bool,
@@ -143,6 +199,11 @@ def tw2002_bot(
     watch: bool,
     watch_interval: float,
     watch_clear: bool,
+    watch_socket: bool,
+    watch_socket_host: str,
+    watch_socket_port: int,
+    watch_socket_protocol: str,
+    watch_socket_clear: bool,
 ) -> None:
     """Run the TW2002 trading bot."""
     from bbsbot.tw2002.cli import run_bot_cli
@@ -159,6 +220,11 @@ def tw2002_bot(
         watch=watch,
         watch_interval=watch_interval,
         watch_clear=watch_clear,
+        watch_socket=watch_socket,
+        watch_socket_host=watch_socket_host,
+        watch_socket_port=watch_socket_port,
+        watch_socket_protocol=watch_socket_protocol,
+        watch_socket_clear=watch_socket_clear,
     )
 
 
@@ -207,6 +273,47 @@ def replay_view(log: str, speed: float, step: bool, events: tuple[str, ...]) -> 
     from bbsbot.replay.viewer import replay_log
 
     replay_log(log, speed=speed, step=step, events=list(events))
+
+
+@cli.command("spy")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", type=int, default=8765, show_default=True)
+@click.option("--encoding", default="cp437", show_default=True, help="Decode bytes before printing (set to '' for raw).")
+def spy(host: str, port: int, encoding: str) -> None:
+    """Attach to a watch socket and render ANSI output locally."""
+    import asyncio
+    import sys
+
+    async def _run() -> None:
+        reader, writer = await asyncio.open_connection(host, port)
+        try:
+            while True:
+                data = await reader.read(8192)
+                if not data:
+                    break
+                if encoding:
+                    text = data.decode(encoding, errors="replace")
+                    sys.stdout.write(text)
+                    sys.stdout.flush()
+                else:
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.buffer.flush()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    asyncio.run(_run())
+
+
+@cli.command("tui")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", type=int, default=8765, show_default=True)
+@click.option("--log", "log_path", type=click.Path(path_type=str))
+def tui(host: str, port: int, log_path: str | None) -> None:
+    """Hybrid live/replay TUI for spying on sessions."""
+    from bbsbot.tui import run_tui
+
+    asyncio.run(run_tui(host=host, port=port, log_path=log_path))
 
 
 def main() -> None:

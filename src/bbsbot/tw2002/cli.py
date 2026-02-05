@@ -71,10 +71,16 @@ async def run_bot(
     watch: bool = False,
     watch_interval: float = 0.0,
     watch_clear: bool = True,
+    watch_socket: bool = False,
+    watch_socket_host: str = "127.0.0.1",
+    watch_socket_port: int = 8765,
+    watch_socket_protocol: str = "raw",
+    watch_socket_clear: bool = False,
 ) -> None:
     """Run the trading bot with the given configuration."""
     from bbsbot.tw2002.bot import TradingBot
     from bbsbot.tw2002.multi_character import MultiCharacterManager
+    from bbsbot.watch import WatchManager, watch_settings
 
     print("\n" + "=" * 60)
     print("TW2002 TRADING BOT")
@@ -100,6 +106,16 @@ async def run_bot(
     total_characters = 0
     total_profit = 0
 
+    watch_manager: WatchManager | None = None
+    if watch_socket:
+        watch_settings.enabled = True
+        watch_settings.host = watch_socket_host
+        watch_settings.port = watch_socket_port
+        watch_settings.protocol = watch_socket_protocol
+        watch_settings.send_clear = watch_socket_clear
+        watch_manager = WatchManager()
+        await watch_manager.start()
+
     while total_characters < config.multi_character.max_characters:
         total_characters += 1
 
@@ -110,6 +126,8 @@ async def run_bot(
             character_name=char_state.name,
             config=config,
         )
+        if watch_manager is not None:
+            bot.session_manager.register_session_callback(watch_manager.attach_session)
 
         try:
             print(f"\n[Connect] Connecting to {config.connection.host}:{config.connection.port}...")
@@ -180,6 +198,8 @@ async def run_bot(
     print(f"  Deaths: {stats['total_deaths']}")
     print(f"  Total profit: {stats['total_profit']:,} credits")
     print("=" * 60)
+    if watch_manager is not None:
+        await watch_manager.stop()
 
 
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
@@ -205,6 +225,11 @@ def run_bot_cli(
     watch: bool,
     watch_interval: float,
     watch_clear: bool,
+    watch_socket: bool,
+    watch_socket_host: str,
+    watch_socket_port: int,
+    watch_socket_protocol: str,
+    watch_socket_clear: bool,
 ) -> None:
     if generate_config:
         print(generate_default_config())
@@ -225,4 +250,16 @@ def run_bot_cli(
     )
 
     setup_logging(verbose)
-    asyncio.run(run_bot(config, watch=watch, watch_interval=watch_interval, watch_clear=watch_clear))
+    asyncio.run(
+        run_bot(
+            config,
+            watch=watch,
+            watch_interval=watch_interval,
+            watch_clear=watch_clear,
+            watch_socket=watch_socket,
+            watch_socket_host=watch_socket_host,
+            watch_socket_port=watch_socket_port,
+            watch_socket_protocol=watch_socket_protocol,
+            watch_socket_clear=watch_socket_clear,
+        )
+    )
