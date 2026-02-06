@@ -248,6 +248,33 @@ def tw2002_play(mode: str | None) -> None:
             raise click.ClickException(f"Unknown mode: {mode}")
 
 
+@tw2002_group.command("list-resume")
+@click.option("--json", "as_json", is_flag=True, help="Output JSON.")
+def tw2002_list_resume(as_json: bool) -> None:
+    """List resumable TW2002 characters from local state."""
+    from bbsbot.paths import default_knowledge_root
+    from bbsbot.tw2002.resume import as_dict, list_resumable_tw2002
+
+    entries = list_resumable_tw2002(default_knowledge_root())
+    if as_json:
+        import json
+
+        click.echo(json.dumps(as_dict(entries), indent=2))
+        return
+
+    if not entries:
+        click.echo("No resumable characters found.")
+        return
+
+    for entry in entries:
+        host = f"{entry.host}:{entry.port}" if entry.port is not None else entry.host
+        click.echo(f"{host}  resumable:{len(entry.resumable)}  dead:{entry.dead}  total:{entry.total}")
+        for char in entry.resumable:
+            click.echo(
+                f"  - {char.name}  credits:{char.credits}  sector:{char.sector}  last_active:{char.last_active}"
+            )
+
+
 @cli.group("replay")
 def replay_group() -> None:
     """Replay tools."""

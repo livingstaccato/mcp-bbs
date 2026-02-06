@@ -16,6 +16,8 @@ from bbsbot.core.session_manager import SessionManager
 from bbsbot.watch import WatchManager, watch_settings
 from bbsbot.learning.discovery import discover_menu
 from bbsbot.learning.knowledge import append_md
+from bbsbot.tw2002.resume import as_dict as _resume_as_dict
+from bbsbot.tw2002.resume import list_resumable_tw2002
 
 # Configure structlog to write to stderr (MCP uses stdout for JSON-RPC)
 structlog.configure(
@@ -214,6 +216,16 @@ async def bbs_read(timeout_ms: int = 250, max_bytes: int = 8192) -> dict[str, An
     _require_knowledge_root()
     _, session = await _get_session()
     return cast(dict[str, Any], await session.read(timeout_ms, max_bytes))
+
+
+@app.tool()
+async def bbs_list_resumable_games(game: str = "tw2002") -> dict[str, Any]:
+    """List resumable game characters from local state."""
+    knowledge_root = _require_knowledge_root()
+    if game != "tw2002":
+        raise RuntimeError(f"Unsupported game: {game}")
+    entries = list_resumable_tw2002(knowledge_root)
+    return {"game": game, "entries": _resume_as_dict(entries)}
 
 
 @app.tool()
