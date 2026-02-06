@@ -108,8 +108,34 @@ class CompleteTW2002Player:
                 continue
 
             if "trade wars 2002" in screen_lower and "enter your choice" in screen_lower:
-                await self.send("T", "Play Trade Wars 2002")
+                await self.send("T\r", "Play Trade Wars 2002")
                 snapshot = await self.read_and_show(pause=2.0, max_lines=25)
+                continue
+
+            if "start a new character" in screen_lower or "type y or n" in screen_lower:
+                await self.send("Y\r", "Start new character")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "password" in screen_lower and "confirm" in screen_lower:
+                await self.send(f"{password}\r", "Confirm password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "password" in screen_lower and ("enter" in screen_lower or "please" in screen_lower):
+                await self.send(f"{password}\r", "Set password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "ship" in screen_lower and "name" in screen_lower:
+                ship_name = f"{username}'s ship"
+                await self.send(f"{ship_name}\r", "Ship name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "(y/n)" in screen_lower and ("ship" in screen_lower or "correct" in screen_lower):
+                await self.send("Y\r", "Confirm")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
             if prompt_id == "prompt.any_key" or "[any key]" in screen_lower:
