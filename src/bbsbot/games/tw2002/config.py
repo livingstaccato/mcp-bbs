@@ -27,8 +27,13 @@ class ConnectionConfig(BaseModel):
 class CharacterConfig(BaseModel):
     """Character creation settings."""
 
-    name_prefix: str = "bot"
     password: str = "trade123"
+
+    # Themed name generation
+    name_complexity: Literal["simple", "medium", "complex", "numbered"] = "medium"
+    generate_ship_names: bool = True
+    ship_names_with_numbers: bool = False
+    name_seed: int | None = None
 
     model_config = ConfigDict(extra="ignore")
 

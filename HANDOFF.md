@@ -1,5 +1,13 @@
 # Handoff - MCP-BBS / bbsbot
 
+## Documentation
+
+**📚 Complete System Documentation**:
+- **[System Architecture](.provide/SYSTEM_ARCHITECTURE.md)** - Complete overview of all layers, components, LLM integration, game loops
+- **[Architecture Diagrams](.provide/ARCHITECTURE_DIAGRAM.md)** - Visual diagrams for data flow, LLM decisions, multi-character management
+- **[Themed Names](.provide/HANDOFF_themed_names.md)** - Character and ship name generation system
+- **[Main README](README.md)** - MCP server installation and usage
+
 ## Session Snapshot (2026-02-06)
 - **Server**: TWGS on `localhost:2002` (this is the only allowed target).
 - **Active character**: `Cdx9E2B7` / `Codex2026!` (Game: `B` = “The AI Apocalypse”).

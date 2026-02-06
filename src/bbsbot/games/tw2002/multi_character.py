@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from bbsbot.games.tw2002.orientation import SectorKnowledge
 
 from bbsbot.games.tw2002.character import CharacterManager, CharacterState
+from bbsbot.games.tw2002.name_generator import NameGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class CharacterRecord(BaseModel):
     """Record of a character's lifecycle."""
 
     name: str
+    ship_name: str | None = None  # Optional themed ship name
     created_at: float
     died_at: float | None = None
     inherited_from: str | None = None
@@ -66,6 +68,7 @@ class MultiCharacterManager:
             sharing_mode: Override sharing mode from config
         """
         self.config = config.multi_character
+        self.character_config = config.character
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -80,8 +83,17 @@ class MultiCharacterManager:
         # Shared knowledge (for shared mode)
         self._shared_knowledge_path = self.data_dir / "shared_sectors.json"
 
+        # Initialize name generator
+        self.name_generator = NameGenerator(seed=self.character_config.name_seed)
+
         # Load existing records
         self._load_records()
+
+        # Mark existing names as used to avoid collisions
+        for record in self._records.values():
+            self.name_generator.mark_used(record.name)
+            if record.ship_name:
+                self.name_generator.mark_used(record.ship_name)
 
     def _records_path(self) -> Path:
         """Path to character records file."""
@@ -112,32 +124,47 @@ class MultiCharacterManager:
         }
         path.write_text(json.dumps(data, indent=2))
 
-    def generate_character_name(self, prefix: str = "bot") -> str:
-        """Generate a unique character name.
-
-        Args:
-            prefix: Name prefix from config
+    def generate_character_name(self) -> str:
+        """Generate a unique themed character name.
 
         Returns:
-            Unique character name
+            Unique character name like "QuantumTrader" or "NeuralDataProfit"
         """
-        self._character_count += 1
-        name = f"{prefix}{self._character_count:03d}"
+        name = self.name_generator.generate_character_name(
+            complexity=self.character_config.name_complexity
+        )
         logger.info(f"Generated character name: {name}")
         return name
 
-    def create_character(self, name: str | None = None) -> CharacterState:
+    def generate_ship_name(self) -> str | None:
+        """Generate a unique ship name.
+
+        Returns:
+            Themed ship name like "Swift Venture" or None if disabled
+        """
+        if self.character_config.generate_ship_names:
+            ship_name = self.name_generator.generate_ship_name(
+                add_number=self.character_config.ship_names_with_numbers
+            )
+            logger.info(f"Generated ship name: {ship_name}")
+            return ship_name
+        return None
+
+    def create_character(self, name: str | None = None, ship_name: str | None = None) -> CharacterState:
         """Create a new character.
 
         Args:
             name: Optional name (auto-generated if not provided)
+            ship_name: Optional ship name (auto-generated if not provided)
 
         Returns:
             New CharacterState
         """
         if name is None:
-            prefix = self.config.name_prefix if hasattr(self.config, 'name_prefix') else "bot"
-            name = self.generate_character_name(prefix)
+            name = self.generate_character_name()
+
+        if ship_name is None:
+            ship_name = self.generate_ship_name()
 
         # Check max characters limit
         living_characters = [
@@ -150,18 +177,20 @@ class MultiCharacterManager:
                 "oldest will be retired"
             )
 
-        # Create state
+        # Create state with ship name
         state = self._character_manager.load(name)
+        state.ship_name = ship_name
 
         # Create record
         self._records[name] = CharacterRecord(
             name=name,
+            ship_name=ship_name,
             created_at=time(),
         )
         self._save_records()
 
         self._active_character = name
-        logger.info(f"Created character: {name}")
+        logger.info(f"Created character: {name} (ship: {ship_name or 'none'})")
 
         return state
 

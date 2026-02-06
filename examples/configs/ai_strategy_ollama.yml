@@ -10,8 +10,9 @@ connection:
   game_password: game
 
 character:
-  name_prefix: ai_bot
   password: trade123
+  name_complexity: medium
+  generate_ship_names: true
 
 trading:
   strategy: ai_strategy

@@ -37,6 +37,7 @@ class CharacterState(BaseModel):
 
     # Identity
     name: str
+    ship_name: str | None = None  # Optional themed ship name
     created_at: float = Field(default_factory=time)
     last_active: float = Field(default_factory=time)
 
