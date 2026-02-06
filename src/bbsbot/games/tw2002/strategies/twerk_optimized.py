@@ -192,7 +192,10 @@ class TwerkOptimizedStrategy(TradingStrategy):
             ports = parse_ports(ports_path)
 
             # Find optimal routes
-            routes = find_trade_routes(sectors, ports, max_distance=5)
+            # Use ship holds from knowledge or default to 20
+            holds = getattr(self.knowledge, 'ship_holds', 20)
+            max_hops = 5  # Maximum warp hops for route calculation
+            routes = find_trade_routes(sectors, ports, holds, max_hops)
 
             self._routes = [
                 TwerkRoute(

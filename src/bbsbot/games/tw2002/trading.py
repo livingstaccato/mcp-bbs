@@ -136,7 +136,9 @@ def _guard_trade_port(bot, screen: str, context: str) -> None:
         return
 
     # Special/unknown port - do not trade.
-    special_tokens = ("stardock", "rylos", "special port")
+    # Common special ports: Stardock (Fed HQ), Rylos (Corporate HQ),
+    # Hardware (ship/equipment vendor), McPlasma's (weapons vendor)
+    special_tokens = ("stardock", "rylos", "special port", "hardware", "mcplasma")
     if port_name and any(token in port_name.lower() for token in special_tokens):
         raise RuntimeError(f"{context}:special_port:{port_name}")
     if any(token in screen_lower for token in special_tokens):
@@ -356,6 +358,7 @@ async def _warp_to_sector(bot, target_sector: int):
     # Wait for sector input prompt (validate prompt type)
     pre_warp_sector = bot.current_sector
     warp_prompt_seen = False
+    warp_input_type = None
     for _ in range(6):
         input_type, prompt_id, screen, kv_data = await wait_and_respond(
             bot,
@@ -370,6 +373,7 @@ async def _warp_to_sector(bot, target_sector: int):
             if kv_data and "current_sector" in kv_data:
                 pre_warp_sector = kv_data["current_sector"]
             warp_prompt_seen = True
+            warp_input_type = input_type  # Save the correct input type
             break
         if prompt_id in ("prompt.pause_simple", "prompt.pause_space_or_enter") or input_type == "any_key":
             await send_input(bot, "", input_type)
@@ -398,8 +402,8 @@ async def _warp_to_sector(bot, target_sector: int):
     if not warp_prompt_seen:
         raise RuntimeError("warp_prompt_missing")
 
-    # Send destination sector (multi_key)
-    await send_input(bot, str(target_sector), input_type)
+    # Send destination sector (multi_key) - use saved input type from warp prompt
+    await send_input(bot, str(target_sector), warp_input_type)
 
     # Wait for arrival confirmation and reach a stable prompt
     arrival_screen = ""
@@ -700,6 +704,11 @@ async def single_trading_cycle(
                     f"(current {bot.current_sector})"
                 )
                 await _warp_to_sector(bot, buy_sector)
+                # Verify we arrived at the correct sector
+                if bot.current_sector != buy_sector:
+                    raise RuntimeError(
+                        f"warp_verification_failed:expected_{buy_sector}_got_{bot.current_sector}"
+                    )
 
             # BUY PHASE
             print(f"\n📍 BUY PHASE (Sector {buy_sector})")
@@ -717,6 +726,11 @@ async def single_trading_cycle(
             # WARP PHASE
             print(f"\n🚀 WARPING to {sell_sector}")
             await _warp_to_sector(bot, sell_sector)
+            # Verify we arrived at the correct sector
+            if bot.current_sector != sell_sector:
+                raise RuntimeError(
+                    f"warp_verification_failed:expected_{sell_sector}_got_{bot.current_sector}"
+                )
 
             # SELL PHASE
             print(f"\n📍 SELL PHASE (Sector {sell_sector})")
