@@ -109,6 +109,10 @@ class Session(BaseModel):
         Raises:
             ConnectionError: If transport send fails
         """
+        printable = keys.replace("\r", "\\r").replace("\n", "\\n")
+        print(
+            f"status action=send host={self.host} port={self.port} keys={printable}"
+        )
         async with self._lock:
             payload = keys.encode(CP437, errors="replace")
             await self.transport.send(payload)
@@ -130,6 +134,9 @@ class Session(BaseModel):
         Raises:
             ConnectionError: If transport is disconnected
         """
+        print(
+            f"status action=read host={self.host} port={self.port} timeout_ms={timeout_ms} max_bytes={max_bytes}"
+        )
         async with self._lock:
             try:
                 raw = await self.transport.receive(max_bytes, timeout_ms)

@@ -32,12 +32,24 @@ async def main():
     print(f"Screen: {snapshot.get('screen', '')[:200]}")
     print(f"Prompt: {snapshot.get('prompt_detected', {})}")
 
-    print("\n3. Sending 'A' to select game...")
-    await session.send("A\r")
+    print("\n3. Sending 'B' to select game...")
+    await session.send("B\r")
     await asyncio.sleep(3.0)
     snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
     print(f"Screen:\n{snapshot.get('screen', '')}")
     print(f"\nPrompt: {snapshot.get('prompt_detected', {})}")
+
+    # If we land in description mode, exit and select B again
+    screen_lower = snapshot.get("screen", "").lower()
+    if "show game descriptions" in screen_lower or "select game (q for none)" in screen_lower:
+        print("\n3a. Exiting description mode (Q) then re-selecting game B...")
+        await session.send("Q")
+        await asyncio.sleep(1.0)
+        await session.send("B\r")
+        await asyncio.sleep(2.0)
+        snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
+        print(f"Screen:\n{snapshot.get('screen', '')}")
+        print(f"\nPrompt: {snapshot.get('prompt_detected', {})}")
 
     print("\n4. Waiting 5 more seconds to see if anything changes...")
     await asyncio.sleep(5.0)

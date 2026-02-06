@@ -126,11 +126,6 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "what alias do you want to use" in screen_lower:
-                await self.send(f"{username}\r", "Alias")
-                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
-                continue
-
             if "use (n)ew name" in screen_lower and "what alias do you want to use" not in screen_lower:
                 await self.send("\r", "Use default BBS name")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
@@ -140,6 +135,11 @@ class CompleteTW2002Player:
                 "alias" in screen_lower or "commander" in screen_lower
             ):
                 await self.send("Y\r", "Confirm alias")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "what alias do you want to use" in screen_lower and "is what you want" not in screen_lower:
+                await self.send(f"{username}\r", "Alias")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 

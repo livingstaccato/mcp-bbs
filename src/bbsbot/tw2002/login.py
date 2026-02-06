@@ -367,9 +367,8 @@ async def login_sequence(
         elif actual_prompt == "alias_prompt":
             # Name was taken, need to provide a unique alias
             import uuid
-            # Use short UUID to ensure uniqueness
-            short_id = uuid.uuid4().hex[:8]
-            alias = f"Trader{short_id}"
+            short_id = uuid.uuid4().hex[:6]
+            alias = f"Cdx{short_id}"
             print(f"      → Alias prompt (name taken), entering: {alias}")
             await send_input(bot, alias, "multi_key")
 

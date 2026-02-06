@@ -36,7 +36,14 @@ async def run_flow(name: str, func) -> bool:
         print(f"FAIL: {name} ({exc})\n")
         return False
 
-    ok = result in (None, True, 0)
+    if isinstance(result, bool):
+        ok = result
+    elif result is None:
+        ok = True
+    elif isinstance(result, int):
+        ok = result == 0
+    else:
+        ok = False
     status = "PASS" if ok else "FAIL"
     print(f"{status}: {name}\n")
     return ok

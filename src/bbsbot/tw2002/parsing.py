@@ -5,6 +5,74 @@ import re
 from .logging_utils import logger
 
 
+def extract_semantic_kv(screen: str) -> dict:
+    """Extract semantic key/value data from a screen snapshot."""
+    data: dict = {}
+
+    # Sector
+    sector_matches = re.findall(r"[Ss]ector\s*:\s*(\d+)", screen)
+    if sector_matches:
+        data["sector"] = int(sector_matches[-1])
+
+    # Warps
+    warp_line = None
+    for line in screen.splitlines():
+        if "Warps to Sector" in line:
+            warp_line = line
+    if warp_line:
+        warps = [int(x) for x in re.findall(r"\d+", warp_line)]
+        if warps:
+            data["warps"] = warps
+
+    # Ports
+    port_match = re.search(r"Ports?\s*:\s*([^,]+),\s*Class\s*\d+\s*\(([^)]+)\)", screen)
+    if port_match:
+        data["has_port"] = True
+        data["port_name"] = port_match.group(1).strip()
+        data["port_class"] = port_match.group(2).strip()
+
+    # Planets
+    planet_line = None
+    for line in screen.splitlines():
+        if line.strip().startswith("Planets"):
+            planet_line = line
+    if planet_line:
+        # Example: "Planets : (M) Codex Terra"
+        names = []
+        for match in re.finditer(r"\)\s*([^()]+)", planet_line):
+            name = match.group(1).strip()
+            if name:
+                names.append(name)
+        if names:
+            data["has_planet"] = True
+            data["planet_names"] = names
+
+    # Credits
+    credit_match = re.search(r"You have\s+([\d,]+)\s+credits", screen)
+    if not credit_match:
+        credit_match = re.search(r"Credits?\s*:?\s*([\d,]+)", screen)
+    if credit_match:
+        data["credits"] = int(credit_match.group(1).replace(",", ""))
+
+    # Fighters
+    fighter_match = re.search(r"Fighters\s*:\s*([\d,]+)", screen)
+    if fighter_match:
+        data["fighters"] = int(fighter_match.group(1).replace(",", ""))
+
+    # Holds
+    holds_match = re.search(r"Total Holds\s*:\s*(\d+)", screen)
+    if holds_match:
+        data["holds_total"] = int(holds_match.group(1))
+    empty_match = re.search(r"Empty\s*=\s*(\d+)", screen)
+    if empty_match:
+        data["holds_free"] = int(empty_match.group(1))
+    empty_holds_match = re.search(r"You have\s+(\d+)\s+empty cargo holds", screen)
+    if empty_holds_match:
+        data["holds_free"] = int(empty_holds_match.group(1))
+
+    return data
+
+
 def _parse_credits_from_screen(bot, screen: str) -> int:
     """Extract credit amount from screen text.
 

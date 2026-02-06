@@ -1,10 +1,11 @@
 """Trading operations for TW2002."""
 
 import asyncio
+import re
 from pathlib import Path
 
 from .io import wait_and_respond, send_input
-from .parsing import _parse_credits_from_screen, _parse_sector_from_screen
+from .parsing import _parse_credits_from_screen, _parse_sector_from_screen, extract_semantic_kv
 from .logging_utils import logger
 from . import cli_impl
 
@@ -43,6 +44,104 @@ def _validate_kv_data(kv_data: dict | None, prompt_id: str) -> tuple[bool, str]:
     return True, ""
 
 
+_SECTOR_BRACKET_RE = re.compile(r"\[(\d+)\]\s*\(\?")
+_SECTOR_WORD_RE = re.compile(r"\bsector\s+(\d+)\b", re.IGNORECASE)
+_PORT_CLASS_INLINE_RE = re.compile(r"Class\s*\d+\s*\(([^)]+)\)", re.IGNORECASE)
+_PORT_CLASS_NAME_RE = re.compile(r"Class\s*([BS]{3})", re.IGNORECASE)
+
+
+def _extract_sector_from_screen(screen: str) -> int | None:
+    matches = _SECTOR_BRACKET_RE.findall(screen)
+    if matches:
+        return int(matches[-1])
+    matches = _SECTOR_WORD_RE.findall(screen)
+    if matches:
+        return int(matches[-1])
+    return None
+
+
+def _is_trade_port_class(port_class: str | None) -> bool:
+    if not port_class:
+        return False
+    return bool(re.fullmatch(r"[BS]{3}", port_class.strip().upper()))
+
+
+def _extract_port_info(bot, screen: str) -> tuple[bool, str | None, str | None]:
+    semantic = extract_semantic_kv(screen)
+    has_port = semantic.get("has_port")
+    port_class = semantic.get("port_class")
+    port_name = semantic.get("port_name")
+
+    if port_class:
+        port_class = port_class.strip().upper()
+    if port_name:
+        port_name = port_name.strip()
+
+    try:
+        from .orientation import _parse_sector_display
+
+        sector_info = _parse_sector_display(screen)
+    except Exception:
+        sector_info = {}
+
+    if sector_info.get("has_port"):
+        has_port = True if has_port is None else has_port
+        if not port_class:
+            port_class = sector_info.get("port_class")
+
+    port_line = None
+    for line in screen.splitlines():
+        if re.search(r"Ports?\s*:", line, re.IGNORECASE):
+            port_line = line
+            break
+
+    if not port_class:
+        if class_match := _PORT_CLASS_INLINE_RE.search(screen):
+            port_class = class_match.group(1).strip().upper()
+        elif class_match := _PORT_CLASS_NAME_RE.search(screen):
+            port_class = class_match.group(1).strip().upper()
+        elif port_line:
+            if class_match := re.search(r"\(([A-Z]{3})\)", port_line):
+                port_class = class_match.group(1).strip().upper()
+
+    if port_name is None:
+        if name_match := re.search(r"Ports?\s*:\s*([^,\n]+)", screen, re.IGNORECASE):
+            port_name = name_match.group(1).strip()
+
+    if has_port is None and port_line:
+        has_port = True
+
+    # Fallback to known game state if present
+    state = getattr(bot, "game_state", None)
+    if state:
+        if has_port is None:
+            has_port = state.has_port
+        if not port_class:
+            port_class = state.port_class
+
+    return bool(has_port), port_class, port_name
+
+
+def _guard_trade_port(bot, screen: str, context: str) -> None:
+    has_port, port_class, port_name = _extract_port_info(bot, screen)
+    screen_lower = screen.lower()
+    if not has_port:
+        raise RuntimeError(f"{context}:no_port")
+
+    if _is_trade_port_class(port_class):
+        return
+
+    # Special/unknown port - do not trade.
+    special_tokens = ("stardock", "rylos", "special port")
+    if port_name and any(token in port_name.lower() for token in special_tokens):
+        raise RuntimeError(f"{context}:special_port:{port_name}")
+    if any(token in screen_lower for token in special_tokens):
+        raise RuntimeError(f"{context}:special_port_screen")
+    if port_class:
+        raise RuntimeError(f"{context}:special_port_class:{port_class}")
+    raise RuntimeError(f"{context}:port_class_unknown")
+
+
 async def _dock_and_buy(bot, sector: int, quantity: int = 500):
     """Dock at sector and buy commodities.
 
@@ -54,6 +153,18 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
     # Get to port menu
     input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  Got prompt: {prompt_id}")
+    if prompt_id == "prompt.planet_command":
+        print("  On planet surface, exiting to sector command...")
+        await bot.session.send("Q")
+        await asyncio.sleep(0.5)
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
+        print(f"  After exit: {prompt_id}")
+        if prompt_id == "prompt.planet_command":
+            raise RuntimeError("still_on_planet")
+
+    # Guard against special/unknown ports before docking
+    if prompt_id in ("prompt.sector_command", "prompt.command_generic", "prompt.port_menu"):
+        _guard_trade_port(bot, screen, "buy")
 
     # Send "P" for Port/Dock
     print("  Docking at port...")
@@ -75,6 +186,7 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
     await asyncio.sleep(0.3)
 
     # Handle commodity/quantity prompts
+    buy_attempts = 0
     for attempt in range(10):
         try:
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
@@ -87,6 +199,14 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
             if not is_valid:
                 print(f"    ⚠️  {error_msg}")
 
+            if prompt_id == "prompt.port_menu":
+                buy_attempts += 1
+                if buy_attempts <= 2:
+                    print("    Still at port menu, retrying BUY...")
+                    await bot.session.send("B")
+                    await asyncio.sleep(0.3)
+                    continue
+                raise RuntimeError("port_buy_unavailable")
             if "port_quantity" in prompt_id:
                 # How many units?
                 print(f"    Buying {quantity} units...")
@@ -118,6 +238,18 @@ async def _dock_and_sell(bot, sector: int):
     # Get to port menu
     input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  Got prompt: {prompt_id}")
+    if prompt_id == "prompt.planet_command":
+        print("  On planet surface, exiting to sector command...")
+        await bot.session.send("Q")
+        await asyncio.sleep(0.5)
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
+        print(f"  After exit: {prompt_id}")
+        if prompt_id == "prompt.planet_command":
+            raise RuntimeError("still_on_planet")
+
+    # Guard against special/unknown ports before docking
+    if prompt_id in ("prompt.sector_command", "prompt.command_generic", "prompt.port_menu"):
+        _guard_trade_port(bot, screen, "sell")
 
     # Send "P" for Port/Dock
     print("  Docking at port...")
@@ -139,6 +271,7 @@ async def _dock_and_sell(bot, sector: int):
     await asyncio.sleep(0.3)
 
     # Handle commodity/quantity prompts
+    sell_attempts = 0
     for attempt in range(10):
         try:
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
@@ -151,6 +284,14 @@ async def _dock_and_sell(bot, sector: int):
             if not is_valid:
                 print(f"    ⚠️  {error_msg}")
 
+            if prompt_id == "prompt.port_menu":
+                sell_attempts += 1
+                if sell_attempts <= 2:
+                    print("    Still at port menu, retrying SELL...")
+                    await bot.session.send("S")
+                    await asyncio.sleep(0.3)
+                    continue
+                raise RuntimeError("port_sell_unavailable")
             if "port_quantity" in prompt_id:
                 # How many units? Sell all - use high number
                 print("    Selling max units...")
@@ -179,32 +320,111 @@ async def _warp_to_sector(bot, target_sector: int):
         bot: TradingBot instance
         target_sector: Destination sector number
     """
+    if bot.current_sector == target_sector:
+        print(f"  Already at sector {target_sector}; skipping warp")
+        return
+
     # Get to command menu
     input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
     print(f"  Got prompt: {prompt_id}")
+    if prompt_id == "prompt.planet_command":
+        print("  On planet surface, exiting to sector command...")
+        await bot.session.send("Q")
+        await asyncio.sleep(0.5)
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
+        print(f"  After exit: {prompt_id}")
+        if prompt_id == "prompt.planet_command":
+            raise RuntimeError("still_on_planet")
 
     # Send "M" for Move/Warp
     print(f"  Initiating warp to sector {target_sector}...")
     await bot.session.send("M")  # Single key
     await asyncio.sleep(0.3)
 
-    # Wait for sector input prompt
-    input_type, prompt_id, screen, kv_data = await wait_and_respond(bot)
-    print(f"  Warp prompt: {prompt_id}")
+    # Wait for sector input prompt (validate prompt type)
+    pre_warp_sector = bot.current_sector
+    warp_prompt_seen = False
+    for _ in range(6):
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(
+            bot,
+            timeout_ms=3000,
+            ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
+        )
+        print(f"  Warp prompt: {prompt_id}")
+        if prompt_id == "prompt.warp_sector":
+            is_valid, error_msg = _validate_kv_data(kv_data, prompt_id)
+            if not is_valid:
+                print(f"  ⚠️  {error_msg}")
+            if kv_data and "current_sector" in kv_data:
+                pre_warp_sector = kv_data["current_sector"]
+            warp_prompt_seen = True
+            break
+        if prompt_id in ("prompt.pause_simple", "prompt.pause_space_or_enter") or input_type == "any_key":
+            await send_input(bot, "", input_type)
+            await asyncio.sleep(0.2)
+            continue
+        if prompt_id == "prompt.yes_no":
+            screen_lower = screen.lower()
+            if "autopilot" in screen_lower or "engage" in screen_lower:
+                await send_input(bot, "Y", input_type)
+            else:
+                await send_input(bot, "N", input_type)
+            await asyncio.sleep(0.2)
+            continue
+        if prompt_id in ("prompt.sector_command", "prompt.command_generic"):
+            # Retry sending warp command if we missed it
+            await bot.session.send("M")
+            await asyncio.sleep(0.3)
+            continue
+        raise RuntimeError(f"unexpected_warp_prompt:{prompt_id}")
+
+    if not warp_prompt_seen:
+        raise RuntimeError("warp_prompt_missing")
 
     # Send destination sector (multi_key)
     await send_input(bot, str(target_sector), input_type)
 
-    # Wait for arrival confirmation
-    try:
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=5000
-        )
+    # Wait for arrival confirmation and reach a stable prompt
+    arrival_screen = ""
+    for _ in range(6):
+        try:
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(
+                bot,
+                timeout_ms=5000,
+                ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
+            )
+        except TimeoutError:
+            break
         print(f"  Warp status: {prompt_id}")
-        if input_type == "any_key":
+        arrival_screen = screen
+        if prompt_id in ("prompt.pause_simple", "prompt.pause_space_or_enter") or input_type == "any_key":
             await send_input(bot, "", input_type)
-    except TimeoutError:
-        pass
+            await asyncio.sleep(0.2)
+            continue
+        if prompt_id == "prompt.yes_no":
+            screen_lower = screen.lower()
+            if "autopilot" in screen_lower or "engage" in screen_lower:
+                await send_input(bot, "Y", input_type)
+            else:
+                await send_input(bot, "N", input_type)
+            await asyncio.sleep(0.2)
+            continue
+        if prompt_id in ("prompt.sector_command", "prompt.command_generic"):
+            break
+
+    # Post-warp anomaly checks
+    post_sector = _extract_sector_from_screen(arrival_screen) if arrival_screen else None
+    if post_sector is None:
+        quick_state = await bot.where_am_i()
+        post_sector = quick_state.sector
+    if post_sector is None:
+        raise RuntimeError("warp_sector_unknown")
+    if pre_warp_sector and post_sector == pre_warp_sector:
+        raise RuntimeError("warp_no_change")
+    if post_sector != target_sector:
+        raise RuntimeError(f"warp_failed:{post_sector}")
+
+    bot.current_sector = post_sector
 
     print(f"  ✓ Warped to sector {target_sector}")
     await asyncio.sleep(0.5)
@@ -454,6 +674,16 @@ async def single_trading_cycle(
 
     for attempt in range(max_retries + 1):
         try:
+            # Ensure we're at buy sector before trading
+            if bot.current_sector is None:
+                await bot.orient()
+            if bot.current_sector != buy_sector:
+                print(
+                    f"\n🚀 WARPING to buy sector {buy_sector} "
+                    f"(current {bot.current_sector})"
+                )
+                await _warp_to_sector(bot, buy_sector)
+
             # BUY PHASE
             print(f"\n📍 BUY PHASE (Sector {buy_sector})")
             try:

@@ -1,10 +1,58 @@
 """Core I/O operations for TW2002 Trading Bot."""
 
 import asyncio
+import json
 import sys
 import time
+from pathlib import Path
 
 from .errors import _detect_error_in_screen, _check_for_loop
+from .parsing import extract_semantic_kv
+
+
+def _write_semantic_log(bot, data: dict) -> None:
+    knowledge_root = getattr(bot, "knowledge_root", None)
+    if not knowledge_root:
+        return
+
+    try:
+        base = Path(knowledge_root) / "tw2002" / "semantic"
+        base.mkdir(parents=True, exist_ok=True)
+        name = getattr(bot, "character_name", "unknown") or "unknown"
+        path = base / f"{name}_semantic.jsonl"
+        payload = {
+            "ts": time.time(),
+            "data": data,
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload) + "\n")
+    except Exception:
+        return
+
+
+def _update_semantic_relationships(bot, data: dict) -> None:
+    knowledge = getattr(bot, "sector_knowledge", None)
+    sector = data.get("sector")
+    if not knowledge or not sector:
+        return
+
+    try:
+        from .orientation import SectorInfo
+    except Exception:
+        return
+
+    info = knowledge._sectors.get(sector) or SectorInfo()
+    if data.get("warps"):
+        info.warps = data["warps"]
+    if data.get("has_port") is True:
+        info.has_port = True
+        info.port_class = data.get("port_class")
+    if data.get("has_planet") is True:
+        info.has_planet = True
+        info.planet_names = data.get("planet_names", [])
+    info.last_visited = time.time()
+    knowledge._sectors[sector] = info
+    knowledge._save_cache()
 
 
 async def wait_and_respond(
@@ -33,9 +81,19 @@ async def wait_and_respond(
     timeout_sec = timeout_ms / 1000.0
 
     while time.time() - start_time < timeout_sec:
+        # One-line status marker between I/O operations
+        print(
+            f"status action=read step={bot.step_count} elapsed_ms={int((time.time() - start_time) * 1000)}"
+        )
         # Use session.read() which runs prompt detection
         snapshot = await bot.session.read(timeout_ms=250, max_bytes=8192)
         screen = snapshot.get("screen", "")
+        semantic = extract_semantic_kv(screen)
+        if semantic:
+            kv = " ".join(f"{k}={semantic[k]}" for k in sorted(semantic))
+            print(f"semantic {kv}")
+            _update_semantic_relationships(bot, semantic)
+            _write_semantic_log(bot, semantic)
 
         if "prompt_detected" in snapshot:
             detected = snapshot["prompt_detected"]
@@ -121,6 +179,12 @@ async def send_input(
         input_type: Type from prompt metadata ("single_key", "multi_key", "any_key")
         wait_after: Time to wait after sending (seconds)
     """
+    # One-line status marker between I/O operations
+    printable = keys.replace("\r", "\\r").replace("\n", "\\n")
+    print(
+        f"status action=send step={bot.step_count} input_type={input_type} keys={printable}"
+    )
+
     if input_type == "single_key":
         # Single key - send as-is without newline
         await bot.session.send(keys)

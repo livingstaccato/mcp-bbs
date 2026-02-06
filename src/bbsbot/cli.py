@@ -348,6 +348,50 @@ def spy(host: str, port: int, encoding: str) -> None:
     asyncio.run(_run())
 
 
+@tw2002_group.command("parse-semantic")
+@click.option(
+    "-i",
+    "--input",
+    "input_path",
+    type=click.Path(dir_okay=False, path_type=str),
+    help="Read screen text from a file instead of stdin.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["kv", "json"]),
+    default="kv",
+    show_default=True,
+    help="Output format for parsed semantic data.",
+)
+def tw2002_parse_semantic(input_path: str | None, output_format: str) -> None:
+    """Parse TW2002 semantic data from screen text (stdin or file)."""
+    import json
+
+    from bbsbot.tw2002.parsing import extract_semantic_kv
+
+    if input_path:
+        with open(input_path, "r", encoding="utf-8") as handle:
+            screen = handle.read()
+    else:
+        screen = sys.stdin.read()
+
+    if not screen.strip():
+        raise click.ClickException("No input received. Provide --input or pipe screen text via stdin.")
+
+    data = extract_semantic_kv(screen)
+    if output_format == "json":
+        click.echo(json.dumps(data, sort_keys=True))
+        return
+
+    if not data:
+        click.echo("")
+        return
+
+    kv = " ".join(f"{key}={data[key]}" for key in sorted(data))
+    click.echo(f"semantic {kv}")
+
+
 @cli.command("tui")
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", type=int, default=8765, show_default=True)

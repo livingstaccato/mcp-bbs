@@ -10,6 +10,7 @@ This script:
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -56,6 +57,11 @@ async def test_menu_exploration():
         login_prompts = []
         step = 0
 
+        username = os.environ.get("BBSBOT_TEST_USERNAME", "codexbot")
+        char_password = os.environ.get("BBSBOT_TEST_PASSWORD", "codex2026")
+        game_password = os.environ.get("BBSBOT_GAME_PASSWORD", "game")
+        game_letter = os.environ.get("BBSBOT_GAME_LETTER", "B")
+
         for _ in range(50):
             step += 1
             try:
@@ -84,21 +90,24 @@ async def test_menu_exploration():
 
                 # Handle prompts
                 if "login_name" in prompt_id:
-                    await send_input(bot, "testbot", input_type)
-                elif "login_password" in prompt_id:
-                    await send_input(bot, "test", input_type)
+                    await send_input(bot, username, input_type)
+                elif "login_password" in prompt_id or "character_password" in prompt_id:
+                    await send_input(bot, char_password, input_type)
                 elif "private_game_password" in prompt_id:
-                    await send_input(bot, "game", input_type)
+                    await send_input(bot, game_password, input_type)
                 elif "game_password" in prompt_id:
-                    await send_input(bot, "game", input_type)
+                    await send_input(bot, game_password, input_type)
                 elif "use_ansi_graphics" in prompt_id:
-                    await bot.session.send("y")
+                    await bot.session.send("y\r")
                     await asyncio.sleep(0.3)
                 elif "twgs_select_game" in prompt_id:
-                    await bot.session.send("A")
+                    if "show game descriptions" in screen.lower() or "select game (q for none)" in screen.lower():
+                        await bot.session.send("Q")
+                        await asyncio.sleep(0.3)
+                    await bot.session.send(game_letter)
                     await asyncio.sleep(0.3)
                 elif "menu_selection" in prompt_id:
-                    await bot.session.send("A")
+                    await bot.session.send(game_letter)
                     await asyncio.sleep(0.3)
                 elif input_type == "any_key":
                     await send_input(bot, "", input_type)

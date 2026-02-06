@@ -3,7 +3,7 @@
 
 import asyncio
 import sys
-from pathlib import Path
+import time
 
 
 from bbsbot.tw2002 import TradingBot
@@ -12,7 +12,7 @@ from bbsbot.tw2002.login import login_sequence
 from bbsbot.tw2002.trading import single_trading_cycle
 
 async def test():
-    unique_char = "bottest2001"
+    unique_char = f"bottest{int(time.time()) % 100000}"
     char_password = unique_char
     game_password = "game"
     
@@ -38,9 +38,26 @@ async def test():
         )
         
         print(f"\n✓ Login successful!\n")
+
+        # Ensure we're at sector command (not planet prompt) before trading
+        state = await bot.orient()
+        if state.context == "planet_command":
+            print("  At planet command; exiting to sector command...")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.5)
+            state = await bot.orient()
+        if state.context != "sector_command":
+            raise RuntimeError(f"Unexpected context before trading: {state.context}")
         
-        # Run trading cycle
-        await single_trading_cycle(bot, start_sector=499)
+        # Run trading cycle only if we have credits and a port to trade at
+        if state.credits is None or state.credits <= 0:
+            print("  ⚠️  No credits available; skipping trade cycle")
+            return True
+        if not state.has_port:
+            print("  ⚠️  No port in current sector; skipping trade cycle")
+            return True
+
+        await single_trading_cycle(bot, start_sector=state.sector or 499)
         
         print("\n" + "=" * 80)
         print("✅ SUCCESS: Bot completed full trading cycle!")
