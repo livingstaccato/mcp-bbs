@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 
@@ -29,13 +30,15 @@ class CompleteTW2002Player:
         print("=" * 80)
         print()
 
+        host = os.getenv("BBSBOT_TW_HOST", "localhost")
+        port = int(os.getenv("BBSBOT_TW_PORT", "2002"))
         self.session_id = await self.session_manager.create_session(
-            host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0
+            host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0
         )
         self.session = await self.session_manager.get_session(self.session_id)
         await self.session_manager.enable_learning(self.session_id, self.knowledge_root, namespace="tw2002")
 
-        print(f"✓ Connected to localhost:2002")
+        print(f"✓ Connected to {host}:{port}")
         print(f"✓ Patterns loaded: {len(self.session.learning._prompt_detector._patterns)}")
         print()
 
@@ -85,7 +88,9 @@ class CompleteTW2002Player:
         await self.read_and_show(pause=1.5, max_lines=25)
 
         # Should get player name prompt now
-        await self.send("TestPlayer\r", "Enter player name")
+        username = os.getenv("BBSBOT_TW_USERNAME", "TestPlayer")
+        password = os.getenv("BBSBOT_TW_PASSWORD", username)
+        await self.send(f"{username}\r", "Enter player name")
         snapshot = await self.read_and_show(pause=1.0, max_lines=25)
 
         # Check if new player or returning
@@ -98,11 +103,11 @@ class CompleteTW2002Player:
             await self.read_and_show(pause=1.0)
 
             # Set password if prompted
-            await self.send("testpass\r", "Set password")
+            await self.send(f"{password}\r", "Set password")
             await self.read_and_show(pause=1.0)
 
             # Confirm password
-            await self.send("testpass\r", "Confirm password")
+            await self.send(f"{password}\r", "Confirm password")
             await self.read_and_show(pause=1.0)
 
         # Should be in game now - read initial game screen
