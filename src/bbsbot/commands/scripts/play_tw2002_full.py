@@ -107,6 +107,11 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
+            if "trade wars 2002" in screen_lower and "enter your choice" in screen_lower:
+                await self.send("T", "Play Trade Wars 2002")
+                snapshot = await self.read_and_show(pause=2.0, max_lines=25)
+                continue
+
             if prompt_id == "prompt.any_key" or "[any key]" in screen_lower:
                 await self.send(" ", "Continue")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
