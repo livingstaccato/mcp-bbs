@@ -7,10 +7,10 @@ import time
 from pathlib import Path
 
 
-from bbsbot.tw2002 import TradingBot
-from bbsbot.tw2002.connection import connect
-from bbsbot.tw2002.login import login_sequence
-from bbsbot.tw2002.trading import single_trading_cycle
+from bbsbot.games.tw2002 import TradingBot
+from bbsbot.games.tw2002.connection import connect
+from bbsbot.games.tw2002.login import login_sequence
+from bbsbot.games.tw2002.trading import single_trading_cycle
 
 async def main():
     # Use timestamp for unique character

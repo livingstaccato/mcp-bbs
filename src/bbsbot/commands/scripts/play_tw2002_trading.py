@@ -8,7 +8,7 @@ import asyncio
 import sys
 from argparse import ArgumentParser
 
-from bbsbot.tw2002 import TradingBot
+from bbsbot.games.tw2002 import TradingBot
 
 
 async def main():

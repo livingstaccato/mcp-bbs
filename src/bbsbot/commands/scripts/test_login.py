@@ -2,7 +2,7 @@
 """Wrapper for TW2002 login verification."""
 
 import asyncio
-from bbsbot.game.tw2002.verification.login import login
+from bbsbot.games.tw2002.verification.login import login
 
 
 if __name__ == "__main__":

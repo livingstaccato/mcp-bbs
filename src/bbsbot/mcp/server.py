@@ -2,34 +2,26 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 import time
 from pathlib import Path
 from typing import Any, cast
 
-import structlog
 from fastmcp import FastMCP
 
-from bbsbot.paths import find_repo_games_root, validate_knowledge_root
-from bbsbot.settings import Settings
 from bbsbot.core.session_manager import SessionManager
-from bbsbot.watch import WatchManager, watch_settings
 from bbsbot.learning.discovery import discover_menu
 from bbsbot.learning.knowledge import append_md
-from bbsbot.tw2002.resume import as_dict as _resume_as_dict
-from bbsbot.tw2002.resume import list_resumable_tw2002
+from bbsbot.logging import configure_logging, get_logger
+from bbsbot.paths import find_repo_games_root, validate_knowledge_root
+from bbsbot.settings import Settings
+from bbsbot.games.tw2002.resume import as_dict as _resume_as_dict
+from bbsbot.games.tw2002.resume import list_resumable_tw2002
+from bbsbot.watch import WatchManager, watch_settings
 
-# Configure structlog to write to stderr (MCP uses stdout for JSON-RPC)
-structlog.configure(
-    processors=[
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(),
-    ],
-    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-)
+# Configure logging once at module import
+configure_logging()
 
-log = structlog.get_logger()
+log = get_logger(__name__)
 
 
 def decode_escape_sequences(s: str) -> str:

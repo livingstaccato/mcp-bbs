@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 
-from bbsbot.tw2002 import TradingBot
-from bbsbot.tw2002.connection import connect
-from bbsbot.tw2002.io import wait_and_respond, send_input
+from bbsbot.games.tw2002 import TradingBot
+from bbsbot.games.tw2002.connection import connect
+from bbsbot.games.tw2002.io import wait_and_respond, send_input
 
 async def show_step(step_num, screen, prompt_id, input_type):
     """Display one login step with analysis."""

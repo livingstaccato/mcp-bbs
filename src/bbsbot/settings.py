@@ -12,6 +12,6 @@ from bbsbot.paths import default_knowledge_root
 
 class Settings(BaseSettings):
     knowledge_root: Path = Field(default_factory=default_knowledge_root)
-    log_level: str = "INFO"
+    log_level: str = "WARNING"
 
     model_config = SettingsConfigDict(env_prefix="BBSBOT_", extra="ignore")

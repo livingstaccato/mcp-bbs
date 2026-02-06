@@ -3,7 +3,7 @@
 
 import asyncio
 import sys
-from bbsbot.game.tw2002.verification.new_character import test
+from bbsbot.games.tw2002.verification.new_character import test
 
 
 if __name__ == "__main__":

@@ -6,8 +6,8 @@ import sys
 from pathlib import Path
 
 
-from bbsbot.tw2002 import TradingBot
-from bbsbot.tw2002.io import wait_and_respond, send_input
+from bbsbot.games.tw2002 import TradingBot
+from bbsbot.games.tw2002.io import wait_and_respond, send_input
 from bbsbot.learning.rules import RuleSet
 from bbsbot.learning.extractor import KVExtractor
 
@@ -22,7 +22,7 @@ async def test_sector_command_detection():
 
     try:
         # Connect
-        from bbsbot.tw2002.connection import connect
+        from bbsbot.games.tw2002.connection import connect
         await connect(bot)
 
         # Load rules
@@ -37,7 +37,7 @@ async def test_sector_command_detection():
             print(f"    - {rule.field}: regex='{rule.regex}', validate={rule.validate}")
 
         # Fast login - use existing login function but trace deeply
-        from bbsbot.tw2002.login import login_sequence
+        from bbsbot.games.tw2002.login import login_sequence
 
         # Run login with higher visibility
         print("\n" + "-" * 80)

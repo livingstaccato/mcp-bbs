@@ -206,7 +206,7 @@ def tw2002_bot(
     watch_socket_clear: bool,
 ) -> None:
     """Run the TW2002 trading bot."""
-    from bbsbot.tw2002.cli import run_bot_cli
+    from bbsbot.games.tw2002.cli import run_bot_cli
 
     run_bot_cli(
         config_path=config_path,
@@ -263,7 +263,7 @@ def tw2002_list_resume(
 ) -> None:
     """List resumable TW2002 characters from local state."""
     from bbsbot.paths import default_knowledge_root
-    from bbsbot.tw2002.resume import as_dict, list_resumable_tw2002
+    from bbsbot.games.tw2002.resume import as_dict, list_resumable_tw2002
 
     entries = list_resumable_tw2002(
         default_knowledge_root(),
@@ -368,7 +368,7 @@ def tw2002_parse_semantic(input_path: str | None, output_format: str) -> None:
     """Parse TW2002 semantic data from screen text (stdin or file)."""
     import json
 
-    from bbsbot.tw2002.parsing import extract_semantic_kv
+    from bbsbot.games.tw2002.parsing import extract_semantic_kv
 
     if input_path:
         with open(input_path, "r", encoding="utf-8") as handle:

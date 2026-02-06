@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 
-from bbsbot.tw2002.bot import TradingBot
+from bbsbot.games.tw2002.bot import TradingBot
 
 
 async def test_navigation(bot: TradingBot) -> dict:

@@ -23,10 +23,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bbsbot.tw2002.bot import TradingBot
-from bbsbot.tw2002.config import BotConfig, load_config
-from bbsbot.tw2002.character import CharacterManager, CharacterState
-from bbsbot.tw2002.multi_character import MultiCharacterManager
+from bbsbot.games.tw2002.bot import TradingBot
+from bbsbot.games.tw2002.config import BotConfig, load_config
+from bbsbot.games.tw2002.character import CharacterManager, CharacterState
+from bbsbot.games.tw2002.multi_character import MultiCharacterManager
 
 
 class PortInfo(BaseModel):
@@ -297,7 +297,7 @@ class TradeWarPlayer:
         # mark_scanned() only sets timestamp, doesn't store discovered data.
         # GameState requires 'context' argument even if we only need sector data.
         if sector and self.bot.sector_knowledge:
-            from bbsbot.tw2002.orientation import GameState
+            from bbsbot.games.tw2002.orientation import GameState
             state = GameState(
                 context="sector_command",  # Required field
                 sector=sector,

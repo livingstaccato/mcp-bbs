@@ -5,20 +5,22 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 
-from collections.abc import Callable
-
 from bbsbot.addons.manager import AddonManager
 from bbsbot.constants import CP437
 from bbsbot.keepalive import KeepaliveController
 from bbsbot.learning.engine import LearningEngine
+from bbsbot.logging import get_logger
 from bbsbot.logging.session_logger import SessionLogger
 from bbsbot.terminal.emulator import TerminalEmulator
 from bbsbot.transport.base import ConnectionTransport
+
+logger = get_logger(__name__)
 
 
 class Session(BaseModel):
@@ -109,10 +111,7 @@ class Session(BaseModel):
         Raises:
             ConnectionError: If transport send fails
         """
-        printable = keys.replace("\r", "\\r").replace("\n", "\\n")
-        print(
-            f"status action=send host={self.host} port={self.port} keys={printable}"
-        )
+        logger.debug("session_send", host=self.host, port=self.port, keys=repr(keys))
         async with self._lock:
             payload = keys.encode(CP437, errors="replace")
             await self.transport.send(payload)
@@ -134,9 +133,8 @@ class Session(BaseModel):
         Raises:
             ConnectionError: If transport is disconnected
         """
-        print(
-            f"status action=read host={self.host} port={self.port} timeout_ms={timeout_ms} max_bytes={max_bytes}"
-        )
+        logger.debug("session_read", host=self.host, port=self.port,
+                    timeout_ms=timeout_ms, max_bytes=max_bytes)
         async with self._lock:
             try:
                 raw = await self.transport.receive(max_bytes, timeout_ms)

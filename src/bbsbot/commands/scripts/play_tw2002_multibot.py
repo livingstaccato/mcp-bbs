@@ -22,12 +22,12 @@ from typing import Any
 
 from bbsbot.paths import default_knowledge_root
 from bbsbot.core.session_manager import SessionManager
-from bbsbot.tw2002.config import BotConfig, load_config
-from bbsbot.tw2002.bot import TradingBot
-from bbsbot.tw2002.multi_character import MultiCharacterManager
-from bbsbot.tw2002.character import CharacterState
-from bbsbot.tw2002 import login, orientation, io, trading
-from bbsbot.tw2002.sophisticated_trader import SophisticatedTrader
+from bbsbot.games.tw2002.config import BotConfig, load_config
+from bbsbot.games.tw2002.bot import TradingBot
+from bbsbot.games.tw2002.multi_character import MultiCharacterManager
+from bbsbot.games.tw2002.character import CharacterState
+from bbsbot.games.tw2002 import login, orientation, io, trading
+from bbsbot.games.tw2002.sophisticated_trader import SophisticatedTrader
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ class CoordinatedBot:
         logger.info(f"[{self.character_name}] Login complete")
 
         # Initialize orientation and sector knowledge
-        from bbsbot.tw2002.orientation import SectorKnowledge, GameState
+        from bbsbot.games.tw2002.orientation import SectorKnowledge, GameState
         self.bot.sector_knowledge = SectorKnowledge(self.data_dir)
 
         # Initialize game state
