@@ -76,6 +76,65 @@ class CompleteTW2002Player:
         print(f"{'─'*80}\n")
         return snapshot
 
+    def _is_game_prompt(self, screen_lower: str) -> bool:
+        return "sector command" in screen_lower or "command" in screen_lower
+
+    async def _reach_game(self, snapshot, username: str, password: str, game_letter: str):
+        """Navigate menus until we reach the game prompt."""
+        for _ in range(30):
+            screen_text = snapshot.get("screen", "")
+            screen_lower = screen_text.lower()
+            detected = snapshot.get("prompt_detected", {}) or {}
+            prompt_id = detected.get("prompt_id", "")
+
+            if "enter your name" in screen_lower or prompt_id == "prompt.login_name":
+                await self.send(f"{username}\r", "Enter player name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "select game (q for none)" in screen_lower:
+                await self.send("Q", "Exit description mode")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "selection (? for menu)" in screen_lower or prompt_id == "prompt.menu_selection":
+                await self.send(game_letter, f"Select game {game_letter}")
+                snapshot = await self.read_and_show(pause=2.0, max_lines=25)
+                continue
+
+            if "private game" in screen_lower and "password" in screen_lower:
+                await self.send(f"{password}\r", "Enter game password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if prompt_id == "prompt.any_key" or "[any key]" in screen_lower:
+                await self.send(" ", "Continue")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "[pause]" in screen_lower:
+                await self.send(" ", "Continue")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "show today's log" in screen_lower:
+                await self.send("N\r", "Skip today's log")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "use ansi graphics" in screen_lower:
+                await self.send("Y\r", "Use ANSI graphics")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if self._is_game_prompt(screen_lower):
+                return snapshot
+
+            snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+
+        print("  ❌ Failed to reach game prompt within step limit.")
+        return None
+
     async def play(self):
         """Play through the game."""
 
@@ -85,55 +144,11 @@ class CompleteTW2002Player:
 
         username = os.getenv("BBSBOT_TW_USERNAME", "TestPlayer")
         password = os.getenv("BBSBOT_TW_PASSWORD", username)
+        game_letter = os.getenv("BBSBOT_TW_GAME", "B")
 
-        # Step 1: Telnet login name prompt (if present)
-        screen_text = snapshot.get("screen", "").lower()
-        detected = snapshot.get("prompt_detected", {})
-        if "enter your name" in screen_text or detected.get("prompt_id") == "prompt.login_name":
-            await self.send(f"{username}\r", "Enter player name")
-            snapshot = await self.read_and_show(pause=1.0, max_lines=25)
-
-        # Step 2: Select game from TWGS menu
-        screen_text = snapshot.get("screen", "")
-        detected = snapshot.get("prompt_detected", {})
-        if "Select game" in screen_text or detected.get("prompt_id") == "prompt.twgs_select_game":
-            await self.send("A", "Select 'A' - My Game")
-            snapshot = await self.read_and_show(pause=2.0, max_lines=25)
-            detected = snapshot.get("prompt_detected", {})
-            if detected.get("prompt_id") == "prompt.twgs_select_game":
-                await self.send("A\r", "Select 'A' with Enter")
-                snapshot = await self.read_and_show(pause=2.0, max_lines=25)
-                detected = snapshot.get("prompt_detected", {})
-
-            if detected.get("prompt_id") == "prompt.twgs_select_game":
-                print("  ❌ Still at TWGS game selection after attempts. Aborting playthrough.")
-                return
-
-        # Handle intermediate ANY KEY screens (game descriptions)
-        for _ in range(3):
-            detected = snapshot.get("prompt_detected", {})
-            if detected.get("prompt_id") == "prompt.any_key":
-                await self.send(" ", "Continue")
-                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
-                continue
-            break
-
-        detected = snapshot.get("prompt_detected", {})
-        if detected.get("prompt_id") == "prompt.twgs_select_game":
-            await self.send("A", "Select 'A' - My Game (second try)")
-            snapshot = await self.read_and_show(pause=2.0, max_lines=25)
-            detected = snapshot.get("prompt_detected", {})
-            if detected.get("prompt_id") == "prompt.any_key":
-                await self.send(" ", "Continue")
-                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
-                detected = snapshot.get("prompt_detected", {})
-            if detected.get("prompt_id") == "prompt.twgs_select_game":
-                await self.send("A\r", "Select 'A' with Enter (fallback)")
-                snapshot = await self.read_and_show(pause=2.0, max_lines=25)
-                detected = snapshot.get("prompt_detected", {})
-            if detected.get("prompt_id") == "prompt.twgs_select_game":
-                print("  ❌ Returned to TWGS game selection after attempts. Aborting playthrough.")
-                return
+        snapshot = await self._reach_game(snapshot, username, password, game_letter)
+        if snapshot is None:
+            return
 
         # Check if new player or returning
         screen_text = snapshot.get('screen', '').lower()
