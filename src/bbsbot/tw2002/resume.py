@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from time import time
 from typing import Any
 
 from bbsbot.tw2002.character import CharacterState
@@ -49,8 +50,16 @@ def _parse_host_port(dir_name: str) -> tuple[str, int | None]:
         return dir_name, None
 
 
-def list_resumable_tw2002(knowledge_root: Path) -> list[ResumeEntry]:
+def list_resumable_tw2002(
+    knowledge_root: Path,
+    *,
+    active_within_hours: float | None = None,
+    min_credits: int | None = None,
+    require_sector: bool = False,
+    name_prefix: str | None = None,
+) -> list[ResumeEntry]:
     entries: list[ResumeEntry] = []
+    now = time()
 
     for data_dir in _iter_tw2002_dirs(knowledge_root):
         records_path = data_dir / "character_records.json"
@@ -78,12 +87,29 @@ def list_resumable_tw2002(knowledge_root: Path) -> list[ResumeEntry]:
                 state = CharacterState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
             except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                 state = None
+            credits = state.credits if state else None
+            sector = state.current_sector if state else None
+            last_active = state.last_active if state else None
+
+            if name_prefix and not name.startswith(name_prefix):
+                continue
+            if require_sector and sector is None:
+                continue
+            if min_credits is not None and (credits is None or credits < min_credits):
+                continue
+            if active_within_hours is not None:
+                if last_active is None:
+                    continue
+                hours_since = (now - last_active) / 3600
+                if hours_since > active_within_hours:
+                    continue
+
             resumable.append(
                 ResumeCharacter(
                     name=name,
-                    credits=state.credits if state else None,
-                    sector=state.current_sector if state else None,
-                    last_active=state.last_active if state else None,
+                    credits=credits,
+                    sector=sector,
+                    last_active=last_active,
                     state_path=str(state_path),
                 )
             )

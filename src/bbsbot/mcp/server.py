@@ -219,12 +219,24 @@ async def bbs_read(timeout_ms: int = 250, max_bytes: int = 8192) -> dict[str, An
 
 
 @app.tool()
-async def bbs_list_resumable_games(game: str = "tw2002") -> dict[str, Any]:
+async def bbs_list_resumable_games(
+    game: str = "tw2002",
+    active_within_hours: float | None = None,
+    min_credits: int | None = None,
+    require_sector: bool = False,
+    name_prefix: str | None = None,
+) -> dict[str, Any]:
     """List resumable game characters from local state."""
     knowledge_root = _require_knowledge_root()
     if game != "tw2002":
         raise RuntimeError(f"Unsupported game: {game}")
-    entries = list_resumable_tw2002(knowledge_root)
+    entries = list_resumable_tw2002(
+        knowledge_root,
+        active_within_hours=active_within_hours,
+        min_credits=min_credits,
+        require_sector=require_sector,
+        name_prefix=name_prefix,
+    )
     return {"game": game, "entries": _resume_as_dict(entries)}
 
 

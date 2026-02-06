@@ -250,12 +250,28 @@ def tw2002_play(mode: str | None) -> None:
 
 @tw2002_group.command("list-resume")
 @click.option("--json", "as_json", is_flag=True, help="Output JSON.")
-def tw2002_list_resume(as_json: bool) -> None:
+@click.option("--active-within-hours", type=float)
+@click.option("--min-credits", type=int)
+@click.option("--require-sector", is_flag=True)
+@click.option("--name-prefix", type=str)
+def tw2002_list_resume(
+    as_json: bool,
+    active_within_hours: float | None,
+    min_credits: int | None,
+    require_sector: bool,
+    name_prefix: str | None,
+) -> None:
     """List resumable TW2002 characters from local state."""
     from bbsbot.paths import default_knowledge_root
     from bbsbot.tw2002.resume import as_dict, list_resumable_tw2002
 
-    entries = list_resumable_tw2002(default_knowledge_root())
+    entries = list_resumable_tw2002(
+        default_knowledge_root(),
+        active_within_hours=active_within_hours,
+        min_credits=min_credits,
+        require_sector=require_sector,
+        name_prefix=name_prefix,
+    )
     if as_json:
         import json
 
