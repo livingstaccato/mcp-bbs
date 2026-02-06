@@ -81,17 +81,24 @@ class CompleteTW2002Player:
 
         # Initial screen
         print("\n🎮 Starting playthrough...\n")
-        await self.read_and_show(pause=1.0, max_lines=25)
+        snapshot = await self.read_and_show(pause=1.0, max_lines=25)
 
-        # Step 1: Enter game from TWGS menu
-        await self.send("A\r", "Select 'A' - My Game")
-        await self.read_and_show(pause=1.5, max_lines=25)
-
-        # Should get player name prompt now
         username = os.getenv("BBSBOT_TW_USERNAME", "TestPlayer")
         password = os.getenv("BBSBOT_TW_PASSWORD", username)
-        await self.send(f"{username}\r", "Enter player name")
-        snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+
+        # Step 1: Telnet login name prompt (if present)
+        screen_text = snapshot.get("screen", "").lower()
+        detected = snapshot.get("prompt_detected", {})
+        if "enter your name" in screen_text or detected.get("prompt_id") == "prompt.login_name":
+            await self.send(f"{username}\r", "Enter player name")
+            snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+
+        # Step 2: Select game from TWGS menu
+        screen_text = snapshot.get("screen", "")
+        detected = snapshot.get("prompt_detected", {})
+        if "Select game" in screen_text or detected.get("prompt_id") == "prompt.twgs_select_game":
+            await self.send("A\r", "Select 'A' - My Game")
+            snapshot = await self.read_and_show(pause=1.5, max_lines=25)
 
         # Check if new player or returning
         screen_text = snapshot.get('screen', '').lower()
