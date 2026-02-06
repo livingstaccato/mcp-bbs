@@ -77,7 +77,9 @@ class CompleteTW2002Player:
         return snapshot
 
     def _is_game_prompt(self, screen_lower: str) -> bool:
-        return "sector command" in screen_lower or "command" in screen_lower
+        if "sector command" in screen_lower or "planet command" in screen_lower:
+            return True
+        return "command [" in screen_lower
 
     async def _reach_game(self, snapshot, username: str, password: str, game_letter: str):
         """Navigate menus until we reach the game prompt."""
@@ -114,7 +116,7 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=2.0, max_lines=25)
                 continue
 
-            if "show today's log" in tail or prompt_id == "prompt.yes_no":
+            if "show today's log" in screen_lower:
                 await self.send("N\r", "Skip today's log")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
@@ -124,13 +126,25 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if prompt_id == "prompt.game_password":
-                await self.send(f"{password}\r", "Enter password")
+            if "what alias do you want to use" in screen_lower:
+                await self.send(f"{username}\r", "Alias")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "use (n)ew name" in screen_lower and "what alias do you want to use" not in screen_lower:
+                await self.send("\r", "Use default BBS name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "is what you want" in screen_lower and "ship" not in tail and (
+                "alias" in screen_lower or "commander" in screen_lower
+            ):
+                await self.send("Y\r", "Confirm alias")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
             if "repeat password" in tail or "verify" in tail:
-                await self.send(f"{password}\r", "Confirm password")
+                await self.send(f"{password}\r{password}\r", "Set + confirm password")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
@@ -139,8 +153,18 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "use (n)ew name" in tail or "bbs name" in tail:
-                await self.send("B\r", "Use BBS name")
+            if prompt_id == "prompt.game_password":
+                await self.send(f"{password}\r", "Enter password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if (
+                "home planet" in screen_lower
+                and "name your home planet" in screen_lower
+                and "planet command" not in screen_lower
+            ):
+                planet_name = f"{username} Prime"
+                await self.send(f"{planet_name}\r", "Home planet name")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
@@ -203,22 +227,11 @@ class CompleteTW2002Player:
         if snapshot is None:
             return
 
-        # Check if new player or returning
+        # If we're on a planet prompt, exit to sector command before running commands.
         screen_text = snapshot.get('screen', '').lower()
-
-        if 'new player' in screen_text or 'create' in screen_text:
-            print("  ℹ️  Detected new player creation")
-            # May need to confirm or set password
-            await self.send("Y\r", "Confirm new player")
-            await self.read_and_show(pause=1.0)
-
-            # Set password if prompted
-            await self.send(f"{password}\r", "Set password")
-            await self.read_and_show(pause=1.0)
-
-            # Confirm password
-            await self.send(f"{password}\r", "Confirm password")
-            await self.read_and_show(pause=1.0)
+        if "planet command" in screen_text:
+            await self.send("Q\r", "Leave planet prompt")
+            await self.read_and_show(pause=1.0, max_lines=25)
 
         # Should be in game now - read initial game screen
         snapshot = await self.read_and_show(pause=2.0, max_lines=35)
