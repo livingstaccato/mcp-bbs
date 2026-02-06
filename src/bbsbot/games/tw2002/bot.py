@@ -143,6 +143,9 @@ class TradingBot:
         elif strategy_name == "twerk_optimized":
             from bbsbot.games.tw2002.strategies.twerk_optimized import TwerkOptimizedStrategy
             self._strategy = TwerkOptimizedStrategy(self.config, self.sector_knowledge)
+        elif strategy_name == "ai_strategy":
+            from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
+            self._strategy = AIStrategy(self.config, self.sector_knowledge)
         else:  # Default to opportunistic
             from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
             self._strategy = OpportunisticStrategy(self.config, self.sector_knowledge)

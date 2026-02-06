@@ -1,0 +1,76 @@
+# AI Strategy Configuration with Ollama
+#
+# This example demonstrates using the AI strategy with a local Ollama instance.
+# The AI will make trading decisions using LLM reasoning, with fallback to
+# opportunistic strategy on failures.
+
+connection:
+  host: localhost
+  port: 2002
+  game_password: game
+
+character:
+  name_prefix: ai_bot
+  password: trade123
+
+trading:
+  strategy: ai_strategy
+
+  ai_strategy:
+    # Enable AI decision-making
+    enabled: true
+
+    # Fallback configuration
+    fallback_strategy: opportunistic  # Strategy to use when LLM fails
+    fallback_threshold: 3             # Consecutive failures before fallback
+    fallback_duration_turns: 10       # Turns to stay in fallback mode
+
+    # Prompt configuration
+    context_mode: summary             # full | summary
+    sector_radius: 3                  # Adjacent sectors to include
+    include_history: true
+    max_history_items: 5
+
+    # Performance
+    timeout_ms: 30000                 # LLM request timeout
+    cache_decisions: false
+
+    # Learning
+    record_history: true
+
+# LLM Provider Configuration
+llm:
+  provider: ollama
+
+  ollama:
+    base_url: http://localhost:11434
+    model: gemma3                     # default model
+    timeout_seconds: 30.0
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    retry_backoff_multiplier: 2.0
+
+# Standard bot settings
+banking:
+  enabled: true
+  deposit_threshold: 50000
+  keep_on_hand: 5000
+
+upgrades:
+  enabled: true
+  auto_buy_holds: true
+  max_holds: 75
+  auto_buy_fighters: true
+  min_fighters: 50
+  auto_buy_shields: true
+  min_shields: 100
+
+combat:
+  enabled: true
+  avoid_hostile_sectors: true
+  danger_threshold: 100
+  retreat_health_percent: 25
+
+session:
+  target_credits: 5000000
+  max_turns_per_session: 500

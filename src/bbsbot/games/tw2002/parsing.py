@@ -3,6 +3,7 @@
 import re
 
 from bbsbot.games.tw2002.logging_utils import logger
+from bbsbot.terminal.screen_utils import clean_screen_for_display, extract_menu_options
 
 
 def extract_semantic_kv(screen: str) -> dict:
@@ -108,24 +109,8 @@ def _parse_sector_from_screen(bot, screen: str) -> int:
     return bot.current_sector or 0
 
 
-def _clean_screen_for_display(screen: str, max_lines: int = 30) -> list[str]:
-    """Clean screen for display by removing padding lines.
-
-    Args:
-        screen: Raw screen text
-        max_lines: Maximum lines to return
-
-    Returns:
-        List of non-empty content lines (up to max_lines)
-    """
-    lines = []
-    for line in screen.split("\n"):
-        # Skip pure padding (80+ spaces) and empty lines
-        if line.strip() or not line.startswith(" " * 80):
-            lines.append(line)
-            if len(lines) >= max_lines:
-                break
-    return lines
+# Re-export framework utility with tw2002-specific alias
+_clean_screen_for_display = clean_screen_for_display
 
 
 def _extract_game_options(screen: str) -> list[tuple[str, str]]:
@@ -137,15 +122,11 @@ def _extract_game_options(screen: str) -> list[tuple[str, str]]:
     Returns:
         List of (letter, description) tuples, e.g., [('A', 'My Game'), ('B', 'Game 2')]
     """
-    options = []
-    # Look for lines like "<A> My Game" or "[A] My Game"
-    # Handle cases where multiple games are on the same line like "<A> Game1  <B> Game2"
-    pattern = r"[<\[]([A-Z])[>\]]\s+([^<\[\n]+?)(?=\s*[<\[]|$)"
-    for match in re.finditer(pattern, screen):
-        letter = match.group(1)
-        description = match.group(2).strip()
-        if description and letter not in ["Q", "X", "!"]:
-            options.append((letter, description))
+    # Use framework menu extraction
+    options = extract_menu_options(screen)
+
+    # Filter out common exit keys (tw2002-specific logic)
+    options = [(letter, desc) for letter, desc in options if letter not in ["Q", "X", "!"]]
 
     # DEBUG: Log what we found
     if not options and ("<" in screen or "[" in screen):

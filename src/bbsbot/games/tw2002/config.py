@@ -9,6 +9,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+from bbsbot.llm.config import LLMConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,13 +60,38 @@ class TwerkOptimizedConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class AIStrategyConfig(BaseModel):
+    """Configuration for AI strategy."""
+
+    enabled: bool = True
+    fallback_strategy: str = "opportunistic"
+    fallback_threshold: int = 3
+    fallback_duration_turns: int = 10
+
+    # Prompt configuration
+    context_mode: Literal["full", "summary"] = "summary"
+    sector_radius: int = 3
+    include_history: bool = True
+    max_history_items: int = 5
+
+    # Performance
+    timeout_ms: int = 30000
+    cache_decisions: bool = False
+
+    # Learning
+    record_history: bool = True
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class TradingConfig(BaseModel):
     """Trading strategy configuration."""
 
-    strategy: Literal["profitable_pairs", "opportunistic", "twerk_optimized"] = "opportunistic"
+    strategy: Literal["profitable_pairs", "opportunistic", "twerk_optimized", "ai_strategy"] = "opportunistic"
     profitable_pairs: ProfitablePairsConfig = Field(default_factory=ProfitablePairsConfig)
     opportunistic: OpportunisticConfig = Field(default_factory=OpportunisticConfig)
     twerk_optimized: TwerkOptimizedConfig = Field(default_factory=TwerkOptimizedConfig)
+    ai_strategy: AIStrategyConfig = Field(default_factory=AIStrategyConfig)
 
     model_config = ConfigDict(extra="ignore")
 
@@ -146,6 +173,7 @@ class BotConfig(BaseModel):
     combat: CombatConfig = Field(default_factory=CombatConfig)
     multi_character: MultiCharacterConfig = Field(default_factory=MultiCharacterConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
 
     model_config = ConfigDict(extra="ignore")
 

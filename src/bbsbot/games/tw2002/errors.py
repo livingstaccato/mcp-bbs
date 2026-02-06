@@ -1,5 +1,6 @@
-"""Error detection and loop checking utilities."""
+"""Error detection and loop checking utilities for TW2002."""
 
+from bbsbot.core.error_detection import BaseErrorDetector, LoopDetector
 from bbsbot.games.tw2002.logging_utils import logger
 
 
@@ -13,23 +14,34 @@ def _check_for_loop(bot, prompt_id: str) -> bool:
     Returns:
         True if stuck in loop, False otherwise
     """
-    # Track how many times we've seen this prompt consecutively
-    if prompt_id == bot.last_prompt_id:
-        bot.loop_detection[prompt_id] = bot.loop_detection.get(prompt_id, 0) + 1
-    else:
-        # Different prompt - reset loop detection
-        bot.loop_detection.clear()
-        bot.last_prompt_id = prompt_id
+    # Use the framework LoopDetector
+    if not hasattr(bot, "_loop_detector"):
+        bot._loop_detector = LoopDetector(threshold=bot.stuck_threshold)
 
-    count = bot.loop_detection.get(prompt_id, 0)
-    if count >= bot.stuck_threshold:
+    is_loop = bot._loop_detector.check(prompt_id)
+    count = bot._loop_detector.get_count(prompt_id)
+
+    if is_loop:
         logger.warning("loop_detected", prompt_id=prompt_id, count=count, threshold=bot.stuck_threshold)
-        return True
-
-    if count > 0:
+    elif count > 0:
         logger.debug("loop_detection_tracking", prompt_id=prompt_id, count=count, threshold=bot.stuck_threshold)
 
-    return False
+    return is_loop
+
+
+class TW2002ErrorDetector(BaseErrorDetector):
+    """TW2002-specific error detection."""
+
+    def __init__(self):
+        """Initialize TW2002 error detector with game-specific patterns."""
+        super().__init__()
+
+        # Register TW2002-specific error patterns
+        self.add_error_pattern("invalid_password", ["invalid password"])
+        self.add_error_pattern("insufficient_credits", ["not enough credits", "insufficient funds"])
+        self.add_error_pattern("hold_full", ["hold full", "cargo hold is full"])
+        self.add_error_pattern("ship_destroyed", ["you are dead", "destroyed"])
+        self.add_error_pattern("out_of_turns", ["out of turns", "no turns remaining"])
 
 
 def _detect_error_in_screen(screen: str) -> str | None:
@@ -41,17 +53,5 @@ def _detect_error_in_screen(screen: str) -> str | None:
     Returns:
         Error type if detected, None otherwise
     """
-    screen_lower = screen.lower()
-
-    if "invalid password" in screen_lower:
-        return "invalid_password"
-    elif "not enough credits" in screen_lower or "insufficient funds" in screen_lower:
-        return "insufficient_credits"
-    elif "hold full" in screen_lower or "cargo hold is full" in screen_lower:
-        return "hold_full"
-    elif "you are dead" in screen_lower or "destroyed" in screen_lower:
-        return "ship_destroyed"
-    elif "out of turns" in screen_lower or "no turns remaining" in screen_lower:
-        return "out_of_turns"
-
-    return None
+    detector = TW2002ErrorDetector()
+    return detector.detect_error(screen)

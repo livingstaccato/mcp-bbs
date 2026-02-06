@@ -31,6 +31,7 @@ dependencies = [
     "structlog>=24.1.0",
     "hypothesis>=6.151.5",
     "pyyaml>=6.0.0",
+    "httpx>=0.27.0",
 ]
 # Note: twerk (TW2002 data file library) is available via _twerk.pth in the venv
 # Location: /Users/tim/code/gh/livingstaccato/tw2002/twerk-py/src
