@@ -215,6 +215,10 @@ async def _dock_and_buy(bot, sector: int, quantity: int = 500):
                 # Price confirmation - accept market price (1)
                 print("    Accepting offer...")
                 await send_input(bot, "1", input_type)
+            elif prompt_id == "prompt.port_haggle":
+                # Haggle - accept default price
+                print("    Accepting haggle price...")
+                await send_input(bot, "", input_type)
             elif input_type == "any_key":
                 # Confirmation/done - continue
                 await send_input(bot, "", input_type)
@@ -300,6 +304,10 @@ async def _dock_and_sell(bot, sector: int):
                 # Price confirmation - accept market price (1)
                 print("    Accepting offer...")
                 await send_input(bot, "1", input_type)
+            elif prompt_id == "prompt.port_haggle":
+                # Haggle - accept default price
+                print("    Accepting haggle price...")
+                await send_input(bot, "", input_type)
             elif input_type == "any_key":
                 # Confirmation/done - continue
                 await send_input(bot, "", input_type)

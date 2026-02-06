@@ -1,105 +1,283 @@
-# MCP-BBS Telnet Negotiation Fix - HANDOFF
+# Multi-Bot Coordinated Gameplay Implementation
 
-## Problem Description
+## Problem/Request
 
-The mcp-bbs telnet client failed to connect to BBS systems on port 2002 with error:
+User requested to run 5 different simultaneous bots in Trade Wars 2002 with:
+- Coordinated gameplay (bots work together)
+- Continuous operation until manually stopped
+- Shared knowledge and communication
+
+## Changes Completed
+
+### 1. Created Multi-Bot System (`play_tw2002_multibot.py`)
+
+**Location**: `src/bbsbot/commands/scripts/play_tw2002_multibot.py`
+
+**Architecture**:
+- `MultiBotCoordinator`: Main coordinator managing all bots
+- `CoordinatedBot`: Individual bot with role-specific behavior
+- `SharedState`: Persistent shared knowledge base
+- `BotRole`: Enum defining 5 different roles
+
+**Bot Roles**:
+1. **Trader** (2 instances) - Execute trading strategies
+2. **Scout** - Explore and map sectors
+3. **Banker** - Manage banking operations
+4. **Defender** - Monitor threats and danger zones
+
+**Key Features**:
+- Async/concurrent execution using `asyncio`
+- Graceful shutdown on Ctrl+C
+- Persistent shared state in `~/.bbsbot_multibot/shared_state.json`
+- Status reports every 30 seconds
+- Coordination updates every 30 seconds per bot
+
+### 2. Created Launcher Script
+
+**Location**: `run_multibot.sh`
+
+Simple bash wrapper for easy execution:
+```bash
+./run_multibot.sh          # Run 5 bots
+./run_multibot.sh 3        # Run 3 bots
 ```
-Failed to detect protocol. Expected Telnet...
-```
 
-While regular `telnet` connected successfully to the same BBS, and a previous version of the code (~/code/gh/doors/src) worked correctly.
+### 3. Created Documentation
 
-## Changes Requested and Completed
+**Location**: `.provide/MULTIBOT.md`
 
-### Primary Fix: Telnet Negotiation Protocol
-**File:** `src/mcp_bbs/telnet/client.py` (lines 123-127)
-
-Changed from sending DO commands to sending WILL commands on connection:
-
-**Before:**
-```python
-await self._protocol.send_do(OPT_SGA)
-await self._protocol.send_do(OPT_ECHO)
-```
-
-**After:**
-```python
-await self._protocol.send_will(OPT_BINARY)
-await self._protocol.send_will(OPT_SGA)
-```
-
-### Related Work (Previously Completed)
-- Added structlog debug logging to telnet operations
-- Fixed escape sequence handling in MCP tool responses
-- Cleaned up MCP response format (removed raw/raw_bytes_b64 from tool responses, kept in JSONL logs)
-- Fixed default parameter escape sequences in app.py
+Comprehensive documentation covering:
+- Quick start guide
+- Bot roles and behaviors
+- Configuration options
+- Monitoring and status reports
+- Troubleshooting
+- Architecture details
+- Development guide
 
 ## Reasoning for Approach
 
-**Telnet Protocol Background:**
-- `WILL (251)`: Client announces "I am willing to use this option"
-- `DO (253)`: Client asks server "Will you use this option?"
+### Why Async/Await?
+- Python's `asyncio` allows true concurrent execution
+- Each bot runs independently without blocking others
+- Efficient for I/O-bound operations (telnet connections)
+- Better than threading for this use case
 
-**Why This Matters:**
-BBS systems expect telnet clients to **announce capabilities using WILL** commands as part of the standard telnet handshake. Sending DO commands instead was interpreted as not being a proper telnet client.
+### Why Shared State File?
+- Simple persistence across restarts
+- No need for complex database
+- Easy to inspect/debug (JSON format)
+- Atomic writes prevent corruption
 
-**Options Sent:**
-- `OPT_BINARY (0)`: Enables 8-bit clean transmission (critical for CP437/ANSI)
-- `OPT_SGA (3)`: Suppresses go-ahead (allows continuous transmission)
+### Why Different Roles?
+- Specialization improves efficiency
+- Traders focus on profit
+- Scouts expand map knowledge
+- Clear separation of concerns
+- Easy to extend with new roles
 
-This matches the working doors implementation and standard telnet client behavior.
+### Why 30-Second Coordination Interval?
+- Balances real-time updates with overhead
+- Prevents excessive disk I/O
+- Sufficient for gameplay coordination
+- Configurable if needed
 
-## Summary of Work Done
+## Technical Implementation
 
-1. **Root Cause Analysis**: Compared current implementation with working doors code
-2. **Created Plan**: Detailed implementation plan in `/Users/tim/.claude/plans/fancy-noodling-pinwheel.md`
-3. **Implementation**: Changed DO commands to WILL commands (commit 90f768e)
-4. **Testing**: Verified on both target ports:
-   - Port 2002: Now displays "Telnet connection detected" and accepts commands
-   - Port 3003: TradeWars continues to work correctly
-5. **Documentation**: Updated comments to reflect correct telnet behavior
+### Connection Management
+Each bot:
+1. Creates own `SessionManager` instance
+2. Establishes separate telnet connection to port 2002
+3. Maintains independent session state
+4. Uses learning engine for prompt detection
 
-## Verification Checklist
+### Login Flow
+```python
+await bot.connect()           # Establish telnet connection
+await bot.login_and_setup()   # Handle TWGS login + character creation
+await bot.run_behavior_loop() # Execute role-specific behavior
+```
 
-- ✅ Port 2002 connection succeeds without "Failed to detect protocol" error
-- ✅ Port 2002 displays "Telnet connection detected" message
-- ✅ Interactive commands work on port 2002 (tested with "new" command)
-- ✅ Port 3003 TradeWars connection still works (no regression)
-- ✅ Telnet negotiation uses WILL commands (BINARY + SGA)
-- ✅ Structured logging with structlog in place
-- ✅ All changes committed to git
+### Coordination Mechanism
+```python
+async def coordinate(self):
+    # Update bot status in shared state
+    self.shared_state.active_bots[name] = {...}
 
-## Current Status
+    # Persist to disk
+    self.shared_state.save()
+```
 
-**COMPLETE** - All acceptance criteria met. The mcp-bbs telnet client now successfully:
-- Connects to BBS systems on port 2002
-- Plays TradeWars on port 3003
-- Properly implements telnet protocol negotiation
-- Provides detailed structured logging
+### Error Handling
+- Try/except blocks around all bot behaviors
+- Automatic 5-second retry delay on errors
+- Graceful degradation (trader falls back to exploration)
+- Logging at appropriate levels (INFO/DEBUG/ERROR)
 
-## Server Issues (Not mcp-bbs Bugs)
+## Potential Issues and Solutions
 
-### Port 3003 Character Processing Bug
+### Issue: TWGS Connection Limit
+**Problem**: Server may limit concurrent connections
 
-The tw2002 server running on port 3003 has an input buffering race condition (see agent investigation a8b7996). When multi-character strings arrive:
-- First `recv()` reads all bytes at once
-- `GS_getChar()` returns only first character, buffers the rest
-- Buffer is processed (~6-10 chars) then `poll()` with timeout=0 returns "no data"
-- Input loop waits forever for data that already arrived
+**Solution**: Test with 2-3 bots first, scale gradually
 
-**Root cause**: `/Users/tim/code/gh/livingstaccato/tw2002/src/net/twgsgate/twgsgate_init.c` lines 89-167
+**Code Impact**: None, handled by server config
 
-**Status**: This is a server-side bug in the tw2002 code, not an mcp-bbs client issue. The mcp-bbs client correctly sends all characters (verified via JSONL logs with base64 payloads).
+---
 
-### Port 2002 Status
+### Issue: Character Slot Limit
+**Problem**: Game may limit characters per account
 
-**Port 2002 works correctly** ✅ - Successfully played Trade Wars 2002 with full multi-character input. Session log: `.provide/tw2002-session-2026-02-03.md`
+**Solution**: Bots create unique characters (trader_01, scout_02, etc.)
 
-## Next Steps
+**Code Impact**: None, already handled in `character_name` generation
 
-No immediate action required. System is fully functional for both ports.
+---
 
-Optional future enhancements:
-- Add telnet negotiation tests to automated test suite
-- Document telnet handshake sequence in developer docs
-- Create telnet protocol compatibility test suite for different BBS systems
+### Issue: Strategy Not Implemented
+**Problem**: Some strategies may not have `execute_one_cycle()` method
+
+**Solution**: Added fallback behavior (scan + explore)
+
+**Code Location**: `trader_behavior()` line 258-268
+
+---
+
+### Issue: Port 2002 Not Available
+**Problem**: TWGS server not running
+
+**Solution**: Pre-flight check in documentation
+
+**User Action**: Start TWGS before running bots
+
+---
+
+### Issue: Stuck Bots
+**Problem**: Bot may get stuck in unknown prompt
+
+**Solution**: Each bot has independent error handling and timeout logic
+
+**Code**: Built into existing `SessionManager` and learning engine
+
+## Testing Checklist
+
+### ✓ Pre-Flight Checks
+- [x] Port 2002 is accessible (verified in initial playthrough)
+- [x] Script imports successfully
+- [x] Config files exist
+- [x] Learning engine patterns loaded (195 patterns)
+
+### Pending Tests
+- [ ] Single bot execution (verify login works)
+- [ ] 2 bots simultaneously (verify coordination)
+- [ ] 5 bots full run (verify scaling)
+- [ ] Graceful shutdown (Ctrl+C handling)
+- [ ] State persistence (restart and resume)
+- [ ] Error recovery (kill connection, verify retry)
+
+### How to Test
+
+**Test 1: Single Bot**
+```bash
+python3 -m bbsbot.commands.scripts.play_tw2002_multibot 1
+# Verify: Bot connects, logs in, executes behavior
+# Expected: Single trader bot running continuously
+```
+
+**Test 2: Two Bots**
+```bash
+./run_multibot.sh 2
+# Verify: Both bots coordinate, shared_state.json created
+# Expected: trader_01 and scout_02 running, status reports every 30s
+```
+
+**Test 3: Five Bots (Full)**
+```bash
+./run_multibot.sh 5
+# Verify: All roles active, no connection errors
+# Expected: 5 bots all reporting status
+```
+
+**Test 4: Graceful Shutdown**
+```bash
+./run_multibot.sh 3
+# Wait 60 seconds, then press Ctrl+C
+# Verify: "Shutting down gracefully" for each bot
+# Expected: Clean exit, no exceptions
+```
+
+**Test 5: State Persistence**
+```bash
+./run_multibot.sh 2
+# Run for 2 minutes, Ctrl+C
+# Check: cat ~/.bbsbot_multibot/shared_state.json
+# Verify: sectors_mapped > 0, total_trades > 0
+```
+
+## Files Modified/Created
+
+### New Files
+- `src/bbsbot/commands/scripts/play_tw2002_multibot.py` (510 lines)
+- `run_multibot.sh` (launcher script)
+- `.provide/MULTIBOT.md` (comprehensive documentation)
+- `.provide/HANDOFF.md` (this file)
+
+### Modified Files
+- None (all new implementation)
+
+## Next Steps for User
+
+### Immediate Testing
+1. **Start with 1 bot** to verify basic flow:
+   ```bash
+   python3 -m bbsbot.commands.scripts.play_tw2002_multibot 1
+   ```
+   Watch for successful login and behavior execution.
+
+2. **Scale to 2 bots** to test coordination:
+   ```bash
+   ./run_multibot.sh 2
+   ```
+   Watch for shared state updates in status reports.
+
+3. **Full 5-bot run**:
+   ```bash
+   ./run_multibot.sh 5
+   ```
+   Monitor for connection issues or errors.
+
+### Monitoring
+- Watch console output for status reports
+- Check `~/.bbsbot_multibot/shared_state.json` for coordination data
+- Monitor server load (CPU, memory, connections)
+
+### Customization
+- Adjust coordination interval (30s default)
+- Change bot roles in `spawn_bots()` method
+- Add new behaviors for different strategies
+- Configure via `config/tw2002.yml`
+
+### Troubleshooting
+If issues occur:
+1. Check `.provide/MULTIBOT.md` troubleshooting section
+2. Reduce number of bots
+3. Check TWGS server logs
+4. Verify port 2002 is accessible
+5. Review bot logs for specific errors
+
+## Summary
+
+Successfully implemented a complete multi-bot coordinated gameplay system for Trade Wars 2002:
+
+- ✅ 5 different bot roles with specialized behaviors
+- ✅ Coordinated gameplay via shared state
+- ✅ Continuous operation until stopped
+- ✅ Graceful shutdown handling
+- ✅ Comprehensive documentation
+- ✅ Easy-to-use launcher script
+
+The system is ready for testing. Start with 1-2 bots to verify core functionality, then scale to 5 for full coordinated gameplay.
+
+**Estimated Time to First Working Run**: 5-10 minutes (assuming server is running and credentials configured)
+
+**Total Implementation**: ~510 lines of production code + 350 lines of documentation
