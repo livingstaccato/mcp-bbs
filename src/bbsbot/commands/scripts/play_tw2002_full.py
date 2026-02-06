@@ -97,8 +97,17 @@ class CompleteTW2002Player:
         screen_text = snapshot.get("screen", "")
         detected = snapshot.get("prompt_detected", {})
         if "Select game" in screen_text or detected.get("prompt_id") == "prompt.twgs_select_game":
-            await self.send("A\r", "Select 'A' - My Game")
-            snapshot = await self.read_and_show(pause=1.5, max_lines=25)
+            await self.send("A", "Select 'A' - My Game")
+            snapshot = await self.read_and_show(pause=2.0, max_lines=25)
+            detected = snapshot.get("prompt_detected", {})
+            if detected.get("prompt_id") == "prompt.twgs_select_game":
+                await self.send("A\r", "Select 'A' with Enter")
+                snapshot = await self.read_and_show(pause=2.0, max_lines=25)
+                detected = snapshot.get("prompt_detected", {})
+
+            if detected.get("prompt_id") == "prompt.twgs_select_game":
+                print("  ❌ Still at TWGS game selection after attempts. Aborting playthrough.")
+                return
 
         # Check if new player or returning
         screen_text = snapshot.get('screen', '').lower()
