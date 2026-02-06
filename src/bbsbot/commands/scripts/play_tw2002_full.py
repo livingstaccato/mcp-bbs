@@ -112,18 +112,28 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=2.0, max_lines=25)
                 continue
 
-            if "start a new character" in screen_lower or "type y or n" in screen_lower:
+            if "show today's log" in screen_lower:
+                await self.send("N\r", "Skip today's log")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "start a new character" in screen_lower and "password" not in screen_lower:
                 await self.send("Y\r", "Start new character")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "password" in screen_lower and "confirm" in screen_lower:
+            if "repeat password" in screen_lower or "verify" in screen_lower:
                 await self.send(f"{password}\r", "Confirm password")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "password" in screen_lower and ("enter" in screen_lower or "please" in screen_lower):
+            if "password?" in screen_lower:
                 await self.send(f"{password}\r", "Set password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "use (n)ew name" in screen_lower or "bbs name" in screen_lower:
+                await self.send("B\r", "Use BBS name")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
@@ -133,8 +143,8 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "(y/n)" in screen_lower and ("ship" in screen_lower or "correct" in screen_lower):
-                await self.send("Y\r", "Confirm")
+            if "is what you want" in screen_lower and "ship" in screen_lower:
+                await self.send("Y\r", "Confirm ship name")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
@@ -145,11 +155,6 @@ class CompleteTW2002Player:
 
             if "[pause]" in screen_lower:
                 await self.send(" ", "Continue")
-                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
-                continue
-
-            if "show today's log" in screen_lower:
-                await self.send("N\r", "Skip today's log")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
