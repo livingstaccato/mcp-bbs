@@ -87,6 +87,12 @@ class AIStrategyConfig(BaseModel):
     # Learning
     record_history: bool = True
 
+    # Feedback loop settings
+    feedback_enabled: bool = True
+    feedback_interval_turns: int = 10  # Analyze every N turns
+    feedback_lookback_turns: int = 10  # Analyze last N turns
+    feedback_max_tokens: int = 300  # Limit response length
+
     model_config = ConfigDict(extra="ignore")
 
 

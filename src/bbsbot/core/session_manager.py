@@ -41,6 +41,7 @@ class SessionManager:
             max_sessions: Maximum number of concurrent sessions
         """
         self._sessions: dict[str, Session] = {}
+        self._bots: dict[str, Any] = {}  # session_id -> bot instance
         self._max_sessions = max_sessions
         self._lock = asyncio.Lock()
         self._session_counter = 0
@@ -180,6 +181,9 @@ class SessionManager:
 
         async with self._lock:
             del self._sessions[session_id]
+            # Auto-unregister bot if registered
+            if session_id in self._bots:
+                del self._bots[session_id]
 
         log.info("session_closed", session_id=session_id)
 
@@ -316,3 +320,36 @@ class SessionManager:
         session.learning = None
 
         log.info("learning_disabled", session_id=session_id)
+
+    def register_bot(self, session_id: str, bot_instance: Any) -> None:
+        """Register a bot instance for a session.
+
+        Allows MCP tools to access running bot for debugging.
+
+        Args:
+            session_id: Session identifier
+            bot_instance: Bot instance to register
+        """
+        self._bots[session_id] = bot_instance
+        log.info("bot_registered", session_id=session_id, bot_type=type(bot_instance).__name__)
+
+    def get_bot(self, session_id: str) -> Any | None:
+        """Get registered bot for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Bot instance or None if not registered
+        """
+        return self._bots.get(session_id)
+
+    def unregister_bot(self, session_id: str) -> None:
+        """Unregister bot for a session.
+
+        Args:
+            session_id: Session identifier
+        """
+        if session_id in self._bots:
+            del self._bots[session_id]
+            log.info("bot_unregistered", session_id=session_id)

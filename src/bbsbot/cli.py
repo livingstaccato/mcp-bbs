@@ -170,6 +170,17 @@ def tw2002_group() -> None:
     """Trade Wars 2002 commands."""
 
 
+@tw2002_group.command("check")
+@click.option("--host", default="localhost", show_default=True, help="BBS host to check")
+@click.option("--port", default=2002, type=int, show_default=True, help="BBS port to check")
+@click.option("--timeout", default=5, type=int, show_default=True, help="Connection timeout in seconds")
+def tw2002_check(host: str, port: int, timeout: int) -> None:
+    """Verify TW2002 server is reachable and responding."""
+    from bbsbot.games.tw2002.cli import run_health_check
+
+    run_health_check(host, port, timeout)
+
+
 @tw2002_group.command("bot")
 @click.option("-c", "--config", "config_path", type=click.Path(path_type=str))
 @click.option("--generate-config", is_flag=True)

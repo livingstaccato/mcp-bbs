@@ -5,6 +5,26 @@ from typing import Literal
 
 
 @dataclass
+class TokenUsage:
+    """Token usage statistics for an LLM request/response."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+    @property
+    def estimated_cost_usd(self) -> float:
+        """Estimate cost in USD based on typical pricing.
+
+        This is a rough estimate - actual costs vary by provider and model.
+        Assumes ~$0.01 per 1K prompt tokens, ~$0.03 per 1K completion tokens.
+        """
+        prompt_cost = (self.prompt_tokens / 1000) * 0.01
+        completion_cost = (self.completion_tokens / 1000) * 0.03
+        return prompt_cost + completion_cost
+
+
+@dataclass
 class ChatMessage:
     """A single message in a chat conversation."""
 
@@ -30,6 +50,8 @@ class CompletionResponse:
     text: str
     model: str
     finish_reason: str | None = None
+    usage: TokenUsage | None = None  # Token usage statistics
+    cached: bool = False  # Whether this response was served from cache
 
 
 @dataclass
@@ -50,6 +72,8 @@ class ChatResponse:
     message: ChatMessage
     model: str
     finish_reason: str | None = None
+    usage: TokenUsage | None = None  # Token usage statistics
+    cached: bool = False  # Whether this response was served from cache
 
 
 @dataclass

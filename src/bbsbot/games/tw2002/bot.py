@@ -146,11 +146,19 @@ class TradingBot:
         elif strategy_name == "ai_strategy":
             from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
             self._strategy = AIStrategy(self.config, self.sector_knowledge)
+            # Inject session logger for feedback loop
+            if self.session and self.session.logger:
+                self._strategy.set_session_logger(self.session.logger)
         else:  # Default to opportunistic
             from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
             self._strategy = OpportunisticStrategy(self.config, self.sector_knowledge)
 
         print(f"  [Strategy] Initialized: {self._strategy.name}")
+
+        # Register bot with session manager for MCP debugging
+        if self.session_id:
+            self.session_manager.register_bot(self.session_id, self)
+
         return self._strategy
 
     # -------------------------------------------------------------------------

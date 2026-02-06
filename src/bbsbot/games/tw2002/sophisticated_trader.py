@@ -272,17 +272,113 @@ class SophisticatedTrader:
                ("buy" in screen_lower and "sell" in screen_lower and "commodities" in screen_lower)
 
     def _parse_port_screen(self, screen: str) -> Optional[PortInfo]:
-        """Parse port screen to extract commodities and prices."""
-        # TODO: Implement actual parsing of TW2002 port screens
-        # This is a placeholder
+        """Parse port screen to extract commodities and prices.
+
+        Parses TW2002 port screens to extract:
+        - Port class (BBS, SSB, etc.) where B=Buys, S=Sells
+        - Commodity prices (Fuel Ore, Organics, Equipment)
+        - Available quantities
+
+        Port class format: Position 0=Fuel, 1=Organics, 2=Equipment
+        B = Port Buys (we sell to them), S = Port Sells (we buy from them)
+        """
         port = PortInfo(sector=self.current_sector)
 
-        # Look for port class
-        class_match = re.search(r'Class\s+(\d)', screen, re.IGNORECASE)
-        if class_match:
-            port.port_class = class_match.group(1)
+        # Extract port class from various formats:
+        # "Class BBS", "Port Class: BBS", "Class 1 (BBS)", "(BBS)"
+        class_patterns = [
+            r'Class\s+\d*\s*\(([BSbs]{3})\)',  # Class 1 (BBS)
+            r'Class\s+([BSbs]{3})',             # Class BBS
+            r'Port\s+Class[:\s]+([BSbs]{3})',   # Port Class: BBS
+            r'\(([BSbs]{3})\)',                 # (BBS)
+        ]
 
-        return port
+        for pattern in class_patterns:
+            match = re.search(pattern, screen, re.IGNORECASE)
+            if match:
+                port.port_class = match.group(1).upper()
+                break
+
+        # Parse commodity information
+        # Common formats:
+        # "Fuel Ore: 100 at 500 cr"
+        # "Organics: Buying at 300 credits"
+        # "Equipment: Selling for 1200 cr"
+
+        commodities = {
+            'fuel_ore': ['fuel ore', 'fuel'],
+            'organics': ['organics', 'organic'],
+            'equipment': ['equipment', 'equip']
+        }
+
+        for commodity_key, aliases in commodities.items():
+            for alias in aliases:
+                # Pattern for "Fuel Ore: 100 at 500 cr" or "Organics: 50 @ 300"
+                quantity_price = re.search(
+                    rf'{alias}[:\s]+(\d+)\s+(?:at|@)\s+(\d+)',
+                    screen,
+                    re.IGNORECASE
+                )
+                if quantity_price:
+                    quantity = int(quantity_price.group(1))
+                    price = int(quantity_price.group(2))
+
+                    # Determine if port is buying or selling this commodity
+                    # Check surrounding context
+                    start = max(0, quantity_price.start() - 50)
+                    end = min(len(screen), quantity_price.end() + 50)
+                    context = screen[start:end].lower()
+
+                    commodity = Commodity(name=commodity_key, quantity=quantity)
+
+                    if 'buying' in context or 'buy' in context:
+                        commodity.buy_price = price  # Port buys (we sell)
+                    elif 'selling' in context or 'sell' in context:
+                        commodity.sell_price = price  # Port sells (we buy)
+                    else:
+                        # Use port class to determine
+                        if port.port_class:
+                            idx = ['fuel_ore', 'organics', 'equipment'].index(commodity_key)
+                            if idx < len(port.port_class):
+                                if port.port_class[idx] == 'B':
+                                    commodity.buy_price = price
+                                elif port.port_class[idx] == 'S':
+                                    commodity.sell_price = price
+
+                    port.commodities[commodity_key] = commodity
+                    break
+
+                # Pattern for "Fuel Ore: Buying at 500 cr" (no quantity)
+                price_only = re.search(
+                    rf'{alias}[:\s]+(?:buying|selling)?\s+(?:at|for)\s+(\d+)',
+                    screen,
+                    re.IGNORECASE
+                )
+                if price_only:
+                    price = int(price_only.group(1))
+                    context = screen[max(0, price_only.start()-30):price_only.end()+30].lower()
+
+                    commodity = Commodity(name=commodity_key)
+
+                    if 'buying' in context or 'buy' in context:
+                        commodity.buy_price = price
+                    elif 'selling' in context or 'sell' in context:
+                        commodity.sell_price = price
+
+                    port.commodities[commodity_key] = commodity
+                    break
+
+        # If we got a port class but no commodity details, use class to set up structure
+        if port.port_class and len(port.commodities) == 0:
+            commodity_names = ['fuel_ore', 'organics', 'equipment']
+            for idx, char in enumerate(port.port_class):
+                if idx < len(commodity_names):
+                    commodity = Commodity(name=commodity_names[idx])
+                    # B = port buys (we can sell), S = port sells (we can buy)
+                    # Prices would need to be discovered through interaction
+                    port.commodities[commodity_names[idx]] = commodity
+
+        return port if (port.port_class or port.commodities) else None
 
     async def _warp_to_sector(self, target_sector: int):
         """Warp to target sector with prompt handling - FAST."""

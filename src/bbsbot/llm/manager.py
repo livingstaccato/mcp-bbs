@@ -3,8 +3,11 @@
 import logging
 
 from bbsbot.llm.base import LLMProvider
+from bbsbot.llm.cache import LLMCache
 from bbsbot.llm.config import LLMConfig
 from bbsbot.llm.exceptions import LLMError
+from bbsbot.llm.types import ChatRequest, ChatResponse, CompletionRequest, CompletionResponse
+from bbsbot.llm.usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -12,17 +15,35 @@ logger = logging.getLogger(__name__)
 class LLMManager:
     """Manages LLM provider lifecycle.
 
-    Handles provider initialization, caching, and cleanup.
+    Handles provider initialization, response caching, and token usage tracking.
+
+    Features:
+    - Automatic response caching with TTL
+    - Token usage tracking and cost estimation
+    - Cache hit rate monitoring
+    - Per-model statistics
     """
 
-    def __init__(self, config: LLMConfig):
+    def __init__(
+        self,
+        config: LLMConfig,
+        enable_cache: bool = True,
+        cache_ttl: int = 3600,
+        max_cache_entries: int = 1000,
+    ):
         """Initialize manager.
 
         Args:
             config: LLM configuration
+            enable_cache: Whether to enable response caching (default True)
+            cache_ttl: Cache TTL in seconds (default 1 hour)
+            max_cache_entries: Maximum cache entries (default 1000)
         """
         self.config = config
         self._provider: LLMProvider | None = None
+        self._cache = LLMCache(ttl_seconds=cache_ttl, max_entries=max_cache_entries) if enable_cache else None
+        self._usage_tracker = UsageTracker()
+        self._enable_cache = enable_cache
 
     async def get_provider(self) -> LLMProvider:
         """Get or create provider instance.
@@ -64,8 +85,101 @@ class LLMManager:
             )
             raise LLMError(f"Failed to initialize provider: {e}") from e
 
+    async def chat(self, request: ChatRequest) -> ChatResponse:
+        """Generate chat response with caching and tracking.
+
+        Args:
+            request: Chat request
+
+        Returns:
+            Chat response (may be cached)
+        """
+        # Try cache first
+        if self._cache:
+            cached_response = self._cache.get(request)
+            if cached_response:
+                logger.debug("llm_cache_hit", model=request.model)
+                self._usage_tracker.track_usage(request.model, cached_response.usage, cached=True)
+                return cached_response
+
+        # Cache miss - call provider
+        provider = await self.get_provider()
+        response = await provider.chat(request)
+
+        # Track usage
+        self._usage_tracker.track_usage(request.model, response.usage, cached=False)
+
+        # Store in cache
+        if self._cache:
+            self._cache.set(request, response)
+
+        return response
+
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Generate completion with caching and tracking.
+
+        Args:
+            request: Completion request
+
+        Returns:
+            Completion response (may be cached)
+        """
+        # Try cache first
+        if self._cache:
+            cached_response = self._cache.get(request)
+            if cached_response:
+                logger.debug("llm_cache_hit", model=request.model)
+                self._usage_tracker.track_usage(request.model, cached_response.usage, cached=True)
+                return cached_response
+
+        # Cache miss - call provider
+        provider = await self.get_provider()
+        response = await provider.complete(request)
+
+        # Track usage
+        self._usage_tracker.track_usage(request.model, response.usage, cached=False)
+
+        # Store in cache
+        if self._cache:
+            self._cache.set(request, response)
+
+        return response
+
+    def get_usage_stats(self) -> dict:
+        """Get token usage statistics.
+
+        Returns:
+            Dictionary with usage statistics
+        """
+        return self._usage_tracker.get_all_stats()
+
+    def get_cache_stats(self) -> dict | None:
+        """Get cache statistics.
+
+        Returns:
+            Dictionary with cache statistics or None if caching disabled
+        """
+        return self._cache.get_stats() if self._cache else None
+
+    def log_usage_summary(self) -> None:
+        """Log usage summary to logger."""
+        self._usage_tracker.log_summary()
+
+    def reset_stats(self) -> None:
+        """Reset usage statistics."""
+        self._usage_tracker.reset()
+
+    def clear_cache(self) -> None:
+        """Clear response cache."""
+        if self._cache:
+            self._cache.clear()
+            logger.info("llm_cache_cleared")
+
     async def close(self) -> None:
-        """Cleanup provider resources."""
+        """Cleanup provider resources and log final statistics."""
+        # Log final usage summary
+        self.log_usage_summary()
+
         if self._provider:
             await self._provider.close()
             logger.info("llm_provider_closed", provider=self.config.provider)
