@@ -31,6 +31,7 @@ class CharacterConfig(BaseModel):
 
     # Themed name generation
     name_complexity: Literal["simple", "medium", "complex", "numbered"] = "medium"
+    number_prefix: bool = False  # If True, puts generation number at start (e.g., "1BotName")
     generate_ship_names: bool = True
     ship_names_with_numbers: bool = False
     name_seed: int | None = None

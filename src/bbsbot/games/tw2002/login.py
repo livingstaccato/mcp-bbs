@@ -298,8 +298,10 @@ async def login_sequence(
         step += 1
         try:
             # Game loading takes 11+ seconds, need longer timeout
+            # During character creation, ignore loop detection for ship/planet names
+            ignore_loop = {"prompt.ship_name", "prompt.planet_name"}
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=20000
+                bot, timeout_ms=20000, ignore_loop_for=ignore_loop
             )
         except RuntimeError as e:
             print(f"✗ Game load error: {e}")
@@ -373,7 +375,8 @@ async def login_sequence(
             await send_input(bot, alias, "multi_key")
 
         elif actual_prompt == "ship_name_prompt":
-            ship_name = f"{username}'s Ship"
+            # Use simple ship name without special characters
+            ship_name = "Bot Ship"
             print(f"      → Ship naming prompt, entering: {ship_name}")
             await send_input(bot, ship_name, "multi_key")
 

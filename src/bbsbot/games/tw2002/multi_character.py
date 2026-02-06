@@ -129,9 +129,11 @@ class MultiCharacterManager:
 
         Returns:
             Unique character name like "QuantumTrader" or "NeuralDataProfit"
+            or with number prefix: "1QuantumTrader", "2NeuralDataProfit"
         """
         name = self.name_generator.generate_character_name(
-            complexity=self.character_config.name_complexity
+            complexity=self.character_config.name_complexity,
+            number_prefix=self.character_config.number_prefix
         )
         logger.info(f"Generated character name: {name}")
         return name

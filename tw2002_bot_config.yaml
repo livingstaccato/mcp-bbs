@@ -4,13 +4,16 @@
 # Connection settings
 connection:
   host: localhost
-  port: 2002
+  port: 3223  # TW2002 Docker container telnet port
   game_password: "game"
 
 # Character settings - will create new character
 character:
-  name_prefix: "testbot"
   password: "test123"
+  # Name generation settings
+  name_complexity: "numbered"  # Use numbered names for tracking generations
+  number_prefix: true  # Put number at start: "1BotName", "2BotName", etc.
+  generate_ship_names: false  # Disable custom ship names for testing
 
 # Trading strategy configuration
 trading:

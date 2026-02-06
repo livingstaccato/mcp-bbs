@@ -123,7 +123,8 @@ class NameGenerator:
 
     def generate_character_name(
         self,
-        complexity: Literal["simple", "medium", "complex", "numbered"] = "medium"
+        complexity: Literal["simple", "medium", "complex", "numbered"] = "medium",
+        number_prefix: bool = False
     ) -> str:
         """Generate unique character name with configurable complexity.
 
@@ -133,6 +134,9 @@ class NameGenerator:
                 - medium: 3-part names (prefix+middle+suffix) - ~77,000 combinations
                 - complex: 4-part names (prefix+middle1+middle2+suffix) - ~3.7M combinations
                 - numbered: Always adds number suffix for unlimited names
+            number_prefix: If True, puts generation number at start (e.g., "1QuantumTrader")
+                          instead of end (e.g., "QuantumTrader1"). Useful for tracking
+                          bot generations in order.
 
         Returns:
             Unique character name like "QuantumTrader" or "NeuralDataProfit"
@@ -161,7 +165,10 @@ class NameGenerator:
                 # Always use number
                 base = f"{self.rng.choice(PREFIXES)}{self.rng.choice(SUFFIXES)}"
                 self._name_counter += 1
-                name = f"{base}{self._name_counter}"
+                if number_prefix:
+                    name = f"{self._name_counter}{base}"
+                else:
+                    name = f"{base}{self._name_counter}"
 
             if name not in self.used_names:
                 self.used_names.add(name)
@@ -170,7 +177,10 @@ class NameGenerator:
         # Fallback with counter if all attempts exhausted
         self._name_counter += 1
         base = f"{self.rng.choice(PREFIXES)}Bot"
-        name = f"{base}{self._name_counter}"
+        if number_prefix:
+            name = f"{self._name_counter}{base}"
+        else:
+            name = f"{base}{self._name_counter}"
         self.used_names.add(name)
         return name
 
