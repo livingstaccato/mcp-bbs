@@ -1,9 +1,0 @@
-================================================================================
-TW2002 - 1000 TURN AUTONOMOUS PLAYTHROUGH
-================================================================================
-Target: 1000 turns
-Server: localhost:2002
-
-2026-02-03 16:11:26 [info     ] telnet_connected               cols=80 host=localhost port=2002 rows=25 term=ANSI
-2026-02-03 16:11:26 [info     ] session_created                cols=80 host=localhost port=2002 rows=25 session_id=635c1631-8149-4ffd-8088-848c0de820d9 session_number=1 term=ANSI
-2026-02-03 16:11:26 [info     ] learning_enabled               knowledge_root='/Users/tim/Library/Application Support/mcp-bbs' namespace=tw2002 session_id=635c1631-8149-4ffd-8088-848c0de820d9

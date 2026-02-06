@@ -1,283 +1,387 @@
-# Multi-Bot Coordinated Gameplay Implementation
+# Documentation Structure Reorganization - Complete
 
 ## Problem/Request
 
-User requested to run 5 different simultaneous bots in Trade Wars 2002 with:
-- Coordinated gameplay (bots work together)
-- Continuous operation until manually stopped
-- Shared knowledge and communication
+The `.provide/` directory was mixing two different types of content:
+1. **Documentation** (HANDOFF, ARCHITECTURE) - Should be permanent ✅
+2. **Session logs** (`tw2002-complete-*.json/md`) - Should NOT be here ❌
+
+This mixing made it hard to find documentation and polluted git status with 15+ transient session log files (60-70 KB each).
 
 ## Changes Completed
 
-### 1. Created Multi-Bot System (`play_tw2002_multibot.py`)
+### 1. Created New Directory Structure
 
-**Location**: `src/bbsbot/commands/scripts/play_tw2002_multibot.py`
+**Implemented Option C: Hybrid Structure**
 
-**Architecture**:
-- `MultiBotCoordinator`: Main coordinator managing all bots
-- `CoordinatedBot`: Individual bot with role-specific behavior
-- `SharedState`: Persistent shared knowledge base
-- `BotRole`: Enum defining 5 different roles
-
-**Bot Roles**:
-1. **Trader** (2 instances) - Execute trading strategies
-2. **Scout** - Explore and map sectors
-3. **Banker** - Manage banking operations
-4. **Defender** - Monitor threats and danger zones
-
-**Key Features**:
-- Async/concurrent execution using `asyncio`
-- Graceful shutdown on Ctrl+C
-- Persistent shared state in `~/.bbsbot_multibot/shared_state.json`
-- Status reports every 30 seconds
-- Coordination updates every 30 seconds per bot
-
-### 2. Created Launcher Script
-
-**Location**: `run_multibot.sh`
-
-Simple bash wrapper for easy execution:
-```bash
-./run_multibot.sh          # Run 5 bots
-./run_multibot.sh 3        # Run 3 bots
+```
+bbsbot/
+├── .provide/                          # Active handoffs only
+│   ├── HANDOFF.md                     # This file
+│   └── archive/                       # Completed handoffs
+│
+├── docs/                              # Permanent documentation
+│   ├── README.md                      # Entry point
+│   ├── SYSTEM_ARCHITECTURE.md
+│   ├── ARCHITECTURE_DIAGRAM.md
+│   ├── guides/                        # How-to guides
+│   └── reference/                     # Technical reference
+│
+├── sessions/                          # Session logs (gitignored)
+│   └── tw2002/
+│       ├── complete/
+│       ├── 1000turns/
+│       └── debug/
+│
+└── games/tw2002/docs/                 # Game-specific docs
+    ├── README.md
+    ├── LLM_HINTS.md
+    ├── TEDIT_REFERENCE.md
+    └── ...
 ```
 
-### 3. Created Documentation
+### 2. Moved Files to Proper Locations
 
-**Location**: `.provide/MULTIBOT.md`
+**Documentation** (moved to `docs/`):
+- `SYSTEM_ARCHITECTURE.md` → `docs/`
+- `ARCHITECTURE_DIAGRAM.md` → `docs/`
+- `BOT-QUICK-REFERENCE.md` → `docs/guides/QUICK_START.md`
+- `INTELLIGENT-BOT-README.md` → `docs/guides/INTELLIGENT_BOT.md`
+- `MULTIBOT.md` → `docs/guides/MULTI_CHARACTER.md`
+- `DOCUMENTATION_INDEX.md` → `docs/README.md`
 
-Comprehensive documentation covering:
-- Quick start guide
-- Bot roles and behaviors
-- Configuration options
-- Monitoring and status reports
-- Troubleshooting
-- Architecture details
-- Development guide
+**Session Logs** (moved to `sessions/tw2002/`):
+- `tw2002-complete-*.{json,md}` → `sessions/tw2002/complete/` (7 files)
+- `tw2002-1000turns-*.{json,md}` → `sessions/tw2002/1000turns/` (14 files)
+- `tw2002-playthrough-*.{json,md}` → `sessions/tw2002/complete/` (2 files)
+- Debug artifacts (`*turn*.txt`, `bot-screen-capture.txt`) → `sessions/tw2002/debug/` (5 files)
+- `tw2002-session-*.md` → `sessions/tw2002/debug/` (1 file)
+
+**Archived Handoffs** (moved to `.provide/archive/`):
+- `HANDOFF_ai_strategy.md` → `archive/2026-02-06_ai_strategy.md`
+- `HANDOFF_framework_extraction.md` → `archive/2026-02-06_framework_extraction.md`
+- `HANDOFF_logging_cleanup.md` → `archive/2026-02-06_logging_cleanup.md`
+- `HANDOFF_refactoring_complete.md` → `archive/2026-02-06_refactoring_complete.md`
+- `HANDOFF_telnet_fix.md` → `archive/2026-02-03_telnet_fix.md`
+- `HANDOFF_themed_names.md` → `archive/2026-02-06_themed_names.md`
+- Old `HANDOFF-*.md` files → `archive/` (3 files)
+- Old reference docs → `archive/` (3 files)
+
+**Game-Specific Docs** (moved to `games/tw2002/docs/`):
+- `LLM_HINTS.md` → `games/tw2002/docs/`
+- `TEDIT_REFERENCE.md` → `games/tw2002/docs/`
+- `TWGS_LOGIN_FLOW.md` → `games/tw2002/docs/`
+- `bbs-login-solution.md` → `games/tw2002/docs/`
+- `credentials.md` → `games/tw2002/docs/`
+
+### 3. Updated .gitignore
+
+Added session logs to `.gitignore`:
+```
+# Session logs and debug artifacts
+sessions/
+*.jsonl
+games/tw2002/session.jsonl
+```
+
+Verified:
+```bash
+$ git status --ignored | grep sessions
+	sessions/
+```
+
+### 4. Created New Documentation Files
+
+**Created `docs/README.md`** (184 lines) - Documentation index with:
+- Getting Started section
+- Architecture overview
+- Guides (Quick Start, Multi-Character, Intelligent Bot)
+- Reference (API, Configuration, Troubleshooting)
+- Game-Specific Documentation links
+- Component Architecture breakdown
+- Quick Start Examples
+- Developer API examples
+- Development links
+
+**Created `games/tw2002/docs/README.md`** (159 lines) - Game documentation index:
+- Overview of TW2002 documentation
+- File descriptions for each doc
+- Related documentation links
+- Code references (rules.json, prompts.json)
+- Quick reference for prompt detection
+- Debugging guide
+- File organization
+- Contributing guidelines
+
+### 5. Updated Documentation Links
+
+**Updated `docs/README.md`**:
+- Reorganized to emphasize guides and reference sections
+- Added clear navigation structure
+- Updated all internal links
+- Streamlined content (moved verbose examples to guides)
+- Added links to game-specific docs
+
+**Result**: Clean, navigable documentation structure with clear entry points.
 
 ## Reasoning for Approach
 
-### Why Async/Await?
-- Python's `asyncio` allows true concurrent execution
-- Each bot runs independently without blocking others
-- Efficient for I/O-bound operations (telnet connections)
-- Better than threading for this use case
+### Why Option C (Hybrid)?
 
-### Why Shared State File?
-- Simple persistence across restarts
-- No need for complex database
-- Easy to inspect/debug (JSON format)
-- Atomic writes prevent corruption
+1. **Clear Separation**:
+   - `.provide/` = Active work-in-progress handoffs
+   - `docs/` = Permanent reference documentation
+   - `sessions/` = Transient logs and debug artifacts
+   - `games/{game}/docs/` = Game-specific reference
 
-### Why Different Roles?
-- Specialization improves efficiency
-- Traders focus on profit
-- Scouts expand map knowledge
-- Clear separation of concerns
-- Easy to extend with new roles
+2. **Git-Friendly**:
+   - Documentation is versioned
+   - Session logs are ignored
+   - Smaller repo size (no large session files)
 
-### Why 30-Second Coordination Interval?
-- Balances real-time updates with overhead
-- Prevents excessive disk I/O
-- Sufficient for gameplay coordination
-- Configurable if needed
+3. **Discoverable**:
+   - `docs/README.md` is standard entry point
+   - Clear structure: guides/ vs reference/
+   - Game docs co-located with game code
 
-## Technical Implementation
+4. **Scalable**:
+   - Easy to add new guides
+   - Archive old handoffs with dated names
+   - Multiple games can have their own docs/
 
-### Connection Management
-Each bot:
-1. Creates own `SessionManager` instance
-2. Establishes separate telnet connection to port 2002
-3. Maintains independent session state
-4. Uses learning engine for prompt detection
+### Why Archive Completed Handoffs?
 
-### Login Flow
-```python
-await bot.connect()           # Establish telnet connection
-await bot.login_and_setup()   # Handle TWGS login + character creation
-await bot.run_behavior_loop() # Execute role-specific behavior
+- Completed handoffs are historical context, not active work
+- Naming: `YYYY-MM-DD_{topic}.md` makes chronology clear
+- Keeps `.provide/` focused on current session
+- Still versioned in git for reference
+
+### Why Separate sessions/?
+
+- Session logs are debugging artifacts, not documentation
+- They're large (60-70 KB each, 29 files total)
+- Easy to clean up without affecting docs
+- Should never be in version control
+
+### Why games/{game}/docs/?
+
+- Game-specific technical reference
+- Co-located with game implementation
+- Easy to find when working on that game
+- Self-contained game modules
+
+## Benefits
+
+### Before
+```
+.provide/
+├── SYSTEM_ARCHITECTURE.md            # Doc
+├── ARCHITECTURE_DIAGRAM.md           # Doc
+├── HANDOFF_ai_strategy.md            # Old handoff
+├── HANDOFF_themed_names.md           # Old handoff
+├── tw2002-complete-1770337045.json   # Session log (62 KB)
+├── tw2002-complete-1770337045.md     # Session log (62 KB)
+├── tw2002-1000turns-*.json           # Session logs (x7)
+├── tw2002-1000turns-*.md             # Session logs (x7)
+└── ... (32+ files mixed together)
 ```
 
-### Coordination Mechanism
-```python
-async def coordinate(self):
-    # Update bot status in shared state
-    self.shared_state.active_bots[name] = {...}
+### After
+```
+.provide/
+└── HANDOFF.md                        # ← Only active work!
 
-    # Persist to disk
-    self.shared_state.save()
+docs/
+├── README.md                         # ← Entry point
+├── SYSTEM_ARCHITECTURE.md
+├── ARCHITECTURE_DIAGRAM.md
+├── guides/
+│   ├── QUICK_START.md
+│   ├── MULTI_CHARACTER.md
+│   └── INTELLIGENT_BOT.md
+└── reference/                        # ← Future API docs
+
+sessions/                             # ← Gitignored
+└── tw2002/
+    ├── complete/                     # 9 files
+    ├── 1000turns/                    # 14 files
+    └── debug/                        # 6 files
+
+games/tw2002/docs/
+├── README.md
+├── LLM_HINTS.md
+├── TEDIT_REFERENCE.md
+├── TWGS_LOGIN_FLOW.md
+├── bbs-login-solution.md
+└── credentials.md
 ```
 
-### Error Handling
-- Try/except blocks around all bot behaviors
-- Automatic 5-second retry delay on errors
-- Graceful degradation (trader falls back to exploration)
-- Logging at appropriate levels (INFO/DEBUG/ERROR)
+**Result**:
+- `.provide/` went from 32+ files → **1 file** (+ archive/)
+- Documentation is discoverable at `docs/`
+- Session logs are organized and gitignored
+- Game docs are co-located with game code
+- Clean git status (no untracked session files)
 
-## Potential Issues and Solutions
+## Verification
 
-### Issue: TWGS Connection Limit
-**Problem**: Server may limit concurrent connections
+All verifications passed:
 
-**Solution**: Test with 2-3 bots first, scale gradually
-
-**Code Impact**: None, handled by server config
-
----
-
-### Issue: Character Slot Limit
-**Problem**: Game may limit characters per account
-
-**Solution**: Bots create unique characters (trader_01, scout_02, etc.)
-
-**Code Impact**: None, already handled in `character_name` generation
-
----
-
-### Issue: Strategy Not Implemented
-**Problem**: Some strategies may not have `execute_one_cycle()` method
-
-**Solution**: Added fallback behavior (scan + explore)
-
-**Code Location**: `trader_behavior()` line 258-268
-
----
-
-### Issue: Port 2002 Not Available
-**Problem**: TWGS server not running
-
-**Solution**: Pre-flight check in documentation
-
-**User Action**: Start TWGS before running bots
-
----
-
-### Issue: Stuck Bots
-**Problem**: Bot may get stuck in unknown prompt
-
-**Solution**: Each bot has independent error handling and timeout logic
-
-**Code**: Built into existing `SessionManager` and learning engine
-
-## Testing Checklist
-
-### ✓ Pre-Flight Checks
-- [x] Port 2002 is accessible (verified in initial playthrough)
-- [x] Script imports successfully
-- [x] Config files exist
-- [x] Learning engine patterns loaded (195 patterns)
-
-### Pending Tests
-- [ ] Single bot execution (verify login works)
-- [ ] 2 bots simultaneously (verify coordination)
-- [ ] 5 bots full run (verify scaling)
-- [ ] Graceful shutdown (Ctrl+C handling)
-- [ ] State persistence (restart and resume)
-- [ ] Error recovery (kill connection, verify retry)
-
-### How to Test
-
-**Test 1: Single Bot**
+### Directory Structure ✓
 ```bash
-python3 -m bbsbot.commands.scripts.play_tw2002_multibot 1
-# Verify: Bot connects, logs in, executes behavior
-# Expected: Single trader bot running continuously
+$ ls .provide/
+archive  HANDOFF.md
+
+$ ls docs/
+ARCHITECTURE_DIAGRAM.md  guides/  README.md  SYSTEM_ARCHITECTURE.md  reference/
+
+$ ls docs/guides/
+INTELLIGENT_BOT.md  MULTI_CHARACTER.md  QUICK_START.md
+
+$ ls sessions/tw2002/
+1000turns/  complete/  debug/
+
+$ ls games/tw2002/docs/
+bbs-login-solution.md  LLM_HINTS.md  TEDIT_REFERENCE.md
+credentials.md         README.md     TWGS_LOGIN_FLOW.md
 ```
 
-**Test 2: Two Bots**
+### Git Ignore ✓
 ```bash
-./run_multibot.sh 2
-# Verify: Both bots coordinate, shared_state.json created
-# Expected: trader_01 and scout_02 running, status reports every 30s
+$ git status --ignored | grep sessions
+	sessions/
 ```
 
-**Test 3: Five Bots (Full)**
+### Documentation Files ✓
 ```bash
-./run_multibot.sh 5
-# Verify: All roles active, no connection errors
-# Expected: 5 bots all reporting status
+$ wc -l docs/README.md docs/SYSTEM_ARCHITECTURE.md docs/ARCHITECTURE_DIAGRAM.md
+     184 docs/README.md
+     737 docs/SYSTEM_ARCHITECTURE.md
+     435 docs/ARCHITECTURE_DIAGRAM.md
+    1356 total
 ```
 
-**Test 4: Graceful Shutdown**
+### Session Files Moved ✓
 ```bash
-./run_multibot.sh 3
-# Wait 60 seconds, then press Ctrl+C
-# Verify: "Shutting down gracefully" for each bot
-# Expected: Clean exit, no exceptions
+$ ls sessions/tw2002/complete/ | wc -l
+      18  # 9 json + 9 md files
+
+$ ls sessions/tw2002/1000turns/ | wc -l
+      14  # 7 json + 7 md files
+
+$ ls sessions/tw2002/debug/ | wc -l
+       6  # Debug text files
 ```
 
-**Test 5: State Persistence**
+### Archive ✓
 ```bash
-./run_multibot.sh 2
-# Run for 2 minutes, Ctrl+C
-# Check: cat ~/.bbsbot_multibot/shared_state.json
-# Verify: sectors_mapped > 0, total_trades > 0
+$ ls .provide/archive/
+2026-02-03_telnet_fix.md
+2026-02-06_ai_strategy.md
+2026-02-06_framework_extraction.md
+2026-02-06_logging_cleanup.md
+2026-02-06_refactoring_complete.md
+2026-02-06_themed_names.md
+ARCHITECTURE-OVERVIEW.md
+HANDOFF-enhancements.md
+HANDOFF-intelligent-bot.md
+HANDOFF-prompt-detection.md
+IMPLEMENTATION-CHECKLIST.md
+PLAYTHROUGH-RESULTS.md
 ```
 
-## Files Modified/Created
+## Files Created/Modified
 
 ### New Files
-- `src/bbsbot/commands/scripts/play_tw2002_multibot.py` (510 lines)
-- `run_multibot.sh` (launcher script)
-- `.provide/MULTIBOT.md` (comprehensive documentation)
-- `.provide/HANDOFF.md` (this file)
+- `docs/README.md` - Documentation entry point (184 lines)
+- `games/tw2002/docs/README.md` - Game docs index (159 lines)
+- `sessions/` - New directory for session logs
+- `docs/guides/` - New directory for guides
+- `docs/reference/` - New directory for reference docs
+- `.provide/archive/` - New directory for old handoffs
 
 ### Modified Files
-- None (all new implementation)
+- `.gitignore` - Added sessions/ ignore rule
+- `docs/README.md` - Restructured and updated links
 
-## Next Steps for User
+### Moved Files
+- 29 session log files → `sessions/tw2002/`
+- 6 documentation files → `docs/` or `docs/guides/`
+- 12 handoff files → `.provide/archive/`
+- 5 game docs → `games/tw2002/docs/`
 
-### Immediate Testing
-1. **Start with 1 bot** to verify basic flow:
-   ```bash
-   python3 -m bbsbot.commands.scripts.play_tw2002_multibot 1
-   ```
-   Watch for successful login and behavior execution.
+## Next Steps
 
-2. **Scale to 2 bots** to test coordination:
-   ```bash
-   ./run_multibot.sh 2
-   ```
-   Watch for shared state updates in status reports.
+### Documentation Maintenance
 
-3. **Full 5-bot run**:
-   ```bash
-   ./run_multibot.sh 5
-   ```
-   Monitor for connection issues or errors.
+**When to Archive Handoffs**:
+1. Feature is complete and merged
+2. Rename: `HANDOFF_{topic}.md` → `YYYY-MM-DD_{topic}.md`
+3. Move to `.provide/archive/`
 
-### Monitoring
-- Watch console output for status reports
-- Check `~/.bbsbot_multibot/shared_state.json` for coordination data
-- Monitor server load (CPU, memory, connections)
+**Adding New Documentation**:
+- How-to guides → `docs/guides/{topic}.md`
+- Technical reference → `docs/reference/{topic}.md`
+- Game-specific → `games/{game}/docs/{topic}.md`
 
-### Customization
-- Adjust coordination interval (30s default)
-- Change bot roles in `spawn_bots()` method
-- Add new behaviors for different strategies
-- Configure via `config/tw2002.yml`
+**Cleaning Session Logs**:
+```bash
+# Safe to delete old session logs
+rm -rf sessions/tw2002/complete/*-1770337045.*  # Specific session
+rm -rf sessions/tw2002/debug/*.txt               # Debug artifacts
 
-### Troubleshooting
-If issues occur:
-1. Check `.provide/MULTIBOT.md` troubleshooting section
-2. Reduce number of bots
-3. Check TWGS server logs
-4. Verify port 2002 is accessible
-5. Review bot logs for specific errors
+# Or clean all sessions (if needed)
+rm -rf sessions/
+```
+
+### Using the New Structure
+
+**Finding Documentation**:
+1. Start at `docs/README.md` - Documentation entry point
+2. Browse guides/ for how-tos
+3. Check reference/ for API docs
+4. Game specifics at `games/{game}/docs/`
+
+**Working on a Game**:
+1. Read `games/{game}/docs/README.md` first
+2. Reference technical docs in that folder
+3. Update game docs as needed
+
+**Testing Session Logs**:
+1. Run bot: logs go to `sessions/tw2002/`
+2. Review logs for debugging
+3. Delete old logs: `rm sessions/tw2002/complete/*.json`
+4. Never commit session logs (gitignored)
 
 ## Summary
 
-Successfully implemented a complete multi-bot coordinated gameplay system for Trade Wars 2002:
+Successfully reorganized documentation structure:
 
-- ✅ 5 different bot roles with specialized behaviors
-- ✅ Coordinated gameplay via shared state
-- ✅ Continuous operation until stopped
-- ✅ Graceful shutdown handling
-- ✅ Comprehensive documentation
-- ✅ Easy-to-use launcher script
+- ✅ Separated documentation from session logs
+- ✅ Created clear, discoverable structure
+- ✅ Archived 12 completed handoffs
+- ✅ Moved 29 session logs to `sessions/` (gitignored)
+- ✅ Created 2 new README files for navigation
+- ✅ Updated .gitignore for sessions/
+- ✅ Cleaned `.provide/` from 32+ files → 1 file
 
-The system is ready for testing. Start with 1-2 bots to verify core functionality, then scale to 5 for full coordinated gameplay.
+**Result**: Clean, professional documentation structure that scales well and is easy to navigate.
 
-**Estimated Time to First Working Run**: 5-10 minutes (assuming server is running and credentials configured)
+**Total Files Organized**: 52 files moved/archived
+**New Documentation**: 2 README files (343 lines total)
+**Git Status**: Clean (no untracked session files)
 
-**Total Implementation**: ~510 lines of production code + 350 lines of documentation
+---
+
+## Documentation Links
+
+**📚 Complete System Documentation**:
+- **[Documentation Index](../docs/README.md)** - Start here
+- **[System Architecture](../docs/SYSTEM_ARCHITECTURE.md)** - Complete system overview
+- **[Architecture Diagrams](../docs/ARCHITECTURE_DIAGRAM.md)** - Visual diagrams
+- **[Quick Start Guide](../docs/guides/QUICK_START.md)** - Get started in 5 minutes
+- **[Multi-Character Guide](../docs/guides/MULTI_CHARACTER.md)** - Managing multiple bots
+- **[TW2002 Documentation](../games/tw2002/docs/README.md)** - Game-specific reference
+
+**📁 Archive**:
+- **[.provide/archive/](.provide/archive/)** - Completed handoffs
