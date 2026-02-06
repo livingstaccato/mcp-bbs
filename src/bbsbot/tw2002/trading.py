@@ -379,6 +379,11 @@ async def _warp_to_sector(bot, target_sector: int):
                 await send_input(bot, "N", input_type)
             await asyncio.sleep(0.2)
             continue
+        if prompt_id == "prompt.avoid_sector_add":
+            # Don't avoid sectors - we want to explore everywhere
+            await send_input(bot, "N", input_type)
+            await asyncio.sleep(0.2)
+            continue
         if prompt_id in ("prompt.sector_command", "prompt.command_generic"):
             # Retry sending warp command if we missed it
             await bot.session.send("M")

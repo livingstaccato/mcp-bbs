@@ -27,6 +27,7 @@ from bbsbot.tw2002.bot import TradingBot
 from bbsbot.tw2002.multi_character import MultiCharacterManager
 from bbsbot.tw2002.character import CharacterState
 from bbsbot.tw2002 import login, orientation, io, trading
+from bbsbot.tw2002.sophisticated_trader import SophisticatedTrader
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ class CoordinatedBot:
         self.session_id: str | None = None
         self.bot: TradingBot | None = None
         self.character: CharacterState | None = None
+        self.trader: SophisticatedTrader | None = None
 
         # Role-specific behavior counters
         self.actions_count = 0
@@ -189,10 +191,12 @@ class CoordinatedBot:
         # Initialize game state
         self.bot.game_state = await orientation.orient(self.bot, self.bot.sector_knowledge)
 
-        # Initialize trading strategy for ALL bots (they all trade now)
-        self.bot.init_strategy()
+        # Initialize sophisticated trader
+        self.trader = SophisticatedTrader(self.bot, self.shared_state)
+        self.trader.current_sector = self.bot.current_sector
+        self.trader.current_credits = self.bot.current_credits
 
-        logger.info(f"[{self.character_name}] Ready for action")
+        logger.info(f"[{self.character_name}] Ready for action with sophisticated trader")
 
     async def run_behavior_loop(self):
         """Main behavior loop - trade until out of turns."""
@@ -256,23 +260,35 @@ class CoordinatedBot:
             logger.debug(f"[{self.character_name}] Actions: {self.actions_count}, Turns: {turns}")
 
     async def trading_behavior(self):
-        """Use proper trading system with full prompt handling."""
+        """Use sophisticated trader with full AI and coordination."""
         try:
-            # Use the actual trading cycle which handles all prompts correctly
-            result = await trading.single_trading_cycle(self.bot)
+            # Execute one trade cycle with the sophisticated trader
+            result = await self.trader.execute_trade_cycle()
 
             if result and result.get("success"):
+                action = result.get("action", "unknown")
                 profit = result.get("profit", 0)
-                if profit > 0:
-                    logger.info(f"[{self.character_name}] 💰 Profit: {profit:,} credits")
 
-                # Update shared state
-                self.shared_state.total_trades += 1
                 if profit > 0:
+                    logger.info(f"[{self.character_name}] 💰 Profit: +{profit:,} credits!")
                     self.shared_state.total_credits += profit
 
+                if action in ("bought", "sold"):
+                    self.shared_state.total_trades += 1
+
+                # Update bot state from trader
+                self.bot.current_sector = self.trader.current_sector
+                self.bot.current_credits = self.trader.current_credits
+
         except Exception as e:
-            logger.debug(f"[{self.character_name}] Trade attempt: {e}")
+            logger.warning(f"[{self.character_name}] Trade cycle error: {e}")
+
+            # Try to recover
+            try:
+                await self.bot.session.send("Q\r")
+                await asyncio.sleep(0.5)
+            except:
+                pass
 
     async def shutdown(self):
         """Graceful shutdown."""
@@ -285,8 +301,9 @@ class CoordinatedBot:
 class MultiBotCoordinator:
     """Coordinates multiple bots."""
 
-    def __init__(self, num_bots: int = 5):
+    def __init__(self, num_bots: int = 5, connection_window: int = 60):
         self.num_bots = num_bots
+        self.connection_window = connection_window  # Seconds to spread connections over
         self.bots: list[CoordinatedBot] = []
         self.data_dir = Path.home() / ".bbsbot_multibot"
         self.data_dir.mkdir(exist_ok=True)
@@ -343,9 +360,13 @@ class MultiBotCoordinator:
             self.bots.append(bot)
             logger.info(f"✓ Created bot #{i}: {bot.character_name} ({role.value})")
 
-    async def run_bot(self, bot: CoordinatedBot):
-        """Run a single bot lifecycle."""
+    async def run_bot(self, bot: CoordinatedBot, connection_delay: float = 0):
+        """Run a single bot lifecycle with optional connection delay."""
         try:
+            # Stagger connection to avoid overwhelming server
+            if connection_delay > 0:
+                await asyncio.sleep(connection_delay)
+
             await bot.connect()
             await bot.login_and_setup()
             await bot.run_behavior_loop()
@@ -383,18 +404,36 @@ class MultiBotCoordinator:
 
     async def run(self):
         """Run the multi-bot system."""
+        import random
+
         print("\n" + "="*80)
         print("TRADE WARS 2002 - MULTI-BOT COORDINATED GAMEPLAY")
         print("="*80)
         print(f"\nSpawning {self.num_bots} coordinated bots...")
+        print(f"Connections staggered over {self.connection_window} seconds")
         print("Press Ctrl+C to stop all bots gracefully\n")
 
         await self.spawn_bots()
 
-        # Start all bots concurrently
+        # Calculate random connection delays for each bot
+        # Spread evenly over the connection window
+        connection_delays = []
+        for i in range(len(self.bots)):
+            # Random delay between 0 and connection_window seconds
+            delay = random.uniform(0, self.connection_window)
+            connection_delays.append(delay)
+
+        # Sort to show connection order
+        sorted_delays = sorted(enumerate(connection_delays), key=lambda x: x[1])
+        print(f"Connection schedule (first 10 bots):")
+        for idx, delay in sorted_delays[:10]:
+            print(f"  {self.bots[idx].character_name:20s} @ {delay:5.1f}s")
+        print()
+
+        # Start all bots concurrently with staggered connections
         tasks = [
-            asyncio.create_task(self.run_bot(bot))
-            for bot in self.bots
+            asyncio.create_task(self.run_bot(bot, delay))
+            for bot, delay in zip(self.bots, connection_delays)
         ]
 
         # Add monitor task
@@ -428,8 +467,9 @@ async def main():
     # Allow override via command line
     import sys
     num_bots = int(sys.argv[1]) if len(sys.argv) > 1 else 5
+    connection_window = int(sys.argv[2]) if len(sys.argv) > 2 else 60
 
-    coordinator = MultiBotCoordinator(num_bots=num_bots)
+    coordinator = MultiBotCoordinator(num_bots=num_bots, connection_window=connection_window)
     coordinator.setup_signal_handlers()
     await coordinator.run()
 
