@@ -84,6 +84,8 @@ class CompleteTW2002Player:
         for _ in range(30):
             screen_text = snapshot.get("screen", "")
             screen_lower = screen_text.lower()
+            lines = screen_text.splitlines()
+            tail = "\n".join(lines[-5:]).lower() if lines else ""
             detected = snapshot.get("prompt_detected", {}) or {}
             prompt_id = detected.get("prompt_id", "")
 
@@ -107,43 +109,58 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "trade wars 2002" in screen_lower and "enter your choice" in screen_lower:
+            if "trade wars 2002" in screen_lower and "enter your choice" in tail:
                 await self.send("T\r", "Play Trade Wars 2002")
                 snapshot = await self.read_and_show(pause=2.0, max_lines=25)
                 continue
 
-            if "show today's log" in screen_lower:
+            if "show today's log" in tail or prompt_id == "prompt.yes_no":
                 await self.send("N\r", "Skip today's log")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "start a new character" in screen_lower and "password" not in screen_lower:
+            if "start a new character" in tail and "password" not in tail:
                 await self.send("Y\r", "Start new character")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "repeat password" in screen_lower or "verify" in screen_lower:
+            if prompt_id == "prompt.game_password":
+                await self.send(f"{password}\r", "Enter password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "repeat password" in tail or "verify" in tail:
                 await self.send(f"{password}\r", "Confirm password")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "password?" in screen_lower:
+            if "password?" in tail:
                 await self.send(f"{password}\r", "Set password")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "use (n)ew name" in screen_lower or "bbs name" in screen_lower:
+            if "use (n)ew name" in tail or "bbs name" in tail:
                 await self.send("B\r", "Use BBS name")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "ship" in screen_lower and "name" in screen_lower:
+            if prompt_id == "prompt.ship_name":
+                if "is what you want" in tail:
+                    await self.send("Y\r", "Confirm ship name")
+                    snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                else:
+                    ship_name = f"{username}'s ship"
+                    await self.send(f"{ship_name}\r", "Ship name")
+                    snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "ship" in tail and "name" in tail:
                 ship_name = f"{username}'s ship"
                 await self.send(f"{ship_name}\r", "Ship name")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "is what you want" in screen_lower and "ship" in screen_lower:
+            if "is what you want" in tail and "ship" in tail:
                 await self.send("Y\r", "Confirm ship name")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
