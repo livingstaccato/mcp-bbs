@@ -14,6 +14,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.config import BotConfig, GoalPhase
+from bbsbot.games.tw2002.interventions.advisor import InterventionAdvisor
+from bbsbot.games.tw2002.interventions.trigger import InterventionTrigger
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
@@ -97,6 +99,19 @@ class AIStrategy(TradingStrategy):
         )
         self._current_goal_id = initial_goal
 
+        # Intervention system
+        self._intervention_trigger = InterventionTrigger(
+            enabled=self._settings.intervention.enabled,
+            min_priority=self._settings.intervention.min_priority,
+            cooldown_turns=self._settings.intervention.cooldown_turns,
+            max_interventions_per_session=self._settings.intervention.max_per_session,
+            session_logger=self._session_logger,
+        )
+        self._intervention_advisor = InterventionAdvisor(
+            config=config,
+            llm_manager=self.llm_manager,
+        )
+
     @property
     def name(self) -> str:
         """Strategy name."""
@@ -146,6 +161,48 @@ class AIStrategy(TradingStrategy):
 
         # Re-evaluate goal if needed
         await self._maybe_reevaluate_goal(state)
+
+        # Check for intervention triggers
+        should_intervene, reason, context = self._intervention_trigger.should_intervene(
+            current_turn=self._current_turn,
+            state=state,
+            strategy=self,
+        )
+
+        if should_intervene:
+            try:
+                # Build intervention prompt and query LLM
+                recommendation = await self._intervention_advisor.analyze(
+                    state=state,
+                    recent_decisions=self._get_recent_decisions(),
+                    strategy_stats=self.stats,
+                    goal_phases=self._goal_phases,
+                    anomalies=context.get("anomalies", []),
+                    opportunities=context.get("opportunities", []),
+                    trigger_reason=reason,
+                )
+
+                # Log intervention
+                await self._intervention_trigger.log_intervention(
+                    turn=self._current_turn,
+                    reason=reason,
+                    context=context,
+                    recommendation=recommendation,
+                )
+
+                # Apply recommendation if auto-apply enabled
+                if self._settings.intervention.auto_apply:
+                    result = self._apply_intervention(recommendation, state)
+                    if result:
+                        action, params = result
+                        logger.info(
+                            "intervention_applied",
+                            action=action.name,
+                            recommendation=recommendation.get("recommendation"),
+                        )
+                        return action, params
+            except Exception as e:
+                logger.error("intervention_analysis_failed", error=str(e))
 
         # Periodic feedback loop
         if (
@@ -990,6 +1047,100 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
             reason=reason,
         )
         self._goal_phases.append(self._current_phase)
+
+    def record_action_result(
+        self,
+        action: TradeAction,
+        profit_delta: int,
+        state: GameState,
+    ) -> None:
+        """Record action result for intervention detection.
+
+        Args:
+            action: Action that was taken
+            profit_delta: Profit change from action
+            state: Game state after action
+        """
+        # Update intervention detector
+        self._intervention_trigger.update_detector(
+            turn=self._current_turn,
+            state=state,
+            action=action.name,
+            profit_delta=profit_delta,
+            strategy=self,
+        )
+
+        # Also record for feedback
+        self._record_event("result", {
+            "turn": self._current_turn,
+            "action": action.name,
+            "profit_delta": profit_delta,
+            "credits": state.credits,
+        })
+
+    def _get_recent_decisions(self) -> list[dict]:
+        """Get recent decisions with reasoning for intervention analysis.
+
+        Returns:
+            List of recent decision events
+        """
+        # Return last N decision events from recent_events
+        decisions = [
+            e for e in self._recent_events
+            if e.get("type") == "decision"
+        ]
+        return list(decisions)[-10:]  # Last 10 decisions
+
+    def _apply_intervention(
+        self,
+        recommendation: dict,
+        state: GameState,
+    ) -> tuple[TradeAction, dict] | None:
+        """Apply intervention recommendation.
+
+        Args:
+            recommendation: LLM intervention recommendation
+            state: Current game state
+
+        Returns:
+            Tuple of (action, params) if recommendation should be applied,
+            None otherwise
+        """
+        action_type = recommendation.get("suggested_action", {}).get("type", "none")
+
+        match action_type:
+            case "change_goal":
+                # Change to suggested goal
+                params = recommendation.get("suggested_action", {}).get("parameters", {})
+                new_goal = params.get("goal")
+                if new_goal and new_goal != self._current_goal_id:
+                    logger.info(
+                        "intervention_changing_goal",
+                        from_goal=self._current_goal_id,
+                        to_goal=new_goal,
+                    )
+                    self._set_goal(new_goal, trigger_type="manual", state=state)
+                return None  # Continue with normal decision making
+
+            case "reset_strategy":
+                # Reset fallback counter and try fresh
+                logger.info("intervention_reset_strategy")
+                self.consecutive_failures = 0
+                self.fallback_until_turn = 0
+                return None
+
+            case "force_move":
+                # Force movement to specific sector
+                params = recommendation.get("suggested_action", {}).get("parameters", {})
+                target_sector = params.get("target_sector")
+                if target_sector:
+                    logger.info("intervention_force_move", target=target_sector)
+                    return TradeAction.MOVE, {"destination": target_sector}
+                return None
+
+            case _:
+                # No action or unknown type - continue normally
+                return None
 
     async def rewind_to_turn(
         self,
