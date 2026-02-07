@@ -540,25 +540,33 @@ async def login_sequence(
     print(f"  [DEBUG] Parsing credits...", flush=True)
     bot.current_credits = _parse_credits_from_screen(bot, screen)
 
-    # If still 0/None, try to get credits via D command immediately after login
+    # Establish accurate game state immediately after login
+    # This reads current screen to get accurate credits, location, and game state
     if bot.current_credits is None or bot.current_credits == 0:
-        print(f"  [DEBUG] Credits still 0, attempting D command for player status...", flush=True)
+        print(f"  [DEBUG] Establishing accurate game state after login...", flush=True)
         try:
+            from bbsbot.games.tw2002.parsing import extract_semantic_kv, _parse_display_screen
+
+            # Send 'D' to get player display with full status
             await bot.session.send("D")
             await asyncio.sleep(0.5)
             result = await bot.session.read(timeout_ms=5000, max_bytes=8192)
             display_screen = result.get("screen", "")
+            kv_semantic = result.get("kv_data", {})
 
-            # Try to parse credits from display output
-            import re
-            credit_match = re.search(r'credits?\s*:\s*([\d,]+)', display_screen, re.IGNORECASE)
-            if credit_match:
-                parsed_credits = int(credit_match.group(1).replace(',', ''))
-                if parsed_credits > 0:
-                    bot.current_credits = parsed_credits
-                    print(f"  [DEBUG] Got credits from D command: {bot.current_credits}", flush=True)
+            # Try display parsing first (official D command output)
+            display_info = _parse_display_screen(display_screen)
+            if display_info.get('credits'):
+                bot.current_credits = display_info.get('credits')
+                print(f"  [DEBUG] Got credits from D command display: {bot.current_credits}", flush=True)
+            # Fallback to semantic extraction from current screen
+            elif kv_semantic.get('credits'):
+                bot.current_credits = kv_semantic.get('credits')
+                print(f"  [DEBUG] Got credits from semantic data: {bot.current_credits}", flush=True)
+            else:
+                print(f"  [DEBUG] D command didn't return credits, moving to sector...", flush=True)
         except Exception as e:
-            print(f"  [DEBUG] D command attempt failed: {e}", flush=True)
+            print(f"  [DEBUG] State establishment failed: {e}", flush=True)
 
     # Final fallback: Use semantic data if still 0/None
     print(f"  [DEBUG] kv_data available: {bool(kv_data)}, keys: {list(kv_data.keys()) if kv_data else 'None'}", flush=True)
