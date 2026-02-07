@@ -183,7 +183,15 @@ class LearningEngine:
         if not self._namespace:
             return RuleLoadResult(source="none", patterns=[], metadata={})
 
-        repo_games_root = find_repo_games_root()
+        # Look for a repo-local rules override relative to the knowledge root.
+        # This keeps tests isolated (tmp dirs are not git repos) and avoids
+        # accidentally pulling in repo rules based on the current working dir.
+        # Be tolerant of older call sites / tests that monkeypatch this helper
+        # with a 0-arg function.
+        try:
+            repo_games_root = find_repo_games_root(self._knowledge_root)
+        except TypeError:
+            repo_games_root = find_repo_games_root()
         if repo_games_root:
             repo_rules = repo_games_root / self._namespace / "rules.json"
             if repo_rules.exists():
@@ -195,6 +203,35 @@ class LearningEngine:
                         metadata={"game": rules.game, "version": rules.version, **rules.metadata},
                     )
                 except (json.JSONDecodeError, OSError, ValueError):
+                    # Legacy rules.json support (minimal prompt list).
+                    try:
+                        data = json.loads(repo_rules.read_text())
+                        legacy_patterns: list[dict[str, Any]] = []
+                        for prompt in data.get("prompts", []):
+                            prompt_id = prompt.get("prompt_id")
+                            regex = prompt.get("regex")
+                            if not prompt_id or not regex:
+                                continue
+                            input_type = prompt.get("input_type", "multi_key")
+                            legacy_patterns.append(
+                                {
+                                    "id": prompt_id,
+                                    "regex": regex,
+                                    "input_type": input_type,
+                                    "expect_cursor_at_end": True,
+                                    # Legacy rules.json files may include kv_extract
+                                    # directly; the detector can carry it through.
+                                    "kv_extract": prompt.get("kv_extract"),
+                                }
+                            )
+                        if legacy_patterns:
+                            return RuleLoadResult(
+                                source=str(repo_rules),
+                                patterns=legacy_patterns,
+                                metadata=data.get("metadata", {}),
+                            )
+                    except Exception:
+                        pass
                     return RuleLoadResult(source=str(repo_rules), patterns=[], metadata={})
 
             repo_prompts = repo_games_root / self._namespace / "prompts.json"
@@ -219,6 +256,33 @@ class LearningEngine:
                     metadata={"game": rules.game, "version": rules.version, **rules.metadata},
                 )
             except (json.JSONDecodeError, OSError, ValueError):
+                # Legacy rules.json support (minimal prompt list).
+                try:
+                    data = json.loads(rules_file.read_text())
+                    legacy_patterns: list[dict[str, Any]] = []
+                    for prompt in data.get("prompts", []):
+                        prompt_id = prompt.get("prompt_id")
+                        regex = prompt.get("regex")
+                        if not prompt_id or not regex:
+                            continue
+                        input_type = prompt.get("input_type", "multi_key")
+                        legacy_patterns.append(
+                            {
+                                "id": prompt_id,
+                                "regex": regex,
+                                "input_type": input_type,
+                                "expect_cursor_at_end": True,
+                                "kv_extract": prompt.get("kv_extract"),
+                            }
+                        )
+                    if legacy_patterns:
+                        return RuleLoadResult(
+                            source=str(rules_file),
+                            patterns=legacy_patterns,
+                            metadata=data.get("metadata", {}),
+                        )
+                except Exception:
+                    pass
                 return RuleLoadResult(source=str(rules_file), patterns=[], metadata={})
 
         patterns_file = self._knowledge_root / "games" / self._namespace / "prompts.json"

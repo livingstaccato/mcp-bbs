@@ -70,7 +70,9 @@ class PromptDetector:
             PromptMatch if a prompt pattern matches, None otherwise
         """
         screen = snapshot["screen"]
-        cursor_at_end = snapshot.get("cursor_at_end", False)
+        # Most callers supply cursor metadata; tests/legacy callers may not.
+        # Defaulting to True keeps prompt detection working for minimal snapshots.
+        cursor_at_end = snapshot.get("cursor_at_end", True)
         has_trailing_space = snapshot.get("has_trailing_space", False)
 
         for regex, pattern in self._compiled:

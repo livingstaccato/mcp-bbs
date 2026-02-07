@@ -189,6 +189,9 @@ def test_character_reuse_workflow(
     assert len(chars_session1) == 3
     assert len(set(chars_session1)) == 3  # All unique
 
+    # End of session cleanup: release locks so another process can reuse characters.
+    manager1.release_all_locks()
+
     # Second session: Should reuse those 3 characters
     manager2 = MultiCharacterManager(
         config=test_config,

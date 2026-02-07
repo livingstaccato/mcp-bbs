@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from bbsbot.tw2002.login import _get_actual_prompt, _is_description_mode
+from bbsbot.games.tw2002.login import _get_actual_prompt, _is_description_mode
 
 
 class TestGetActualPrompt:

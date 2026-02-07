@@ -36,6 +36,11 @@ class BufferManager:
         self._last_hash: str = ""
         self._last_change_time: float = 0.0
 
+    @property
+    def _buffers(self) -> dict[str, deque[ScreenBuffer]]:
+        """Backward-compatible view for older tests/code that expected per-session buffers."""
+        return {"default": self._buffer}
+
     def add_screen(self, snapshot: dict[str, Any]) -> ScreenBuffer:
         """Add screen snapshot to buffer and calculate timing metadata.
 

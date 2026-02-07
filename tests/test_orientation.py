@@ -9,7 +9,7 @@ import json
 import pytest
 from pathlib import Path
 
-from bbsbot.tw2002.orientation import (
+from bbsbot.games.tw2002.orientation import (
     GameState,
     SectorKnowledge,
     SectorInfo,

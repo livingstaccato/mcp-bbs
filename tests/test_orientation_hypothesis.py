@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from hypothesis import given, strategies as st, assume, settings
 
-from bbsbot.tw2002.orientation import (
+from bbsbot.games.tw2002.orientation import (
     GameState,
     SectorInfo,
     SectorKnowledge,
@@ -31,10 +31,31 @@ VALID_CONTEXTS = [
     "sector_command",
     "planet_command",
     "citadel_command",
+    "stardock",
+    "computer_menu",
+    "cim_mode",
+    "course_plotter",
     "port_menu",
+    "port_trading",
+    "port_report",
+    "bank",
+    "ship_shop",
+    "hardware_shop",
+    "message_system",
+    "tavern",
+    "grimy_trader",
+    "gambling",
+    "eavesdrop",
+    "underground",
     "combat",
-    "menu",
+    "warping",
+    "autopilot",
     "pause",
+    "more",
+    "confirm",
+    "login",
+    "menu",
+    "death",
     "unknown",
 ]
 
