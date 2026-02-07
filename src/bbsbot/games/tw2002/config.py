@@ -176,6 +176,38 @@ class TwerkOptimizedConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class InterventionConfig(BaseModel):
+    """Intervention system configuration."""
+
+    # Enable/disable
+    enabled: bool = True
+
+    # Detection thresholds
+    loop_action_threshold: int = 3        # Same action N times
+    loop_sector_threshold: int = 4        # Visit same sector N times
+    stagnation_turns: int = 15            # No progress for N turns
+    profit_decline_ratio: float = 0.5     # 50% decline triggers alert
+    turn_waste_threshold: float = 0.3     # >30% unproductive turns
+
+    # Opportunity thresholds
+    high_value_trade_min: int = 5000      # Min profit to flag trade
+    combat_ready_fighters: int = 50       # Min fighters for combat
+    combat_ready_shields: int = 100       # Min shields for combat
+    banking_threshold: int = 100000       # Credits to suggest banking
+
+    # Intervention behavior
+    auto_apply: bool = False              # Auto-apply recommendations
+    min_priority: str = "medium"          # medium|high|critical
+    cooldown_turns: int = 5               # Min turns between interventions
+    max_per_session: int = 20             # Budget limit
+
+    # LLM settings
+    analysis_temperature: float = 0.3     # Lower for consistent analysis
+    analysis_max_tokens: int = 800
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class AIStrategyConfig(BaseModel):
     """Configuration for AI strategy."""
 
@@ -209,6 +241,9 @@ class AIStrategyConfig(BaseModel):
     # Visualization settings
     show_goal_visualization: bool = True  # Enable/disable live visualization
     visualization_interval: int = 50      # Show status every N turns (when applicable)
+
+    # Intervention system
+    intervention: InterventionConfig = Field(default_factory=InterventionConfig)
 
     model_config = ConfigDict(extra="ignore")
 
