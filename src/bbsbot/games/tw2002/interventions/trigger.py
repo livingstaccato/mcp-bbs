@@ -8,14 +8,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bbsbot.games.tw2002.interventions.detector import (
-    InterventionDetector,
-    InterventionPriority,
-)
+from bbsbot.games.tw2002.interventions.detector import InterventionDetector
+from bbsbot.games.tw2002.interventions.types import InterventionPriority
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
-    from bbsbot.games.tw2002.state import GameState
+    from bbsbot.games.tw2002.orientation import GameState
     from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
     from bbsbot.mcp_bbs.session_logger import SessionLogger
 

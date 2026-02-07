@@ -13,7 +13,7 @@ from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.config import BotConfig
-    from bbsbot.games.tw2002.state import GameState
+    from bbsbot.games.tw2002.orientation import GameState
     from bbsbot.llm.manager import LLMManager
 
 logger = get_logger(__name__)
@@ -147,7 +147,7 @@ class InterventionAdvisor:
             import json
             from typing import cast
 
-            recommendation = cast(dict[str, Any], json.loads(response.message.content))
+            recommendation = cast("dict[str, Any]", json.loads(response.message.content))
             logger.info(
                 "Received intervention recommendation",
                 severity=recommendation.get("severity"),

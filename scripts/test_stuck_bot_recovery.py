@@ -18,10 +18,10 @@ from typing import Any
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from bbsbot.games.tw2002.interventions.detector import (
+from bbsbot.games.tw2002.interventions.detector import InterventionDetector
+from bbsbot.games.tw2002.interventions.types import (
     Anomaly,
     AnomalyType,
-    InterventionDetector,
     InterventionPriority,
     TurnData,
 )
