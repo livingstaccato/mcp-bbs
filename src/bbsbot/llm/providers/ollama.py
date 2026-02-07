@@ -1,12 +1,12 @@
 """Ollama provider implementation."""
 
 import json
-import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
 
+from bbsbot.logging import get_logger
 from bbsbot.llm.config import OllamaConfig
 from bbsbot.llm.exceptions import (
     LLMConnectionError,
@@ -24,7 +24,7 @@ from bbsbot.llm.types import (
     StreamChunk,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OllamaProvider:

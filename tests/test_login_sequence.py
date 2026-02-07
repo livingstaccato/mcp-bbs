@@ -101,7 +101,7 @@ class TestLoginSequencePromptHandling:
         bot = MockBot(session)
 
         # Import here to avoid issues with module loading
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         # Test menu_selection detection
         assert _get_actual_prompt(screens[0]["screen"]) == "menu_selection"
@@ -109,7 +109,7 @@ class TestLoginSequencePromptHandling:
     @pytest.mark.asyncio
     async def test_handles_tw_game_menu(self) -> None:
         """Test that TW game menu sends T to play."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = """Trade Wars 2002
 <S>tart a New Character
@@ -121,7 +121,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_show_log_prompt(self) -> None:
         """Test that show log prompt sends N."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = "Show today's log? (Y/N)"
         assert _get_actual_prompt(screen) == "show_log_prompt"
@@ -129,7 +129,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_name_selection(self) -> None:
         """Test that name selection sends B for BBS name."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = "(N)ew Name or (B)BS Name"
         assert _get_actual_prompt(screen) == "name_selection"
@@ -137,7 +137,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_ship_name_prompt(self) -> None:
         """Test that ship name prompt enters ship name."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = "What do you want to name your ship?"
         assert _get_actual_prompt(screen) == "ship_name_prompt"
@@ -145,7 +145,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_name_confirm(self) -> None:
         """Test that ship name confirmation sends Y."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = '"testbot\'s Ship"\nIs what you want?'
         assert _get_actual_prompt(screen) == "name_confirm"
@@ -153,7 +153,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_password_prompt(self) -> None:
         """Test that password prompt sends password."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = "Welcome back!\nPassword?"
         assert _get_actual_prompt(screen) == "password_prompt"
@@ -161,7 +161,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_new_character_prompt(self) -> None:
         """Test that new character prompt sends Y."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = "Start a new character?\n(Type Y or N)"
         assert _get_actual_prompt(screen) == "new_character_prompt"
@@ -169,7 +169,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_use_ansi(self) -> None:
         """Test that ANSI prompt sends Y."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = "Use ANSI graphics?"
         assert _get_actual_prompt(screen) == "use_ansi"
@@ -177,7 +177,7 @@ Enter your choice:"""
     @pytest.mark.asyncio
     async def test_handles_description_mode(self) -> None:
         """Test that description mode sends Q to exit."""
-        from bbsbot.tw2002.login import _get_actual_prompt, _is_description_mode
+        from bbsbot.games.tw2002.login import _get_actual_prompt, _is_description_mode
 
         screen = "Show Game Descriptions\nSelect game (Q for none):"
         assert _get_actual_prompt(screen) == "description_mode"
@@ -194,7 +194,7 @@ class TestLoginSequenceFlow:
         Flow: menu → game → log prompt → pause → password → name select →
               ship name → confirm → command prompt
         """
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         # Verify each step of the flow is detected correctly
         flow_steps = [
@@ -221,7 +221,7 @@ class TestLoginSequenceFlow:
 
         Flow: menu → game → log prompt → password → command prompt
         """
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         flow_steps = [
             ("Selection (? for menu):", "menu_selection"),
@@ -241,7 +241,7 @@ class TestLoginSequenceFlow:
 
         When stuck in description mode, should send Q to exit.
         """
-        from bbsbot.tw2002.login import _get_actual_prompt, _is_description_mode
+        from bbsbot.games.tw2002.login import _get_actual_prompt, _is_description_mode
 
         # First detect description mode
         desc_screen = "Show Game Descriptions\nSelect game (Q for none):"
@@ -259,7 +259,7 @@ class TestLoginSequenceEdgeCases:
     @pytest.mark.asyncio
     async def test_stale_pause_in_buffer(self) -> None:
         """Test that stale [Pause] text doesn't confuse detection."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         # Old pause text in buffer, but command prompt is current
         screen = """[Pause] press space or enter
@@ -273,7 +273,7 @@ Command [TL=00:00:00]:[1] (?=Help)?"""
     @pytest.mark.asyncio
     async def test_partial_ship_name_input(self) -> None:
         """Test ship name detection with partial input on last line."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         # User started typing but prompt should still be detected
         screen = """What do you want to name your ship?
@@ -284,7 +284,7 @@ testbot's Sh"""
     @pytest.mark.asyncio
     async def test_planet_command_is_game_entry(self) -> None:
         """Test that planet command is recognized as game entry."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         screen = """Planet Terra
 Population: 1000
@@ -296,7 +296,7 @@ Planet Command [?=Help]?"""
     @pytest.mark.asyncio
     async def test_multiple_pause_screens(self) -> None:
         """Test handling multiple consecutive pause screens."""
-        from bbsbot.tw2002.login import _get_actual_prompt
+        from bbsbot.games.tw2002.login import _get_actual_prompt
 
         # Each pause should be detected
         screens = [
@@ -316,14 +316,14 @@ class TestLoginValidation:
 
     def test_kv_validation_valid(self) -> None:
         """Test validation passes for valid data."""
-        from bbsbot.tw2002.login import _check_kv_validation
+        from bbsbot.games.tw2002.login import _check_kv_validation
 
         kv_data = {"_validation": {"valid": True}}
         assert _check_kv_validation(kv_data, "test") == ""
 
     def test_kv_validation_invalid(self) -> None:
         """Test validation returns error for invalid data."""
-        from bbsbot.tw2002.login import _check_kv_validation
+        from bbsbot.games.tw2002.login import _check_kv_validation
 
         kv_data = {"_validation": {"valid": False, "errors": ["Field X is invalid"]}}
         result = _check_kv_validation(kv_data, "test")
@@ -332,13 +332,13 @@ class TestLoginValidation:
 
     def test_kv_validation_none(self) -> None:
         """Test validation handles None kv_data."""
-        from bbsbot.tw2002.login import _check_kv_validation
+        from bbsbot.games.tw2002.login import _check_kv_validation
 
         assert _check_kv_validation(None, "test") == ""
 
     def test_kv_validation_empty(self) -> None:
         """Test validation handles empty kv_data."""
-        from bbsbot.tw2002.login import _check_kv_validation
+        from bbsbot.games.tw2002.login import _check_kv_validation
 
         assert _check_kv_validation({}, "test") == ""
 
@@ -349,7 +349,7 @@ class TestLoginSequenceIntegration:
     @pytest.mark.asyncio
     async def test_send_input_adds_carriage_return(self) -> None:
         """Test that send_input adds \\r for multi_key input."""
-        from bbsbot.tw2002.io import send_input
+        from bbsbot.games.tw2002.io import send_input
 
         # Create mock bot with mock session
         mock_session = AsyncMock()
@@ -366,7 +366,7 @@ class TestLoginSequenceIntegration:
     @pytest.mark.asyncio
     async def test_send_input_single_key_no_cr(self) -> None:
         """Test that send_input doesn't add \\r for single_key input."""
-        from bbsbot.tw2002.io import send_input
+        from bbsbot.games.tw2002.io import send_input
 
         mock_session = AsyncMock()
         mock_session.send = AsyncMock()
@@ -382,7 +382,7 @@ class TestLoginSequenceIntegration:
     @pytest.mark.asyncio
     async def test_send_input_any_key_sends_space(self) -> None:
         """Test that send_input sends space for any_key."""
-        from bbsbot.tw2002.io import send_input
+        from bbsbot.games.tw2002.io import send_input
 
         mock_session = AsyncMock()
         mock_session.send = AsyncMock()

@@ -52,8 +52,10 @@ class KVExtractRule(BaseModel):
     regex: str
     type: str = "string"
     flags: int = re.MULTILINE | re.IGNORECASE
-    validate: dict[str, Any] | None = None
+    validate_rule: dict[str, Any] | None = Field(default=None, alias="validate")
     required: bool = False
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class PromptRule(BaseModel):
@@ -133,7 +135,7 @@ class RuleSet(BaseModel):
                         "regex": item.regex,
                         "type": item.type,
                         "flags": item.flags,
-                        "validate": item.validate,
+                        "validate": item.validate_rule,
                         "required": item.required,
                     }
                     for item in prompt.kv_extract

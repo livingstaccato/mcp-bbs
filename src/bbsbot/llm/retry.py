@@ -1,12 +1,12 @@
 """Retry logic with exponential backoff."""
 
 import asyncio
-import logging
 from typing import Any, Awaitable, Callable, TypeVar
 
+from bbsbot.logging import get_logger
 from bbsbot.llm.exceptions import LLMRateLimitError, LLMTimeoutError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

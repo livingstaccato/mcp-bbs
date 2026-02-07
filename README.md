@@ -673,6 +673,65 @@ Source files:
 
 bbsbot includes an intelligent bot system that uses prompt detection to autonomously navigate BBS games and test prompt patterns.
 
+## TW2002 Trading Bot
+
+Run the TW2002 trading bot:
+
+```bash
+bbsbot tw2002 bot -c tw2002_bot_config.yaml
+```
+
+### Goal Visualization (AI Strategy)
+
+When `trading.strategy: ai_strategy` is active, goal progress is shown:
+
+- A compact status line every `trading.ai_strategy.visualization_interval` turns
+- A full timeline whenever the goal changes
+- A summary report at the end of the session
+
+To disable all goal visualization output:
+
+```yaml
+trading:
+  ai_strategy:
+    show_goal_visualization: false
+```
+
+### Spy / Watch Socket
+
+You can broadcast the live terminal stream over TCP and attach to it from another terminal:
+
+```bash
+# Start bot with watch socket enabled (raw ANSI stream)
+bbsbot tw2002 bot -c tw2002_bot_config.yaml --watch-socket
+
+# Attach viewer
+bbsbot spy
+```
+
+If you want structured JSON events (including goal visualization events), use JSON protocol:
+
+```bash
+# Start bot with JSON watch protocol
+bbsbot tw2002 bot -c tw2002_bot_config.yaml --watch-socket --watch-socket-protocol json
+
+# Attach and view JSON lines (the "viz" events include compact/timeline/summary text)
+bbsbot spy --encoding utf-8
+```
+
+Goal visualization watch events look like:
+
+```json
+{"event":"viz","data":{"kind":"compact|timeline|summary","text":"...","turn":123,"character_name":"..."}}
+```
+
+### MCP “Spy” Tools (In-Process)
+
+If you’re running the bot inside the MCP server process, you can query goal progress on demand:
+
+- `tw2002_get_goal_visualization` (renders compact/timeline/summary)
+- `tw2002_get_goal_phases` (raw phase data)
+
 ### Quick Start
 
 ```bash
@@ -737,6 +796,10 @@ await bot.generate_report()
 - `enter_number`
 
 Results saved to `.provide/intelligent-bot-{timestamp}.json`
+
+## Known Warnings
+
+- You may see `UserWarning: Field name "validate" ... shadows an attribute` from Pydantic when starting `bbsbot`. This is currently harmless and does not affect runtime behavior.
 
 ## License
 

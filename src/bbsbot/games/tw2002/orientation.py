@@ -226,6 +226,20 @@ class SectorKnowledge:
         """Get full sector info if known."""
         return self._sectors.get(sector)
 
+    def update_sector(self, sector: int, info: dict) -> None:
+        """Update (or create) sector info from a partial dict.
+
+        This is a convenience helper primarily used by tests and debugging.
+        Unknown keys are ignored.
+        """
+        if sector not in self._sectors:
+            self._sectors[sector] = SectorInfo()
+        sector_info = self._sectors[sector]
+        for key, value in info.items():
+            if hasattr(sector_info, key):
+                setattr(sector_info, key, value)
+        self._save_cache()
+
     def record_observation(self, state: GameState) -> None:
         """Record what we observed in current sector."""
         if state.sector is None:

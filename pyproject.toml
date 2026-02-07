@@ -120,12 +120,11 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=bbsbot",
-    "--cov-report=term-missing",
-    "--cov-report=html",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
     "pytest-xdist>=3.8.0",
 ]

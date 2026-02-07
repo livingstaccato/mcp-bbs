@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import pytest
 from fastmcp import Client
 from fastmcp.mcp_config import StdioMCPServer
@@ -11,8 +12,10 @@ from fastmcp.mcp_config import StdioMCPServer
 async def test_bbs_connection(bbs_host: str, bbs_port: int) -> None:
     """Test basic BBS connection and interaction."""
     server = StdioMCPServer(
-        command="bbsbot",
-        args=[],
+        # Don't require an installed `bbsbot` console script; run from the
+        # current interpreter.
+        command=sys.executable,
+        args=["-m", "bbsbot.cli", "serve"],
     )
     async with Client(server.to_transport()) as client:
         await client.call_tool(

@@ -109,8 +109,8 @@ def extract_key_value_pairs(
 
     Example:
         patterns = {
-            "credits": r"Credits?:?\s*([\d,]+)",
-            "sector": r"Sector\s*:?\s*(\d+)"
+            "credits": r"Credits?:?\\s*([\\d,]+)",
+            "sector": r"Sector\\s*:?\\s*(\\d+)"
         }
         result = extract_key_value_pairs(screen, patterns)
         # Returns: {"credits": "1,000", "sector": "42"}

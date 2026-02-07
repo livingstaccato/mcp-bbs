@@ -94,6 +94,11 @@ class MultiCharacterManager:
         # Load existing records
         self._load_records()
 
+        # Ensure any on-disk character state files have corresponding records.
+        # This keeps record-keeping robust across older data layouts and
+        # simplifies callers/tests that expect _records entries for state files.
+        self._ensure_records_for_existing_characters()
+
         # Mark existing names as used to avoid collisions
         for record in self._records.values():
             self.name_generator.mark_used(record.name)
@@ -118,6 +123,27 @@ class MultiCharacterManager:
             self._character_count = data.get("total_count", len(self._records))
         except (json.JSONDecodeError, KeyError) as e:
             logger.warning(f"Failed to load character records: {e}")
+
+    def _ensure_records_for_existing_characters(self) -> None:
+        """Create minimal records for any characters that exist on disk."""
+        changed = False
+        for name in self._character_manager.list_characters():
+            if name in self._records:
+                continue
+            state = self._character_manager.load(name)
+            created_at = state.last_active or time()
+            self._records[name] = CharacterRecord(
+                name=name,
+                ship_name=getattr(state, "ship_name", None),
+                created_at=created_at,
+                sessions=getattr(state, "sessions_played", 0),
+                total_profit=getattr(state, "total_profit", 0),
+            )
+            changed = True
+
+        if changed:
+            self._character_count = max(self._character_count, len(self._records))
+            self._save_records()
 
     def _save_records(self) -> None:
         """Save character records to disk."""

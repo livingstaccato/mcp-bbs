@@ -65,12 +65,18 @@ def _extract_sector_from_screen(screen: str) -> int | None:
 
 
 def _is_trade_port_class(port_class: str | None) -> bool:
+    if not isinstance(port_class, str):
+        return False
     if not port_class:
         return False
     return bool(re.fullmatch(r"[BS]{3}", port_class.strip().upper()))
 
 
 def _extract_port_info(bot, screen: str) -> tuple[bool, str | None, str | None]:
+    screen_lower = screen.lower()
+    if "no port" in screen_lower:
+        return False, None, None
+
     semantic = extract_semantic_kv(screen)
     has_port = semantic.get("has_port")
     port_class = semantic.get("port_class")
@@ -117,7 +123,12 @@ def _extract_port_info(bot, screen: str) -> tuple[bool, str | None, str | None]:
 
     # Fallback to known game state if present
     state = getattr(bot, "game_state", None)
-    if state:
+    try:
+        from bbsbot.games.tw2002.orientation import GameState as _GameState
+    except Exception:
+        _GameState = None
+
+    if _GameState is not None and isinstance(state, _GameState):
         if has_port is None:
             has_port = state.has_port
         if not port_class:
@@ -129,11 +140,6 @@ def _extract_port_info(bot, screen: str) -> tuple[bool, str | None, str | None]:
 def _guard_trade_port(bot, screen: str, context: str) -> None:
     has_port, port_class, port_name = _extract_port_info(bot, screen)
     screen_lower = screen.lower()
-    if not has_port:
-        raise RuntimeError(f"{context}:no_port")
-
-    if _is_trade_port_class(port_class):
-        return
 
     # Special/unknown port - do not trade.
     # Common special ports: Stardock (Fed HQ), Rylos (Corporate HQ),
@@ -143,6 +149,13 @@ def _guard_trade_port(bot, screen: str, context: str) -> None:
         raise RuntimeError(f"{context}:special_port:{port_name}")
     if any(token in screen_lower for token in special_tokens):
         raise RuntimeError(f"{context}:special_port_screen")
+
+    if not has_port:
+        raise RuntimeError(f"{context}:no_port")
+
+    if _is_trade_port_class(port_class):
+        return
+
     if port_class:
         raise RuntimeError(f"{context}:special_port_class:{port_class}")
     raise RuntimeError(f"{context}:port_class_unknown")
@@ -350,57 +363,64 @@ async def _warp_to_sector(bot, target_sector: int):
         if prompt_id == "prompt.planet_command":
             raise RuntimeError("still_on_planet")
 
-    # Send "M" for Move/Warp
-    print(f"  Initiating warp to sector {target_sector}...")
-    await bot.session.send("M")  # Single key
-    await asyncio.sleep(0.3)
-
-    # Wait for sector input prompt (validate prompt type)
+    # If we're already at the warp-sector input prompt, don't send "M" again.
     pre_warp_sector = bot.current_sector
     warp_prompt_seen = False
     warp_input_type = None
-    for _ in range(6):
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot,
-            timeout_ms=3000,
-            ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
-        )
-        print(f"  Warp prompt: {prompt_id}")
-        if prompt_id == "prompt.warp_sector":
-            is_valid, error_msg = _validate_kv_data(kv_data, prompt_id)
-            if not is_valid:
-                print(f"  ⚠️  {error_msg}")
-            if kv_data and "current_sector" in kv_data:
-                pre_warp_sector = kv_data["current_sector"]
-            warp_prompt_seen = True
-            warp_input_type = input_type  # Save the correct input type
-            break
-        if prompt_id in ("prompt.pause_simple", "prompt.pause_space_or_enter") or input_type == "any_key":
-            await send_input(bot, "", input_type)
-            await asyncio.sleep(0.2)
-            continue
-        if prompt_id == "prompt.yes_no":
-            screen_lower = screen.lower()
-            if "autopilot" in screen_lower or "engage" in screen_lower:
-                await send_input(bot, "Y", input_type)
-            else:
-                await send_input(bot, "N", input_type)
-            await asyncio.sleep(0.2)
-            continue
-        if prompt_id == "prompt.avoid_sector_add":
-            # Don't avoid sectors - we want to explore everywhere
-            await send_input(bot, "N", input_type)
-            await asyncio.sleep(0.2)
-            continue
-        if prompt_id in ("prompt.sector_command", "prompt.command_generic"):
-            # Retry sending warp command if we missed it
-            await bot.session.send("M")
-            await asyncio.sleep(0.3)
-            continue
-        raise RuntimeError(f"unexpected_warp_prompt:{prompt_id}")
+    if prompt_id == "prompt.warp_sector":
+        warp_prompt_seen = True
+        warp_input_type = input_type
+        if kv_data and "current_sector" in kv_data:
+            pre_warp_sector = kv_data["current_sector"]
+    else:
+        # Send "M" for Move/Warp
+        print(f"  Initiating warp to sector {target_sector}...")
+        await bot.session.send("M")  # Single key
+        await asyncio.sleep(0.3)
 
-    if not warp_prompt_seen:
-        raise RuntimeError("warp_prompt_missing")
+        # Wait for sector input prompt (validate prompt type)
+        for _ in range(6):
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(
+                bot,
+                timeout_ms=3000,
+                ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
+            )
+            print(f"  Warp prompt: {prompt_id}")
+            if prompt_id == "prompt.warp_sector":
+                is_valid, error_msg = _validate_kv_data(kv_data, prompt_id)
+                if not is_valid:
+                    print(f"  ⚠️  {error_msg}")
+                if kv_data and "current_sector" in kv_data:
+                    pre_warp_sector = kv_data["current_sector"]
+                warp_prompt_seen = True
+                warp_input_type = input_type  # Save the correct input type
+                break
+            if prompt_id in ("prompt.pause_simple", "prompt.pause_space_or_enter") or input_type == "any_key":
+                await send_input(bot, "", input_type)
+                await asyncio.sleep(0.2)
+                continue
+            if prompt_id == "prompt.yes_no":
+                screen_lower = screen.lower()
+                if "autopilot" in screen_lower or "engage" in screen_lower:
+                    await send_input(bot, "Y", input_type)
+                else:
+                    await send_input(bot, "N", input_type)
+                await asyncio.sleep(0.2)
+                continue
+            if prompt_id == "prompt.avoid_sector_add":
+                # Don't avoid sectors - we want to explore everywhere
+                await send_input(bot, "N", input_type)
+                await asyncio.sleep(0.2)
+                continue
+            if prompt_id in ("prompt.sector_command", "prompt.command_generic"):
+                # Retry sending warp command if we missed it
+                await bot.session.send("M")
+                await asyncio.sleep(0.3)
+                continue
+            raise RuntimeError(f"unexpected_warp_prompt:{prompt_id}")
+
+        if not warp_prompt_seen:
+            raise RuntimeError("warp_prompt_missing")
 
     # Send destination sector (multi_key) - use saved input type from warp prompt
     await send_input(bot, str(target_sector), warp_input_type)

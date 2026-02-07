@@ -116,7 +116,9 @@ async def run_bot(
     from bbsbot.paths import default_knowledge_root
 
     knowledge_root = default_knowledge_root()
-    data_dir = knowledge_root / "tw2002" / f"{config.connection.host}_{config.connection.port}"
+    # Include game_letter in path to separate character pools per game on same BBS
+    game_suffix = f"_game{config.connection.game_letter}" if config.connection.game_letter else ""
+    data_dir = knowledge_root / "tw2002" / f"{config.connection.host}_{config.connection.port}{game_suffix}"
     data_dir.mkdir(parents=True, exist_ok=True)
 
     multi_char = MultiCharacterManager(
@@ -127,6 +129,7 @@ async def run_bot(
 
     total_characters = 0
     total_profit = 0
+    last_bot = None
 
     watch_manager: WatchManager | None = None
     if watch_socket:
@@ -149,8 +152,13 @@ async def run_bot(
             character_name=char_state.name,
             config=config,
         )
+        last_bot = bot
         if watch_manager is not None:
             bot.session_manager.register_session_callback(watch_manager.attach_session)
+            try:
+                bot.set_watch_manager(watch_manager)
+            except Exception:
+                setattr(bot, "_watch_manager", watch_manager)
 
         try:
             print(f"\n[Connect] Connecting to {config.connection.host}:{config.connection.port}...")
@@ -160,9 +168,6 @@ async def run_bot(
             if watch and bot.session is not None:
                 bot.session.set_watch(_make_watch_callback(clear=watch_clear), interval_s=watch_interval)
 
-            bot.init_knowledge(config.connection.host, config.connection.port)
-            bot.init_strategy()
-
             print(f"\n[Login] Logging in as {char_state.name}...")
             await bot.login_sequence(
                 game_password=config.connection.game_password,
@@ -170,6 +175,12 @@ async def run_bot(
                 username=char_state.name,
             )
             print("  Logged in!")
+
+            # Initialize knowledge AFTER login so we can use the detected game_letter
+            # This ensures different games on same BBS have separate knowledge bases
+            game_letter = config.connection.game_letter or bot.last_game_letter
+            bot.init_knowledge(config.connection.host, config.connection.port, game_letter)
+            bot.init_strategy()
 
             print("\n[Orient] Getting initial state...")
             state = await bot.orient(force_scan=True)
@@ -215,6 +226,36 @@ async def run_bot(
 
     # Release character locks so other processes can use them
     multi_char.release_all_locks()
+
+    # Display goal progression summary (AI strategy only).
+    try:
+        show_viz = (
+            config.trading.strategy == "ai_strategy"
+            and config.trading.ai_strategy.show_goal_visualization
+        )
+    except Exception:
+        show_viz = False
+
+    if show_viz and last_bot is not None and getattr(last_bot, "strategy", None) is not None:
+        strategy = last_bot.strategy
+        phases = getattr(strategy, "_goal_phases", None)
+        if phases:
+            from bbsbot.games.tw2002.visualization import GoalSummaryReport
+
+            print("\n" + "=" * 60)
+            print("GOAL PROGRESSION SUMMARY")
+            print("=" * 60)
+            report = GoalSummaryReport(
+                phases=phases,
+                max_turns=config.session.max_turns_per_session,
+            )
+            summary_text = report.render_full_summary()
+            print(summary_text)
+            print("")
+            emit_viz = getattr(last_bot, "emit_viz", None)
+            if callable(emit_viz):
+                current_turn = getattr(strategy, "_current_turn", None)
+                emit_viz("summary", summary_text, turn=current_turn)
 
     print("\n" + "=" * 60)
     print("SESSION COMPLETE")

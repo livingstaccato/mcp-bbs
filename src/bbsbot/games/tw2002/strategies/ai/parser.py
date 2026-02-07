@@ -4,14 +4,14 @@ Parses LLM responses into TradeAction decisions.
 """
 
 import json
-import logging
 import re
 
 from bbsbot.games.tw2002.orientation import GameState
 from bbsbot.games.tw2002.strategies.base import TradeAction
 from bbsbot.llm.types import ChatResponse
+from bbsbot.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ResponseParser:

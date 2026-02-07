@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from bbsbot.games.tw2002.banking import BankingManager
     from bbsbot.games.tw2002.upgrades import UpgradeManager
     from bbsbot.games.tw2002.combat import CombatManager
+    from bbsbot.watch.manager import WatchManager
 
 
 class TradingBot:
@@ -81,7 +82,6 @@ class TradingBot:
         self.error_count = 0
         self.loop_detection = LoopDetector(threshold=3)
         self.last_prompt_id: str | None = None
-        self.stuck_threshold = 3  # Max times to see same prompt before declaring stuck
 
         # Session tracking
         self.session_start_time = time.time()
@@ -96,6 +96,9 @@ class TradingBot:
         # Menu navigation tracking
         self.menu_selection_attempts = 0
         self.last_game_letter: str | None = None
+
+        # Optional: watch-socket manager for out-of-band status/event streaming.
+        self._watch_manager: WatchManager | None = None
 
     # -------------------------------------------------------------------------
     # Subsystem properties (lazy initialization)
@@ -150,6 +153,11 @@ class TradingBot:
             # Inject session logger for feedback loop
             if self.session and self.session.logger:
                 self._strategy.set_session_logger(self.session.logger)
+            # Optional: allow strategy to emit goal visualization events.
+            try:
+                self._strategy.set_viz_emitter(self.emit_viz)  # type: ignore[attr-defined]
+            except Exception:
+                setattr(self._strategy, "_viz_emit", self.emit_viz)
         else:  # Default to opportunistic
             from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
             self._strategy = OpportunisticStrategy(self.config, self.sector_knowledge)
@@ -161,6 +169,23 @@ class TradingBot:
             self.session_manager.register_bot(self.session_id, self)
 
         return self._strategy
+
+    def set_watch_manager(self, watch_manager: WatchManager | None) -> None:
+        """Attach a WatchManager used for broadcasting structured events."""
+        self._watch_manager = watch_manager
+
+    def emit_viz(self, kind: str, text: str, *, turn: int | None = None, **extra: object) -> None:
+        """Emit a goal-visualization payload over the watch socket (if enabled)."""
+        if self._watch_manager is None:
+            return
+        payload: dict[str, object] = {
+            "kind": kind,
+            "text": text,
+            "turn": turn,
+            "character_name": self.character_name,
+        }
+        payload.update(extra)
+        self._watch_manager.emit_event("viz", payload)
 
     # -------------------------------------------------------------------------
     # Scanning optimization
@@ -224,15 +249,27 @@ class TradingBot:
         return await login.test_login(self)
 
     # Orientation methods
-    def init_knowledge(self, host: str = "localhost", port: int = 2002) -> None:
-        """Initialize sector knowledge for this character/server."""
-        knowledge_dir = self.knowledge_root / "tw2002" / f"{host}_{port}"
+    def init_knowledge(self, host: str = "localhost", port: int = 2002, game_letter: str | None = None) -> None:
+        """Initialize sector knowledge for this character/server/game.
+
+        Args:
+            host: BBS host
+            port: BBS port
+            game_letter: Game selection letter (A, B, C, etc.) to scope data per-game on same BBS
+        """
+        # Include game_letter in path to separate data for different games on same BBS
+        if game_letter:
+            knowledge_dir = self.knowledge_root / "tw2002" / f"{host}_{port}_game{game_letter}"
+        else:
+            knowledge_dir = self.knowledge_root / "tw2002" / f"{host}_{port}"
+
         self.sector_knowledge = SectorKnowledge(
             knowledge_dir=knowledge_dir,
             character_name=self.character_name,
             twerk_data_dir=self.twerk_data_dir,
         )
-        print(f"  [Knowledge] Initialized for {self.character_name} @ {host}:{port}")
+        game_info = f"_game{game_letter}" if game_letter else ""
+        print(f"  [Knowledge] Initialized for {self.character_name} @ {host}:{port}{game_info}")
         print(f"  [Knowledge] Known sectors: {self.sector_knowledge.known_sector_count()}")
 
     async def orient(self, force_scan: bool = False) -> GameState:
@@ -263,12 +300,25 @@ class TradingBot:
             # Fast path: skip D command, just check context
             quick_state = await self.where_am_i()
             if quick_state.is_safe:
+                # Extract semantic data for credits and other state
+                # The session read already captured kv_data during where_am_i()
+                try:
+                    result = await self.session.read(timeout_ms=100, max_bytes=1024)
+                    kv_data = result.get("kv_data", {})
+                except Exception:
+                    kv_data = {}
+
                 # Use cached knowledge
                 self.game_state = GameState(
                     context=quick_state.context,
                     sector=quick_state.sector,
                     raw_screen=quick_state.screen,
                     prompt_id=quick_state.prompt_id,
+                    # Extract critical state from semantic data
+                    credits=kv_data.get('credits'),
+                    turns_left=kv_data.get('turns_left'),
+                    fighters=kv_data.get('fighters'),
+                    shields=kv_data.get('shields'),
                 )
                 # Fill in from knowledge if available
                 if self.sector_knowledge and quick_state.sector:

@@ -17,6 +17,17 @@ logger = logging.getLogger(__name__)
 registry = create_registry("tw2002")
 
 
+def _get_active_bot():
+    from bbsbot.mcp.server import session_manager
+
+    bot = None
+    for session_id in session_manager._sessions:
+        bot = session_manager.get_bot(session_id)
+        if bot:
+            break
+    return bot
+
+
 @registry.tool()
 async def set_goal(goal: str, duration_turns: int = 0) -> dict[str, Any]:
     """Set current bot goal (profit/combat/exploration/banking).
@@ -36,14 +47,8 @@ async def set_goal(goal: str, duration_turns: int = 0) -> dict[str, Any]:
         await tw2002_set_goal(goal="combat", duration_turns=50)
         # Bot focuses on combat for next 50 turns
     """
-    from bbsbot.mcp.server import session_manager
-
     # Get active bot
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
+    bot = _get_active_bot()
 
     if not bot:
         return {
@@ -94,14 +99,8 @@ async def get_goals() -> dict[str, Any]:
         goals = await tw2002_get_goals()
         # Returns: {current: "profit", available: [...], ...}
     """
-    from bbsbot.mcp.server import session_manager
-
     # Get active bot
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
+    bot = _get_active_bot()
 
     if not bot:
         return {
@@ -153,6 +152,86 @@ async def get_goals() -> dict[str, Any]:
         "available": available_goals,
         "reevaluate_every_turns": goals_config.reevaluate_every_turns,
         "mode": goals_config.current,  # "auto" or specific goal ID
+    }
+
+
+@registry.tool()
+async def get_goal_phases() -> dict[str, Any]:
+    """Return raw goal phase data (if the active strategy supports it)."""
+    bot = _get_active_bot()
+    if not bot or not getattr(bot, "strategy", None):
+        return {"success": False, "error": "No active bot found"}
+
+    strategy = bot.strategy
+    phases = getattr(strategy, "_goal_phases", None)
+    if not phases:
+        return {
+            "success": True,
+            "phases": [],
+            "current_turn": getattr(strategy, "_current_turn", 0),
+        }
+
+    return {
+        "success": True,
+        "phases": [p.model_dump(mode="json") for p in phases],
+        "current_turn": getattr(strategy, "_current_turn", 0),
+    }
+
+
+@registry.tool()
+async def get_goal_visualization(max_turns: int | None = None) -> dict[str, Any]:
+    """Return rendered goal visualization strings (compact/timeline/summary).
+
+    This is intended as a "spy" interface to retrieve the visualization output
+    while a bot is running in this process.
+    """
+    bot = _get_active_bot()
+    if not bot or not getattr(bot, "strategy", None):
+        return {"success": False, "error": "No active bot found"}
+
+    strategy = bot.strategy
+    phases = getattr(strategy, "_goal_phases", None) or []
+    phase = getattr(strategy, "_current_phase", None)
+    current_turn = getattr(strategy, "_current_turn", 0)
+
+    resolved_max_turns = max_turns or getattr(strategy, "_max_turns", None)
+    if not resolved_max_turns:
+        cfg = getattr(bot, "config", None)
+        resolved_max_turns = getattr(getattr(cfg, "session", None), "max_turns_per_session", None) or 1
+    if resolved_max_turns <= 0:
+        resolved_max_turns = 1
+
+    compact = None
+    timeline = None
+    summary = None
+
+    if phase is not None:
+        from bbsbot.games.tw2002.visualization import GoalStatusDisplay
+
+        compact = GoalStatusDisplay().render_compact(
+            phase=phase,
+            current_turn=current_turn,
+            max_turns=resolved_max_turns,
+        )
+
+    if phases:
+        from bbsbot.games.tw2002.visualization import GoalSummaryReport, GoalTimeline
+
+        timeline_obj = GoalTimeline(phases, current_turn=current_turn, max_turns=resolved_max_turns)
+        timeline = "\n".join([timeline_obj.render_progress_bar(), timeline_obj.render_legend()])
+
+        summary = GoalSummaryReport(phases, max_turns=resolved_max_turns).render_full_summary()
+
+    return {
+        "success": True,
+        "compact": compact,
+        "timeline": timeline,
+        "summary": summary,
+        "phases": [p.model_dump(mode="json") for p in phases],
+        "current_turn": current_turn,
+        "max_turns": resolved_max_turns,
+        "character_name": getattr(bot, "character_name", "unknown"),
+        "strategy": getattr(strategy, "name", type(strategy).__name__),
     }
 
 

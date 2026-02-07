@@ -9,6 +9,7 @@ import re
 
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
+from bbsbot.games.tw2002.visualization import GoalStatusDisplay
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     max_turns = config.session.max_turns_per_session
 
     turns_used = 0
+    goal_status_display: GoalStatusDisplay | None = None
 
     while turns_used < max_turns:
         turns_used += 1
@@ -71,6 +73,34 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         credits = state.credits or 0
         print(f"\n[Turn {turns_used}] Sector {state.sector}, Credits: {credits:,}")
+
+        # Show compact goal status every N turns (AI strategy only).
+        try:
+            show_viz = (
+                config.trading.strategy == "ai_strategy"
+                and config.trading.ai_strategy.show_goal_visualization
+                and config.trading.ai_strategy.visualization_interval > 0
+            )
+        except Exception:
+            show_viz = False
+
+        if show_viz:
+            phase = getattr(strategy, "_current_phase", None)
+            if phase is not None:
+                current_turn = getattr(strategy, "_current_turn", turns_used)
+                interval = config.trading.ai_strategy.visualization_interval
+                if current_turn % interval == 0:
+                    if goal_status_display is None:
+                        goal_status_display = GoalStatusDisplay()
+                    status_line = goal_status_display.render_compact(
+                        phase=phase,
+                        current_turn=current_turn,
+                        max_turns=max_turns,
+                    )
+                    print(f"  {status_line}")
+                    emit_viz = getattr(bot, "emit_viz", None)
+                    if callable(emit_viz):
+                        emit_viz("compact", status_line, turn=current_turn)
 
         # Check target
         if credits >= target_credits:

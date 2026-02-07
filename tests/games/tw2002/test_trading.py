@@ -260,7 +260,7 @@ class TestWarpPromptValidation:
                     # Verify send_input was called with multi_key (from warp prompt)
                     # not any_key (from pause prompt)
                     calls = [call for call in mock_send.call_args_list
-                            if len(call[0]) > 1 and call[0][1] == "multi_key"]
+                            if len(call[0]) > 2 and call[0][2] == "multi_key"]
                     assert len(calls) > 0, "Should use multi_key from warp prompt"
 
 
