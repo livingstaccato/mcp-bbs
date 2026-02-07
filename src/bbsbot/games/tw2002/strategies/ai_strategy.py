@@ -1122,7 +1122,7 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
                         to_goal=new_goal,
                         severity=severity,
                     )
-                    self._set_goal(new_goal, trigger_type="manual", state=state)
+                    self.set_goal(new_goal, trigger_type="manual", state=state)
                 return None  # Continue with normal decision making
 
             case "reset_strategy":
@@ -1131,7 +1131,7 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
                 self.consecutive_failures = 0
                 self.fallback_until_turn = 0
                 # Also change to exploration to get unstuck
-                self._set_goal("exploration", trigger_type="manual", state=state)
+                self.set_goal("exploration", trigger_type="manual", state=state)
                 return None
 
             case "force_move":
@@ -1160,7 +1160,7 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
                 # Explore to break out of stuck state
                 logger.info("intervention_explore_random", severity=severity)
                 # Change goal to exploration
-                self._set_goal("exploration", trigger_type="manual", state=state)
+                self.set_goal("exploration", trigger_type="manual", state=state)
                 # Let normal decision logic handle exploration
                 return None
 

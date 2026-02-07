@@ -1,0 +1,46 @@
+# Test Configuration 2: AI Strategy with Auto-Apply Intervention
+# This config tests full intervention system with automatic application
+
+trading:
+  strategy: "ai_strategy"
+
+  ai_strategy:
+    enabled: true
+    fallback_strategy: "opportunistic"
+    fallback_threshold: 3
+
+    # Enable aggressive intervention detection
+    intervention:
+      enabled: true
+      auto_apply: true               # AUTO-APPLY for testing
+      min_priority: "low"            # Catch all interventions
+      cooldown_turns: 2              # Quick cooldowns for testing
+      max_per_session: 50            # High budget
+
+      # Low thresholds to trigger quickly
+      loop_action_threshold: 2       # Trigger after 2 repeated actions
+      loop_sector_threshold: 3       # Trigger after 3 sector visits
+      stagnation_turns: 5            # Detect stagnation fast
+      profit_decline_ratio: 0.4      # 40% decline triggers
+      turn_waste_threshold: 0.2      # 20% waste triggers
+
+      # LLM settings for gemma3
+      analysis_temperature: 0.3
+      analysis_max_tokens: 800
+
+llm:
+  provider: "ollama"
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "gemma3"
+    timeout_seconds: 30.0
+
+session:
+  max_turns_per_session: 100
+  target_credits: 100000
+
+banking:
+  enabled: false                     # Simplify for testing
+
+upgrades:
+  enabled: false                     # Simplify for testing

@@ -62,9 +62,26 @@ All MCP tools files under 500 LOC limit:
 
 1. ✅ ~~Split detector.py into sub-modules~~ COMPLETE
 2. ✅ ~~Split mcp_tools.py to meet 500 LOC limit~~ COMPLETE
-3. Test with live server when available (localhost:2002)
-4. Tune thresholds based on real gameplay
-5. Consider ai_strategy.py refactoring if it becomes unmaintainable
+3. ✅ ~~Fix critical bug in ai_strategy.py `_apply_intervention()`~~ COMPLETE
+4. ✅ ~~Create test configurations for live testing~~ COMPLETE
+5. 🚧 **Ready for Phase 3: Live Testing with localhost:2002**
+6. Tune thresholds based on real gameplay
+7. Consider ai_strategy.py refactoring if it becomes unmaintainable
+
+## Bug Fix Applied (2026-02-07)
+
+**Critical Bug**: `_apply_intervention()` called non-existent `self._set_goal()` method
+- Fixed 3 locations (lines 1125, 1134, 1163) to use `self.set_goal()`
+- All 386 tests still pass after fix
+
+## Test Configurations Created
+
+Three YAML configs ready for live testing:
+1. `config/test_opportunistic_stuck.yaml` - Baseline (should get stuck)
+2. `config/test_ai_intervention.yaml` - Auto-apply intervention
+3. `config/test_ai_manual_intervention.yaml` - Manual intervention only
+
+All configs use OLLAMA gemma3 (verified available on localhost:11434)
 
 ## Documentation
 

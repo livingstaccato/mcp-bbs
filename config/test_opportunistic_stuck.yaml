@@ -1,0 +1,26 @@
+# Test Configuration 1: Opportunistic Strategy (Baseline - Should Get Stuck)
+# This config is designed to trigger stuck behavior for intervention testing
+
+trading:
+  strategy: "opportunistic"
+
+  opportunistic:
+    explore_chance: 0.9              # 90% exploration (high stuck risk)
+    max_wander_without_trade: 2      # Reset quickly
+
+llm:
+  provider: "ollama"
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "gemma3"
+    timeout_seconds: 30.0
+
+session:
+  max_turns_per_session: 50          # Long enough to see patterns
+  target_credits: 100000
+
+banking:
+  enabled: false                     # Disable to reduce profitable actions
+
+upgrades:
+  enabled: false                     # Disable to increase stuck likelihood
