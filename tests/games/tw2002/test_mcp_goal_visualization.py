@@ -9,7 +9,7 @@ from bbsbot.games.tw2002.config import BotConfig, GoalPhase
 
 def test_mcp_get_goal_visualization(monkeypatch):
     """Tool returns rendered strings when phases exist."""
-    from bbsbot.games.tw2002 import mcp_tools
+    from bbsbot.games.tw2002 import mcp_tools_goals
 
     class FakeStrategy:
         name = "ai_strategy"
@@ -59,7 +59,7 @@ def test_mcp_get_goal_visualization(monkeypatch):
     bot = FakeBot()
     monkeypatch.setattr(mcp_server, "session_manager", FakeSessionManager(bot))
 
-    result = asyncio.run(mcp_tools.get_goal_visualization())
+    result = asyncio.run(mcp_tools_goals.get_goal_visualization())
     assert result["success"] is True
     assert "COMBAT" in (result["compact"] or "")
     assert "Legend:" in (result["timeline"] or "")
@@ -69,7 +69,7 @@ def test_mcp_get_goal_visualization(monkeypatch):
 
 def test_mcp_get_goal_phases(monkeypatch):
     """Tool returns raw phase data."""
-    from bbsbot.games.tw2002 import mcp_tools
+    from bbsbot.games.tw2002 import mcp_tools_goals
 
     class FakeStrategy:
         def __init__(self) -> None:
@@ -102,7 +102,7 @@ def test_mcp_get_goal_phases(monkeypatch):
 
     monkeypatch.setattr(mcp_server, "session_manager", FakeSessionManager(FakeBot()))
 
-    result = asyncio.run(mcp_tools.get_goal_phases())
+    result = asyncio.run(mcp_tools_goals.get_goal_phases())
     assert result["success"] is True
     assert result["current_turn"] == 5
     assert result["phases"][0]["goal_id"] == "profit"
