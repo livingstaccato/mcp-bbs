@@ -296,13 +296,31 @@ async def login_sequence(
             await send_input(bot, "", input_type)
 
         else:
-            print(f"      ⚠️  Unexpected prompt, pressing space")
-            await bot.session.send(" ")
+            # Content-based fallback detection when prompt_id doesn't match
+            handled = False
+
+            if "what is your name" in screen_lower:
+                print(f"      → [Content] Detected name prompt, entering: {username}")
+                await bot.session.send(f"{username}\r")
+                await asyncio.sleep(0.3)
+                handled = True
+            elif ("selection" in screen_lower and "for menu" in screen_lower):
+                print(f"      ✓ [Content] Detected game selection menu!")
+                break
+            elif "command" in screen_lower and ("?" in screen_lower or "tl=" in screen_lower):
+                print(f"      ✓ [Content] Detected game command prompt - already in game!")
+                return
+
+            if not handled:
+                print(f"      ⚠️  Unexpected prompt (prompt_id={prompt_id}), pressing space")
+                await bot.session.send(" ")
             await asyncio.sleep(0.2)
 
     # PHASE 2: Send game selection
     print("\nSending game selection...")
-    game_letter = "B"  # Default
+    # Use configured game_letter if available, otherwise auto-detect
+    config_letter = getattr(bot.config.connection, 'game_letter', None) if hasattr(bot, 'config') else None
+    game_letter = config_letter if config_letter else "B"  # Default to B if not configured
     original_threshold = bot.loop_detection.threshold  # Save before any modifications
 
     # Check screen content for game selection menu (more robust than prompt detection)
@@ -310,8 +328,10 @@ async def login_sequence(
     if "selection" in screen_lower and ("for menu" in screen_lower or "<q>" in screen_lower):
         options = _extract_game_options(screen)
         print(f"  Available games: {options}")
-        game_letter = _select_trade_wars_game(screen)
-        print(f"  → Sending {game_letter}")
+        # Only auto-detect if no game_letter configured
+        if not config_letter:
+            game_letter = _select_trade_wars_game(screen)
+        print(f"  → Sending {game_letter}" + (f" (configured)" if config_letter else " (auto-detected)"))
         await bot.session.send(game_letter)
         # Save game letter to bot for data directory scoping
         bot.last_game_letter = game_letter
@@ -319,8 +339,9 @@ async def login_sequence(
         # Fallback to prompt detection if screen matching fails
         options = _extract_game_options(screen)
         print(f"  Available games: {options}")
-        game_letter = _select_trade_wars_game(screen)
-        print(f"  → Sending {game_letter}")
+        if not config_letter:
+            game_letter = _select_trade_wars_game(screen)
+        print(f"  → Sending {game_letter}" + (f" (configured)" if config_letter else " (auto-detected)"))
         await bot.session.send(game_letter)
         bot.last_game_letter = game_letter
         # Reset state before Phase 3 to prevent loop detection false triggers
