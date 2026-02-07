@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -12,6 +13,23 @@ from pydantic import BaseModel, ConfigDict, Field
 from bbsbot.llm.config import LLMConfig
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GoalPhase:
+    """Represents a phase of gameplay focused on a specific goal.
+
+    Tracks when a goal was active, its outcome, and relevant metrics
+    for visualization and analysis.
+    """
+
+    goal_id: str
+    start_turn: int
+    end_turn: int | None = None  # None if currently active
+    status: Literal["active", "completed", "failed", "rewound"] = "active"
+    trigger_type: Literal["auto", "manual"] = "auto"
+    metrics: dict = field(default_factory=dict)  # Start/end credits, kills, sectors, etc.
+    reason: str = ""  # Why goal was selected or ended
 
 
 class GoalTrigger(BaseModel):
