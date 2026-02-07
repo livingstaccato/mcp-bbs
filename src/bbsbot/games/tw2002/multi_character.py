@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time as time_module
 from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING, Literal
@@ -127,6 +129,51 @@ class MultiCharacterManager:
         }
         path.write_text(json.dumps(data, indent=2))
 
+    def _lock_path(self, name: str) -> Path:
+        """Get path to character's lock file."""
+        return self.data_dir / f"{name}.lock"
+
+    def _is_character_locked(self, name: str) -> bool:
+        """Check if character is currently in use by another process.
+
+        Lock files older than 2 hours are considered stale and ignored.
+        """
+        lock_file = self._lock_path(name)
+        if not lock_file.exists():
+            return False
+
+        # Check if lock is stale (older than 2 hours)
+        try:
+            lock_age = time_module.time() - lock_file.stat().st_mtime
+            if lock_age > 7200:  # 2 hours in seconds
+                logger.warning(f"Removing stale lock for {name} (age: {lock_age/3600:.1f} hours)")
+                lock_file.unlink()
+                return False
+        except Exception as e:
+            logger.warning(f"Error checking lock for {name}: {e}")
+            return False
+
+        return True
+
+    def _lock_character(self, name: str) -> None:
+        """Create lock file for character to prevent other processes from using it."""
+        lock_file = self._lock_path(name)
+        try:
+            lock_file.write_text(f"{os.getpid()}\n{time_module.time()}\n")
+            logger.debug(f"Locked character: {name}")
+        except Exception as e:
+            logger.warning(f"Failed to lock character {name}: {e}")
+
+    def _unlock_character(self, name: str) -> None:
+        """Remove lock file for character."""
+        lock_file = self._lock_path(name)
+        try:
+            if lock_file.exists():
+                lock_file.unlink()
+                logger.debug(f"Unlocked character: {name}")
+        except Exception as e:
+            logger.warning(f"Failed to unlock character {name}: {e}")
+
     def generate_character_name(self) -> str:
         """Generate a unique themed character name.
 
@@ -196,6 +243,9 @@ class MultiCharacterManager:
 
         self._active_character = name
 
+        # Lock character to prevent other processes from using it
+        self._lock_character(name)
+
         # Mark as assigned in this session
         self._assigned_this_session.add(name)
 
@@ -214,6 +264,9 @@ class MultiCharacterManager:
         """
         state = self._character_manager.load(name)
         self._active_character = name
+
+        # Lock character to prevent other processes from using it
+        self._lock_character(name)
 
         # Mark as assigned in this session
         self._assigned_this_session.add(name)
@@ -349,6 +402,7 @@ class MultiCharacterManager:
         - Have existing state files on disk
         - Are not marked as dead in records (or have no record yet)
         - Have not been assigned in this session
+        - Are not locked by another process
 
         Returns:
             List of character names sorted by last_active time (oldest first)
@@ -356,7 +410,7 @@ class MultiCharacterManager:
         # Get all character state files
         existing_chars = self._character_manager.list_characters()
 
-        # Filter out dead characters and already-assigned characters
+        # Filter out dead characters, already-assigned characters, and locked characters
         available = []
         for name in existing_chars:
             # Skip if already assigned in this session
@@ -364,6 +418,9 @@ class MultiCharacterManager:
                 continue
             # If we have a record and it's marked dead, skip it
             if name in self._records and self._records[name].died_at is not None:
+                continue
+            # Skip if locked by another process
+            if self._is_character_locked(name):
                 continue
             available.append(name)
 
@@ -466,3 +523,13 @@ class MultiCharacterManager:
             logger.info(f"Cleaned up {len(to_remove)} old character records")
 
         return len(to_remove)
+
+    def release_all_locks(self) -> None:
+        """Release all character locks held by this manager.
+
+        Should be called when bot session ends to free up characters
+        for other processes.
+        """
+        for name in self._assigned_this_session:
+            self._unlock_character(name)
+        logger.info(f"Released {len(self._assigned_this_session)} character locks")

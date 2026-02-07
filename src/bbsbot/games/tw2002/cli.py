@@ -213,6 +213,9 @@ async def run_bot(
                 except Exception:
                     pass
 
+    # Release character locks so other processes can use them
+    multi_char.release_all_locks()
+
     print("\n" + "=" * 60)
     print("SESSION COMPLETE")
     print("=" * 60)
