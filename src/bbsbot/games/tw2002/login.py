@@ -540,7 +540,27 @@ async def login_sequence(
     print(f"  [DEBUG] Parsing credits...", flush=True)
     bot.current_credits = _parse_credits_from_screen(bot, screen)
 
-    # Fallback: Use semantic data if screen parsing found 0/None
+    # If still 0/None, try to get credits via D command immediately after login
+    if bot.current_credits is None or bot.current_credits == 0:
+        print(f"  [DEBUG] Credits still 0, attempting D command for player status...", flush=True)
+        try:
+            await bot.session.send("D")
+            await asyncio.sleep(0.5)
+            result = await bot.session.read(timeout_ms=5000, max_bytes=8192)
+            display_screen = result.get("screen", "")
+
+            # Try to parse credits from display output
+            import re
+            credit_match = re.search(r'credits?\s*:\s*([\d,]+)', display_screen, re.IGNORECASE)
+            if credit_match:
+                parsed_credits = int(credit_match.group(1).replace(',', ''))
+                if parsed_credits > 0:
+                    bot.current_credits = parsed_credits
+                    print(f"  [DEBUG] Got credits from D command: {bot.current_credits}", flush=True)
+        except Exception as e:
+            print(f"  [DEBUG] D command attempt failed: {e}", flush=True)
+
+    # Final fallback: Use semantic data if still 0/None
     print(f"  [DEBUG] kv_data available: {bool(kv_data)}, keys: {list(kv_data.keys()) if kv_data else 'None'}", flush=True)
     if (bot.current_credits is None or bot.current_credits == 0) and kv_data and 'credits' in kv_data:
         semantic_credits = kv_data.get('credits')

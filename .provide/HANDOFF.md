@@ -131,6 +131,22 @@ All MCP tools files under 500 LOC limit:
 - Real-time progress: Background task b4a662e
 - Check progress: `tail -f ~/bbsbot_test_monitor.log`
 
+## Credit Tracking Issue Found (2026-02-07 14:20+)
+
+**Problem**: Bots showing Credits: 0 after login, therefore not executing profitable trades.
+
+**Root Cause**: At login completion, bots are on planet command prompts (after new character creation), not sector command prompts. Planet prompts don't display credits on screen. The semantic extraction also doesn't capture credits at that point.
+
+**Attempted Fixes**:
+1. ✅ Added semantic fallback in orientation.py for D command failures
+2. ✅ Preserved kv_data through all login phases
+3. ❌ Both fixes applied but credits still 0 at login - wait for D command or move to sector
+
+**Next Steps for Credit Tracking Fix**:
+1. After login, send 'D' command immediately to get full player status including credits
+2. Or move bot to first sector to ensure credits are displayed on screen
+3. Test with quick command sequence to establish proper credit initialization
+
 ## Next Steps
 
 1. ✅ ~~Split detector.py into sub-modules~~ COMPLETE
@@ -139,10 +155,11 @@ All MCP tools files under 500 LOC limit:
 4. ✅ ~~Create test configurations for live testing~~ COMPLETE
 5. ✅ ~~Fix game selection prompt detection~~ COMPLETE
 6. ✅ ~~Fix LearningEngine pattern loading~~ COMPLETE
-7. ✅ **IN PROGRESS**: Stress test 111 bot configurations (65000 turns each)
-8. Monitor for bot failures or unexpected behaviors during stress test
-9. Tune intervention thresholds based on real gameplay data
-10. Consider ai_strategy.py refactoring if it becomes unmaintainable (1247 LOC)
+7. **IN PROGRESS**: Fix credit initialization after login (planet vs sector command)
+8. Restart 111 bot configurations for stress test
+9. Monitor for bot failures or unexpected behaviors during stress test
+10. Tune intervention thresholds based on real gameplay data
+11. Consider ai_strategy.py refactoring if it becomes unmaintainable (1247 LOC)
 
 ## Bug Fix Applied (2026-02-07)
 
