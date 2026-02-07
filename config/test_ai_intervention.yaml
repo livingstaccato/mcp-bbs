@@ -4,7 +4,7 @@
 connection:
   host: "localhost"
   port: 2002
-  game_letter: "B"                   # Specify game to avoid selection timeout
+  game_letter: "C"                   # Specify game to avoid selection timeout
 
 trading:
   strategy: "ai_strategy"
