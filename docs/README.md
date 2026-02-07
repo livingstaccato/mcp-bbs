@@ -37,16 +37,8 @@ Topics covered:
 - **[Quick Start](guides/QUICK_START.md)** - Get started in 5 minutes
 - **[Multi-Character Management](guides/MULTI_CHARACTER.md)** - Managing multiple bots
 - **[Intelligent Bot](guides/INTELLIGENT_BOT.md)** - Using AI strategies
-- **[Configuration](../README.md#configuration)** - Config file reference
-- **[Debugging](../README.md#troubleshooting)** - Troubleshooting guide
-
----
-
-## Reference
-
-- **[API Reference](reference/API.md)** - Python API documentation
-- **[Configuration Reference](reference/CONFIGURATION_REFERENCE.md)** - All config options
-- **[Troubleshooting](reference/TROUBLESHOOTING.md)** - Common issues
+- **[Configuration](../README.md#configuration)** - Config + environment settings
+- **[Spying / Watch Socket](../README.md#spy--watch-socket)** - Attach to a running session output
 
 ---
 
@@ -137,7 +129,7 @@ See [examples/configs/](../examples/configs/) for more configurations.
 
 ## Developer API
 
-See [reference/API.md](reference/API.md) for complete API documentation.
+See the top-level [README.md](../README.md) for MCP tool usage and code pointers.
 
 Quick example:
 ```python
@@ -159,7 +151,7 @@ print(f"{char.name} - Ship: {char.ship_name}")
 
 - **[Contributing](../CONTRIBUTING.md)** - How to contribute
 - **[Testing](../README.md#testing)** - Running tests
-- **[Troubleshooting](reference/TROUBLESHOOTING.md)** - Common issues
+- **[Known warnings](../README.md#known-warnings)** - Non-fatal warnings you may see at startup
 
 ---
 
