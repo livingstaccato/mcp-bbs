@@ -1172,18 +1172,21 @@ async def _gather_state(
         # Credits: Always prefer semantic data if display parsing fails
         # The D command often returns a prompt instead of actual display data
         state.credits = get_with_fallback('credits')
-        if state.credits is None and kv_data and 'credits' in kv_data:
-            state.credits = kv_data.get('credits')
-            if state.credits is not None:
-                print(f"  [Orient] Using semantic credits (D command returned no data): {state.credits}")
+        # If we got 0 or None, try semantic data (0 is invalid for newborns)
+        if (state.credits is None or state.credits == 0) and kv_data and 'credits' in kv_data:
+            semantic_credits = kv_data.get('credits')
+            if semantic_credits is not None and semantic_credits > 0:
+                state.credits = semantic_credits
+                print(f"  [Orient] Using semantic credits (fallback from 0): {state.credits}")
 
         state.turns_left = get_with_fallback('turns_left')
+
         state.fighters = get_with_fallback('fighters')
-        if state.fighters is None and kv_data and 'fighters' in kv_data:
+        if (state.fighters is None or state.fighters == 0) and kv_data and kv_data.get('fighters'):
             state.fighters = kv_data.get('fighters')
 
         state.shields = get_with_fallback('shields')
-        if state.shields is None and kv_data and 'shields' in kv_data:
+        if (state.shields is None or state.shields == 0) and kv_data and kv_data.get('shields'):
             state.shields = kv_data.get('shields')
         state.holds_total = get_with_fallback('holds_total')
         state.holds_free = get_with_fallback('holds_free')
