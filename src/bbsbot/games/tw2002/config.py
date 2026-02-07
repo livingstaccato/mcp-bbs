@@ -205,6 +205,10 @@ class AIStrategyConfig(BaseModel):
     # Goals system
     goals: GoalsConfig = Field(default_factory=GoalsConfig)
 
+    # Visualization settings
+    show_goal_visualization: bool = True  # Enable/disable live visualization
+    visualization_interval: int = 50      # Show status every N turns (when applicable)
+
     model_config = ConfigDict(extra="ignore")
 
 

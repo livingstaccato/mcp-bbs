@@ -542,6 +542,24 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
 
         logger.info(f"goal_changed: {old_goal} -> {goal_id}, duration={duration_turns}")
 
+        # Display timeline visualization on manual goal change
+        if self._settings.show_goal_visualization:
+            from bbsbot.games.tw2002.visualization import GoalTimeline
+
+            timeline = GoalTimeline(
+                phases=self._goal_phases,
+                current_turn=self._current_turn,
+                max_turns=self._max_turns,
+            )
+            print("\n" + "=" * 80)
+            print(f"MANUAL GOAL OVERRIDE: {old_goal.upper()} → {goal_id.upper()}")
+            if duration_turns > 0:
+                print(f"Duration: {duration_turns} turns")
+            print("=" * 80)
+            print(timeline.render_progress_bar())
+            print(timeline.render_legend())
+            print("=" * 80 + "\n")
+
         # Log to event ledger
         if self._session_logger:
             import asyncio
@@ -613,6 +631,22 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
             )
 
             logger.info(f"goal_auto_changed: {old_goal} -> {new_goal_id}")
+
+            # Display timeline visualization on goal change
+            if self._settings.show_goal_visualization:
+                from bbsbot.games.tw2002.visualization import GoalTimeline
+
+                timeline = GoalTimeline(
+                    phases=self._goal_phases,
+                    current_turn=self._current_turn,
+                    max_turns=self._max_turns,
+                )
+                print("\n" + "=" * 80)
+                print(f"GOAL CHANGED: {old_goal.upper()} → {new_goal_id.upper()}")
+                print("=" * 80)
+                print(timeline.render_progress_bar())
+                print(timeline.render_legend())
+                print("=" * 80 + "\n")
 
             # Log to event ledger
             if self._session_logger:
