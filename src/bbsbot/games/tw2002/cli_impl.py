@@ -40,6 +40,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         state = await bot.orient()
         char_state.update_from_game_state(state)
 
+        # Update bot's current credits from state (needed for trade quantity calculations)
+        if state.credits is not None:
+            bot.current_credits = state.credits
+
         credits = state.credits or 0
         print(f"\n[Turn {turns_used}] Sector {state.sector}, Credits: {credits:,}")
 
