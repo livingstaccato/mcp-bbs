@@ -41,3 +41,22 @@ class LLMConfig(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     openai: OpenAIConfig | None = None
     gemini: GeminiConfig | None = None
+
+    def get_model(self) -> str:
+        """Return the configured model name for the active provider.
+
+        Today we primarily use Ollama. For other providers, raise a clear error
+        if their nested config isn't set to avoid silently using the wrong model.
+        """
+        if self.provider == "ollama":
+            return self.ollama.model
+        if self.provider == "openai":
+            if not self.openai:
+                raise ValueError("LLM provider is openai but llm.openai is not configured")
+            return self.openai.model
+        if self.provider == "gemini":
+            if not self.gemini:
+                raise ValueError("LLM provider is gemini but llm.gemini is not configured")
+            return self.gemini.model
+        # Defensive: Literal should prevent this, but keep a stable error.
+        raise ValueError(f"Unknown LLM provider: {self.provider}")

@@ -23,6 +23,7 @@ def test_llm_config_defaults():
     assert config.ollama is not None
     assert config.openai is None
     assert config.gemini is None
+    assert config.get_model() == "llama2"
 
 
 def test_llm_config_with_custom_ollama():
@@ -40,6 +41,7 @@ def test_llm_config_with_custom_ollama():
     assert config.ollama.base_url == "http://custom:8080"
     assert config.ollama.model == "llama3"
     assert config.ollama.timeout_seconds == 60.0
+    assert config.get_model() == "llama3"
 
 
 def test_llm_config_openai():
@@ -56,3 +58,10 @@ def test_llm_config_openai():
     assert config.openai is not None
     assert config.openai.api_key == "sk-test"
     assert config.openai.model == "gpt-4"
+    assert config.get_model() == "gpt-4"
+
+
+def test_llm_config_openai_missing_nested_config_raises():
+    config = LLMConfig(provider="openai", openai=None)
+    with pytest.raises(ValueError, match="llm\\.openai is not configured"):
+        config.get_model()

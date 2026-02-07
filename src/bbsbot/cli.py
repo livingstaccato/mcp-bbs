@@ -187,7 +187,10 @@ def tw2002_check(host: str, port: int, timeout: int) -> None:
 @click.option("--host", type=str)
 @click.option("--port", type=int)
 @click.option("-v", "--verbose", is_flag=True)
-@click.option("--strategy", type=click.Choice(["profitable_pairs", "opportunistic", "twerk_optimized"]))
+@click.option(
+    "--strategy",
+    type=click.Choice(["profitable_pairs", "opportunistic", "twerk_optimized", "ai_strategy"]),
+)
 @click.option("--target-credits", type=int)
 @click.option("--max-turns", type=int)
 @click.option("--watch", is_flag=True, help="Print live screens as the bot runs.")

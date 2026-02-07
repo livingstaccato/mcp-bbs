@@ -1,7 +1,7 @@
 """Tests for AI strategy."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from bbsbot.games.tw2002.config import AIStrategyConfig, BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
@@ -75,13 +75,7 @@ async def test_ai_strategy_successful_decision(ai_strategy, game_state):
         model="llama2",
     )
 
-    # Mock provider
-    mock_provider = AsyncMock()
-    mock_provider.chat.return_value = mock_response
-
-    with patch.object(
-        ai_strategy.llm_manager, "get_provider", return_value=mock_provider
-    ):
+    with patch.object(ai_strategy.llm_manager, "chat", return_value=mock_response):
         action, params = await ai_strategy._get_next_action_async(game_state)
 
         assert action == TradeAction.TRADE
@@ -93,12 +87,7 @@ async def test_ai_strategy_successful_decision(ai_strategy, game_state):
 async def test_ai_strategy_fallback_on_failure(ai_strategy, game_state):
     """Test fallback activation on failures."""
     # Simulate LLM failures
-    mock_provider = AsyncMock()
-    mock_provider.chat.side_effect = Exception("LLM error")
-
-    with patch.object(
-        ai_strategy.llm_manager, "get_provider", return_value=mock_provider
-    ):
+    with patch.object(ai_strategy.llm_manager, "chat", side_effect=Exception("LLM error")):
         # First failure
         action1, _ = await ai_strategy._get_next_action_async(game_state)
         assert ai_strategy.consecutive_failures == 1
@@ -116,6 +105,34 @@ async def test_ai_strategy_fallback_on_failure(ai_strategy, game_state):
         action4, _ = await ai_strategy._get_next_action_async(game_state)
         # Fallback returns a valid action
         assert action4 is not None
+
+
+@pytest.mark.asyncio
+async def test_ai_strategy_logs_llm_decision(ai_strategy, game_state):
+    mock_response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"action": "TRADE", "reasoning": "Good opportunity", "confidence": 0.9, "parameters": {"commodity": "fuel_ore"}}',
+        ),
+        model="llama2",
+    )
+
+    mock_session_logger = AsyncMock()
+    ai_strategy.set_session_logger(mock_session_logger)
+
+    with patch.object(ai_strategy.llm_manager, "chat", return_value=mock_response):
+        action, params = await ai_strategy._get_next_action_async(game_state)
+        assert action == TradeAction.TRADE
+        assert params.get("commodity") == "fuel_ore"
+
+    # Ensure decision log was written.
+    calls = [c for c in mock_session_logger.log_event.call_args_list if c.args and c.args[0] == "llm.decision"]
+    assert calls, "Expected at least one llm.decision event"
+    payload = calls[-1].args[1]
+    assert payload["parsed"]["action"] == "TRADE"
+    assert payload["validated"] is True
+    assert isinstance(payload["messages"], list) and payload["messages"]
+    assert "response" in payload and "content" in payload["response"]
 
 
 def test_ai_strategy_validate_move_decision(ai_strategy, game_state):

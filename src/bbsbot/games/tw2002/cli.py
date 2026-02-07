@@ -140,6 +140,12 @@ async def run_bot(
         watch_settings.send_clear = watch_socket_clear
         watch_manager = WatchManager()
         await watch_manager.start()
+        if watch_socket_protocol == "json":
+            print(
+                f"[Spy] Attach: bbsbot spy --encoding utf-8 --host {watch_socket_host} --port {watch_socket_port}"
+            )
+        else:
+            print(f"[Spy] Attach: bbsbot spy --host {watch_socket_host} --port {watch_socket_port}")
 
     while total_characters < config.multi_character.max_characters:
         total_characters += 1

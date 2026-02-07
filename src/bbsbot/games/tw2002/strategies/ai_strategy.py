@@ -169,10 +169,11 @@ class AIStrategy(TradingStrategy):
 
         # Try LLM decision
         try:
-            action, params = await self._make_llm_decision(state)
+            action, params, trace = await self._make_llm_decision(state)
 
             # Validate decision
-            if self._validate_decision(action, params, state):
+            validated = self._validate_decision(action, params, state)
+            if validated:
                 self.consecutive_failures = 0
                 logger.info(
                     f"ai_strategy_decision: action={action.name}, params={params}"
@@ -185,8 +186,22 @@ class AIStrategy(TradingStrategy):
                     "sector": state.sector,
                     "credits": state.credits,
                 })
+                await self._log_llm_decision(
+                    state=state,
+                    trace=trace,
+                    action=action,
+                    params=params,
+                    validated=True,
+                )
                 return action, params
             else:
+                await self._log_llm_decision(
+                    state=state,
+                    trace=trace,
+                    action=action,
+                    params=params,
+                    validated=False,
+                )
                 raise ValueError("Invalid LLM decision")
 
         except Exception as e:
@@ -209,7 +224,7 @@ class AIStrategy(TradingStrategy):
     async def _make_llm_decision(
         self,
         state: GameState,
-    ) -> tuple[TradeAction, dict]:
+    ) -> tuple[TradeAction, dict, dict]:
         """Make decision using LLM.
 
         Args:
@@ -235,21 +250,160 @@ class AIStrategy(TradingStrategy):
             goal_instructions=goal_instructions,
         )
 
-        # Query LLM
-        provider = await self.llm_manager.get_provider()
+        model = self.config.llm.get_model()
         request = ChatRequest(
             messages=messages,
-            model=self.config.llm.ollama.model,  # Use configured model
+            model=model,
             temperature=0.7,
             max_tokens=500,
         )
 
-        response = await provider.chat(request)
+        start_time = time.time()
+        try:
+            response = await self.llm_manager.chat(request)
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            await self._log_llm_decision_error(
+                state=state,
+                model=model,
+                request=request,
+                messages=messages,
+                duration_ms=duration_ms,
+                error=e,
+                raw_response=None,
+            )
+            raise
+        duration_ms = (time.time() - start_time) * 1000
 
         # Parse response
-        action, params = self.parser.parse(response, state)
+        try:
+            action, params = self.parser.parse(response, state)
+        except Exception as e:
+            await self._log_llm_decision_error(
+                state=state,
+                model=model,
+                request=request,
+                messages=messages,
+                duration_ms=duration_ms,
+                error=e,
+                raw_response=getattr(response.message, "content", None),
+            )
+            raise
 
-        return action, params
+        trace = {
+            "provider": self.config.llm.provider,
+            "model": model,
+            "request": {
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+                "timeout_ms": getattr(self._settings, "timeout_ms", None),
+            },
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "response": {
+                "content": response.message.content,
+                "usage": {
+                    "prompt": response.usage.prompt_tokens if response.usage else 0,
+                    "completion": response.usage.completion_tokens if response.usage else 0,
+                    "total": response.usage.total_tokens if response.usage else 0,
+                },
+                "cached": bool(getattr(response, "cached", False)),
+                "duration_ms": duration_ms,
+            },
+        }
+
+        return action, params, trace
+
+    def _truncate(self, s: str | None, limit: int = 50_000) -> str:
+        if s is None:
+            return ""
+        if len(s) <= limit:
+            return s
+        return s[:limit] + "\n[...truncated...]"
+
+    async def _log_llm_decision(
+        self,
+        *,
+        state: GameState,
+        trace: dict,
+        action: TradeAction,
+        params: dict,
+        validated: bool,
+    ) -> None:
+        """Best-effort logging of the primary decision prompt/response to session JSONL."""
+        if not self._session_logger:
+            return
+        try:
+            messages = trace.get("messages", [])
+            for m in messages:
+                if isinstance(m, dict) and "content" in m:
+                    m["content"] = self._truncate(str(m.get("content", "")))
+            response = trace.get("response", {})
+            if isinstance(response, dict) and "content" in response:
+                response["content"] = self._truncate(str(response.get("content", "")))
+
+            event_data = {
+                "turn": self._current_turn,
+                "goal_id": self._current_goal_id,
+                "provider": trace.get("provider", self.config.llm.provider),
+                "model": trace.get("model", ""),
+                "request": trace.get("request", {}),
+                "messages": messages,
+                "response": response,
+                "parsed": {"action": action.name, "params": params},
+                "validated": bool(validated),
+                "state_hint": {
+                    "sector": state.sector,
+                    "credits": state.credits,
+                    "turns_left": state.turns_left,
+                    "context": getattr(state, "context", None),
+                },
+            }
+            await self._session_logger.log_event("llm.decision", event_data)
+        except Exception as e:
+            # Never break trading because logging failed.
+            logger.debug(f"llm_decision_log_failed: {e}")
+
+    async def _log_llm_decision_error(
+        self,
+        *,
+        state: GameState,
+        model: str,
+        request: ChatRequest,
+        messages: list[ChatMessage],
+        duration_ms: float,
+        error: Exception,
+        raw_response: str | None,
+    ) -> None:
+        if not self._session_logger:
+            return
+        try:
+            event_data = {
+                "turn": self._current_turn,
+                "goal_id": self._current_goal_id,
+                "provider": self.config.llm.provider,
+                "model": model,
+                "request": {
+                    "temperature": request.temperature,
+                    "max_tokens": request.max_tokens,
+                    "timeout_ms": getattr(self._settings, "timeout_ms", None),
+                },
+                "messages": [
+                    {"role": m.role, "content": self._truncate(m.content)} for m in messages
+                ],
+                "duration_ms": duration_ms,
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "raw_response": self._truncate(raw_response),
+                "state_hint": {
+                    "sector": state.sector,
+                    "credits": state.credits,
+                    "turns_left": state.turns_left,
+                    "context": getattr(state, "context", None),
+                },
+            }
+            await self._session_logger.log_event("llm.decision_error", event_data)
+        except Exception as e:
+            logger.debug(f"llm_decision_error_log_failed: {e}")
 
     def _validate_decision(
         self,

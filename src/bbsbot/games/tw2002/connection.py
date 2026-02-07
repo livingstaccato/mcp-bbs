@@ -62,7 +62,7 @@ async def connect(bot, host="localhost", port=2002):
         host: BBS hostname (default: localhost)
         port: BBS port (default: 2002)
     """
-    print(f"\n🔗 Connecting to {host}:{port}...")
+    print(f"\nConnecting to {host}:{port}...")
     bot.session_id = await bot.session_manager.create_session(
         host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0
     )
@@ -70,6 +70,22 @@ async def connect(bot, host="localhost", port=2002):
     await bot.session_manager.enable_learning(
         bot.session_id, bot.knowledge_root, namespace="tw2002"
     )
+    if bot.session and bot.session.logger:
+        # Surface the exact session log path so debugging is immediate.
+        log_path = getattr(bot.session.logger, "_log_path", None)
+        if log_path:
+            print(f"Session log: {log_path}")
+        try:
+            bot.session.logger.set_context(
+                {
+                    "game": "tw2002",
+                    "character": getattr(bot, "character_name", "unknown") or "unknown",
+                    "host": str(host),
+                    "port": str(port),
+                }
+            )
+        except Exception:
+            pass
     bot.session.add_watch(lambda snapshot, raw: _semantic_watch(bot, snapshot, raw))
-    print(f"✓ Connected")
+    print("Connected")
     logger.info("bbs_connected", host=host, port=port, session_id=bot.session_id)
