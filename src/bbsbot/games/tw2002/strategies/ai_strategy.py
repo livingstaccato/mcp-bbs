@@ -8,12 +8,11 @@ This strategy uses a hybrid approach:
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from collections import deque
 from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002.config import BotConfig
+from bbsbot.games.tw2002.config import BotConfig, GoalPhase
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
@@ -26,11 +25,12 @@ from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
 from bbsbot.llm.exceptions import LLMError
 from bbsbot.llm.manager import LLMManager
 from bbsbot.llm.types import ChatMessage, ChatRequest, ChatResponse
+from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
     from bbsbot.logging.session_logger import SessionLogger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Feedback loop prompt template
 FEEDBACK_SYSTEM_PROMPT = """You are analyzing Trade Wars 2002 gameplay to identify patterns and suggest improvements.
@@ -81,9 +81,16 @@ class AIStrategy(TradingStrategy):
         self._manual_override_until_turn: int | None = None  # None = no override
 
         # Goal phase tracking for visualization
-        self._goal_phases: list = []  # Will hold GoalPhase instances
-        self._current_phase = None  # Current active phase
+        self._goal_phases: list[GoalPhase] = []  # Will hold GoalPhase instances
+        self._current_phase: GoalPhase | None = None  # Current active phase
         self._max_turns = config.session.max_turns_per_session
+
+        # Start initial goal phase
+        self._start_goal_phase(
+            goal_id=self._current_goal_id,
+            trigger_type="auto",
+            reason="Initial goal on strategy creation",
+        )
 
     @property
     def name(self) -> str:
@@ -503,12 +510,13 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
         """
         return self._current_goal_id
 
-    def set_goal(self, goal_id: str, duration_turns: int = 0) -> None:
+    def set_goal(self, goal_id: str, duration_turns: int = 0, state: GameState | None = None) -> None:
         """Manually set current goal.
 
         Args:
             goal_id: Goal ID to activate
             duration_turns: How many turns to maintain (0 = until changed)
+            state: Current game state for metrics
         """
         if goal_id not in [g.id for g in self._settings.goals.available]:
             available = [g.id for g in self._settings.goals.available]
@@ -522,6 +530,15 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
             self._manual_override_until_turn = self._current_turn + duration_turns
         else:
             self._manual_override_until_turn = None
+
+        # Start new phase
+        reason = f"Manual override for {duration_turns} turns" if duration_turns > 0 else "Manual override"
+        self._start_goal_phase(
+            goal_id=goal_id,
+            trigger_type="manual",
+            reason=reason,
+            state=state,
+        )
 
         logger.info(f"goal_changed: {old_goal} -> {goal_id}, duration={duration_turns}")
 
@@ -582,6 +599,19 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
         if new_goal_id != self._current_goal_id:
             old_goal = self._current_goal_id
             self._current_goal_id = new_goal_id
+
+            # Determine reason for auto-selection
+            goal_config = self._get_goal_config(new_goal_id)
+            reason = f"Auto-selected: {goal_config.description if goal_config else 'triggers matched'}"
+
+            # Start new phase
+            self._start_goal_phase(
+                goal_id=new_goal_id,
+                trigger_type="auto",
+                reason=reason,
+                state=state,
+            )
+
             logger.info(f"goal_auto_changed: {old_goal} -> {new_goal_id}")
 
             # Log to event ledger
@@ -696,6 +726,125 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
         # Return match ratio
         return matches / total_conditions
 
+    def _start_goal_phase(
+        self,
+        goal_id: str,
+        trigger_type: str,
+        reason: str,
+        state: GameState | None = None,
+    ) -> None:
+        """Start a new goal phase.
+
+        Args:
+            goal_id: Goal ID to start
+            trigger_type: "auto" or "manual"
+            reason: Why this goal was selected
+            state: Current game state for metrics
+        """
+        # Close current phase if active
+        if self._current_phase:
+            self._current_phase.end_turn = self._current_turn
+            self._current_phase.status = "completed"
+
+            # Record end metrics
+            if state:
+                self._current_phase.metrics["end_credits"] = state.credits
+                self._current_phase.metrics["end_fighters"] = state.fighters
+                self._current_phase.metrics["end_shields"] = state.shields
+                self._current_phase.metrics["end_holds"] = state.holds_total
+
+        # Create new phase
+        metrics = {}
+        if state:
+            metrics = {
+                "start_credits": state.credits,
+                "start_fighters": state.fighters,
+                "start_shields": state.shields,
+                "start_holds": state.holds_total,
+            }
+
+        self._current_phase = GoalPhase(
+            goal_id=goal_id,
+            start_turn=self._current_turn,
+            end_turn=None,
+            status="active",
+            trigger_type=trigger_type,
+            metrics=metrics,
+            reason=reason,
+        )
+        self._goal_phases.append(self._current_phase)
+
+    async def rewind_to_turn(
+        self,
+        target_turn: int,
+        reason: str,
+        state: GameState | None = None,
+    ) -> dict:
+        """Rewind to a specific turn, marking current phase as failed.
+
+        This allows the bot to backtrack when it encounters a critical failure
+        (e.g., ship destroyed, major loss) and retry from an earlier point.
+
+        Args:
+            target_turn: Turn number to rewind to
+            reason: Reason for rewinding (e.g., "ship destroyed in combat")
+            state: Current game state
+
+        Returns:
+            Dictionary with rewind details
+        """
+        if target_turn >= self._current_turn:
+            logger.warning(f"rewind_invalid: target={target_turn} >= current={self._current_turn}")
+            return {
+                "success": False,
+                "error": "Cannot rewind to future or current turn",
+            }
+
+        old_turn = self._current_turn
+
+        # Mark current phase as rewound
+        if self._current_phase:
+            self._current_phase.status = "rewound"
+            self._current_phase.end_turn = self._current_turn
+            self._current_phase.metrics["rewind_reason"] = reason
+            self._current_phase.metrics["rewind_to_turn"] = target_turn
+
+        # Set current turn to target
+        self._current_turn = target_turn
+
+        # Start new phase with same goal (retry)
+        retry_reason = f"Retry after rewind: {reason}"
+        self._start_goal_phase(
+            goal_id=self._current_goal_id,
+            trigger_type="auto",
+            reason=retry_reason,
+            state=state,
+        )
+
+        logger.info(f"rewind_executed: {old_turn} -> {target_turn}, reason={reason}")
+
+        # Log to event ledger
+        if self._session_logger:
+            await self._session_logger.log_event("goal.rewound", {
+                "from_turn": old_turn,
+                "to_turn": target_turn,
+                "reason": reason,
+                "goal": self._current_goal_id,
+            })
+
+        return {
+            "success": True,
+            "from_turn": old_turn,
+            "to_turn": target_turn,
+            "reason": reason,
+            "goal": self._current_goal_id,
+        }
+
     async def cleanup(self) -> None:
         """Cleanup resources."""
+        # Close final phase
+        if self._current_phase and self._current_phase.status == "active":
+            self._current_phase.end_turn = self._current_turn
+            self._current_phase.status = "completed"
+
         await self.llm_manager.close()
