@@ -540,56 +540,9 @@ async def login_sequence(
     print(f"  [DEBUG] Parsing credits...", flush=True)
     bot.current_credits = _parse_credits_from_screen(bot, screen)
 
-    # Establish accurate game state immediately after login
-    # This reads current screen to get accurate credits, location, and game state
-    if bot.current_credits is None or bot.current_credits == 0:
-        print(f"  [DEBUG] Establishing accurate game state after login...", flush=True)
-        try:
-            from bbsbot.games.tw2002.orientation import _parse_display_screen
-
-            # Send 'D' to get player display with full status
-            await bot.session.send("D")
-            await asyncio.sleep(1.0)  # D command needs time to return
-            result = await bot.session.read(timeout_ms=10000, max_bytes=8192)
-            display_screen = result.get("screen", "")
-            kv_semantic = result.get("kv_data", {})
-
-            # Debug: Show what D command returned
-            if display_screen:
-                lines = [l.strip() for l in display_screen.split('\n') if l.strip()]
-                print(f"  [DEBUG] D command returned {len(lines)} lines", flush=True)
-                if len(lines) > 0:
-                    print(f"  [DEBUG] First line: {lines[0][:60]}", flush=True)
-                    if len(lines) > 1:
-                        print(f"  [DEBUG] Last line: {lines[-1][:60]}", flush=True)
-                if "credits" in display_screen.lower():
-                    print(f"  [DEBUG] D response contains 'credits'", flush=True)
-                else:
-                    print(f"  [DEBUG] D response MISSING 'credits' - may be pause screen", flush=True)
-
-            # Try display parsing first (official D command output)
-            display_info = _parse_display_screen(display_screen)
-            if display_info.get('credits'):
-                bot.current_credits = display_info.get('credits')
-                print(f"  [DEBUG] Got credits from D command display: {bot.current_credits}", flush=True)
-            # Fallback to semantic extraction from current screen
-            elif kv_semantic.get('credits'):
-                bot.current_credits = kv_semantic.get('credits')
-                print(f"  [DEBUG] Got credits from semantic data: {bot.current_credits}", flush=True)
-            else:
-                print(f"  [DEBUG] D command didn't return credits data", flush=True)
-        except Exception as e:
-            print(f"  [DEBUG] State establishment failed: {e}", flush=True)
-
-    # Final fallback: Use semantic data if still 0/None
-    print(f"  [DEBUG] kv_data available: {bool(kv_data)}, keys: {list(kv_data.keys()) if kv_data else 'None'}", flush=True)
-    if (bot.current_credits is None or bot.current_credits == 0) and kv_data and 'credits' in kv_data:
-        semantic_credits = kv_data.get('credits')
-        if semantic_credits is not None and semantic_credits > 0:
-            bot.current_credits = semantic_credits
-            print(f"  [DEBUG] Using semantic credits instead: {bot.current_credits}", flush=True)
-    elif (bot.current_credits is None or bot.current_credits == 0):
-        print(f"  [DEBUG] No semantic credits available. kv_data={kv_data}, parsed={bot.current_credits}", flush=True)
+    # Note: Bots login on planet command prompts where credits aren't visible.
+    # The orient() function (called on first trading turn) will establish accurate state
+    # including credits by sending D command from a sector context. Accept credits=0 here.
 
     print(
         f"\n✓ Login complete - Sector {bot.current_sector}, "
