@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from bbsbot.llm.types import ChatMessage, ChatRequest
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
@@ -116,19 +117,28 @@ class InterventionAdvisor:
             opportunity_count=len(opportunities),
         )
 
-        # Query LLM with intervention system prompt
-        response = await self.llm_manager.chat(
-            messages=[{"role": "user", "content": prompt}],
-            system=INTERVENTION_SYSTEM_PROMPT,
-            temperature=self.config.intervention.analysis_temperature,
-            max_tokens=self.config.intervention.analysis_max_tokens,
+        # Build chat request with intervention system prompt
+        messages = [
+            ChatMessage(role="system", content=INTERVENTION_SYSTEM_PROMPT),
+            ChatMessage(role="user", content=prompt),
+        ]
+
+        request = ChatRequest(
+            messages=messages,
+            model=self.config.llm.ollama.model,
+            temperature=self.config.trading.ai_strategy.intervention.analysis_temperature,
+            max_tokens=self.config.trading.ai_strategy.intervention.analysis_max_tokens,
         )
+
+        # Query LLM
+        response = await self.llm_manager.chat(request)
 
         # Parse response
         try:
             import json
+            from typing import cast
 
-            recommendation = json.loads(response)
+            recommendation = cast(dict[str, Any], json.loads(response.message.content))
             logger.info(
                 "Received intervention recommendation",
                 severity=recommendation.get("severity"),
@@ -177,11 +187,11 @@ class InterventionAdvisor:
         if goal_phases:
             current_phase = goal_phases[-1]
             goal_context = f"""
-- Current Goal: {getattr(current_phase, 'goal_id', 'unknown')}
-- Duration: {getattr(current_phase, 'turns', 0)} turns
-- Start Credits: {getattr(current_phase, 'start_credits', 0):,}
+- Current Goal: {getattr(current_phase, "goal_id", "unknown")}
+- Duration: {getattr(current_phase, "turns", 0)} turns
+- Start Credits: {getattr(current_phase, "start_credits", 0):,}
 - Current Credits: {state.credits:,}
-- Net Change: {state.credits - getattr(current_phase, 'start_credits', 0):+,}
+- Net Change: {state.credits - getattr(current_phase, "start_credits", 0):+,}
 """
 
         # Build performance metrics
@@ -193,9 +203,7 @@ class InterventionAdvisor:
         if anomalies:
             anomaly_lines = []
             for a in anomalies:
-                anomaly_lines.append(
-                    f"  - [{a['priority'].upper()}] {a['type']}: {a['description']}"
-                )
+                anomaly_lines.append(f"  - [{a['priority'].upper()}] {a['type']}: {a['description']}")
                 for evidence in a.get("evidence", []):
                     anomaly_lines.append(f"    • {evidence}")
             anomaly_text = "\n".join(anomaly_lines)
@@ -205,9 +213,7 @@ class InterventionAdvisor:
         if opportunities:
             opp_lines = []
             for o in opportunities:
-                opp_lines.append(
-                    f"  - [{o['priority'].upper()}] {o['type']}: {o['description']}"
-                )
+                opp_lines.append(f"  - [{o['priority'].upper()}] {o['type']}: {o['description']}")
                 for evidence in o.get("evidence", []):
                     opp_lines.append(f"    • {evidence}")
             opportunity_text = "\n".join(opp_lines)
@@ -220,9 +226,7 @@ class InterventionAdvisor:
                 action = d.get("action", "unknown")
                 reasoning = d.get("reasoning", "no reasoning provided")
                 profit = d.get("profit_delta", 0)
-                decision_lines.append(
-                    f"  {i}. {action} (profit: {profit:+,}) - {reasoning}"
-                )
+                decision_lines.append(f"  {i}. {action} (profit: {profit:+,}) - {reasoning}")
             decision_text = "\n".join(decision_lines)
 
         # Build full prompt

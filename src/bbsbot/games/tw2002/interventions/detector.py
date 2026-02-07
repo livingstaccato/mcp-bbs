@@ -7,7 +7,7 @@ to identify stuck states, performance issues, and missed opportunities.
 from __future__ import annotations
 
 from collections import Counter, deque
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class InterventionPriority(str, Enum):
+class InterventionPriority(StrEnum):
     """Priority levels for interventions."""
 
     CRITICAL = "critical"  # Bot stuck, ship at risk, major capital loss
@@ -30,7 +30,7 @@ class InterventionPriority(str, Enum):
     LOW = "low"  # Informational, no immediate action needed
 
 
-class AnomalyType(str, Enum):
+class AnomalyType(StrEnum):
     """Types of behavioral anomalies."""
 
     ACTION_LOOP = "action_loop"  # Repeating same action
@@ -40,7 +40,7 @@ class AnomalyType(str, Enum):
     TURN_WASTE = "turn_waste"  # Unproductive turns
 
 
-class OpportunityType(str, Enum):
+class OpportunityType(StrEnum):
     """Types of missed opportunities."""
 
     HIGH_VALUE_TRADE = "high_value_trade"  # Profitable trade available
@@ -247,26 +247,26 @@ class InterventionDetector:
                 )
 
         # Check for alternating pattern (A-B-A-B)
-        if len(recent_actions) >= 4:
-            if (
-                recent_actions[0] == recent_actions[2]
-                and recent_actions[1] == recent_actions[3]
-                and recent_actions[0] != recent_actions[1]
-            ):
-                return Anomaly(
-                    type=AnomalyType.ACTION_LOOP,
-                    priority=InterventionPriority.HIGH,
-                    confidence=0.8,
-                    description=f"Alternating pattern: {recent_actions[0]}-{recent_actions[1]}",
-                    evidence=[
-                        f"Last 5 actions: {' → '.join(recent_actions)}",
-                        "Alternating between two actions",
-                    ],
-                    metadata={
-                        "action_a": recent_actions[0],
-                        "action_b": recent_actions[1],
-                    },
-                )
+        if (
+            len(recent_actions) >= 4
+            and recent_actions[0] == recent_actions[2]
+            and recent_actions[1] == recent_actions[3]
+            and recent_actions[0] != recent_actions[1]
+        ):
+            return Anomaly(
+                type=AnomalyType.ACTION_LOOP,
+                priority=InterventionPriority.HIGH,
+                confidence=0.8,
+                description=f"Alternating pattern: {recent_actions[0]}-{recent_actions[1]}",
+                evidence=[
+                    f"Last 5 actions: {' → '.join(recent_actions)}",
+                    "Alternating between two actions",
+                ],
+                metadata={
+                    "action_a": recent_actions[0],
+                    "action_b": recent_actions[1],
+                },
+            )
 
         return None
 
@@ -353,11 +353,11 @@ class InterventionDetector:
                 type=AnomalyType.PERFORMANCE_DECLINE,
                 priority=InterventionPriority.HIGH,
                 confidence=0.7,
-                description=f"Profit/turn dropped {(1 - second_profit/first_profit):.0%}",
+                description=f"Profit/turn dropped {(1 - second_profit / first_profit):.0%}",
                 evidence=[
                     f"First half: {first_profit:.1f} credits/turn",
                     f"Second half: {second_profit:.1f} credits/turn",
-                    f"Decline: {(1 - second_profit/first_profit):.0%}",
+                    f"Decline: {(1 - second_profit / first_profit):.0%}",
                 ],
                 metadata={
                     "first_profit_per_turn": first_profit,
@@ -392,17 +392,13 @@ class InterventionDetector:
 
         return None
 
-    def _detect_high_value_trade(
-        self, state: GameState, strategy: AIStrategy
-    ) -> Opportunity | None:
+    def _detect_high_value_trade(self, state: GameState, strategy: AIStrategy) -> Opportunity | None:
         """Detect high-value trade opportunities."""
         # This would integrate with strategy.find_opportunities()
         # For now, return None as placeholder
         return None
 
-    def _detect_combat_ready(
-        self, state: GameState, strategy: AIStrategy
-    ) -> Opportunity | None:
+    def _detect_combat_ready(self, state: GameState, strategy: AIStrategy) -> Opportunity | None:
         """Detect combat readiness."""
         # Check if ship is combat-ready but goal is not combat
         if state.fighters >= 50 and state.shields >= 100:

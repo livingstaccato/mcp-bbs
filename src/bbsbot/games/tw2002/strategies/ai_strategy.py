@@ -232,17 +232,18 @@ class AIStrategy(TradingStrategy):
             validated = self._validate_decision(action, params, state)
             if validated:
                 self.consecutive_failures = 0
-                logger.info(
-                    f"ai_strategy_decision: action={action.name}, params={params}"
-                )
+                logger.info(f"ai_strategy_decision: action={action.name}, params={params}")
                 # Record event for feedback
-                self._record_event("decision", {
-                    "turn": self._current_turn,
-                    "action": action.name,
-                    "params": params,
-                    "sector": state.sector,
-                    "credits": state.credits,
-                })
+                self._record_event(
+                    "decision",
+                    {
+                        "turn": self._current_turn,
+                        "action": action.name,
+                        "params": params,
+                        "sector": state.sector,
+                        "credits": state.credits,
+                    },
+                )
                 await self._log_llm_decision(
                     state=state,
                     trace=trace,
@@ -262,19 +263,13 @@ class AIStrategy(TradingStrategy):
                 raise ValueError("Invalid LLM decision")
 
         except Exception as e:
-            logger.warning(
-                f"ai_strategy_failure: {e}, consecutive={self.consecutive_failures + 1}"
-            )
+            logger.warning(f"ai_strategy_failure: {e}, consecutive={self.consecutive_failures + 1}")
             self.consecutive_failures += 1
 
             # Enter fallback mode if threshold reached
             if self.consecutive_failures >= self._settings.fallback_threshold:
-                self.fallback_until_turn = (
-                    self._current_turn + self._settings.fallback_duration_turns
-                )
-                logger.warning(
-                    f"ai_strategy_entering_fallback: until_turn={self.fallback_until_turn}"
-                )
+                self.fallback_until_turn = self._current_turn + self._settings.fallback_duration_turns
+                logger.warning(f"ai_strategy_entering_fallback: until_turn={self.fallback_until_turn}")
 
             return self.fallback.get_next_action(state)
 
@@ -444,9 +439,7 @@ class AIStrategy(TradingStrategy):
                     "max_tokens": request.max_tokens,
                     "timeout_ms": getattr(self._settings, "timeout_ms", None),
                 },
-                "messages": [
-                    {"role": m.role, "content": self._truncate(m.content)} for m in messages
-                ],
+                "messages": [{"role": m.role, "content": self._truncate(m.content)} for m in messages],
                 "duration_ms": duration_ms,
                 "error_type": type(error).__name__,
                 "error_message": str(error),
@@ -554,11 +547,13 @@ class AIStrategy(TradingStrategy):
             event_type: Type of event (e.g., 'decision', 'trade', 'error')
             data: Event data
         """
-        self._recent_events.append({
-            "type": event_type,
-            "timestamp": time.time(),
-            **data,
-        })
+        self._recent_events.append(
+            {
+                "type": event_type,
+                "timestamp": time.time(),
+                **data,
+            }
+        )
 
     async def _periodic_feedback(self, state: GameState) -> None:
         """Generate periodic gameplay analysis using LLM.
@@ -569,17 +564,12 @@ class AIStrategy(TradingStrategy):
         # Collect data from last N turns
         lookback = self._settings.feedback_lookback_turns
         start_turn = self._current_turn - lookback
-        recent_events = [
-            e for e in self._recent_events
-            if e.get("turn", 0) >= start_turn
-        ]
+        recent_events = [e for e in self._recent_events if e.get("turn", 0) >= start_turn]
 
         # Build analysis prompt
         messages = [
             ChatMessage(role="system", content=FEEDBACK_SYSTEM_PROMPT),
-            ChatMessage(role="user", content=self._build_feedback_prompt(
-                state, recent_events, start_turn
-            ))
+            ChatMessage(role="user", content=self._build_feedback_prompt(state, recent_events, start_turn)),
         ]
 
         # Query LLM
@@ -598,7 +588,9 @@ class AIStrategy(TradingStrategy):
             # Log to event ledger
             await self._log_feedback(state, messages, response, duration_ms, recent_events)
 
-            logger.info(f"feedback_generated: turn={self._current_turn}, tokens={response.usage.total_tokens if response.usage else 0}")
+            logger.info(
+                f"feedback_generated: turn={self._current_turn}, tokens={response.usage.total_tokens if response.usage else 0}"
+            )
 
         except Exception as e:
             logger.warning(f"feedback_loop_error: {e}")
@@ -799,14 +791,20 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
         # Log to event ledger
         if self._session_logger:
             import asyncio
+
             try:
-                asyncio.create_task(self._session_logger.log_event("goal.changed", {
-                    "turn": self._current_turn,
-                    "old_goal": old_goal,
-                    "new_goal": goal_id,
-                    "duration_turns": duration_turns,
-                    "manual_override": True,
-                }))
+                asyncio.create_task(
+                    self._session_logger.log_event(
+                        "goal.changed",
+                        {
+                            "turn": self._current_turn,
+                            "old_goal": old_goal,
+                            "new_goal": goal_id,
+                            "duration_turns": duration_turns,
+                            "manual_override": True,
+                        },
+                    )
+                )
             except Exception as e:
                 logger.warning(f"goal_event_logging_failed: {e}")
 
@@ -890,14 +888,17 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
 
             # Log to event ledger
             if self._session_logger:
-                await self._session_logger.log_event("goal.changed", {
-                    "turn": self._current_turn,
-                    "old_goal": old_goal,
-                    "new_goal": new_goal_id,
-                    "duration_turns": 0,
-                    "manual_override": False,
-                    "auto_selected": True,
-                })
+                await self._session_logger.log_event(
+                    "goal.changed",
+                    {
+                        "turn": self._current_turn,
+                        "old_goal": old_goal,
+                        "new_goal": new_goal_id,
+                        "duration_turns": 0,
+                        "manual_override": False,
+                        "auto_selected": True,
+                    },
+                )
 
         self._last_goal_evaluation_turn = self._current_turn
 
@@ -1071,12 +1072,15 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
         )
 
         # Also record for feedback
-        self._record_event("result", {
-            "turn": self._current_turn,
-            "action": action.name,
-            "profit_delta": profit_delta,
-            "credits": state.credits,
-        })
+        self._record_event(
+            "result",
+            {
+                "turn": self._current_turn,
+                "action": action.name,
+                "profit_delta": profit_delta,
+                "credits": state.credits,
+            },
+        )
 
     def _get_recent_decisions(self) -> list[dict]:
         """Get recent decisions with reasoning for intervention analysis.
@@ -1085,10 +1089,7 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
             List of recent decision events
         """
         # Return last N decision events from recent_events
-        decisions = [
-            e for e in self._recent_events
-            if e.get("type") == "decision"
-        ]
+        decisions = [e for e in self._recent_events if e.get("type") == "decision"]
         return list(decisions)[-10:]  # Last 10 decisions
 
     def _apply_intervention(
@@ -1193,12 +1194,15 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
 
         # Log to event ledger
         if self._session_logger:
-            await self._session_logger.log_event("goal.rewound", {
-                "from_turn": old_turn,
-                "to_turn": target_turn,
-                "reason": reason,
-                "goal": self._current_goal_id,
-            })
+            await self._session_logger.log_event(
+                "goal.rewound",
+                {
+                    "from_turn": old_turn,
+                    "to_turn": target_turn,
+                    "reason": reason,
+                    "goal": self._current_goal_id,
+                },
+            )
 
         return {
             "success": True,

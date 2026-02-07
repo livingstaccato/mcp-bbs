@@ -149,12 +149,8 @@ class InterventionTrigger:
         }
         min_priority_value = priority_order[self.min_priority]
 
-        anomalies = [
-            a for a in anomalies if priority_order[a.priority] <= min_priority_value
-        ]
-        opportunities = [
-            o for o in opportunities if priority_order[o.priority] <= min_priority_value
-        ]
+        anomalies = [a for a in anomalies if priority_order[a.priority] <= min_priority_value]
+        opportunities = [o for o in opportunities if priority_order[o.priority] <= min_priority_value]
 
         # Check if we have any triggers
         if not anomalies and not opportunities:
@@ -170,7 +166,7 @@ class InterventionTrigger:
         reason = f"Detected {', '.join(trigger_items)}"
 
         # Get highest priority item for primary reason
-        all_items = [*anomalies, *opportunities]
+        all_items: list[Any] = [*anomalies, *opportunities]
         if all_items:
             highest = min(all_items, key=lambda x: priority_order[x.priority])
             reason = f"{highest.priority.upper()}: {highest.description}"
