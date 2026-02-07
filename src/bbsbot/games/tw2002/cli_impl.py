@@ -45,7 +45,24 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         turns_used += 1
 
         # Get current state (with scan optimization)
-        state = await bot.orient()
+        try:
+            state = await bot.orient()
+        except Exception as e:
+            # Check if we're stuck in a loop
+            from bbsbot.games.tw2002 import errors
+
+            if "Stuck in loop" in str(e) or "loop_detected" in str(e):
+                print(f"\n⚠️  Loop detected, attempting escape...")
+                escaped = await errors.escape_loop(bot)
+                if escaped:
+                    print("  ✓ Escaped from loop, retrying orientation...")
+                    state = await bot.orient()
+                else:
+                    print("  ✗ Could not escape loop, skipping turn")
+                    continue
+            else:
+                raise
+
         char_state.update_from_game_state(state)
 
         # Update bot's current credits from state (needed for trade quantity calculations)
@@ -201,6 +218,8 @@ async def execute_port_trade(
     Returns:
         Credit change (positive = profit, negative = loss)
     """
+    from bbsbot.games.tw2002 import errors
+
     initial_credits = bot.current_credits or 0
     pending_trade = False
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
@@ -224,6 +243,12 @@ async def execute_port_trade(
         result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
         screen = result.get("screen", "")
         screen_lower = screen.lower()
+
+        # Check for error loops (e.g., "not in corporation" repeated)
+        if errors._check_for_error_loop(bot, screen):
+            logger.warning("error_loop_in_trading", step=step)
+            await errors.escape_loop(bot)
+            break
 
         # Use last lines to detect current prompt state
         lines = [l.strip() for l in screen.split("\n") if l.strip()]
