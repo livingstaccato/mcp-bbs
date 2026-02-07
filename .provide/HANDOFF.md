@@ -162,6 +162,23 @@ All MCP tools files under 500 LOC limit:
 - Single bot test shows bot reaching trading phase with proper game flow
 - Ready to restart full 111-bot stress test
 
+## Critical Fixes Applied (2026-02-07 14:50-15:00)
+
+**Problem**: User reported "bots are blindly flying with 0 credits and credits have not changed"
+
+**Root Cause Analysis**:
+1. Bots start on home planets where credits aren't displayed
+2. Home planet ports only show player's own commodities (0 profit trades)
+3. orient() semantic fallback wasn't triggering for 0 credits (only None)
+4. Bots needed explicit logic to escape home planet first
+
+**Fixes Implemented**:
+1. ✅ **orientation.py**: Enhanced semantic fallback to trigger on credits=0 (not just None)
+2. ✅ **opportunistic.py**: Added home planet detection and immediate warp-away logic
+3. ✅ **login.py**: Simplified credit initialization (accept 0, let orient() fix on first turn)
+
+**Expected Result**: Bots now properly escape home planet and establish correct credit values
+
 ## Next Steps
 
 1. ✅ ~~Split detector.py into sub-modules~~ COMPLETE
@@ -170,11 +187,10 @@ All MCP tools files under 500 LOC limit:
 4. ✅ ~~Create test configurations for live testing~~ COMPLETE
 5. ✅ ~~Fix game selection prompt detection~~ COMPLETE
 6. ✅ ~~Fix LearningEngine pattern loading~~ COMPLETE
-7. **IN PROGRESS**: Fix credit initialization after login (planet vs sector command)
-8. Restart 111 bot configurations for stress test
-9. Monitor for bot failures or unexpected behaviors during stress test
-10. Tune intervention thresholds based on real gameplay data
-11. Consider ai_strategy.py refactoring if it becomes unmaintainable (1247 LOC)
+7. ✅ ~~Fix credit initialization and home planet escape~~ COMPLETE
+8. **IN PROGRESS**: Monitor 111 bot configurations for stress test completion
+9. Collect metrics on intervention effectiveness
+10. Consider ai_strategy.py refactoring if it becomes unmaintainable (1247 LOC)
 
 ## Bug Fix Applied (2026-02-07)
 
