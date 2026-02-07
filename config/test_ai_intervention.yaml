@@ -1,6 +1,11 @@
 # Test Configuration 2: AI Strategy with Auto-Apply Intervention
 # This config tests full intervention system with automatic application
 
+connection:
+  host: "localhost"
+  port: 2002
+  game_letter: "B"                   # Specify game to avoid selection timeout
+
 trading:
   strategy: "ai_strategy"
 

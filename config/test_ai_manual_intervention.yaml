@@ -1,6 +1,11 @@
 # Test Configuration 3: AI Strategy with Manual Intervention
 # This config tests intervention detection WITHOUT automatic application
 
+connection:
+  host: "localhost"
+  port: 2002
+  game_letter: "B"                   # Specify game to avoid selection timeout
+
 trading:
   strategy: "ai_strategy"
 

@@ -192,7 +192,7 @@ async def login_sequence(
             )
         except TimeoutError as e:
             # Print screen on timeout for debugging
-            print(f"✗ Timeout in Phase 1: {e}")
+            print(f"⚠ Timeout in Phase 1, checking screen content...")
             try:
                 result = await bot.session.read(timeout_ms=500, max_bytes=8192)
                 timeout_screen = result.get("screen", "")
@@ -200,6 +200,18 @@ async def login_sequence(
                 print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
                 for line in lines[-10:]:
                     print(f"        | {line[:75]}")
+
+                # Check if we're actually at game selection screen (robust content-based detection)
+                screen_lower = timeout_screen.lower()
+                if ("selection" in screen_lower and "for menu" in screen_lower) or \
+                   ("<a>" in screen_lower and "<b>" in screen_lower and "game" in screen_lower):
+                    print(f"      ✓ Detected game selection screen by content!")
+                    # Set variables as if prompt was detected
+                    screen = timeout_screen
+                    prompt_id = "menu_selection"  # Fake prompt ID for Phase 2 compatibility
+                    input_type = "single_key"
+                    kv_data = None
+                    break  # Exit Phase 1 loop
             except Exception:
                 pass
             raise
@@ -292,13 +304,24 @@ async def login_sequence(
     print("\nSending game selection...")
     game_letter = "B"  # Default
     original_threshold = bot.loop_detection.threshold  # Save before any modifications
-    if "menu_selection" in prompt_id:
+
+    # Check screen content for game selection menu (more robust than prompt detection)
+    screen_lower = screen.lower()
+    if "selection" in screen_lower and ("for menu" in screen_lower or "<q>" in screen_lower):
         options = _extract_game_options(screen)
         print(f"  Available games: {options}")
         game_letter = _select_trade_wars_game(screen)
         print(f"  → Sending {game_letter}")
         await bot.session.send(game_letter)
         # Save game letter to bot for data directory scoping
+        bot.last_game_letter = game_letter
+    elif "menu_selection" in prompt_id:
+        # Fallback to prompt detection if screen matching fails
+        options = _extract_game_options(screen)
+        print(f"  Available games: {options}")
+        game_letter = _select_trade_wars_game(screen)
+        print(f"  → Sending {game_letter}")
+        await bot.session.send(game_letter)
         bot.last_game_letter = game_letter
         # Reset state before Phase 3 to prevent loop detection false triggers
         bot.loop_detection.reset()

@@ -1,6 +1,11 @@
 # Test Configuration 1: Opportunistic Strategy (Baseline - Should Get Stuck)
 # This config is designed to trigger stuck behavior for intervention testing
 
+connection:
+  host: "localhost"
+  port: 2002
+  game_letter: "B"                   # Specify game to avoid selection timeout
+
 trading:
   strategy: "opportunistic"
 

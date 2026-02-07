@@ -426,10 +426,10 @@
       "kind": "menu",
       "input_type": "single_key",
       "match": {
-        "pattern": "(?i)select\\s+game",
+        "pattern": "(?i)(selection.*\\(.*for menu.*\\)|<[A-Z]>.*<[A-Z]>.*selection)",
         "match_mode": "regex"
       },
-      "notes": "TWGS game selection menu"
+      "notes": "TWGS game selection menu - matches 'Selection (? for menu):' or game options"
     },
     {
       "id": "prompt.port_quantity",
