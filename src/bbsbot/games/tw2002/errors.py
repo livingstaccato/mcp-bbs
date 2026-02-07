@@ -112,7 +112,7 @@ async def escape_loop(bot) -> bool:
 
     # Clear loop detection state
     if hasattr(bot, "_loop_detector"):
-        bot._loop_detector.clear()
+        bot._loop_detector.reset()
     if hasattr(bot, "_error_history"):
         bot._error_history = []
 

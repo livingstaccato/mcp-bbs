@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.core.error_detection import LoopDetector
 from bbsbot.paths import default_knowledge_root
 from bbsbot.games.tw2002 import connection, io, login, logging_utils, parsing, trading
 from bbsbot.games.tw2002.config import BotConfig, load_config
@@ -78,7 +79,7 @@ class TradingBot:
 
         # Error tracking
         self.error_count = 0
-        self.loop_detection: dict[str, int] = {}  # prompt_id -> count
+        self.loop_detection = LoopDetector(threshold=3)
         self.last_prompt_id: str | None = None
         self.stuck_threshold = 3  # Max times to see same prompt before declaring stuck
 

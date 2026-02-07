@@ -299,7 +299,7 @@ async def login_sequence(
         print(f"  → Sending {game_letter}")
         await bot.session.send(game_letter)
         # Reset state before Phase 3 to prevent loop detection false triggers
-        bot.loop_detection.clear()
+        bot.loop_detection.reset()
         bot.last_prompt_id = None
         # Increase threshold for game loading phase (intro screens may repeat pause prompt)
         bot.stuck_threshold = 15  # Increased for complex flows
@@ -310,7 +310,8 @@ async def login_sequence(
     print("\nWaiting for game to load...")
     description_mode_exits = 0  # Track how many times we exit description mode
 
-    for step_in_phase3 in range(50):
+    # Increased loop limit to handle slow game loading (can take 10+ seconds after pressing T)
+    for step_in_phase3 in range(100):
         step += 1
         try:
             # Game loading takes 11+ seconds, need longer timeout
@@ -375,7 +376,9 @@ async def login_sequence(
             else:
                 print(f"      → At game menu, pressing T to play Trade Wars")
                 await bot.session.send("T")
-            await asyncio.sleep(0.5)  # Wait for menu response
+            # Game loading can take 10+ seconds after pressing T
+            # Don't sleep here - let wait_and_respond handle the delay
+            await asyncio.sleep(0.3)
 
         elif actual_prompt == "name_selection":
             print("      → Name selection prompt, choosing (B)BS Name")

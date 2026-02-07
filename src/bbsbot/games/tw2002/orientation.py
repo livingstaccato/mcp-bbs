@@ -669,7 +669,7 @@ async def recover_to_safe_state(
         if state.is_safe:
             print(f"  [Recovery] ✓ Reached safe state: {state.context}")
             # Clear loop detection counter after successful recovery
-            bot.loop_detection.clear()
+            bot.loop_detection.reset()
             return state
 
         # Handle specific contexts
@@ -1130,7 +1130,8 @@ async def _gather_state(
         _, _, display_screen, display_kv = await wait_and_respond(
             bot,
             timeout_ms=60000,  # 60 seconds for heavily loaded servers
-            ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
+            # Ignore loop detection for D command - it's normal to see sector_command prompt again
+            ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter", "prompt.sector_command"},
         )
 
         # Parse display output

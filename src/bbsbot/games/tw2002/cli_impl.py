@@ -246,7 +246,7 @@ async def execute_port_trade(
 
         # Check for error loops (e.g., "not in corporation" repeated)
         if errors._check_for_error_loop(bot, screen):
-            logger.warning("error_loop_in_trading", step=step)
+            logger.warning("error_loop_in_trading: step=%d", step)
             await errors.escape_loop(bot)
             break
 
@@ -363,7 +363,7 @@ async def warp_to_sector(bot, target: int) -> bool:
     Returns:
         True if successfully reached target sector
     """
-    bot.loop_detection.clear()
+    bot.loop_detection.reset()
 
     await bot.session.send(f"{target}\r")
     await asyncio.sleep(1.5)
