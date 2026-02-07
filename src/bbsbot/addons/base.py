@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class AddonEvent:
+class AddonEvent(BaseModel):
     """Structured addon event."""
 
     name: str
-    data: dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = Field(default_factory=dict)
 
 
 class Addon(Protocol):

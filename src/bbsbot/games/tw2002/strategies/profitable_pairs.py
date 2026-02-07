@@ -6,7 +6,6 @@ the same commodity. Calculates expected profit before trading.
 
 from __future__ import annotations
 
-import logging
 from collections import defaultdict
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,8 +17,9 @@ from bbsbot.games.tw2002.strategies.base import (
     TradeOpportunity,
     TradingStrategy,
 )
+from bbsbot.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PortPair(BaseModel):

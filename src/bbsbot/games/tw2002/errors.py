@@ -16,17 +16,14 @@ def _check_for_loop(bot, prompt_id: str) -> bool:
     Returns:
         True if stuck in loop, False otherwise
     """
-    # Use the framework LoopDetector
-    if not hasattr(bot, "_loop_detector"):
-        bot._loop_detector = LoopDetector(threshold=bot.stuck_threshold)
-
-    is_loop = bot._loop_detector.check(prompt_id)
-    count = bot._loop_detector.get_count(prompt_id)
+    # Use the framework LoopDetector (initialized in bot.__init__)
+    is_loop = bot.loop_detection.check(prompt_id)
+    count = bot.loop_detection.get_count(prompt_id)
 
     if is_loop:
-        logger.warning("loop_detected", prompt_id=prompt_id, count=count, threshold=bot.stuck_threshold)
+        logger.warning("loop_detected", prompt_id=prompt_id, count=count, threshold=bot.loop_detection.threshold)
     elif count > 0:
-        logger.debug("loop_detection_tracking", prompt_id=prompt_id, count=count, threshold=bot.stuck_threshold)
+        logger.debug("loop_detection_tracking", prompt_id=prompt_id, count=count, threshold=bot.loop_detection.threshold)
 
     return is_loop
 
@@ -111,8 +108,7 @@ async def escape_loop(bot) -> bool:
     logger.warning("attempting_loop_escape")
 
     # Clear loop detection state
-    if hasattr(bot, "_loop_detector"):
-        bot._loop_detector.reset()
+    bot.loop_detection.reset()
     if hasattr(bot, "_error_history"):
         bot._error_history = []
 

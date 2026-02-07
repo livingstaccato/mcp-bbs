@@ -291,18 +291,20 @@ async def login_sequence(
     # PHASE 2: Send game selection
     print("\nSending game selection...")
     game_letter = "B"  # Default
-    original_threshold = bot.stuck_threshold  # Save before any modifications
+    original_threshold = bot.loop_detection.threshold  # Save before any modifications
     if "menu_selection" in prompt_id:
         options = _extract_game_options(screen)
         print(f"  Available games: {options}")
         game_letter = _select_trade_wars_game(screen)
         print(f"  → Sending {game_letter}")
         await bot.session.send(game_letter)
+        # Save game letter to bot for data directory scoping
+        bot.last_game_letter = game_letter
         # Reset state before Phase 3 to prevent loop detection false triggers
         bot.loop_detection.reset()
         bot.last_prompt_id = None
         # Increase threshold for game loading phase (intro screens may repeat pause prompt)
-        bot.stuck_threshold = 15  # Increased for complex flows
+        bot.loop_detection.threshold = 15  # Increased for complex flows
         print(f"  ✓ Reset loop detection state")
 
     # PHASE 3: Wait for game to load and reach command prompt
@@ -472,7 +474,7 @@ async def login_sequence(
             await asyncio.sleep(0.2)
 
     # Restore threshold after game loading phase
-    bot.stuck_threshold = original_threshold
+    bot.loop_detection.threshold = original_threshold
     print(f"  [DEBUG] Threshold restored", flush=True)
 
     # Parse initial state

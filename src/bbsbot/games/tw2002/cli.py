@@ -116,7 +116,9 @@ async def run_bot(
     from bbsbot.paths import default_knowledge_root
 
     knowledge_root = default_knowledge_root()
-    data_dir = knowledge_root / "tw2002" / f"{config.connection.host}_{config.connection.port}"
+    # Include game_letter in path to separate character pools per game on same BBS
+    game_suffix = f"_game{config.connection.game_letter}" if config.connection.game_letter else ""
+    data_dir = knowledge_root / "tw2002" / f"{config.connection.host}_{config.connection.port}{game_suffix}"
     data_dir.mkdir(parents=True, exist_ok=True)
 
     multi_char = MultiCharacterManager(
@@ -160,9 +162,6 @@ async def run_bot(
             if watch and bot.session is not None:
                 bot.session.set_watch(_make_watch_callback(clear=watch_clear), interval_s=watch_interval)
 
-            bot.init_knowledge(config.connection.host, config.connection.port)
-            bot.init_strategy()
-
             print(f"\n[Login] Logging in as {char_state.name}...")
             await bot.login_sequence(
                 game_password=config.connection.game_password,
@@ -170,6 +169,12 @@ async def run_bot(
                 username=char_state.name,
             )
             print("  Logged in!")
+
+            # Initialize knowledge AFTER login so we can use the detected game_letter
+            # This ensures different games on same BBS have separate knowledge bases
+            game_letter = config.connection.game_letter or bot.last_game_letter
+            bot.init_knowledge(config.connection.host, config.connection.port, game_letter)
+            bot.init_strategy()
 
             print("\n[Orient] Getting initial state...")
             state = await bot.orient(force_scan=True)

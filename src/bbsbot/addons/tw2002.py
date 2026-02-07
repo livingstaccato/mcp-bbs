@@ -71,16 +71,16 @@ class Tw2002Addon(BaseModel):
         if match := _COMMAND_RE.search(screen):
             events.append(
                 AddonEvent(
-                    "tw2002.command",
-                    {"sector": int(match["sector"]), "turns_left": match["tl"]},
+                name="tw2002.command",
+                data={"sector": int(match["sector"]), "turns_left": match["tl"]},
                 )
             )
 
         if match := _SECTOR_RE.search(screen):
             events.append(
                 AddonEvent(
-                    "tw2002.sector",
-                    {
+                name="tw2002.sector",
+                data={
                         "sector": int(match["sector"]),
                         "region": match["region"].strip(),
                         "unexplored": bool(match["unexplored"]),
@@ -91,14 +91,14 @@ class Tw2002Addon(BaseModel):
         if match := _WARPS_RE.search(screen):
             warps = [w.strip(" ()") for w in match["warps"].split("-")]
             warps = [w for w in warps if w]
-            events.append(AddonEvent("tw2002.warps", {"warps": warps}))
+            events.append(AddonEvent(name="tw2002.warps", data={"warps": warps}))
 
         if match := _PORT_RE.search(screen):
             self.last_port = match["name"].strip()
             events.append(
                 AddonEvent(
-                    "tw2002.port",
-                    {
+                name="tw2002.port",
+                data={
                         "name": self.last_port,
                         "class": int(match["class"]),
                         "type": match["type"],
@@ -110,8 +110,8 @@ class Tw2002Addon(BaseModel):
             self.last_port = match["port"].strip()
             events.append(
                 AddonEvent(
-                    "tw2002.commerce_report",
-                    {"port": self.last_port, "time": match["time"].strip()},
+                name="tw2002.commerce_report",
+                data={"port": self.last_port, "time": match["time"].strip()},
                 )
             )
             items: list[dict[str, Any]] = []
@@ -126,20 +126,20 @@ class Tw2002Addon(BaseModel):
                     }
                 )
             if items:
-                events.append(AddonEvent("tw2002.port_items", {"port": self.last_port, "items": items}))
+                events.append(AddonEvent(name="tw2002.port_items", data={"port": self.last_port, "items": items}))
 
         if match := _CREDITS_RE.search(screen):
             credits = _to_int(match["credits"])
             empty_holds = int(match["holds"])
-            events.append(AddonEvent("tw2002.credits", {"credits": credits, "empty_holds": empty_holds}))
+            events.append(AddonEvent(name="tw2002.credits", data={"credits": credits, "empty_holds": empty_holds}))
             if self.last_credits is not None and self.last_qty and self.last_price and self.last_item and self.last_action:
                 delta = credits - self.last_credits
                 unit_price = self.last_price
                 total_value = unit_price * self.last_qty
                 events.append(
                     AddonEvent(
-                        "tw2002.ledger",
-                        {
+                name="tw2002.ledger",
+                data={
                             "port": self.last_port,
                             "item": self.last_item,
                             "action": self.last_action,
@@ -151,7 +151,7 @@ class Tw2002Addon(BaseModel):
                             "credits_after": credits,
                             "delta": delta,
                         },
-                    )
+                )
                 )
             self.last_credits = credits
 
@@ -160,22 +160,22 @@ class Tw2002Addon(BaseModel):
             self.last_action = match.group(2).lower()
             events.append(
                 AddonEvent(
-                    "tw2002.trade_quantity_prompt",
-                    {"item": self.last_item, "action": self.last_action},
+                name="tw2002.trade_quantity_prompt",
+                data={"item": self.last_item, "action": self.last_action},
                 )
             )
 
         if match := _TRADE_AGREED_QTY_RE.search(screen):
             self.last_qty = int(match["qty"])
-            events.append(AddonEvent("tw2002.trade_quantity", {"qty": self.last_qty}))
+            events.append(AddonEvent(name="tw2002.trade_quantity", data={"qty": self.last_qty}))
 
         if match := _HAGGLE_ACCEPT_RE.search(screen):
             price = _to_int(match["price"])
             self.last_price = price
             events.append(
                 AddonEvent(
-                    "tw2002.haggle_price",
-                    {
+                name="tw2002.haggle_price",
+                data={
                         "port": self.last_port,
                         "item": self.last_item,
                         "action": self.last_action,
@@ -190,21 +190,21 @@ class Tw2002Addon(BaseModel):
                 self.last_offer = _to_int(offer)
                 events.append(
                     AddonEvent(
-                        "tw2002.haggle_offer",
-                        {
+                name="tw2002.haggle_offer",
+                data={
                             "port": self.last_port,
                             "item": self.last_item,
                             "action": self.last_action,
                             "offer": self.last_offer,
                         },
-                    )
+                )
                 )
 
         if _HAGGLE_RESULT_RE.search(screen):
             events.append(
                 AddonEvent(
-                    "tw2002.haggle_result",
-                    {
+                name="tw2002.haggle_result",
+                data={
                         "port": self.last_port,
                         "item": self.last_item,
                         "action": self.last_action,
@@ -217,13 +217,13 @@ class Tw2002Addon(BaseModel):
         if match := _PLANETS_RE.search(screen):
             planets = [p.strip() for p in match["planets"].split("-")]
             planets = [p for p in planets if p]
-            events.append(AddonEvent("tw2002.planets", {"planets": planets}))
+            events.append(AddonEvent(name="tw2002.planets", data={"planets": planets}))
 
         if match := _ALIEN_TRADER_RE.search(screen):
             events.append(
                 AddonEvent(
-                    "tw2002.alien_trader",
-                    {
+                name="tw2002.alien_trader",
+                data={
                         "menace": match["menace"],
                         "name": match["name"].strip(),
                         "fighters": _to_int(match["ftrs"]),
@@ -235,22 +235,22 @@ class Tw2002Addon(BaseModel):
         for match in _WARP_INOUT_RE.finditer(screen):
             events.append(
                 AddonEvent(
-                    "tw2002.trader_warp",
-                    {"name": match["name"].strip(), "direction": match["dir"].lower()},
+                name="tw2002.trader_warp",
+                data={"name": match["name"].strip(), "direction": match["dir"].lower()},
                 )
             )
 
         if match := _SHIP_NAME_RE.search(screen):
-            events.append(AddonEvent("tw2002.ship_name", {"name": match["name"].strip()}))
+            events.append(AddonEvent(name="tw2002.ship_name", data={"name": match["name"].strip()}))
 
         if match := _SHIP_INFO_RE.search(screen):
-            events.append(AddonEvent("tw2002.ship_info", {"info": match["info"].strip()}))
+            events.append(AddonEvent(name="tw2002.ship_info", data={"info": match["info"].strip()}))
 
         if match := _RANK_RE.search(screen):
             events.append(
                 AddonEvent(
-                    "tw2002.rank",
-                    {
+                name="tw2002.rank",
+                data={
                         "exp": _to_int(match["exp"]),
                         "alignment": int(match["align"]),
                         "alignment_label": match["align_label"].strip(),
@@ -262,12 +262,12 @@ class Tw2002Addon(BaseModel):
             holds = match["holds"].strip()
             events.append(
                 AddonEvent(
-                    "tw2002.holds",
-                    {"total": int(match["total"]), "details": holds},
+                name="tw2002.holds",
+                data={"total": int(match["total"]), "details": holds},
                 )
             )
 
         if match := _BEACON_RE.search(screen):
-            events.append(AddonEvent("tw2002.beacon", {"beacon": match["beacon"].strip()}))
+            events.append(AddonEvent(name="tw2002.beacon", data={"beacon": match["beacon"].strip()}))
 
         return events
