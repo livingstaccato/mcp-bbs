@@ -64,9 +64,10 @@ All MCP tools files under 500 LOC limit:
 2. ✅ ~~Split mcp_tools.py to meet 500 LOC limit~~ COMPLETE
 3. ✅ ~~Fix critical bug in ai_strategy.py `_apply_intervention()`~~ COMPLETE
 4. ✅ ~~Create test configurations for live testing~~ COMPLETE
-5. 🚧 **Ready for Phase 3: Live Testing with localhost:2002**
-6. Tune thresholds based on real gameplay
-7. Consider ai_strategy.py refactoring if it becomes unmaintainable
+5. ✅ ~~Fix game selection prompt detection~~ COMPLETE
+6. ⚠️ **BLOCKER**: Prompt detection system not matching patterns in rules.json
+7. Tune thresholds based on real gameplay (pending live testing)
+8. Consider ai_strategy.py refactoring if it becomes unmaintainable
 
 ## Bug Fix Applied (2026-02-07)
 
@@ -82,6 +83,44 @@ Three YAML configs ready for live testing:
 3. `config/test_ai_manual_intervention.yaml` - Manual intervention only
 
 All configs use OLLAMA gemma3 (verified available on localhost:11434)
+All configs updated to use Game C (empty game suggested by user)
+
+## Login Fixes Applied (2026-02-07)
+
+**Issue**: Bot couldn't get past TWGS game selection menu due to prompt detection failure
+**Root Cause**: LearningEngine prompt patterns in rules.json weren't matching actual screen content
+
+**Fixes Applied**:
+1. Added content-based fallback detection in login.py Phase 1 timeout handler
+   - Detects "Selection (? for menu):" by screen content when prompt matching fails
+   - Allows Phase 1 to complete even when LearningEngine doesn't detect the prompt
+
+2. Added robust screen content checks in Phase 2 game selection
+   - Checks for "selection" + "for menu" patterns in screen text
+   - Falls back to prompt detection if screen matching fails
+
+3. Updated TWGS game selection pattern in rules.json
+   - Pattern now matches both "Selection (?..." and game option markers
+
+**Status**: Bot now gets past game selection screen but still has prompt detection issues in Phase 3 (game loading)
+
+## Outstanding Issue: LearningEngine Prompt Detection
+
+**Problem**: The LearningEngine is enabled (`enable_learning()` called in connection.py) and rules.json contains 193 prompts, but prompts aren't being detected during gameplay.
+
+**Evidence**:
+- rules.json is valid JSON and contains comprehensive prompt patterns
+- Learning is enabled with namespace "tw2002"
+- Bot times out waiting for prompts that should match (60s timeout)
+- Content-based fallback works, proving screen text is correct
+
+**Hypothesis**: The LearningEngine's pattern matching may have an issue with:
+- Regex patterns not compiling correctly
+- Screen buffer processing (whitespace, line endings)
+- Pattern priority/ordering in rules processing
+- Caching of rules that needs invalidation
+
+**Workaround**: Content-based detection added to critical login phases
 
 ## Documentation
 
