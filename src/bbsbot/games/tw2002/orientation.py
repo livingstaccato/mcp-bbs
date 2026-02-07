@@ -1023,9 +1023,16 @@ async def _reach_safe_state(
         # Check if we're in a safe state using our context detection
         context = _detect_context(screen)
 
-        if context in ("sector_command", "planet_command", "citadel_command"):
+        if context in ("sector_command", "citadel_command"):
             print(f"  [Orient] Safe state reached: {context}")
             return context, "", screen
+
+        if context == "planet_command":
+            # On planet citadel - quit back to sector with 'Q'
+            print(f"  [Orient] On planet citadel, pressing Q to return to space...")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.5)
+            continue
 
         if context == "pause":
             print(f"  [Orient] Dismissing pause screen...")

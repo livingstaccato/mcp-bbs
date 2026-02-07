@@ -141,8 +141,9 @@ async def run_bot(
     while total_characters < config.multi_character.max_characters:
         total_characters += 1
 
-        char_state = multi_char.create_character()
-        print(f"\n[Character {total_characters}] {char_state.name}")
+        char_state = multi_char.get_or_create_next_character()
+        char_type = "Existing" if char_state.sessions_played > 0 else "New"
+        print(f"\n[Character {total_characters}] {char_state.name} ({char_type})")
 
         bot = TradingBot(
             character_name=char_state.name,

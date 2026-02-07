@@ -80,6 +80,9 @@ class MultiCharacterManager:
         self._active_character: str | None = None
         self._character_count = 0
 
+        # Track characters assigned in this session (prevents reusing same char multiple times)
+        self._assigned_this_session: set[str] = set()
+
         # Shared knowledge (for shared mode)
         self._shared_knowledge_path = self.data_dir / "shared_sectors.json"
 
@@ -192,6 +195,10 @@ class MultiCharacterManager:
         self._save_records()
 
         self._active_character = name
+
+        # Mark as assigned in this session
+        self._assigned_this_session.add(name)
+
         logger.info(f"Created character: {name} (ship: {ship_name or 'none'})")
 
         return state
@@ -207,6 +214,9 @@ class MultiCharacterManager:
         """
         state = self._character_manager.load(name)
         self._active_character = name
+
+        # Mark as assigned in this session
+        self._assigned_this_session.add(name)
 
         # Update record
         if name in self._records:
@@ -330,6 +340,70 @@ class MultiCharacterManager:
             List of all character records
         """
         return list(self._records.values())
+
+    def get_available_characters(self) -> list[str]:
+        """Get list of existing character names that can be reused.
+
+        Scans the data directory for character state files and returns
+        names of characters that:
+        - Have existing state files on disk
+        - Are not marked as dead in records (or have no record yet)
+        - Have not been assigned in this session
+
+        Returns:
+            List of character names sorted by last_active time (oldest first)
+        """
+        # Get all character state files
+        existing_chars = self._character_manager.list_characters()
+
+        # Filter out dead characters and already-assigned characters
+        available = []
+        for name in existing_chars:
+            # Skip if already assigned in this session
+            if name in self._assigned_this_session:
+                continue
+            # If we have a record and it's marked dead, skip it
+            if name in self._records and self._records[name].died_at is not None:
+                continue
+            available.append(name)
+
+        # Sort by last active time (oldest first) to distribute load
+        def get_last_active(name: str) -> float:
+            """Get last active timestamp for sorting."""
+            # Try to load state to get last_active time
+            try:
+                state_path = self.data_dir / f"{name}_state.json"
+                if state_path.exists():
+                    data = json.loads(state_path.read_text())
+                    return data.get("last_active", 0)
+            except Exception:
+                pass
+            return 0
+
+        available.sort(key=get_last_active)
+        return available
+
+    def get_or_create_next_character(self) -> CharacterState:
+        """Get next available character or create a new one.
+
+        Prioritizes reusing existing character saves before creating new ones.
+        This allows characters to build on previous progress across sessions.
+
+        Returns:
+            CharacterState (loaded from existing save or newly created)
+        """
+        # Check for available existing characters
+        available = self.get_available_characters()
+
+        if available:
+            # Reuse oldest character (by last_active time)
+            name = available[0]
+            logger.info(f"Reusing existing character: {name}")
+            return self.load_character(name)
+        else:
+            # No existing characters available, create new one
+            logger.info("No existing characters available, creating new character")
+            return self.create_character()
 
     def get_active_character(self) -> str | None:
         """Get the currently active character name.

@@ -181,12 +181,28 @@ async def login_sequence(
 
     # PHASE 1: Navigate to game selection (menu_selection prompt)
     print("\nNavigating to game selection menu...")
-    for _ in range(10):
+    for iteration in range(10):
         step += 1
         try:
+            # First connection may take up to 60 seconds under heavy server load
+            # Use longer timeout on first attempt, shorter on subsequent attempts
+            timeout = 60000 if iteration == 0 else 20000
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
+                bot, timeout_ms=timeout
             )
+        except TimeoutError as e:
+            # Print screen on timeout for debugging
+            print(f"✗ Timeout in Phase 1: {e}")
+            try:
+                result = await bot.session.read(timeout_ms=500, max_bytes=8192)
+                timeout_screen = result.get("screen", "")
+                lines = [l.strip() for l in timeout_screen.split('\n') if l.strip()]
+                print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
+                for line in lines[-10:]:
+                    print(f"        | {line[:75]}")
+            except Exception:
+                pass
+            raise
         except RuntimeError as e:
             print(f"✗ Navigation error: {e}")
             raise

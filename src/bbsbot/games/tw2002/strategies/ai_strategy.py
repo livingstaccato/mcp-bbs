@@ -86,11 +86,14 @@ class AIStrategy(TradingStrategy):
         self._max_turns = config.session.max_turns_per_session
 
         # Start initial goal phase
+        # If "auto", start with "profit" as default until first evaluation
+        initial_goal = self._current_goal_id if self._current_goal_id != "auto" else "profit"
         self._start_goal_phase(
-            goal_id=self._current_goal_id,
+            goal_id=initial_goal,
             trigger_type="auto",
             reason="Initial goal on strategy creation",
         )
+        self._current_goal_id = initial_goal
 
     @property
     def name(self) -> str:
