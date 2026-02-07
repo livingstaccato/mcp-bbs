@@ -22,9 +22,18 @@ INTERVENTION_SYSTEM_PROMPT = """You are an expert Trade Wars 2002 gameplay analy
 
 YOUR ROLE: Detect behavioral anomalies, performance degradation, and missed opportunities.
 
+CRITICAL PRIORITY - COMPLETE STAGNATION:
+If the bot has made NO changes (same sector, same credits, no events) for multiple turns,
+this is a CRITICAL failure. The bot is completely stuck and needs immediate strategic reorientation:
+- Suggest changing to exploration goal to discover new sectors
+- Recommend force_move to a known port or trading hub
+- Propose reset_strategy to clear any stuck state
+- Identify WHY the bot is stuck (no warps? no fuel? invalid strategy?)
+
 ANALYSIS FRAMEWORK:
 
 1. PATTERN RECOGNITION
+   - COMPLETE STAGNATION (CRITICAL): No changes in sector, credits, or events
    - Stuck behaviors (repeated actions, location loops)
    - Efficiency drops (declining profit velocity, wasted turns)
    - Goal misalignment (actions inconsistent with stated goal)
@@ -37,7 +46,7 @@ ANALYSIS FRAMEWORK:
    - Exploration inefficiencies
 
 3. SEVERITY ASSESSMENT
-   - CRITICAL: Bot stuck, ship at risk, or major capital loss
+   - CRITICAL: Bot completely stuck (no changes), ship at risk, or major capital loss
    - WARNING: Performance declining, suboptimal patterns
    - INFO: Minor inefficiencies, optimization opportunities
 

@@ -38,6 +38,7 @@ class AnomalyType(StrEnum):
     GOAL_STAGNATION = "goal_stagnation"  # No progress toward goal
     PERFORMANCE_DECLINE = "performance_decline"  # Profit velocity dropping
     TURN_WASTE = "turn_waste"  # Unproductive turns
+    COMPLETE_STAGNATION = "complete_stagnation"  # NO changes at all - bot is stuck
 
 
 class OpportunityType(StrEnum):
@@ -121,13 +122,13 @@ class InterventionDetector:
         """
         turn_data = TurnData(
             turn=turn,
-            sector=state.current_sector,
-            credits=state.credits,
+            sector=state.sector or 0,
+            credits=state.credits or 0,
             action=action,
             profit_delta=profit_delta,
-            holds_free=state.holds_free,
-            fighters=state.fighters,
-            shields=state.shields,
+            holds_free=state.holds_free or 0,
+            fighters=state.fighters or 0,
+            shields=state.shields or 0,
         )
         self._turn_history.append(turn_data)
 
@@ -153,6 +154,10 @@ class InterventionDetector:
         anomalies: list[Anomaly] = []
 
         # Run detection algorithms
+        # CRITICAL: Check for complete stagnation first
+        if complete_stagnation := self._detect_complete_stagnation():
+            anomalies.append(complete_stagnation)
+
         if loop := self._detect_action_loop():
             anomalies.append(loop)
 
@@ -222,6 +227,78 @@ class InterventionDetector:
 
         self._recent_opportunities = opportunities
         return opportunities
+
+    def _detect_complete_stagnation(self) -> Anomaly | None:
+        """Detect COMPLETE stagnation - bot making NO progress at all.
+
+        This is CRITICAL - the bot is truly stuck and needs immediate intervention.
+        Checks for:
+        - No sector changes
+        - No credit changes
+        - Same action repeated
+        - No profit from any turns
+        """
+        if len(self._turn_history) < 5:
+            return None
+
+        history = list(self._turn_history)
+
+        # Check if ALL sectors are the same
+        sectors = {t.sector for t in history}
+        if len(sectors) != 1:
+            return None  # Moving between sectors, not completely stuck
+
+        # Check if credits have changed AT ALL
+        credits = {t.credits for t in history}
+        if len(credits) != 1:
+            return None  # Credits changing, some activity
+
+        # Check if ALL actions are the same
+        actions = {t.action for t in history}
+        if len(actions) == 1:
+            repeated_action = list(actions)[0]
+            # Bot is repeating the SAME action in the SAME sector with NO credit change
+            return Anomaly(
+                type=AnomalyType.COMPLETE_STAGNATION,
+                priority=InterventionPriority.CRITICAL,
+                confidence=0.95,
+                description=f"Bot completely stuck: {len(history)} turns with NO changes",
+                evidence=[
+                    f"Stuck in sector {history[0].sector} for {len(history)} turns",
+                    f"Repeating action: {repeated_action}",
+                    f"Credits unchanged: {history[0].credits:,}",
+                    "No progress whatsoever - CRITICAL",
+                ],
+                metadata={
+                    "sector": history[0].sector,
+                    "action": repeated_action,
+                    "credits": history[0].credits,
+                    "turns_stuck": len(history),
+                },
+            )
+
+        # Even if actions vary, if sector and credits are identical, still concerning
+        if len(history) >= 7:  # More turns required for this case
+            return Anomaly(
+                type=AnomalyType.COMPLETE_STAGNATION,
+                priority=InterventionPriority.CRITICAL,
+                confidence=0.9,
+                description=f"Bot stuck: {len(history)} turns, same sector and credits",
+                evidence=[
+                    f"Stuck in sector {history[0].sector}",
+                    f"Credits unchanged: {history[0].credits:,}",
+                    f"Actions: {[t.action for t in history[-5:]]}",
+                    "No net progress - needs reorientation",
+                ],
+                metadata={
+                    "sector": history[0].sector,
+                    "credits": history[0].credits,
+                    "turns_stuck": len(history),
+                    "actions": [t.action for t in history],
+                },
+            )
+
+        return None
 
     def _detect_action_loop(self) -> Anomaly | None:
         """Detect repeated action patterns."""

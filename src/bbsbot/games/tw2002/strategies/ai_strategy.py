@@ -1108,35 +1108,60 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
             None otherwise
         """
         action_type = recommendation.get("suggested_action", {}).get("type", "none")
+        severity = recommendation.get("severity", "info")
 
         match action_type:
             case "change_goal":
                 # Change to suggested goal
                 params = recommendation.get("suggested_action", {}).get("parameters", {})
-                new_goal = params.get("goal")
+                new_goal = params.get("goal", "exploration")  # Default to exploration if stuck
                 if new_goal and new_goal != self._current_goal_id:
                     logger.info(
                         "intervention_changing_goal",
                         from_goal=self._current_goal_id,
                         to_goal=new_goal,
+                        severity=severity,
                     )
                     self._set_goal(new_goal, trigger_type="manual", state=state)
                 return None  # Continue with normal decision making
 
             case "reset_strategy":
                 # Reset fallback counter and try fresh
-                logger.info("intervention_reset_strategy")
+                logger.info("intervention_reset_strategy", severity=severity)
                 self.consecutive_failures = 0
                 self.fallback_until_turn = 0
+                # Also change to exploration to get unstuck
+                self._set_goal("exploration", trigger_type="manual", state=state)
                 return None
 
             case "force_move":
                 # Force movement to specific sector
                 params = recommendation.get("suggested_action", {}).get("parameters", {})
                 target_sector = params.get("target_sector")
+
+                # If no target specified but we're stuck, try to find ANY adjacent sector
+                if not target_sector and severity == "critical":
+                    # Get warps from current sector
+                    warps = getattr(state, "warps", [])
+                    if warps:
+                        target_sector = warps[0]  # Move to first available warp
+                        logger.info(
+                            "intervention_force_move_auto",
+                            target=target_sector,
+                            reason="critical_stagnation",
+                        )
+
                 if target_sector:
-                    logger.info("intervention_force_move", target=target_sector)
+                    logger.info("intervention_force_move", target=target_sector, severity=severity)
                     return TradeAction.MOVE, {"destination": target_sector}
+                return None
+
+            case "explore_random":
+                # Explore to break out of stuck state
+                logger.info("intervention_explore_random", severity=severity)
+                # Change goal to exploration
+                self._set_goal("exploration", trigger_type="manual", state=state)
+                # Let normal decision logic handle exploration
                 return None
 
             case _:
