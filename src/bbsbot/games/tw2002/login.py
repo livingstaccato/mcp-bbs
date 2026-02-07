@@ -545,12 +545,12 @@ async def login_sequence(
     if bot.current_credits is None or bot.current_credits == 0:
         print(f"  [DEBUG] Establishing accurate game state after login...", flush=True)
         try:
-            from bbsbot.games.tw2002.parsing import extract_semantic_kv, _parse_display_screen
+            from bbsbot.games.tw2002.orientation import _parse_display_screen
 
             # Send 'D' to get player display with full status
             await bot.session.send("D")
-            await asyncio.sleep(0.5)
-            result = await bot.session.read(timeout_ms=5000, max_bytes=8192)
+            await asyncio.sleep(1.0)  # D command needs time to return
+            result = await bot.session.read(timeout_ms=10000, max_bytes=8192)
             display_screen = result.get("screen", "")
             kv_semantic = result.get("kv_data", {})
 
@@ -564,7 +564,7 @@ async def login_sequence(
                 bot.current_credits = kv_semantic.get('credits')
                 print(f"  [DEBUG] Got credits from semantic data: {bot.current_credits}", flush=True)
             else:
-                print(f"  [DEBUG] D command didn't return credits, moving to sector...", flush=True)
+                print(f"  [DEBUG] D command didn't return credits data", flush=True)
         except Exception as e:
             print(f"  [DEBUG] State establishment failed: {e}", flush=True)
 
