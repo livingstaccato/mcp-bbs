@@ -3,7 +3,7 @@
 
 import pytest
 
-from bbsbot.tw2002 import TradingBot
+from bbsbot.games.tw2002 import TradingBot
 
 
 class TestTradingBot:

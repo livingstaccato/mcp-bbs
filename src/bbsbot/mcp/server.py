@@ -2,31 +2,52 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 import time
 from pathlib import Path
 from typing import Any, cast
 
-import structlog
 from fastmcp import FastMCP
 
-from bbsbot.paths import find_repo_games_root, validate_knowledge_root
-from bbsbot.settings import Settings
 from bbsbot.core.session_manager import SessionManager
 from bbsbot.learning.discovery import discover_menu
 from bbsbot.learning.knowledge import append_md
+from bbsbot.logging import configure_logging, get_logger
+from bbsbot.paths import find_repo_games_root, validate_knowledge_root
+from bbsbot.settings import Settings
+from bbsbot.games.tw2002.resume import as_dict as _resume_as_dict
+from bbsbot.games.tw2002.resume import list_resumable_tw2002
+from bbsbot.watch import WatchManager, watch_settings
 
-# Configure structlog to write to stderr (MCP uses stdout for JSON-RPC)
-structlog.configure(
-    processors=[
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(),
-    ],
-    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-)
+# Configure logging once at module import
+configure_logging()
 
-log = structlog.get_logger()
+log = get_logger(__name__)
+
+
+def _register_game_tools(mcp_app: FastMCP) -> None:
+    """Register game-specific MCP tools.
+
+    Imports and registers tools from game modules. Each game can
+    define its own tools with custom prefixes (e.g., tw2002_, tedit_).
+    """
+    try:
+        # Import TW2002 tools (triggers registration)
+        from bbsbot.games.tw2002 import mcp_tools as tw2002_tools
+        from bbsbot.mcp.registry import get_manager
+
+        # Get all registered tools from the registry manager
+        manager = get_manager()
+        all_tools = manager.get_all_tools()
+
+        # Add each tool to the MCP app
+        for tool_name, tool_func in all_tools.items():
+            mcp_app.add_tool(tool_func, name=tool_name)
+            log.debug(f"mcp_game_tool_added: {tool_name}")
+
+        log.info(f"mcp_game_tools_registered: {len(all_tools)} tools from {len(manager.list_registries())} games")
+
+    except Exception as e:
+        log.warning(f"mcp_game_tools_registration_failed: {e}")
 
 
 def decode_escape_sequences(s: str) -> str:
@@ -66,6 +87,8 @@ def decode_escape_sequences(s: str) -> str:
 
 app = FastMCP("bbsbot")
 session_manager = SessionManager()
+watch_manager: WatchManager | None = None
+_watch_registered = False
 
 # Single active session (end-state: simple single-session model)
 _active_session_id: str | None = None
@@ -77,7 +100,28 @@ def create_app(settings: Settings) -> FastMCP:
     """Configure globals and return the FastMCP app."""
     global KNOWLEDGE_ROOT
     KNOWLEDGE_ROOT = validate_knowledge_root(settings.knowledge_root)
+
+    # Register game-specific tools
+    _register_game_tools(app)
+
     return app
+
+
+def _attach_watch(session: Any) -> None:
+    if watch_manager is not None:
+        watch_manager.attach_session(session)
+
+
+async def _ensure_watch_manager() -> None:
+    global watch_manager, _watch_registered
+    if not watch_settings.enabled:
+        return
+    if watch_manager is None:
+        watch_manager = WatchManager()
+        await watch_manager.start()
+    if not _watch_registered:
+        session_manager.register_session_callback(_attach_watch)
+        _watch_registered = True
 
 
 def _parse_json(value: str, label: str) -> list[dict[str, str]]:
@@ -161,6 +205,7 @@ async def bbs_connect(
     """Connect to a BBS via telnet (reuse existing session by default)."""
     global _active_session_id
 
+    await _ensure_watch_manager()
     _require_knowledge_root()
     try:
         session_id = await session_manager.create_session(
@@ -193,6 +238,28 @@ async def bbs_read(timeout_ms: int = 250, max_bytes: int = 8192) -> dict[str, An
     _require_knowledge_root()
     _, session = await _get_session()
     return cast(dict[str, Any], await session.read(timeout_ms, max_bytes))
+
+
+@app.tool()
+async def bbs_list_resumable_games(
+    game: str = "tw2002",
+    active_within_hours: float | None = None,
+    min_credits: int | None = None,
+    require_sector: bool = False,
+    name_prefix: str | None = None,
+) -> dict[str, Any]:
+    """List resumable game characters from local state."""
+    knowledge_root = _require_knowledge_root()
+    if game != "tw2002":
+        raise RuntimeError(f"Unsupported game: {game}")
+    entries = list_resumable_tw2002(
+        knowledge_root,
+        active_within_hours=active_within_hours,
+        min_credits=min_credits,
+        require_sector=require_sector,
+        name_prefix=name_prefix,
+    )
+    return {"game": game, "entries": _resume_as_dict(entries)}
 
 
 @app.tool()
@@ -673,6 +740,210 @@ async def bbs_get_screen_saver_status() -> dict[str, Any]:
 
 
 @app.tool()
+async def bbs_debug_llm_stats() -> dict[str, Any]:
+    """Get LLM usage statistics including tokens, cost, and cache hit rates.
+
+    Returns cache performance, per-model token usage, estimated costs.
+    Useful for monitoring LLM efficiency during AI strategy gameplay.
+    """
+    sid = _require_session()
+    bot = session_manager.get_bot(sid)
+
+    if not bot:
+        return {
+            "error": "No bot registered for this session",
+            "session_id": sid,
+        }
+
+    # Check if bot has strategy with LLM manager
+    if not hasattr(bot, "strategy") or not bot.strategy:
+        return {
+            "error": "Bot has no strategy",
+            "bot_type": type(bot).__name__,
+        }
+
+    strategy = bot.strategy
+    if not hasattr(strategy, "llm_manager"):
+        return {
+            "error": "Strategy has no LLM manager",
+            "strategy_type": type(strategy).__name__,
+        }
+
+    llm_manager = strategy.llm_manager
+
+    # Get cache stats
+    cache_stats = llm_manager.get_cache_stats()
+
+    # Get usage stats
+    usage_stats = llm_manager.get_usage_stats()
+
+    return {
+        "session_id": sid,
+        "strategy": strategy.name,
+        "cache": cache_stats or {"enabled": False},
+        "usage": usage_stats,
+    }
+
+
+@app.tool()
+async def bbs_debug_learning_state() -> dict[str, Any]:
+    """Get learning engine state including loaded patterns and buffer status.
+
+    Returns pattern count, recent detections, screen buffer state,
+    screen saver statistics.
+    """
+    sid, session = await _get_session()
+    learning = await _ensure_learning(session, sid)
+
+    result: dict[str, Any] = {
+        "session_id": sid,
+        "enabled": learning.enabled,
+        "namespace": learning._namespace,
+        "auto_discover": learning._auto_discover,
+        "base_dir": str(learning.get_base_dir()),
+    }
+
+    # Prompt detection info
+    if learning._prompt_detector:
+        result["prompt_detection"] = {
+            "patterns_loaded": len(learning._prompt_detector._patterns),
+            "idle_threshold_seconds": learning._idle_threshold_seconds,
+        }
+
+    # Buffer info
+    if learning._buffer_manager:
+        buffer_mgr = learning._buffer_manager
+        recent_screens = buffer_mgr.get_recent(n=1)
+        result["screen_buffer"] = {
+            "size": len(buffer_mgr._buffer),
+            "max_size": buffer_mgr._buffer.maxlen,
+            "is_idle": buffer_mgr.detect_idle_state() if recent_screens else False,
+            "last_change_seconds_ago": (
+                recent_screens[0].time_since_last_change if recent_screens else 0.0
+            ),
+        }
+
+    # Screen saver info
+    if learning._screen_saver:
+        result["screen_saver"] = learning.get_screen_saver_status()
+
+    return result
+
+
+@app.tool()
+async def bbs_debug_bot_state() -> dict[str, Any]:
+    """Get active bot's runtime state including strategy, errors, and progress.
+
+    Returns current strategy name, cycle count, error count, trade history,
+    loop detection status, visited sectors.
+    """
+    sid = _require_session()
+    bot = session_manager.get_bot(sid)
+
+    if not bot:
+        return {
+            "error": "No bot registered for this session",
+            "session_id": sid,
+        }
+
+    result: dict[str, Any] = {
+        "session_id": sid,
+        "bot_type": type(bot).__name__,
+        "character_name": getattr(bot, "character_name", "unknown"),
+    }
+
+    # Strategy info
+    if hasattr(bot, "strategy") and bot.strategy:
+        strategy = bot.strategy
+        result["strategy"] = {
+            "name": strategy.name,
+            "type": type(strategy).__name__,
+        }
+
+        # AI strategy specific info
+        if hasattr(strategy, "consecutive_failures"):
+            result["strategy"]["consecutive_failures"] = strategy.consecutive_failures
+            result["strategy"]["fallback_until_turn"] = getattr(strategy, "fallback_until_turn", 0)
+            result["strategy"]["current_turn"] = getattr(strategy, "_current_turn", 0)
+
+    # Game state
+    if hasattr(bot, "game_state") and bot.game_state:
+        gs = bot.game_state
+        result["game_state"] = {
+            "context": gs.context,
+            "sector": gs.sector,
+            "credits": gs.credits,
+            "turns_left": gs.turns_left,
+            "has_port": gs.has_port,
+        }
+
+    # Progress tracking
+    result["progress"] = {
+        "cycle_count": getattr(bot, "cycle_count", 0),
+        "step_count": getattr(bot, "step_count", 0),
+        "error_count": getattr(bot, "error_count", 0),
+        "turns_used": getattr(bot, "turns_used", 0),
+        "sectors_visited": len(getattr(bot, "sectors_visited", set())),
+        "trades": len(getattr(bot, "trade_history", [])),
+    }
+
+    # Error tracking
+    if hasattr(bot, "loop_detection"):
+        result["loop_detection"] = dict(bot.loop_detection)
+
+    return result
+
+
+@app.tool()
+async def bbs_debug_session_events(
+    limit: int = 50,
+    event_type: str | None = None,
+) -> list[dict[str, Any]]:
+    """Query recent events from session JSONL log.
+
+    Args:
+        limit: Max events to return (default 50)
+        event_type: Filter by type (e.g., 'tw2002.ledger', 'llm.feedback')
+
+    Returns recent events matching filters, useful for analyzing bot behavior.
+    """
+    sid, session = await _get_session()
+
+    if not session.logger:
+        return []
+
+    # Read JSONL file
+    import json
+    from pathlib import Path
+
+    log_path = Path(session.logger._log_path)
+    if not log_path.exists():
+        return []
+
+    events: list[dict[str, Any]] = []
+
+    try:
+        with open(log_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                    # Filter by type if specified
+                    if event_type and event.get("event") != event_type:
+                        continue
+                    events.append(event)
+                except json.JSONDecodeError:
+                    continue
+
+        # Return last N events
+        return events[-limit:]
+    except Exception as e:
+        return [{"error": f"Failed to read events: {e}"}]
+
+
+@app.tool()
 async def bbs_status() -> dict[str, Any]:
     """Return current session status."""
     if not _active_session_id:
@@ -725,6 +996,56 @@ async def bbs_status() -> dict[str, Any]:
         # Add logging status
         if session.logger:
             status["log_path"] = str(session.logger._log_path)
+
+        # Add debug section with summary info
+        bot = session_manager.get_bot(_active_session_id)
+        if bot:
+            debug_info: dict[str, Any] = {}
+
+            # LLM stats summary
+            if hasattr(bot, "strategy") and bot.strategy and hasattr(bot.strategy, "llm_manager"):
+                llm_mgr = bot.strategy.llm_manager
+                cache_stats = llm_mgr.get_cache_stats()
+                usage_stats = llm_mgr.get_usage_stats()
+
+                if cache_stats and usage_stats:
+                    total_tokens = sum(
+                        model_stats["total_tokens"]
+                        for model_stats in usage_stats.get("by_model", {}).values()
+                    )
+                    debug_info["llm"] = {
+                        "cache_hit_rate": cache_stats.get("hit_rate", 0.0),
+                        "total_tokens": total_tokens,
+                        "estimated_cost_usd": usage_stats.get("total_cost_usd", 0.0),
+                    }
+
+            # Learning summary
+            if session.learning:
+                learning_summary = {
+                    "patterns_loaded": (
+                        len(session.learning._prompt_detector._patterns)
+                        if session.learning._prompt_detector
+                        else 0
+                    ),
+                }
+                if session.learning._buffer_manager:
+                    learning_summary["screens_buffered"] = len(session.learning._buffer_manager._buffer)
+                if session.learning._screen_saver:
+                    saver_status = session.learning.get_screen_saver_status()
+                    learning_summary["screens_saved"] = saver_status.get("saved_count", 0)
+                debug_info["learning"] = learning_summary
+
+            # Bot summary
+            if hasattr(bot, "strategy") and bot.strategy:
+                debug_info["bot"] = {
+                    "strategy": bot.strategy.name,
+                    "cycles": getattr(bot, "cycle_count", 0),
+                    "errors": getattr(bot, "error_count", 0),
+                    "trades": len(getattr(bot, "trade_history", [])),
+                }
+
+            if debug_info:
+                status["debug"] = debug_info
 
         return status
     except ValueError:

@@ -1,0 +1,75 @@
+"""Connection and session management for TW2002 Trading Bot."""
+
+import json
+import time
+from pathlib import Path
+
+from bbsbot.games.tw2002.logging_utils import logger
+from bbsbot.games.tw2002.orientation import SectorInfo
+from bbsbot.games.tw2002.parsing import extract_semantic_kv
+
+
+def _write_semantic_log(bot, data: dict) -> None:
+    knowledge_root = getattr(bot, "knowledge_root", None)
+    if not knowledge_root:
+        return
+    name = getattr(bot, "character_name", "unknown") or "unknown"
+    base = Path(knowledge_root) / "tw2002" / "semantic"
+    base.mkdir(parents=True, exist_ok=True)
+    path = base / f"{name}_semantic.jsonl"
+    payload = {"ts": time.time(), "data": data}
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload) + "\n")
+
+
+def _update_semantic_relationships(bot, data: dict) -> None:
+    knowledge = getattr(bot, "sector_knowledge", None)
+    sector = data.get("sector")
+    if not knowledge or not sector:
+        return
+    info = knowledge._sectors.get(sector) or SectorInfo()
+    if data.get("warps"):
+        info.warps = data["warps"]
+    if data.get("has_port") is True:
+        info.has_port = True
+        info.port_class = data.get("port_class")
+    if data.get("has_planet") is True:
+        info.has_planet = True
+        info.planet_names = data.get("planet_names", [])
+    info.last_visited = time.time()
+    knowledge._sectors[sector] = info
+    knowledge._save_cache()
+
+
+def _semantic_watch(bot, snapshot: dict, raw: bytes) -> None:
+    screen = snapshot.get("screen", "")
+    if not screen:
+        return
+    data = extract_semantic_kv(screen)
+    if not data:
+        return
+    kv = " ".join(f"{k}={data[k]}" for k in sorted(data))
+    print(f"semantic {kv}")
+    _update_semantic_relationships(bot, data)
+    _write_semantic_log(bot, data)
+
+
+async def connect(bot, host="localhost", port=2002):
+    """Connect to TW2002 BBS.
+
+    Args:
+        bot: TradingBot instance
+        host: BBS hostname (default: localhost)
+        port: BBS port (default: 2002)
+    """
+    print(f"\n🔗 Connecting to {host}:{port}...")
+    bot.session_id = await bot.session_manager.create_session(
+        host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0
+    )
+    bot.session = await bot.session_manager.get_session(bot.session_id)
+    await bot.session_manager.enable_learning(
+        bot.session_id, bot.knowledge_root, namespace="tw2002"
+    )
+    bot.session.add_watch(lambda snapshot, raw: _semantic_watch(bot, snapshot, raw))
+    print(f"✓ Connected")
+    logger.info("bbs_connected", host=host, port=port, session_id=bot.session_id)

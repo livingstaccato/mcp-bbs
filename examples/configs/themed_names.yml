@@ -1,0 +1,37 @@
+# Example configuration with themed bot names
+# Character names like: QuantumTrader, NeuralDataProfit, CryptoByteMarket
+# Ship names like: Swift Venture, Neural Horizon, Dark Fortune
+
+connection:
+  host: localhost
+  port: 2002
+  game_password: game
+
+character:
+  password: trade123
+
+  # Name complexity levels:
+  # - simple: 2-part names (1,600 combos) - "QuantumTrader"
+  # - medium: 3-part names (77,000 combos) - "NeuralDataProfit" [DEFAULT]
+  # - complex: 4-part names (3.7M combos) - "QuantumNeuralDataTrader"
+  # - numbered: unlimited names - "QuantumTrader47"
+  name_complexity: medium
+
+  # Ship name generation
+  generate_ship_names: true
+  ship_names_with_numbers: false  # Set true for "Swift Venture II" style
+
+  # Optional: Set seed for reproducible names (useful for testing)
+  name_seed: null  # null = random, or use integer for repeatable names
+
+trading:
+  strategy: opportunistic
+
+multi_character:
+  enabled: true
+  max_characters: 50
+  knowledge_sharing: shared
+
+session:
+  target_credits: 5000000
+  max_turns_per_session: 500

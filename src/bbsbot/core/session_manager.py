@@ -41,6 +41,7 @@ class SessionManager:
             max_sessions: Maximum number of concurrent sessions
         """
         self._sessions: dict[str, Session] = {}
+        self._bots: dict[str, Any] = {}  # session_id -> bot instance
         self._max_sessions = max_sessions
         self._lock = asyncio.Lock()
         self._session_counter = 0
@@ -131,6 +132,7 @@ class SessionManager:
             )
 
             self._sessions[session_id] = session
+            self._emit_session_created(session)
 
             # Send newline if requested
             if send_newline:
@@ -179,6 +181,9 @@ class SessionManager:
 
         async with self._lock:
             del self._sessions[session_id]
+            # Auto-unregister bot if registered
+            if session_id in self._bots:
+                del self._bots[session_id]
 
         log.info("session_closed", session_id=session_id)
 
@@ -218,6 +223,20 @@ class SessionManager:
         await session.logger.start(session.session_number)
 
         log.info("logging_enabled", session_id=session_id, log_path=str(log_path))
+
+    def register_session_callback(self, callback: Callable[[Session], None]) -> None:
+        """Register a callback invoked for every new session."""
+        if not hasattr(self, "_session_callbacks"):
+            self._session_callbacks: list[Callable[[Session], None]] = []
+        self._session_callbacks.append(callback)
+
+    def _emit_session_created(self, session: Session) -> None:
+        callbacks: list[Callable[[Session], None]] = getattr(self, "_session_callbacks", [])
+        for callback in callbacks:
+            try:
+                callback(session)
+            except Exception as exc:
+                log.warning("session_callback_failed", session_id=session.session_id, error=str(exc))
 
     async def disable_logging(self, session_id: str) -> None:
         """Disable logging for a session.
@@ -301,3 +320,36 @@ class SessionManager:
         session.learning = None
 
         log.info("learning_disabled", session_id=session_id)
+
+    def register_bot(self, session_id: str, bot_instance: Any) -> None:
+        """Register a bot instance for a session.
+
+        Allows MCP tools to access running bot for debugging.
+
+        Args:
+            session_id: Session identifier
+            bot_instance: Bot instance to register
+        """
+        self._bots[session_id] = bot_instance
+        log.info("bot_registered", session_id=session_id, bot_type=type(bot_instance).__name__)
+
+    def get_bot(self, session_id: str) -> Any | None:
+        """Get registered bot for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Bot instance or None if not registered
+        """
+        return self._bots.get(session_id)
+
+    def unregister_bot(self, session_id: str) -> None:
+        """Unregister bot for a session.
+
+        Args:
+            session_id: Session identifier
+        """
+        if session_id in self._bots:
+            del self._bots[session_id]
+            log.info("bot_unregistered", session_id=session_id)

@@ -12,9 +12,9 @@ import sys
 from pathlib import Path
 
 
-from bbsbot.tw2002 import TradingBot
-from bbsbot.tw2002.connection import connect
-from bbsbot.tw2002.io import wait_and_respond
+from bbsbot.games.tw2002 import TradingBot
+from bbsbot.games.tw2002.connection import connect
+from bbsbot.games.tw2002.io import wait_and_respond
 
 async def analyze_screen(bot, step_num: int, screen: str, prompt_id: str, input_type: str):
     """Analyze a screen and report findings."""

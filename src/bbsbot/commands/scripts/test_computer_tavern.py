@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 
-from bbsbot.tw2002.bot import TradingBot
-from bbsbot.tw2002.orientation import INFO_CONTEXTS
+from bbsbot.games.tw2002.bot import TradingBot
+from bbsbot.games.tw2002.orientation import INFO_CONTEXTS
 
 
 async def test_computer_menu(bot: TradingBot) -> bool:

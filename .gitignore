@@ -57,3 +57,8 @@ dmypy.json
 # Logs
 *.log
 *.jsonl
+
+# Session logs and debug artifacts
+sessions/
+*.jsonl
+games/tw2002/session.jsonl

@@ -23,10 +23,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bbsbot.tw2002.bot import TradingBot
-from bbsbot.tw2002.config import BotConfig, load_config
-from bbsbot.tw2002.character import CharacterManager, CharacterState
-from bbsbot.tw2002.multi_character import MultiCharacterManager
+from bbsbot.games.tw2002.bot import TradingBot
+from bbsbot.games.tw2002.config import BotConfig, load_config
+from bbsbot.games.tw2002.character import CharacterManager, CharacterState
+from bbsbot.games.tw2002.multi_character import MultiCharacterManager
 
 
 class PortInfo(BaseModel):
@@ -190,7 +190,7 @@ class TradeWarPlayer:
     async def get_ship_status(self) -> None:
         """Get current ship status and update session."""
         # Clear loop detection before status check
-        self.bot.loop_detection.clear()
+        self.bot.loop_detection.reset()
 
         await self.bot.session.send("I")
         await asyncio.sleep(0.8)
@@ -297,7 +297,7 @@ class TradeWarPlayer:
         # mark_scanned() only sets timestamp, doesn't store discovered data.
         # GameState requires 'context' argument even if we only need sector data.
         if sector and self.bot.sector_knowledge:
-            from bbsbot.tw2002.orientation import GameState
+            from bbsbot.games.tw2002.orientation import GameState
             state = GameState(
                 context="sector_command",  # Required field
                 sector=sector,
@@ -369,7 +369,7 @@ class TradeWarPlayer:
         initial_credits = self.session.credits
 
         # Clear loop detection before trade attempt
-        self.bot.loop_detection.clear()
+        self.bot.loop_detection.reset()
 
         # Enter port with P command
         await self.bot.session.send("P")
@@ -551,7 +551,7 @@ class TradeWarPlayer:
     async def warp_to(self, sector: int) -> bool:
         """Warp to a sector via single-hop move."""
         # Clear loop detection before warp
-        self.bot.loop_detection.clear()
+        self.bot.loop_detection.reset()
 
         # Make sure we're at sector_command first
         state = await self.bot.where_am_i()
@@ -656,7 +656,7 @@ class TradeWarPlayer:
         while moves < max_moves and self.session.turns_left > 0 and self.session.credits < target_credits:
             moves += 1
             # Clear loop detection at start of each turn
-            self.bot.loop_detection.clear()
+            self.bot.loop_detection.reset()
 
             print(f"\n[Turn {moves}] Sector {self.session.sector}, " +
                   f"Credits: {self.session.credits:,}, Turns: {self.session.turns_left}")

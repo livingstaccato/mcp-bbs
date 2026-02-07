@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-if TYPE_CHECKING:
-    from bbsbot.learning.buffer import ScreenBuffer
+from bbsbot.learning.buffer import ScreenBuffer
 
 
 class PromptMatch(BaseModel):
@@ -18,7 +17,7 @@ class PromptMatch(BaseModel):
     pattern: dict[str, Any]
     input_type: str  # "single_key" | "multi_key" | "any_key"
     eol_pattern: str
-    kv_extract: dict[str, Any] | None = None
+    kv_extract: list[dict[str, Any]] | dict[str, Any] | None = None
 
 
 class PromptDetection(BaseModel):

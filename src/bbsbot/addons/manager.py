@@ -6,8 +6,8 @@ from bbsbot.addons.base import Addon, AddonEvent
 
 
 class AddonManager:
-    def __init__(self) -> None:
-        self.addons: list[Addon] = []
+    def __init__(self, addons: list[Addon] | None = None) -> None:
+        self.addons: list[Addon] = addons or []
 
     def process(self, snapshot: dict[str, object]) -> list[AddonEvent]:
         events: list[AddonEvent] = []

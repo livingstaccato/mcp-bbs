@@ -9,8 +9,12 @@ connection:
 
 # Character settings
 character:
-  name_prefix: "bot"
   password: "trade123"
+  # Name generation settings
+  name_complexity: "medium"  # Options: simple, medium, complex, numbered
+  number_prefix: false  # If true, puts generation number at start (e.g., "1BotName")
+  generate_ship_names: true  # Generate themed ship names
+  ship_names_with_numbers: false  # Add roman numerals to ship names
 
 # Trading strategy configuration
 trading:

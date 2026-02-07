@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 
@@ -29,13 +30,15 @@ class CompleteTW2002Player:
         print("=" * 80)
         print()
 
+        host = os.getenv("BBSBOT_TW_HOST", "localhost")
+        port = int(os.getenv("BBSBOT_TW_PORT", "2002"))
         self.session_id = await self.session_manager.create_session(
-            host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0
+            host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0
         )
         self.session = await self.session_manager.get_session(self.session_id)
         await self.session_manager.enable_learning(self.session_id, self.knowledge_root, namespace="tw2002")
 
-        print(f"✓ Connected to localhost:2002")
+        print(f"✓ Connected to {host}:{port}")
         print(f"✓ Patterns loaded: {len(self.session.learning._prompt_detector._patterns)}")
         print()
 
@@ -73,37 +76,162 @@ class CompleteTW2002Player:
         print(f"{'─'*80}\n")
         return snapshot
 
+    def _is_game_prompt(self, screen_lower: str) -> bool:
+        if "sector command" in screen_lower or "planet command" in screen_lower:
+            return True
+        return "command [" in screen_lower
+
+    async def _reach_game(self, snapshot, username: str, password: str, game_letter: str):
+        """Navigate menus until we reach the game prompt."""
+        for _ in range(30):
+            screen_text = snapshot.get("screen", "")
+            screen_lower = screen_text.lower()
+            lines = screen_text.splitlines()
+            tail = "\n".join(lines[-5:]).lower() if lines else ""
+            detected = snapshot.get("prompt_detected", {}) or {}
+            prompt_id = detected.get("prompt_id", "")
+
+            if "enter your name" in screen_lower or prompt_id == "prompt.login_name":
+                await self.send(f"{username}\r", "Enter player name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "select game (q for none)" in screen_lower:
+                await self.send("Q", "Exit description mode")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "selection (? for menu)" in screen_lower or prompt_id == "prompt.menu_selection":
+                await self.send(game_letter, f"Select game {game_letter}")
+                snapshot = await self.read_and_show(pause=2.0, max_lines=25)
+                continue
+
+            if "private game" in screen_lower and "password" in screen_lower:
+                await self.send(f"{password}\r", "Enter game password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "trade wars 2002" in screen_lower and "enter your choice" in tail:
+                await self.send("T\r", "Play Trade Wars 2002")
+                snapshot = await self.read_and_show(pause=2.0, max_lines=25)
+                continue
+
+            if "show today's log" in screen_lower:
+                await self.send("N\r", "Skip today's log")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "start a new character" in tail and "password" not in tail:
+                await self.send("Y\r", "Start new character")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "use (n)ew name" in screen_lower and "what alias do you want to use" not in screen_lower:
+                await self.send("\r", "Use default BBS name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "is what you want" in screen_lower and "ship" not in tail and (
+                "alias" in screen_lower or "commander" in screen_lower
+            ):
+                await self.send("Y\r", "Confirm alias")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "what alias do you want to use" in screen_lower and "is what you want" not in screen_lower:
+                await self.send(f"{username}\r", "Alias")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "repeat password" in tail or "verify" in tail:
+                await self.send(f"{password}\r{password}\r", "Set + confirm password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "password?" in tail:
+                await self.send(f"{password}\r", "Set password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if prompt_id == "prompt.game_password":
+                await self.send(f"{password}\r", "Enter password")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if (
+                "home planet" in screen_lower
+                and "name your home planet" in screen_lower
+                and "planet command" not in screen_lower
+            ):
+                planet_name = f"{username} Prime"
+                await self.send(f"{planet_name}\r", "Home planet name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if prompt_id == "prompt.ship_name":
+                if "is what you want" in tail:
+                    await self.send("Y\r", "Confirm ship name")
+                    snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                else:
+                    ship_name = f"{username}'s ship"
+                    await self.send(f"{ship_name}\r", "Ship name")
+                    snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "ship" in tail and "name" in tail:
+                ship_name = f"{username}'s ship"
+                await self.send(f"{ship_name}\r", "Ship name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "is what you want" in tail and "ship" in tail:
+                await self.send("Y\r", "Confirm ship name")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if prompt_id == "prompt.any_key" or "[any key]" in screen_lower:
+                await self.send(" ", "Continue")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "[pause]" in screen_lower:
+                await self.send(" ", "Continue")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if "use ansi graphics" in screen_lower:
+                await self.send("Y\r", "Use ANSI graphics")
+                snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+                continue
+
+            if self._is_game_prompt(screen_lower):
+                return snapshot
+
+            snapshot = await self.read_and_show(pause=1.0, max_lines=25)
+
+        print("  ❌ Failed to reach game prompt within step limit.")
+        return None
+
     async def play(self):
         """Play through the game."""
 
         # Initial screen
         print("\n🎮 Starting playthrough...\n")
-        await self.read_and_show(pause=1.0, max_lines=25)
-
-        # Step 1: Enter game from TWGS menu
-        await self.send("A\r", "Select 'A' - My Game")
-        await self.read_and_show(pause=1.5, max_lines=25)
-
-        # Should get player name prompt now
-        await self.send("TestPlayer\r", "Enter player name")
         snapshot = await self.read_and_show(pause=1.0, max_lines=25)
 
-        # Check if new player or returning
+        username = os.getenv("BBSBOT_TW_USERNAME", "TestPlayer")
+        password = os.getenv("BBSBOT_TW_PASSWORD", username)
+        game_letter = os.getenv("BBSBOT_TW_GAME", "B")
+
+        snapshot = await self._reach_game(snapshot, username, password, game_letter)
+        if snapshot is None:
+            return
+
+        # If we're on a planet prompt, exit to sector command before running commands.
         screen_text = snapshot.get('screen', '').lower()
-
-        if 'new player' in screen_text or 'create' in screen_text:
-            print("  ℹ️  Detected new player creation")
-            # May need to confirm or set password
-            await self.send("Y\r", "Confirm new player")
-            await self.read_and_show(pause=1.0)
-
-            # Set password if prompted
-            await self.send("testpass\r", "Set password")
-            await self.read_and_show(pause=1.0)
-
-            # Confirm password
-            await self.send("testpass\r", "Confirm password")
-            await self.read_and_show(pause=1.0)
+        if "planet command" in screen_text:
+            await self.send("Q\r", "Leave planet prompt")
+            await self.read_and_show(pause=1.0, max_lines=25)
 
         # Should be in game now - read initial game screen
         snapshot = await self.read_and_show(pause=2.0, max_lines=35)

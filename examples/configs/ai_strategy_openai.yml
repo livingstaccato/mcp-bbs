@@ -1,0 +1,57 @@
+# AI Strategy Configuration with OpenAI (Future)
+#
+# This is a template for when OpenAI provider is implemented.
+# Currently OpenAI provider raises NotImplementedError.
+
+connection:
+  host: localhost
+  port: 2002
+  game_password: game
+
+character:
+  password: trade123
+  name_complexity: medium
+  generate_ship_names: true
+
+trading:
+  strategy: ai_strategy
+
+  ai_strategy:
+    enabled: true
+    fallback_strategy: opportunistic
+    fallback_threshold: 3
+    fallback_duration_turns: 10
+    context_mode: summary
+    sector_radius: 3
+    include_history: true
+    max_history_items: 5
+    timeout_ms: 30000
+    cache_decisions: false
+    record_history: true
+
+# LLM Provider Configuration (OpenAI)
+llm:
+  provider: openai
+
+  openai:
+    api_key: ${OPENAI_API_KEY}       # Set via environment variable
+    model: gpt-4
+    timeout_seconds: 30.0
+    max_retries: 3
+
+banking:
+  enabled: true
+  deposit_threshold: 50000
+
+upgrades:
+  enabled: true
+  auto_buy_holds: true
+  max_holds: 75
+
+combat:
+  enabled: true
+  danger_threshold: 100
+
+session:
+  target_credits: 5000000
+  max_turns_per_session: 500
