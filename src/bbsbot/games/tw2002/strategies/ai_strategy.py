@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.config import BotConfig, GoalPhase
@@ -74,6 +75,7 @@ class AIStrategy(TradingStrategy):
         self._recent_events: deque = deque(maxlen=100)  # Rolling window
         self._last_feedback_turn = 0
         self._session_logger: SessionLogger | None = None
+        self._viz_emit_cb: Callable[..., None] | None = None
 
         # Goals system
         self._current_goal_id: str = self._settings.goals.current
@@ -318,6 +320,22 @@ class AIStrategy(TradingStrategy):
         """
         self._session_logger = logger
 
+    def set_viz_emitter(self, emit_cb: Callable[..., None] | None) -> None:
+        """Set an optional visualization emitter callback.
+
+        The callback is expected to accept (kind: str, text: str, turn: int|None, ...).
+        """
+        self._viz_emit_cb = emit_cb
+
+    def _emit_viz(self, kind: str, text: str) -> None:
+        emit = self._viz_emit_cb
+        if emit is None:
+            return
+        try:
+            emit(kind, text, turn=self._current_turn, goal_id=self._current_goal_id)
+        except Exception as e:
+            logger.debug(f"viz_emit_failed: {e}")
+
     def _record_event(self, event_type: str, data: dict) -> None:
         """Record event for feedback analysis.
 
@@ -554,14 +572,18 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
                 current_turn=self._current_turn,
                 max_turns=self._max_turns,
             )
-            print("\n" + "=" * 80)
-            print(f"MANUAL GOAL OVERRIDE: {old_goal.upper()} → {goal_id.upper()}")
+            lines: list[str] = []
+            lines.append("\n" + "=" * 80)
+            lines.append(f"MANUAL GOAL OVERRIDE: {old_goal.upper()} → {goal_id.upper()}")
             if duration_turns > 0:
-                print(f"Duration: {duration_turns} turns")
-            print("=" * 80)
-            print(timeline.render_progress_bar())
-            print(timeline.render_legend())
-            print("=" * 80 + "\n")
+                lines.append(f"Duration: {duration_turns} turns")
+            lines.append("=" * 80)
+            lines.append(timeline.render_progress_bar())
+            lines.append(timeline.render_legend())
+            lines.append("=" * 80 + "\n")
+            text = "\n".join(lines)
+            print(text)
+            self._emit_viz("timeline", text)
 
         # Log to event ledger
         if self._session_logger:
@@ -644,12 +666,16 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
                     current_turn=self._current_turn,
                     max_turns=self._max_turns,
                 )
-                print("\n" + "=" * 80)
-                print(f"GOAL CHANGED: {old_goal.upper()} → {new_goal_id.upper()}")
-                print("=" * 80)
-                print(timeline.render_progress_bar())
-                print(timeline.render_legend())
-                print("=" * 80 + "\n")
+                lines: list[str] = []
+                lines.append("\n" + "=" * 80)
+                lines.append(f"GOAL CHANGED: {old_goal.upper()} → {new_goal_id.upper()}")
+                lines.append("=" * 80)
+                lines.append(timeline.render_progress_bar())
+                lines.append(timeline.render_legend())
+                lines.append("=" * 80 + "\n")
+                text = "\n".join(lines)
+                print(text)
+                self._emit_viz("timeline", text)
 
             # Log to event ledger
             if self._session_logger:

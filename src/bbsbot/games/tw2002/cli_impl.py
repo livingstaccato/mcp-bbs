@@ -98,6 +98,9 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                         max_turns=max_turns,
                     )
                     print(f"  {status_line}")
+                    emit_viz = getattr(bot, "emit_viz", None)
+                    if callable(emit_viz):
+                        emit_viz("compact", status_line, turn=current_turn)
 
         # Check target
         if credits >= target_credits:

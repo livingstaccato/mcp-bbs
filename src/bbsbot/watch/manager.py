@@ -15,6 +15,22 @@ class WatchManager:
     def __init__(self, broker: WatchBroker | None = None) -> None:
         self._broker = broker or WatchBroker()
 
+    def emit_event(self, event: str, payload: dict[str, Any]) -> None:
+        """Emit a structured watch event (JSON protocol only).
+
+        This is intended for out-of-band events that are not part of the raw BBS
+        byte stream (e.g. goal visualization lines).
+        """
+        if not watch_settings.enabled:
+            return
+        if watch_settings.protocol != "json":
+            return
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        asyncio.create_task(self._broker.broadcast_event(event, payload))
+
     async def start(self) -> None:
         if not watch_settings.enabled:
             return

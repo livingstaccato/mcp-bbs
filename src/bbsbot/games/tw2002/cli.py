@@ -129,6 +129,7 @@ async def run_bot(
 
     total_characters = 0
     total_profit = 0
+    last_bot = None
 
     watch_manager: WatchManager | None = None
     if watch_socket:
@@ -151,8 +152,13 @@ async def run_bot(
             character_name=char_state.name,
             config=config,
         )
+        last_bot = bot
         if watch_manager is not None:
             bot.session_manager.register_session_callback(watch_manager.attach_session)
+            try:
+                bot.set_watch_manager(watch_manager)
+            except Exception:
+                setattr(bot, "_watch_manager", watch_manager)
 
         try:
             print(f"\n[Connect] Connecting to {config.connection.host}:{config.connection.port}...")
@@ -220,6 +226,36 @@ async def run_bot(
 
     # Release character locks so other processes can use them
     multi_char.release_all_locks()
+
+    # Display goal progression summary (AI strategy only).
+    try:
+        show_viz = (
+            config.trading.strategy == "ai_strategy"
+            and config.trading.ai_strategy.show_goal_visualization
+        )
+    except Exception:
+        show_viz = False
+
+    if show_viz and last_bot is not None and getattr(last_bot, "strategy", None) is not None:
+        strategy = last_bot.strategy
+        phases = getattr(strategy, "_goal_phases", None)
+        if phases:
+            from bbsbot.games.tw2002.visualization import GoalSummaryReport
+
+            print("\n" + "=" * 60)
+            print("GOAL PROGRESSION SUMMARY")
+            print("=" * 60)
+            report = GoalSummaryReport(
+                phases=phases,
+                max_turns=config.session.max_turns_per_session,
+            )
+            summary_text = report.render_full_summary()
+            print(summary_text)
+            print("")
+            emit_viz = getattr(last_bot, "emit_viz", None)
+            if callable(emit_viz):
+                current_turn = getattr(strategy, "_current_turn", None)
+                emit_viz("summary", summary_text, turn=current_turn)
 
     print("\n" + "=" * 60)
     print("SESSION COMPLETE")

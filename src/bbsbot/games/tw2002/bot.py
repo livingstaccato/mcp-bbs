@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from bbsbot.games.tw2002.banking import BankingManager
     from bbsbot.games.tw2002.upgrades import UpgradeManager
     from bbsbot.games.tw2002.combat import CombatManager
+    from bbsbot.watch.manager import WatchManager
 
 
 class TradingBot:
@@ -96,6 +97,9 @@ class TradingBot:
         self.menu_selection_attempts = 0
         self.last_game_letter: str | None = None
 
+        # Optional: watch-socket manager for out-of-band status/event streaming.
+        self._watch_manager: WatchManager | None = None
+
     # -------------------------------------------------------------------------
     # Subsystem properties (lazy initialization)
     # -------------------------------------------------------------------------
@@ -149,6 +153,11 @@ class TradingBot:
             # Inject session logger for feedback loop
             if self.session and self.session.logger:
                 self._strategy.set_session_logger(self.session.logger)
+            # Optional: allow strategy to emit goal visualization events.
+            try:
+                self._strategy.set_viz_emitter(self.emit_viz)  # type: ignore[attr-defined]
+            except Exception:
+                setattr(self._strategy, "_viz_emit", self.emit_viz)
         else:  # Default to opportunistic
             from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
             self._strategy = OpportunisticStrategy(self.config, self.sector_knowledge)
@@ -160,6 +169,23 @@ class TradingBot:
             self.session_manager.register_bot(self.session_id, self)
 
         return self._strategy
+
+    def set_watch_manager(self, watch_manager: WatchManager | None) -> None:
+        """Attach a WatchManager used for broadcasting structured events."""
+        self._watch_manager = watch_manager
+
+    def emit_viz(self, kind: str, text: str, *, turn: int | None = None, **extra: object) -> None:
+        """Emit a goal-visualization payload over the watch socket (if enabled)."""
+        if self._watch_manager is None:
+            return
+        payload: dict[str, object] = {
+            "kind": kind,
+            "text": text,
+            "turn": turn,
+            "character_name": self.character_name,
+        }
+        payload.update(extra)
+        self._watch_manager.emit_event("viz", payload)
 
     # -------------------------------------------------------------------------
     # Scanning optimization
