@@ -554,6 +554,15 @@ async def login_sequence(
             display_screen = result.get("screen", "")
             kv_semantic = result.get("kv_data", {})
 
+            # Debug: Show what D command returned
+            if display_screen:
+                lines = [l.strip() for l in display_screen.split('\n') if l.strip()]
+                print(f"  [DEBUG] D command returned {len(lines)} lines", flush=True)
+                if "credits" in display_screen.lower():
+                    print(f"  [DEBUG] D response contains 'credits' keyword", flush=True)
+                else:
+                    print(f"  [DEBUG] D response does NOT contain 'credits'", flush=True)
+
             # Try display parsing first (official D command output)
             display_info = _parse_display_screen(display_screen)
             if display_info.get('credits'):
