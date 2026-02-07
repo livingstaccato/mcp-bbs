@@ -1,0 +1,31 @@
+# Test 3: Game C, AI Strategy, No Intervention, OLLAMA
+connection:
+  host: "localhost"
+  port: 2002
+  game_letter: "C"
+
+trading:
+  strategy: "ai_strategy"
+  ai_strategy:
+    enabled: true
+    fallback_strategy: "opportunistic"
+    fallback_threshold: 3
+    intervention:
+      enabled: false
+
+llm:
+  provider: "ollama"
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "gemma3"
+    timeout_seconds: 30.0
+
+session:
+  max_turns_per_session: 25
+  target_credits: 75000
+
+banking:
+  enabled: false
+
+upgrades:
+  enabled: false

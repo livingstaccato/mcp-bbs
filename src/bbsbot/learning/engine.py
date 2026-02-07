@@ -7,7 +7,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from bbsbot.paths import find_repo_games_root
+from bbsbot.paths import default_knowledge_root, find_repo_games_root
 from bbsbot.learning.buffer import BufferManager
 from bbsbot.learning.detector import PromptDetection, PromptDetector
 from bbsbot.learning.discovery import discover_menu
@@ -173,39 +173,115 @@ class LearningEngine:
         - .bbs-knowledge/games/{namespace}/prompts.json (legacy)
         - Falls back to empty detector if file doesn't exist
         """
+        from bbsbot.logging import get_logger
+        logger = get_logger(__name__)
+
+        logger.info(f"[PATTERN LOAD] Loading patterns for namespace: {self._namespace}")
+        logger.info(f"[PATTERN LOAD] Knowledge root: {self._knowledge_root}")
+
         result = self._load_rules_or_patterns()
         patterns = result.patterns
+
+        logger.info(f"[PATTERN LOAD] Loaded {len(patterns)} patterns from {result.source}")
+        if result.metadata:
+            logger.info(f"[PATTERN LOAD] Metadata: {result.metadata}")
+
+        if len(patterns) == 0:
+            logger.error(
+                f"[PATTERN LOAD] ⚠️ ⚠️ ⚠️  NO PATTERNS LOADED! ⚠️ ⚠️ ⚠️\n"
+                f"  Namespace: {self._namespace}\n"
+                f"  Source: {result.source}\n"
+                f"  This means prompt detection will NOT work!"
+            )
 
         # Create detector (empty if no patterns found)
         self._prompt_detector = PromptDetector(patterns)
 
     def _load_rules_or_patterns(self) -> RuleLoadResult:
+        from bbsbot.logging import get_logger
+        logger = get_logger(__name__)
+
         if not self._namespace:
+            logger.warning("[RULES LOAD] No namespace set, cannot load patterns")
             return RuleLoadResult(source="none", patterns=[], metadata={})
 
+        logger.debug(f"[RULES LOAD] Namespace: {self._namespace}")
+
         # Look for a repo-local rules override relative to the knowledge root.
-        # This keeps tests isolated (tmp dirs are not git repos) and avoids
-        # accidentally pulling in repo rules based on the current working dir.
-        # Be tolerant of older call sites / tests that monkeypatch this helper
-        # with a 0-arg function.
+        # For tests: knowledge_root is a temp dir (may or may not have .git)
+        # For production: knowledge_root is user data dir, NOT in git repo
+        # Strategy:
+        #   1. Try finding git repo from knowledge_root (tests with .git)
+        #   2. Check knowledge_root/games directly (tests without .git)
+        #   3. Fallback to finding git repo from cwd (production)
         try:
             repo_games_root = find_repo_games_root(self._knowledge_root)
+            logger.debug(f"[RULES LOAD] Searched from knowledge_root, found: {repo_games_root}")
         except TypeError:
+            # Backwards compatibility for monkeypatched callers
             repo_games_root = find_repo_games_root()
+            logger.debug(f"[RULES LOAD] Fallback (TypeError), found: {repo_games_root}")
+        except Exception as e:
+            logger.error(f"[RULES LOAD] Error finding repo games root: {e}")
+            repo_games_root = None
+
+        # If no git repo found from knowledge_root, check if games dir exists directly
+        # (for tests that don't set up .git but do create games/namespace/rules.json)
+        # IMPORTANT: Only use it if the actual rules.json file exists there!
+        if repo_games_root is None:
+            direct_games = self._knowledge_root / "games"
+            direct_rules = direct_games / self._namespace / "rules.json"
+            logger.debug(f"[RULES LOAD] Checking direct games dir: {direct_games}")
+            logger.debug(f"[RULES LOAD] Checking for rules at: {direct_rules}")
+            logger.debug(f"[RULES LOAD] Rules file exists: {direct_rules.exists()}")
+            if direct_rules.exists():
+                logger.debug(f"[RULES LOAD] Found games directory with rules: {direct_games}")
+                repo_games_root = direct_games
+            else:
+                logger.debug(f"[RULES LOAD] No rules.json in knowledge_root games dir")
+
+        # If still nothing, try searching from current working directory (production case ONLY)
+        # Only do this if knowledge_root is the default production directory, not a test temp dir
+        if repo_games_root is None:
+            # Resolve both paths for accurate comparison
+            is_default_knowledge_root = self._knowledge_root.resolve() == default_knowledge_root().resolve()
+            logger.debug(f"[RULES LOAD] knowledge_root: {self._knowledge_root.resolve()}")
+            logger.debug(f"[RULES LOAD] default_knowledge_root: {default_knowledge_root().resolve()}")
+            logger.debug(f"[RULES LOAD] is_default: {is_default_knowledge_root}")
+
+            if is_default_knowledge_root:
+                logger.debug(f"[RULES LOAD] Using default knowledge_root in production, trying cwd")
+                try:
+                    repo_games_root = find_repo_games_root()
+                    logger.debug(f"[RULES LOAD] Searched from cwd, found: {repo_games_root}")
+                except Exception as e:
+                    logger.error(f"[RULES LOAD] Error finding repo games root from cwd: {e}")
+                    repo_games_root = None
+            else:
+                logger.debug(f"[RULES LOAD] Custom knowledge_root (test mode), not falling back to cwd")
+
         if repo_games_root:
             repo_rules = repo_games_root / self._namespace / "rules.json"
+            logger.info(f"[RULES LOAD] Checking for rules.json at: {repo_rules}")
+            logger.info(f"[RULES LOAD] File exists: {repo_rules.exists()}")
+
             if repo_rules.exists():
+                logger.info(f"[RULES LOAD] Attempting to load RuleSet from {repo_rules}")
                 try:
                     rules = RuleSet.from_json_file(repo_rules)
+                    patterns = rules.to_prompt_patterns()
+                    logger.info(f"[RULES LOAD] ✓ Successfully loaded {len(patterns)} patterns from RuleSet")
                     return RuleLoadResult(
                         source=str(repo_rules),
-                        patterns=rules.to_prompt_patterns(),
+                        patterns=patterns,
                         metadata={"game": rules.game, "version": rules.version, **rules.metadata},
                     )
-                except (json.JSONDecodeError, OSError, ValueError):
+                except (json.JSONDecodeError, OSError, ValueError) as e:
+                    logger.warning(f"[RULES LOAD] RuleSet loading failed ({type(e).__name__}: {e}), trying legacy format")
                     # Legacy rules.json support (minimal prompt list).
                     try:
                         data = json.loads(repo_rules.read_text())
+                        logger.debug(f"[RULES LOAD] Parsed JSON, checking for legacy 'prompts' key")
                         legacy_patterns: list[dict[str, Any]] = []
                         for prompt in data.get("prompts", []):
                             prompt_id = prompt.get("prompt_id")
@@ -225,14 +301,21 @@ class LearningEngine:
                                 }
                             )
                         if legacy_patterns:
+                            logger.info(f"[RULES LOAD] ✓ Loaded {len(legacy_patterns)} patterns from legacy format")
                             return RuleLoadResult(
                                 source=str(repo_rules),
                                 patterns=legacy_patterns,
                                 metadata=data.get("metadata", {}),
                             )
-                    except Exception:
+                        else:
+                            logger.warning(f"[RULES LOAD] Legacy format parsed but no valid patterns found")
+                    except Exception as e2:
+                        logger.error(f"[RULES LOAD] Legacy format parsing also failed: {type(e2).__name__}: {e2}")
                         pass
+                    logger.error(f"[RULES LOAD] ✗ Failed to load any patterns from {repo_rules}")
                     return RuleLoadResult(source=str(repo_rules), patterns=[], metadata={})
+            else:
+                logger.warning(f"[RULES LOAD] rules.json not found at {repo_rules}")
 
             repo_prompts = repo_games_root / self._namespace / "prompts.json"
             if repo_prompts.exists():

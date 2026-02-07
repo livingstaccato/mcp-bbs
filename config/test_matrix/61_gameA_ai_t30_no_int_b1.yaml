@@ -1,0 +1,27 @@
+# Test 61: Game A, AI Strategy, 30 turns, intervention=no_int, banking=True
+connection:
+  host: localhost
+  port: 2002
+  game_letter: A
+trading:
+  strategy: ai_strategy
+  ai_strategy:
+    enabled: true
+    fallback_strategy: opportunistic
+    fallback_threshold: 3
+    intervention:
+      enabled: false
+llm:
+  provider: ollama
+  ollama:
+    base_url: http://localhost:11434
+    model: gemma3
+    timeout_seconds: 30.0
+session:
+  max_turns_per_session: 30
+  target_credits: 75000
+banking:
+  enabled: true
+  min_credits_to_bank: 50000
+upgrades:
+  enabled: false

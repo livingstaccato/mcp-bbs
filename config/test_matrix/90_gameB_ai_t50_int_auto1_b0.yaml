@@ -1,0 +1,37 @@
+# Test 90: Game B, AI Strategy, 50 turns, intervention=int_auto1, banking=False
+connection:
+  host: localhost
+  port: 2002
+  game_letter: B
+trading:
+  strategy: ai_strategy
+  ai_strategy:
+    enabled: true
+    fallback_strategy: opportunistic
+    fallback_threshold: 3
+    intervention:
+      enabled: true
+      auto_apply: true
+      min_priority: low
+      cooldown_turns: 3
+      max_per_session: 20
+      loop_action_threshold: 2
+      loop_sector_threshold: 3
+      stagnation_turns: 8
+      profit_decline_ratio: 0.5
+      turn_waste_threshold: 0.3
+      analysis_temperature: 0.3
+      analysis_max_tokens: 800
+llm:
+  provider: ollama
+  ollama:
+    base_url: http://localhost:11434
+    model: gemma3
+    timeout_seconds: 30.0
+session:
+  max_turns_per_session: 50
+  target_credits: 150000
+banking:
+  enabled: false
+upgrades:
+  enabled: false

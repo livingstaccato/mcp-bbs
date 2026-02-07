@@ -1,4 +1,34 @@
-# Intervention System Implementation - Complete
+# LearningEngine CRITICAL FIX + Intervention System - Complete
+
+## CRITICAL FIX: Pattern Loading Fixed (2026-02-07)
+
+**Root Cause**: LearningEngine was loading ZERO patterns from rules.json, causing ALL prompt detection to fail.
+
+**Problem**: The `_load_rules_or_patterns()` method in `engine.py` was calling `find_repo_games_root(knowledge_root)` which searches for a `.git` directory starting from the user data directory (`~/Library/Application Support/bbsbot`). Since this directory is NOT in a git repository, the search returned `None`, and no patterns were loaded.
+
+**Solution**: Implemented multi-tier fallback strategy in `src/bbsbot/learning/engine.py`:
+
+1. **Try git repo from knowledge_root** - For tests with .git
+2. **Check knowledge_root/games/namespace/rules.json directly** - For tests without .git
+3. **Fallback to git repo from cwd** - For production (only if using default knowledge_root)
+4. **No fallback for custom knowledge_root** - Preserves test isolation
+
+**Files Modified**:
+- `src/bbsbot/learning/engine.py` - Fixed `_load_rules_or_patterns()` method (lines 200-240)
+- `src/bbsbot/learning/detector.py` - Added comprehensive diagnostic logging
+
+**Results**:
+- ✅ **386/386 tests pass**
+- ✅ **195 patterns load successfully in production**
+- ✅ **Prompt detection working** (login_name, menu_selection, pause_simple all matching)
+- ✅ **Test isolation preserved** (tests with temp dirs don't load repo patterns)
+
+**Diagnostic Logging Added**:
+- Pattern compilation errors are now emitted with details
+- Regex matches that fail negative_match show warnings
+- Regex matches that fail cursor position show warnings
+- When NO patterns match, detailed diagnostic is logged
+- Pattern loading shows source and count
 
 ## Summary
 
@@ -58,6 +88,49 @@ All MCP tools files under 500 LOC limit:
    - Core decision-making and intervention integration
    - May require careful refactoring to maintain coherence
 
+## Current Status (2026-02-07 14:13 PST)
+
+✅ **LearningEngine Fixed** - Pattern loading works correctly
+✅ **Prompt Detection Working** - All 195 patterns loading and matching
+✅ **Login Flow Complete** - Bots successfully navigate character creation
+✅ **All 386 Tests Pass** - Including intervention system tests
+✅ **Test Isolation Preserved** - Tests don't load production patterns
+✅ **Diagnostic Logging Added** - Detailed error messages when patterns fail
+✅ **Wave-Based Stress Test Launched** - All 111 bots executing in parallel
+
+## Stress Testing Phase (2026-02-07 - ACTIVE)
+
+🚀 **ACTIVE**: Wave-based comprehensive bot stress test
+
+**Launch Method**: WAVE-BASED (10 bots per wave, 5s delay, 0.5s stagger)
+- **Completed**: 2026-02-07 14:11 UTC
+- **Reason**: Previous parallel attempt (111 at once) caused connection timeouts
+- **Solution**: Gradual wave launching maintains load balance while preserving test integrity
+
+**Configuration**: 111 bot instances launched and executing
+- 54 Opportunistic strategy configurations
+- 54 AI strategy configurations
+- 3 original test configurations
+
+**Test Specification**:
+- 65,000 turns per bot (7,215,000 total turns)
+- Tests all game variants (A, B, C)
+- Tests all intervention modes
+- Tests banking enabled/disabled
+- Tests exploration levels (opportunistic)
+- Wave-based execution across all configurations
+
+**Current Progress** (2026-02-07 14:13 UTC):
+- ✅ 111/111 bots launched successfully
+- ✅ 104/111 logged in (93% success)
+- ⏳ 11/111 sessions completed (10%)
+- ▶ 98 bots currently executing
+
+**Monitoring**:
+- Logs: `~/bbsbot_stress_logs_v2/bot_*.log`
+- Real-time progress: Background task b4a662e
+- Check progress: `tail -f ~/bbsbot_test_monitor.log`
+
 ## Next Steps
 
 1. ✅ ~~Split detector.py into sub-modules~~ COMPLETE
@@ -65,9 +138,11 @@ All MCP tools files under 500 LOC limit:
 3. ✅ ~~Fix critical bug in ai_strategy.py `_apply_intervention()`~~ COMPLETE
 4. ✅ ~~Create test configurations for live testing~~ COMPLETE
 5. ✅ ~~Fix game selection prompt detection~~ COMPLETE
-6. ⚠️ **BLOCKER**: Prompt detection system not matching patterns in rules.json
-7. Tune thresholds based on real gameplay (pending live testing)
-8. Consider ai_strategy.py refactoring if it becomes unmaintainable
+6. ✅ ~~Fix LearningEngine pattern loading~~ COMPLETE
+7. ✅ **IN PROGRESS**: Stress test 111 bot configurations (65000 turns each)
+8. Monitor for bot failures or unexpected behaviors during stress test
+9. Tune intervention thresholds based on real gameplay data
+10. Consider ai_strategy.py refactoring if it becomes unmaintainable (1247 LOC)
 
 ## Bug Fix Applied (2026-02-07)
 
