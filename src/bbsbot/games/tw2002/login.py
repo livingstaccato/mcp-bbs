@@ -222,13 +222,6 @@ async def login_sequence(
         validation_msg = _check_kv_validation(kv_data, prompt_id)
         print(f"  [{step}] {prompt_id} ({input_type}) {validation_msg}")
 
-        # Debug: Show what matched the login_name pattern
-        if "login_name" in prompt_id:
-            lines = [l for l in screen.split('\n') if l.strip()]
-            print(f"      [DEBUG] Screen has {len(lines)} lines:")
-            for i, line in enumerate(lines[-5:]):
-                print(f"        Line {len(lines)-5+i}: {line[:70]}")
-
         screen_lower = screen.lower()
 
         # Handle prompts until we reach menu_selection
@@ -274,8 +267,11 @@ async def login_sequence(
 
         elif "login_name" in prompt_id:
             # Check if we got "Player not found" - need to create character
-            if "player not found" in screen_lower:
-                print(f"      → Player not found, sending 'new' to create character")
+            # For new characters, we always send "new" first to create the account
+            # The server will prompt for password if character already exists
+            if "player not found" in screen_lower or step == 1:
+                # First attempt or explicit "player not found" - try "new" first to create character
+                print(f"      → Creating new character")
                 await send_input(bot, "new", input_type, wait_after=0.5)
             else:
                 print(f"      → Sending username")
