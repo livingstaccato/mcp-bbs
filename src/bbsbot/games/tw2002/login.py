@@ -558,10 +558,14 @@ async def login_sequence(
             if display_screen:
                 lines = [l.strip() for l in display_screen.split('\n') if l.strip()]
                 print(f"  [DEBUG] D command returned {len(lines)} lines", flush=True)
+                if len(lines) > 0:
+                    print(f"  [DEBUG] First line: {lines[0][:60]}", flush=True)
+                    if len(lines) > 1:
+                        print(f"  [DEBUG] Last line: {lines[-1][:60]}", flush=True)
                 if "credits" in display_screen.lower():
-                    print(f"  [DEBUG] D response contains 'credits' keyword", flush=True)
+                    print(f"  [DEBUG] D response contains 'credits'", flush=True)
                 else:
-                    print(f"  [DEBUG] D response does NOT contain 'credits'", flush=True)
+                    print(f"  [DEBUG] D response MISSING 'credits' - may be pause screen", flush=True)
 
             # Try display parsing first (official D command output)
             display_info = _parse_display_screen(display_screen)
