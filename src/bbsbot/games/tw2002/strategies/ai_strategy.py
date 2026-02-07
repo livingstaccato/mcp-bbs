@@ -75,6 +75,11 @@ class AIStrategy(TradingStrategy):
         self._last_feedback_turn = 0
         self._session_logger: SessionLogger | None = None
 
+        # Goals system
+        self._current_goal_id: str = self._settings.goals.current
+        self._last_goal_evaluation_turn = 0
+        self._manual_override_until_turn: int | None = None  # None = no override
+
     @property
     def name(self) -> str:
         """Strategy name."""
@@ -83,7 +88,11 @@ class AIStrategy(TradingStrategy):
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
         """Determine next action using LLM or fallback.
 
-        This is a sync wrapper around the async implementation.
+        NOTE: This is a synchronous wrapper. When called from async code,
+        use _get_next_action_async() directly instead.
+
+        If called from within an async context (e.g., already running event loop),
+        this will use the fallback strategy to avoid event loop conflicts.
 
         Args:
             state: Current game state
@@ -91,14 +100,21 @@ class AIStrategy(TradingStrategy):
         Returns:
             Tuple of (action, parameters)
         """
-        # Run async implementation in event loop
+        # Check if we're already in an async context
         try:
-            loop = asyncio.get_event_loop()
+            asyncio.get_running_loop()
+            # We're in an async context - use fallback to avoid event loop issues
+            logger.warning("ai_strategy_sync_call_in_async_context: using fallback")
+            return self.fallback.get_next_action(state)
         except RuntimeError:
+            # No event loop running - safe to create one
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(self._get_next_action_async(state))
+            try:
+                return loop.run_until_complete(self._get_next_action_async(state))
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
 
     async def _get_next_action_async(self, state: GameState) -> tuple[TradeAction, dict]:
         """Async implementation of get_next_action.
@@ -110,6 +126,9 @@ class AIStrategy(TradingStrategy):
             Tuple of (action, parameters)
         """
         self._current_turn += 1
+
+        # Re-evaluate goal if needed
+        await self._maybe_reevaluate_goal(state)
 
         # Periodic feedback loop
         if (
@@ -186,8 +205,18 @@ class AIStrategy(TradingStrategy):
             LLMError: On LLM errors
             ValueError: On invalid response
         """
-        # Build prompt
-        messages = self.prompt_builder.build(state, self.knowledge, self.stats)
+        # Build prompt with current goal
+        goal_config = self._get_goal_config(self._current_goal_id)
+        goal_description = goal_config.description if goal_config else None
+        goal_instructions = goal_config.instructions if goal_config else None
+
+        messages = self.prompt_builder.build(
+            state,
+            self.knowledge,
+            self.stats,
+            goal_description=goal_description,
+            goal_instructions=goal_instructions,
+        )
 
         # Query LLM
         provider = await self.llm_manager.get_provider()
@@ -359,13 +388,19 @@ class AIStrategy(TradingStrategy):
                 elif trade.get("action") == "buy":
                     profit -= trade.get("total", 0)
 
+        # Format values safely
+        credits_str = f"{state.credits:,}" if state.credits is not None else "Unknown"
+        sector_str = str(state.sector) if state.sector is not None else "Unknown"
+        turns_str = str(state.turns_left) if state.turns_left is not None else "Unknown"
+        holds_str = f"{state.holds_free}/{state.holds_total}" if state.holds_free is not None else "Unknown"
+
         return f"""GAMEPLAY SUMMARY (Turns {start_turn}-{self._current_turn}):
 
 Current Status:
-- Location: Sector {state.sector or 'Unknown'}
-- Credits: {state.credits:,} if state.credits else 'Unknown'
-- Turns Remaining: {state.turns_left or 'Unknown'}
-- Ship: {state.holds_free}/{state.holds_total} holds free
+- Location: Sector {sector_str}
+- Credits: {credits_str}
+- Turns Remaining: {turns_str}
+- Ship: {holds_str} holds free
 
 Recent Activity:
 - Decisions Made: {len(decisions)}
@@ -450,6 +485,211 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
         }
 
         await self._session_logger.log_event("llm.feedback", event_data)
+
+    # -------------------------------------------------------------------------
+    # Goals System
+    # -------------------------------------------------------------------------
+
+    def get_current_goal(self) -> str:
+        """Get current goal ID.
+
+        Returns:
+            Goal ID string
+        """
+        return self._current_goal_id
+
+    def set_goal(self, goal_id: str, duration_turns: int = 0) -> None:
+        """Manually set current goal.
+
+        Args:
+            goal_id: Goal ID to activate
+            duration_turns: How many turns to maintain (0 = until changed)
+        """
+        if goal_id not in [g.id for g in self._settings.goals.available]:
+            available = [g.id for g in self._settings.goals.available]
+            logger.warning(f"goal_not_found: {goal_id}, available: {available}")
+            return
+
+        old_goal = self._current_goal_id
+        self._current_goal_id = goal_id
+
+        if duration_turns > 0:
+            self._manual_override_until_turn = self._current_turn + duration_turns
+        else:
+            self._manual_override_until_turn = None
+
+        logger.info(f"goal_changed: {old_goal} -> {goal_id}, duration={duration_turns}")
+
+        # Log to event ledger
+        if self._session_logger:
+            import asyncio
+            try:
+                asyncio.create_task(self._session_logger.log_event("goal.changed", {
+                    "turn": self._current_turn,
+                    "old_goal": old_goal,
+                    "new_goal": goal_id,
+                    "duration_turns": duration_turns,
+                    "manual_override": True,
+                }))
+            except Exception as e:
+                logger.warning(f"goal_event_logging_failed: {e}")
+
+    def _get_goal_config(self, goal_id: str):
+        """Get goal configuration by ID.
+
+        Args:
+            goal_id: Goal identifier
+
+        Returns:
+            Goal config or None
+        """
+        for goal in self._settings.goals.available:
+            if goal.id == goal_id:
+                return goal
+        return None
+
+    async def _maybe_reevaluate_goal(self, state: GameState) -> None:
+        """Re-evaluate current goal if needed.
+
+        Args:
+            state: Current game state
+        """
+        # Skip if manual override is active
+        if self._manual_override_until_turn is not None:
+            if self._current_turn < self._manual_override_until_turn:
+                return
+            else:
+                # Override expired
+                self._manual_override_until_turn = None
+                logger.info("goal_manual_override_expired")
+
+        # Skip if not using auto-select
+        if self._settings.goals.current != "auto":
+            return
+
+        # Check if it's time to re-evaluate
+        turns_since_eval = self._current_turn - self._last_goal_evaluation_turn
+        if turns_since_eval < self._settings.goals.reevaluate_every_turns:
+            return
+
+        # Re-evaluate and potentially change goal
+        new_goal_id = await self._select_goal(state)
+        if new_goal_id != self._current_goal_id:
+            old_goal = self._current_goal_id
+            self._current_goal_id = new_goal_id
+            logger.info(f"goal_auto_changed: {old_goal} -> {new_goal_id}")
+
+            # Log to event ledger
+            if self._session_logger:
+                await self._session_logger.log_event("goal.changed", {
+                    "turn": self._current_turn,
+                    "old_goal": old_goal,
+                    "new_goal": new_goal_id,
+                    "duration_turns": 0,
+                    "manual_override": False,
+                    "auto_selected": True,
+                })
+
+        self._last_goal_evaluation_turn = self._current_turn
+
+    async def _select_goal(self, state: GameState) -> str:
+        """Auto-select best goal based on game state.
+
+        Args:
+            state: Current game state
+
+        Returns:
+            Best goal ID
+        """
+        priority_weights = {"low": 1, "medium": 2, "high": 3}
+
+        # Score each goal
+        scored_goals = []
+        for goal in self._settings.goals.available:
+            score = self._evaluate_goal_triggers(goal, state)
+            priority_weight = priority_weights.get(goal.priority, 2)
+            final_score = score * priority_weight
+            scored_goals.append((goal.id, final_score, goal.priority))
+
+        # Pick highest scoring goal
+        if scored_goals:
+            best = max(scored_goals, key=lambda x: x[1])
+            return best[0]
+
+        # Fallback to profit if no triggers match
+        return "profit"
+
+    def _evaluate_goal_triggers(self, goal, state: GameState) -> float:
+        """Evaluate how well a goal's triggers match current state.
+
+        Args:
+            goal: Goal configuration
+            state: Current game state
+
+        Returns:
+            Score from 0.0 (no match) to 1.0 (perfect match)
+        """
+        triggers = goal.trigger_when
+        matches = 0
+        total_conditions = 0
+
+        # Check credits conditions
+        if triggers.credits_below is not None:
+            total_conditions += 1
+            if state.credits is not None and state.credits < triggers.credits_below:
+                matches += 1
+
+        if triggers.credits_above is not None:
+            total_conditions += 1
+            if state.credits is not None and state.credits > triggers.credits_above:
+                matches += 1
+
+        # Check fighters conditions
+        if triggers.fighters_below is not None:
+            total_conditions += 1
+            if state.fighters is not None and state.fighters < triggers.fighters_below:
+                matches += 1
+
+        if triggers.fighters_above is not None:
+            total_conditions += 1
+            if state.fighters is not None and state.fighters > triggers.fighters_above:
+                matches += 1
+
+        # Check shields conditions
+        if triggers.shields_below is not None:
+            total_conditions += 1
+            if state.shields is not None and state.shields < triggers.shields_below:
+                matches += 1
+
+        if triggers.shields_above is not None:
+            total_conditions += 1
+            if state.shields is not None and state.shields > triggers.shields_above:
+                matches += 1
+
+        # Check turns conditions
+        if triggers.turns_remaining_above is not None:
+            total_conditions += 1
+            if state.turns_left is not None and state.turns_left > triggers.turns_remaining_above:
+                matches += 1
+
+        if triggers.turns_remaining_below is not None:
+            total_conditions += 1
+            if state.turns_left is not None and state.turns_left < triggers.turns_remaining_below:
+                matches += 1
+
+        # Check sector knowledge (would need to query self.knowledge)
+        if triggers.sectors_known_below is not None:
+            total_conditions += 1
+            known_count = self.knowledge.known_sector_count() if self.knowledge else 0
+            if known_count < triggers.sectors_known_below:
+                matches += 1
+
+        # If no conditions specified, give low score
+        if total_conditions == 0:
+            return 0.1
+
+        # Return match ratio
+        return matches / total_conditions
 
     async def cleanup(self) -> None:
         """Cleanup resources."""

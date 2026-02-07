@@ -14,6 +14,97 @@ from bbsbot.llm.config import LLMConfig
 logger = logging.getLogger(__name__)
 
 
+class GoalTrigger(BaseModel):
+    """Conditions that trigger a goal to become active."""
+
+    credits_below: int | None = None
+    credits_above: int | None = None
+    fighters_below: int | None = None
+    fighters_above: int | None = None
+    shields_below: int | None = None
+    shields_above: int | None = None
+    turns_remaining_above: int | None = None
+    turns_remaining_below: int | None = None
+    sectors_known_below: int | None = None
+    in_fedspace: bool | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class Goal(BaseModel):
+    """Represents a gameplay goal the bot can pursue."""
+
+    id: str
+    priority: Literal["low", "medium", "high"] = "medium"
+    description: str
+    instructions: str = ""  # Injected into AI prompts
+    trigger_when: GoalTrigger = Field(default_factory=GoalTrigger)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class GoalsConfig(BaseModel):
+    """Goal system configuration."""
+
+    # Available goals
+    available: list[Goal] = Field(default_factory=lambda: [
+        Goal(
+            id="profit",
+            priority="high",
+            description="Maximize credits through efficient trading",
+            instructions="Focus on profitable trade routes. Minimize risk. Build capital.",
+            trigger_when=GoalTrigger(
+                credits_below=100000,
+                turns_remaining_above=50,
+            ),
+        ),
+        Goal(
+            id="combat",
+            priority="medium",
+            description="Seek combat and build military strength",
+            instructions="Engage enemies when possible. Prioritize fighter and shield upgrades. Accept combat risk.",
+            trigger_when=GoalTrigger(
+                credits_above=50000,
+                fighters_below=100,
+            ),
+        ),
+        Goal(
+            id="exploration",
+            priority="low",
+            description="Discover new sectors and map the universe",
+            instructions="Visit unexplored sectors. Map warp connections. Discover ports and planets.",
+            trigger_when=GoalTrigger(
+                sectors_known_below=500,
+                credits_above=20000,
+            ),
+        ),
+        Goal(
+            id="banking",
+            priority="high",
+            description="Secure wealth in the bank",
+            instructions="Return to safe space. Deposit credits at bank. Preserve capital.",
+            trigger_when=GoalTrigger(
+                credits_above=500000,
+                in_fedspace=False,
+            ),
+        ),
+    ])
+
+    # Current goal (can be goal ID or "auto")
+    current: str = "auto"
+
+    # Re-evaluate goal selection every N turns
+    reevaluate_every_turns: int = 20
+
+    # Allow manual overrides via MCP
+    allow_manual_override: bool = True
+
+    # How many turns to maintain manual override before auto-select
+    manual_override_duration: int = 0  # 0 = until changed
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class ConnectionConfig(BaseModel):
     """Connection settings for the BBS/game server."""
 
@@ -92,6 +183,9 @@ class AIStrategyConfig(BaseModel):
     feedback_interval_turns: int = 10  # Analyze every N turns
     feedback_lookback_turns: int = 10  # Analyze last N turns
     feedback_max_tokens: int = 300  # Limit response length
+
+    # Goals system
+    goals: GoalsConfig = Field(default_factory=GoalsConfig)
 
     model_config = ConfigDict(extra="ignore")
 

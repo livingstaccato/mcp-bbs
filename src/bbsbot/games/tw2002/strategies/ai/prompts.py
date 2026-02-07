@@ -7,7 +7,7 @@ from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.llm.types import ChatMessage
 
 # System prompt explaining game mechanics and expected response format
-SYSTEM_PROMPT = """You are an expert Trade Wars 2002 player. Your goal is to maximize profit per turn while managing risk.
+SYSTEM_PROMPT_BASE = """You are an expert Trade Wars 2002 player.
 
 GAME MECHANICS:
 - Port classes: B=Buys (you sell), S=Sells (you buy). Example: "BBS" means Buys Fuel, Buys Organics, Sells Equipment.
@@ -52,6 +52,8 @@ class PromptBuilder:
         state: GameState,
         knowledge: SectorKnowledge,
         stats: dict,
+        goal_description: str | None = None,
+        goal_instructions: str | None = None,
     ) -> list[ChatMessage]:
         """Build chat messages for LLM.
 
@@ -59,14 +61,26 @@ class PromptBuilder:
             state: Current game state
             knowledge: Sector knowledge for adjacent sectors
             stats: Strategy statistics
+            goal_description: Current goal description
+            goal_instructions: Current goal instructions
 
         Returns:
             List of chat messages (system + user)
         """
+        # Build system prompt with goal
+        system_prompt = SYSTEM_PROMPT_BASE
+        if goal_description and goal_instructions:
+            system_prompt = f"""{SYSTEM_PROMPT_BASE}
+
+CURRENT GOAL: {goal_description}
+{goal_instructions}"""
+        else:
+            system_prompt = f"{SYSTEM_PROMPT_BASE}\n\nYour goal is to maximize profit per turn while managing risk."
+
         user_prompt = self._build_user_prompt(state, knowledge, stats)
 
         return [
-            ChatMessage(role="system", content=SYSTEM_PROMPT),
+            ChatMessage(role="system", content=system_prompt),
             ChatMessage(role="user", content=user_prompt),
         ]
 

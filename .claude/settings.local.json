@@ -21,7 +21,9 @@
       "Bash(wc:*)",
       "Bash(uv pip install:*)",
       "Bash(git remote add:*)",
-      "Bash(git cat-file:*)"
+      "Bash(git cat-file:*)",
+      "Bash(bbsbot tw2002 check:*)",
+      "Bash(bbsbot tw2002 bot:*)"
     ]
   }
 }

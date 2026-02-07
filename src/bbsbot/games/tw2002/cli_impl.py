@@ -53,8 +53,13 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             print("\nOut of turns!")
             break
 
-        # Get next action from strategy
-        action, params = strategy.get_next_action(state)
+        # Get next action from strategy (handle async strategies)
+        if hasattr(strategy, '_get_next_action_async'):
+            # AIStrategy has async implementation
+            action, params = await strategy._get_next_action_async(state)
+        else:
+            # Synchronous strategy
+            action, params = strategy.get_next_action(state)
 
         print(f"  Strategy: {action.name}")
 

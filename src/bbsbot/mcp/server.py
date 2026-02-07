@@ -24,6 +24,32 @@ configure_logging()
 log = get_logger(__name__)
 
 
+def _register_game_tools(mcp_app: FastMCP) -> None:
+    """Register game-specific MCP tools.
+
+    Imports and registers tools from game modules. Each game can
+    define its own tools with custom prefixes (e.g., tw2002_, tedit_).
+    """
+    try:
+        # Import TW2002 tools (triggers registration)
+        from bbsbot.games.tw2002 import mcp_tools as tw2002_tools
+        from bbsbot.mcp.registry import get_manager
+
+        # Get all registered tools from the registry manager
+        manager = get_manager()
+        all_tools = manager.get_all_tools()
+
+        # Add each tool to the MCP app
+        for tool_name, tool_func in all_tools.items():
+            mcp_app.add_tool(tool_func, name=tool_name)
+            log.debug(f"mcp_game_tool_added: {tool_name}")
+
+        log.info(f"mcp_game_tools_registered: {len(all_tools)} tools from {len(manager.list_registries())} games")
+
+    except Exception as e:
+        log.warning(f"mcp_game_tools_registration_failed: {e}")
+
+
 def decode_escape_sequences(s: str) -> str:
     """Decode common escape sequences in a string.
 
@@ -74,6 +100,10 @@ def create_app(settings: Settings) -> FastMCP:
     """Configure globals and return the FastMCP app."""
     global KNOWLEDGE_ROOT
     KNOWLEDGE_ROOT = validate_knowledge_root(settings.knowledge_root)
+
+    # Register game-specific tools
+    _register_game_tools(app)
+
     return app
 
 
