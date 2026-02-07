@@ -54,12 +54,21 @@ class OpportunisticStrategy(TradingStrategy):
         """Determine next action based on current state.
 
         Priority:
-        1. Check for danger/retreat
-        2. Check for banking opportunity
-        3. Check for upgrade opportunity
-        4. Trade if at a port with cargo or profit opportunity
-        5. Explore or wander
+        1. Escape from home planet if on one (no profitable trades there)
+        2. Check for danger/retreat
+        3. Check for banking opportunity
+        4. Check for upgrade opportunity
+        5. Trade if at a port with cargo or profit opportunity
+        6. Explore or wander
         """
+        # CRITICAL: Escape home planet first - no profitable trading there
+        # Home planets only show the player's own commodities, not trading opportunities
+        if state.has_planet and len(state.warps or []) > 0:
+            # We're on a planet with warps available - move away immediately
+            logger.info("On home planet, moving away to find trading opportunities")
+            target = state.warps[0]  # Take first available warp
+            return TradeAction.MOVE, {"target_sector": target, "path": [target]}
+
         # Safety checks first
         if self.should_retreat(state):
             safe_sector = self._find_safe_sector(state)
