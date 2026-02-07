@@ -3,6 +3,8 @@ connection:
   host: localhost
   port: 2002
   game_letter: A
+  username: opp_ga_t15_e2_b1
+  character_password: testpass123
 trading:
   strategy: opportunistic
   opportunistic:

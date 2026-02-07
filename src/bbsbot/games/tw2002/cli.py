@@ -174,11 +174,16 @@ async def run_bot(
             if watch and bot.session is not None:
                 bot.session.set_watch(_make_watch_callback(clear=watch_clear), interval_s=watch_interval)
 
-            print(f"\n[Login] Logging in as {char_state.name}...")
+            # Use config username if provided, otherwise use generated character name
+            login_username = config.connection.username or char_state.name
+            # Use config character_password if provided, otherwise use character config password
+            login_password = config.connection.character_password or config.character.password
+
+            print(f"\n[Login] Logging in as {login_username}...")
             await bot.login_sequence(
                 game_password=config.connection.game_password,
-                character_password=config.character.password,
-                username=char_state.name,
+                character_password=login_password,
+                username=login_username,
             )
             print("  Logged in!")
 

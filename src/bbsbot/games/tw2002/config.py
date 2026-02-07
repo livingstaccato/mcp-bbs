@@ -132,6 +132,8 @@ class ConnectionConfig(BaseModel):
     port: int = 2002
     game_password: str = "game"
     game_letter: str | None = None  # Game selection letter (A, B, C, etc.) - auto-detected if None
+    username: str | None = None  # Character username - uses generated name if not specified
+    character_password: str | None = None  # Character password - uses CharacterConfig.password if not specified
 
     model_config = ConfigDict(extra="ignore")
 

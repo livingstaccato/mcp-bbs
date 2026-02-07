@@ -222,6 +222,13 @@ async def login_sequence(
         validation_msg = _check_kv_validation(kv_data, prompt_id)
         print(f"  [{step}] {prompt_id} ({input_type}) {validation_msg}")
 
+        # Debug: Show what matched the login_name pattern
+        if "login_name" in prompt_id:
+            lines = [l for l in screen.split('\n') if l.strip()]
+            print(f"      [DEBUG] Screen has {len(lines)} lines:")
+            for i, line in enumerate(lines[-5:]):
+                print(f"        Line {len(lines)-5+i}: {line[:70]}")
+
         screen_lower = screen.lower()
 
         # Handle prompts until we reach menu_selection
@@ -269,10 +276,12 @@ async def login_sequence(
             # Check if we got "Player not found" - need to create character
             if "player not found" in screen_lower:
                 print(f"      → Player not found, sending 'new' to create character")
-                await send_input(bot, "new", input_type)
+                await send_input(bot, "new", input_type, wait_after=0.5)
             else:
                 print(f"      → Sending username")
-                await send_input(bot, username, input_type)
+                await send_input(bot, username, input_type, wait_after=0.5)
+            # Give server extra time to process login and prepare next prompt
+            await asyncio.sleep(0.3)
 
         elif "menu_selection" in prompt_id:
             print(f"      ✓ Reached game selection menu!")
