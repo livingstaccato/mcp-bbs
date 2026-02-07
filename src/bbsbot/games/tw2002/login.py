@@ -356,6 +356,9 @@ async def login_sequence(
     print("\nWaiting for game to load...")
     description_mode_exits = 0  # Track how many times we exit description mode
 
+    # Initialize kv_data for Phase 3 (may have been set to None in Phase 1 fallback)
+    kv_data = {}
+
     # Increased loop limit to handle slow game loading (can take 10+ seconds after pressing T)
     for step_in_phase3 in range(100):
         step += 1
@@ -363,9 +366,12 @@ async def login_sequence(
             # Game loading takes 11+ seconds, need longer timeout
             # During character creation, ignore loop detection for ship/planet names
             ignore_loop = {"prompt.ship_name", "prompt.planet_name"}
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
+            input_type, prompt_id, screen, phase3_kv_data = await wait_and_respond(
                 bot, timeout_ms=20000, ignore_loop_for=ignore_loop
             )
+            # Always update kv_data from Phase 3 responses
+            if phase3_kv_data:
+                kv_data = phase3_kv_data
         except RuntimeError as e:
             print(f"✗ Game load error: {e}")
             raise
