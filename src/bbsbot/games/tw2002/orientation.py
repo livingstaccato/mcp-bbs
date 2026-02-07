@@ -1096,16 +1096,12 @@ async def _gather_state(
         prompt_id=prompt_id,
     )
 
-    # If no kv_data provided, try to get fresh semantic data from current screen
+    # If no kv_data provided, extract semantic data from current screen
     if kv_data is None:
-        from bbsbot.games.tw2002.io import wait_and_respond
-        try:
-            # Quick read to get semantic extraction without changing screen
-            result = await bot.session.read(timeout_ms=100, max_bytes=1024)
-            kv_data = result.get("kv_data", {})
-            print(f"  [Orient] Extracted semantic data from current screen")
-        except Exception:
-            kv_data = {}
+        from bbsbot.games.tw2002.parsing import extract_semantic_kv
+        kv_data = extract_semantic_kv(screen)
+        if kv_data:
+            print(f"  [Orient] Extracted semantic data from current screen: {list(kv_data.keys())}")
 
     # Parse sector display (warps, port, etc.)
     sector_info = _parse_sector_display(screen)
@@ -1125,12 +1121,17 @@ async def _gather_state(
 
     # Read display output
     from bbsbot.games.tw2002.io import wait_and_respond
+    from bbsbot.games.tw2002.parsing import extract_semantic_kv
     try:
         _, _, display_screen, display_kv = await wait_and_respond(
             bot,
             timeout_ms=5000,
             ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
         )
+
+        # Extract semantic data from display screen if not in kv
+        if not display_kv:
+            display_kv = extract_semantic_kv(display_screen)
 
         # Parse display output
         display_info = _parse_display_screen(display_screen)
