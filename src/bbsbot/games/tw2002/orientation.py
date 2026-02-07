@@ -1070,14 +1070,21 @@ async def _gather_state(
     context: str,
     screen: str,
     prompt_id: str,
+    kv_data: dict | None = None,
 ) -> GameState:
     """Gather comprehensive game state via Display command.
+
+    Uses multiple data sources with fallbacks:
+    1. Display command (D) screen parsing
+    2. Semantic extraction (kv_data)
+    3. Sector display parsing
 
     Args:
         bot: TradingBot instance
         context: Current context (sector_command, etc.)
         screen: Current screen content
         prompt_id: Current prompt ID
+        kv_data: Optional semantic/extracted data from current screen
 
     Returns:
         Populated GameState
@@ -1088,6 +1095,17 @@ async def _gather_state(
         raw_screen=screen,
         prompt_id=prompt_id,
     )
+
+    # If no kv_data provided, try to get fresh semantic data from current screen
+    if kv_data is None:
+        from bbsbot.games.tw2002.io import wait_and_respond
+        try:
+            # Quick read to get semantic extraction without changing screen
+            result = await bot.session.read(timeout_ms=100, max_bytes=1024)
+            kv_data = result.get("kv_data", {})
+            print(f"  [Orient] Extracted semantic data from current screen")
+        except Exception:
+            kv_data = {}
 
     # Parse sector display (warps, port, etc.)
     sector_info = _parse_sector_display(screen)
@@ -1108,7 +1126,7 @@ async def _gather_state(
     # Read display output
     from bbsbot.games.tw2002.io import wait_and_respond
     try:
-        _, _, display_screen, _ = await wait_and_respond(
+        _, _, display_screen, display_kv = await wait_and_respond(
             bot,
             timeout_ms=5000,
             ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter"},
@@ -1117,26 +1135,56 @@ async def _gather_state(
         # Parse display output
         display_info = _parse_display_screen(display_screen)
 
-        state.credits = display_info.get('credits')
-        state.turns_left = display_info.get('turns_left')
-        state.fighters = display_info.get('fighters')
-        state.shields = display_info.get('shields')
-        state.holds_total = display_info.get('holds_total')
-        state.holds_free = display_info.get('holds_free')
-        state.ship_type = display_info.get('ship_type')
-        state.alignment = display_info.get('alignment')
-        state.experience = display_info.get('experience')
-        state.corp_id = display_info.get('corp_id')
+        # Multi-source fallback: Use display parse first, then kv_data, then initial kv_data
+        # This provides 3 layers of fallback for critical game state
+        def get_with_fallback(key: str):
+            """Get value with fallback chain: display_info -> display_kv -> kv_data"""
+            value = display_info.get(key)
+            if value is not None:
+                return value
+            if display_kv and key in display_kv:
+                return display_kv.get(key)
+            if kv_data and key in kv_data:
+                return kv_data.get(key)
+            return None
+
+        state.credits = get_with_fallback('credits')
+        state.turns_left = get_with_fallback('turns_left')
+        state.fighters = get_with_fallback('fighters')
+        state.shields = get_with_fallback('shields')
+        state.holds_total = get_with_fallback('holds_total')
+        state.holds_free = get_with_fallback('holds_free')
+        state.ship_type = get_with_fallback('ship_type')
+        state.alignment = get_with_fallback('alignment')
+        state.experience = get_with_fallback('experience')
+        state.corp_id = get_with_fallback('corp_id')
 
         # Sector from display if not already set
         if state.sector is None:
-            state.sector = display_info.get('sector')
+            state.sector = get_with_fallback('sector')
 
         # Update raw screen with full display
         state.raw_screen = display_screen
 
+        # Debug: Log which source provided credits
+        if state.credits is not None:
+            if display_info.get('credits'):
+                print(f"  [Orient] Credits from D command: {state.credits}")
+            elif display_kv and display_kv.get('credits'):
+                print(f"  [Orient] Credits from D semantic: {state.credits}")
+            elif kv_data and kv_data.get('credits'):
+                print(f"  [Orient] Credits from sector semantic: {state.credits}")
+
     except Exception as e:
         print(f"  [Orient] Warning: Display command failed: {e}")
+        # Even if D command fails, try to use semantic data
+        if kv_data:
+            state.credits = kv_data.get('credits')
+            state.turns_left = kv_data.get('turns_left')
+            state.fighters = kv_data.get('fighters')
+            state.shields = kv_data.get('shields')
+            if state.credits is not None:
+                print(f"  [Orient] Using fallback semantic credits: {state.credits}")
 
     return state
 
