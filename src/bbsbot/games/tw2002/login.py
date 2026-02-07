@@ -530,11 +530,14 @@ async def login_sequence(
     bot.current_credits = _parse_credits_from_screen(bot, screen)
 
     # Fallback: Use semantic data if screen parsing found 0/None
+    print(f"  [DEBUG] kv_data available: {bool(kv_data)}, keys: {list(kv_data.keys()) if kv_data else 'None'}", flush=True)
     if (bot.current_credits is None or bot.current_credits == 0) and kv_data and 'credits' in kv_data:
         semantic_credits = kv_data.get('credits')
         if semantic_credits is not None and semantic_credits > 0:
             bot.current_credits = semantic_credits
             print(f"  [DEBUG] Using semantic credits instead: {bot.current_credits}", flush=True)
+    elif (bot.current_credits is None or bot.current_credits == 0):
+        print(f"  [DEBUG] No semantic credits available. kv_data={kv_data}, parsed={bot.current_credits}", flush=True)
 
     print(
         f"\n✓ Login complete - Sector {bot.current_sector}, "
