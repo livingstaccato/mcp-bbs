@@ -80,6 +80,11 @@ class AIStrategy(TradingStrategy):
         self._last_goal_evaluation_turn = 0
         self._manual_override_until_turn: int | None = None  # None = no override
 
+        # Goal phase tracking for visualization
+        self._goal_phases: list = []  # Will hold GoalPhase instances
+        self._current_phase = None  # Current active phase
+        self._max_turns = config.session.max_turns_per_session
+
     @property
     def name(self) -> str:
         """Strategy name."""
