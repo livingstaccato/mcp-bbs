@@ -521,6 +521,11 @@ async def login_sequence(
     bot.loop_detection.threshold = original_threshold
     print(f"  [DEBUG] Threshold restored", flush=True)
 
+    # Debug: Show what we have after exiting login loop
+    print(f"  [DEBUG] After login loop - kv_data type: {type(kv_data)}, has credits: {'credits' in kv_data if kv_data else False}", flush=True)
+    if kv_data and 'credits' in kv_data:
+        print(f"  [DEBUG] kv_data HAS CREDITS: {kv_data.get('credits')}", flush=True)
+
     # Parse initial state
     print(f"  [DEBUG] Importing parsing...", flush=True)
     from bbsbot.games.tw2002.parsing import _parse_sector_from_screen, _parse_credits_from_screen
