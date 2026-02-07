@@ -221,6 +221,14 @@ class TradingConfig(BaseModel):
     twerk_optimized: TwerkOptimizedConfig = Field(default_factory=TwerkOptimizedConfig)
     ai_strategy: AIStrategyConfig = Field(default_factory=AIStrategyConfig)
 
+    # Strategy rotation settings
+    enable_strategy_rotation: bool = False  # Auto-switch strategies on persistent failures
+    rotation_failure_threshold: int = 20  # Switch after N consecutive failed actions
+    rotation_cooldown_turns: int = 50  # Give each strategy N turns before considering rotation
+    rotation_order: list[str] = Field(
+        default_factory=lambda: ["ai_strategy", "profitable_pairs", "opportunistic", "twerk_optimized"]
+    )
+
     model_config = ConfigDict(extra="ignore")
 
 

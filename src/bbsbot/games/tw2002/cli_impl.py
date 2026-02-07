@@ -22,16 +22,24 @@ _COMMODITY_PATTERNS = {
 
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     """Run the main trading loop using the configured strategy."""
-    strategy = bot.strategy
-    if not strategy:
-        strategy = bot.init_strategy()
+    from bbsbot.games.tw2002.strategy_manager import StrategyManager
+
+    # Use strategy manager for rotation support
+    if config.trading.enable_strategy_rotation:
+        strategy_manager = StrategyManager(config, bot.sector_knowledge)
+        strategy = strategy_manager.get_current_strategy(bot)
+        print(f"\n[Trading] Starting with {strategy.name} strategy (rotation enabled)...")
+    else:
+        strategy = bot.strategy
+        if not strategy:
+            strategy = bot.init_strategy()
+        strategy_manager = None
+        print(f"\n[Trading] Starting {strategy.name} strategy...")
 
     target_credits = config.session.target_credits
     max_turns = config.session.max_turns_per_session
 
     turns_used = 0
-
-    print(f"\n[Trading] Starting {strategy.name} strategy...")
 
     while turns_used < max_turns:
         turns_used += 1
@@ -74,11 +82,20 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         if action == TradeAction.TRADE:
             opportunity = params.get("opportunity")
             trade_action = params.get("action")  # "buy" or "sell" for pair trading
-            commodity = opportunity.commodity if opportunity else None
+            commodity = opportunity.commodity if opportunity else params.get("commodity")
 
-            if opportunity:
-                print(f"  Trading {commodity} at sector {state.sector} (action={trade_action})")
+            if commodity:
+                print(f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})")
                 profit = await execute_port_trade(bot, commodity=commodity)
+                if profit != 0:
+                    char_state.record_trade(profit)
+                    print(f"  Result: {profit:+,} credits")
+                else:
+                    print(f"  No trade executed")
+                    success = False
+            else:
+                print(f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})")
+                profit = await execute_port_trade(bot, commodity=None)
                 if profit != 0:
                     char_state.record_trade(profit)
                     print(f"  Result: {profit:+,} credits")
@@ -149,7 +166,15 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             elif action == TradeAction.MOVE:
                 result.to_sector = params.get("target_sector")
 
+        # Record result and check for strategy rotation
         strategy.record_result(result)
+        if strategy_manager:
+            strategy_manager.record_result(result)
+            # Update strategy reference if rotation occurred
+            new_strategy = strategy_manager.get_current_strategy(bot)
+            if new_strategy != strategy:
+                strategy = new_strategy
+                print(f"\n[Strategy] Switched to {strategy.name} due to failures")
 
         await asyncio.sleep(0.2)
 
