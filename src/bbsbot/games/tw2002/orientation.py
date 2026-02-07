@@ -1117,7 +1117,10 @@ async def _gather_state(
             # Quick read to get semantic extraction without changing screen
             result = await bot.session.read(timeout_ms=100, max_bytes=1024)
             kv_data = result.get("kv_data", {})
-            print(f"  [Orient] Extracted semantic data from current screen")
+            if kv_data.get('credits'):
+                print(f"  [Orient] Extracted semantic data: credits={kv_data.get('credits')}")
+            else:
+                print(f"  [Orient] Extracted semantic data from current screen")
         except Exception:
             kv_data = {}
 
@@ -1150,6 +1153,8 @@ async def _gather_state(
 
         # Parse display output
         display_info = _parse_display_screen(display_screen)
+        if not display_info.get('credits'):
+            print(f"  [Orient] D command parsing found no credits (display_screen might be a prompt)")
 
         # Multi-source fallback: Use display parse first, then kv_data, then initial kv_data
         # This provides 3 layers of fallback for critical game state
