@@ -187,9 +187,9 @@ async def login_sequence(
     for iteration in range(10):
         step += 1
         try:
-            # First connection may take up to 60 seconds under heavy server load
+            # First connection may take up to 90 seconds under heavy server load (90 bots)
             # Use longer timeout on first attempt, shorter on subsequent attempts
-            timeout = 60000 if iteration == 0 else 20000
+            timeout = 90000 if iteration == 0 else 20000
             input_type, prompt_id, screen, kv_data = await wait_and_respond(
                 bot, timeout_ms=timeout
             )
@@ -373,12 +373,12 @@ async def login_sequence(
         step += 1
         try:
             # Game loading takes 11+ seconds, need longer timeout
-            # Increased to 40s to handle slow server response during swarm spawning
-            # When 20+ bots connect simultaneously, server becomes very slow
+            # Increased to 90s to handle slow server response when 90 bots logging in
+            # With 12s spawn intervals, ~5-7 concurrent logins max, server still slow
             # During character creation, ignore loop detection for ship/planet names
             ignore_loop = {"prompt.ship_name", "prompt.planet_name"}
             input_type, prompt_id, screen, phase3_kv_data = await wait_and_respond(
-                bot, timeout_ms=40000, ignore_loop_for=ignore_loop
+                bot, timeout_ms=90000, ignore_loop_for=ignore_loop
             )
             # Always update kv_data from Phase 3 responses
             if phase3_kv_data:

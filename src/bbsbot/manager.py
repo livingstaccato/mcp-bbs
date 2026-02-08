@@ -175,9 +175,9 @@ class SwarmManager:
                 bot_ids.append(bot_id)
             except Exception as e:
                 logger.error(f"Failed to spawn bot {i} with {config}: {e}")
-            # Increased spawn interval to 4s to reduce server load during game login phase
-            # Each bot takes ~30s to login, so staggering them more reduces peak load
-            await asyncio.sleep(4.0)
+            # Increased spawn interval to 12s - critical for reliable logins
+            # Each bot takes 60-90s to login, so 12s spacing = ~5-7 concurrent logins max
+            await asyncio.sleep(12.0)
         return bot_ids
 
     async def kill_bot(self, bot_id: str) -> None:
