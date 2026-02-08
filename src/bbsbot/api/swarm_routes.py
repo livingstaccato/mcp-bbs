@@ -147,8 +147,9 @@ async def update_status(bot_id: str, update: dict):
     if "sector" in update:
         bot.sector = update["sector"]
     if "credits" in update:
-        # Only update credits if new value > 0 (prevents reset during reconnect)
-        if update["credits"] > 0:
+        # Accept any non-negative value (including 0)
+        # Only -1 means uninitialized, which we skip
+        if update["credits"] >= 0:
             bot.credits = update["credits"]
     if "turns_executed" in update:
         # Turns should only increase (high-water mark)

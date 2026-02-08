@@ -137,13 +137,16 @@
         const turns_max = b.turns_max || 500;
         const turnsDisplay = `${b.turns_executed} / ${turns_max}`;
 
+        // Display "-" for uninitialized credits
+        const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
+
         return `<tr>
         <td>${esc(b.bot_id)}</td>
         <td>${stateHtml}</td>
         <td>${activityHtml}</td>
         <td>${esc(b.username || "-")}</td>
         <td class="numeric">${b.sector}</td>
-        <td class="numeric">${formatCredits(b.credits)}</td>
+        <td class="numeric">${creditsDisplay}</td>
         <td>${esc(b.ship_level || "-")}</td>
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td class="actions">

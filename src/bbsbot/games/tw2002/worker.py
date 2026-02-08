@@ -173,9 +173,8 @@ class WorkerBot(TradingBot):
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
             }
 
-            # Only include credits if > 0 (prevents overwriting good data during reconnect)
-            if credits > 0:
-                status_data["credits"] = credits
+            # Always send credits, even if 0 (only skip if negative sentinel)
+            status_data["credits"] = max(0, credits)  # Never send -1
 
             # Only include username/ship_level/ship_name if they have values
             # This preserves previously-known values in the manager
@@ -282,6 +281,55 @@ class WorkerBot(TradingBot):
             )
         except Exception as e:
             logger.debug(f"Failed to report error: {e}")
+
+        # If this is a loop/orientation error, run diagnostics
+        error_str = str(error).lower()
+        if any(x in error_str for x in ["loop", "menu", "orientation", "stuck"]):
+            try:
+                from bbsbot.diagnostics.stuck_bot_analyzer import StuckBotAnalyzer
+                from bbsbot.llm.manager import LLMManager
+                from bbsbot.llm.config import LLMConfig, OllamaConfig
+                import json
+                from pathlib import Path
+
+                llm_config = LLMConfig(
+                    provider="ollama",
+                    ollama=OllamaConfig(model="gemma3", timeout_seconds=30),
+                )
+                analyzer = StuckBotAnalyzer(LLMManager(llm_config))
+
+                # Get loop history from loop detector
+                loop_history = []
+                if hasattr(self, 'loop_detection') and hasattr(self.loop_detection, 'alternation_history'):
+                    loop_history = self.loop_detection.alternation_history
+
+                diagnosis = await analyzer.analyze_stuck_bot(
+                    bot_id=self.bot_id,
+                    error_type=type(error).__name__,
+                    recent_screens=self.diagnostic_buffer.get("recent_screens", []),
+                    recent_prompts=self.diagnostic_buffer.get("recent_prompts", []),
+                    loop_history=loop_history,
+                    exit_reason=exit_reason,
+                )
+
+                # Log diagnostic results
+                logger.info("llm_diagnosis", bot_id=self.bot_id, diagnosis=diagnosis)
+
+                # Save to diagnostic log file
+                diagnostic_file = Path(f"logs/diagnostics/{self.bot_id}_diagnosis.json")
+                diagnostic_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(diagnostic_file, "w") as f:
+                    json.dump({
+                        "timestamp": time.time(),
+                        "bot_id": self.bot_id,
+                        "error": str(error),
+                        "diagnosis": diagnosis,
+                    }, f, indent=2)
+
+                print(f"  🔍 LLM Diagnosis saved to: {diagnostic_file}")
+
+            except Exception as diag_error:
+                logger.warning(f"Diagnostic analysis failed: {diag_error}")
 
     async def cleanup(self) -> None:
         """Clean up resources."""

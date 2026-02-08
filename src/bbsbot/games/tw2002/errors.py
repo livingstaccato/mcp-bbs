@@ -121,18 +121,18 @@ async def escape_loop(bot) -> bool:
     ]
 
     for sequence, description in escape_sequences:
-        logger.debug("loop_escape_attempt", action=description)
+        logger.info("loop_escape_attempt", method=description)
         await bot.session.send(sequence)
         await asyncio.sleep(0.5)
 
-        # Check if we're at a different state
-        result = await bot.session.read(timeout_ms=1000, max_bytes=8192)
-        screen = result.get("screen", "")
+        # Use proper orientation to check if we're safe
+        try:
+            state = await bot.where_am_i()
+            if state.context in ("sector_command", "planet_command", "citadel_command"):
+                logger.info("loop_escape_successful", method=description, context=state.context)
+                return True
+        except Exception:
+            continue
 
-        # If we see command prompt or sector prompt, we escaped
-        if "command" in screen.lower() and "[" in screen:
-            logger.info("loop_escape_successful", method=description)
-            return True
-
-    logger.error("loop_escape_failed")
+    logger.warning("loop_escape_failed")
     return False

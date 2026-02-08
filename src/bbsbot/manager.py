@@ -35,7 +35,7 @@ class BotStatus(BaseModel):
     config: str
     state: str  # queued, running, completed, error, stopped
     sector: int = 0
-    credits: int = 0
+    credits: int = -1  # -1 = uninitialized, 0+ = valid
     turns_executed: int = 0
     turns_max: int = 500  # Max turns for this session
     uptime_seconds: float = 0

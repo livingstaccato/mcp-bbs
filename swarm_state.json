@@ -1,39 +1,95 @@
 {
-  "timestamp": 1770588725.129663,
+  "timestamp": 1770589325.144405,
   "bots": {
     "bot_000": {
       "bot_id": "bot_000",
       "pid": 31250,
       "config": "config/swarm_demo/bot_01.yaml",
-      "state": "running",
-      "sector": 56,
-      "credits": 0,
-      "turns_executed": 3,
+      "state": "completed",
+      "sector": 591,
+      "credits": 221391,
+      "turns_executed": 500,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770588722.139476,
-      "completed_at": null,
+      "last_update_time": 1770588842.459954,
+      "completed_at": 1770588845.183135,
       "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770588721.932318,
-      "activity_context": "EXPLORING",
+      "last_action": "BANK",
+      "last_action_time": 1770588842.258467,
+      "activity_context": "FINISHED",
       "error_type": null,
       "error_timestamp": null,
-      "exit_reason": null,
+      "exit_reason": "target_reached",
       "recent_actions": [
         {
-          "time": 1770588718.919928,
-          "action": "TRADE",
-          "sector": 56,
-          "details": "all_commodities",
-          "result": "failure"
+          "time": 1770588840.193024,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
         },
         {
-          "time": 1770588721.703397,
-          "action": "TRADE",
-          "sector": 56,
-          "details": "all_commodities",
-          "result": "failure"
+          "time": 1770588840.422483,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588840.651627,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588840.881033,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588841.112484,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588841.341258,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588841.5711172,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588841.801881,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588842.0305028,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588842.25848,
+          "action": "BANK",
+          "sector": 591,
+          "details": null,
+          "result": "success"
         }
       ],
       "username": "bot_000",
@@ -45,21 +101,342 @@
       "bot_id": "bot_001",
       "pid": 31251,
       "config": "config/swarm_demo/bot_02.yaml",
+      "state": "completed",
+      "sector": 56,
+      "credits": 221391,
+      "turns_executed": 14,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588820.3402932,
+      "completed_at": 1770588825.180704,
+      "error_message": "No heartbeat in 60s - bot process may have crashed or is stuck",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770588798.7669692,
+      "activity_context": "FINISHED",
+      "error_type": "HeartbeatTimeout",
+      "error_timestamp": 1770588755.1757572,
+      "exit_reason": "target_reached",
+      "recent_actions": [
+        {
+          "time": 1770588793.343703,
+          "action": "TRADE",
+          "sector": 591,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770588796.1239412,
+          "action": "TRADE",
+          "sector": 591,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770588798.536105,
+          "action": "WAIT",
+          "sector": 591,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588804.644477,
+          "action": "EXPLORE",
+          "sector": 56,
+          "details": "591",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_001",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_002": {
+      "bot_id": "bot_002",
+      "pid": 31459,
+      "config": "config/swarm_demo/bot_01.yaml",
+      "state": "completed",
+      "sector": 56,
+      "credits": 221391,
+      "turns_executed": 500,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588911.627945,
+      "completed_at": 1770588915.188687,
+      "error_message": null,
+      "last_action": "BANK",
+      "last_action_time": 1770588908.441441,
+      "activity_context": "FINISHED",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "target_reached",
+      "recent_actions": [
+        {
+          "time": 1770588906.37606,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588906.605976,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588906.835818,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588907.064977,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588907.2943518,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588907.524056,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588907.7535958,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588907.982889,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588908.212516,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588908.4414542,
+          "action": "BANK",
+          "sector": 56,
+          "details": null,
+          "result": "success"
+        }
+      ],
+      "username": "bot_002",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_003": {
+      "bot_id": "bot_003",
+      "pid": 31460,
+      "config": "config/swarm_demo/bot_02.yaml",
       "state": "running",
+      "sector": 656,
+      "credits": 228138,
+      "turns_executed": 168,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770589320.869051,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770589319.359831,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770589286.476695,
+          "action": "TRADE",
+          "sector": 407,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770589289.257173,
+          "action": "TRADE",
+          "sector": 407,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770589291.022934,
+          "action": "EXPLORE",
+          "sector": 407,
+          "details": "552",
+          "result": "success"
+        },
+        {
+          "time": 1770589293.798484,
+          "action": "TRADE",
+          "sector": 552,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770589296.582062,
+          "action": "TRADE",
+          "sector": 552,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770589298.347543,
+          "action": "EXPLORE",
+          "sector": 552,
+          "details": "103",
+          "result": "success"
+        },
+        {
+          "time": 1770589302.298549,
+          "action": "EXPLORE",
+          "sector": 552,
+          "details": "271",
+          "result": "success"
+        },
+        {
+          "time": 1770589313.419106,
+          "action": "EXPLORE",
+          "sector": 103,
+          "details": "656",
+          "result": "failure"
+        },
+        {
+          "time": 1770589317.364469,
+          "action": "EXPLORE",
+          "sector": 656,
+          "details": "103",
+          "result": "failure"
+        },
+        {
+          "time": 1770589319.129834,
+          "action": "EXPLORE",
+          "sector": 103,
+          "details": "656",
+          "result": "success"
+        }
+      ],
+      "username": "bot_003",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_004": {
+      "bot_id": "bot_004",
+      "pid": 31461,
+      "config": "config/swarm_demo/bot_03.yaml",
+      "state": "completed",
       "sector": 0,
       "credits": 0,
       "turns_executed": 0,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770588692.310076,
+      "last_update_time": 1770588868.120286,
+      "completed_at": 1770588875.185351,
+      "error_message": "No prompt detected within 90000ms",
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "FINISHED",
+      "error_type": "TimeoutError",
+      "error_timestamp": 1770588868.114686,
+      "exit_reason": "target_reached",
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_005": {
+      "bot_id": "bot_005",
+      "pid": 31462,
+      "config": "config/swarm_demo/bot_04.yaml",
+      "state": "completed",
+      "sector": 0,
+      "credits": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588867.307999,
+      "completed_at": 1770588875.1858099,
+      "error_message": "No prompt detected within 90000ms",
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "FINISHED",
+      "error_type": "TimeoutError",
+      "error_timestamp": 1770588867.301953,
+      "exit_reason": "target_reached",
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_006": {
+      "bot_id": "bot_006",
+      "pid": 31463,
+      "config": "config/swarm_demo/bot_05.yaml",
+      "state": "completed",
+      "sector": 0,
+      "credits": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588867.30702,
+      "completed_at": 1770588875.186286,
+      "error_message": "No prompt detected within 90000ms",
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "FINISHED",
+      "error_type": "TimeoutError",
+      "error_timestamp": 1770588867.301705,
+      "exit_reason": "target_reached",
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_007": {
+      "bot_id": "bot_007",
+      "pid": 31665,
+      "config": "config/swarm_demo_ai/bot_01.yaml",
+      "state": "error",
+      "sector": 0,
+      "credits": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588786.7516139,
       "completed_at": null,
-      "error_message": null,
+      "error_message": "Process exited with code 1",
       "last_action": null,
       "last_action_time": 0,
       "activity_context": null,
       "error_type": null,
       "error_timestamp": null,
-      "exit_reason": null,
+      "exit_reason": "exit_code_1",
       "recent_actions": [],
       "username": null,
       "ship_name": null,

@@ -100,6 +100,18 @@ class TradingBot:
         self.menu_selection_attempts = 0
         self.last_game_letter: str | None = None
 
+        # Menu re-entry tracking (persistent across login phase)
+        self.menu_reentry_count: int = 0
+        self.last_menu_reentry_time: float = 0
+        self.max_menu_reentries: int = 5  # Fail after 5 returns to menu
+
+        # Diagnostic buffer for stuck bot analysis
+        self.diagnostic_buffer: dict = {
+            "recent_screens": [],
+            "recent_prompts": [],
+            "max_history": 20,
+        }
+
         # Optional: watch-socket manager for out-of-band status/event streaming.
         self._watch_manager: WatchManager | None = None
 
