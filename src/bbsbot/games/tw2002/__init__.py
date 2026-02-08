@@ -37,9 +37,6 @@ from bbsbot.games.tw2002.parsing import (
     _select_trade_wars_game,
 )
 from bbsbot.games.tw2002.trading import (
-    _dock_and_buy,
-    _dock_and_sell,
-    _warp_to_sector,
     run_trading_loop,
     single_trading_cycle,
 )

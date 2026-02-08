@@ -10,51 +10,51 @@ Tests critical bug fixes:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from bbsbot.games.tw2002.trading import (
-    _guard_trade_port,
-    _extract_port_info,
-    _is_trade_port_class,
+    guard_trade_port,
+    extract_port_info,
+    is_trade_port_class,
 )
 
 
 class TestPortClassValidation:
     """Test port class validation for special port detection."""
 
-    def test_is_trade_port_class_valid_classes(self):
+    def testis_trade_port_class_valid_classes(self):
         """Test that valid trade port classes are accepted."""
         valid_classes = [
             "BBB", "BBS", "BSB", "BSS",
             "SBB", "SBS", "SSB", "SSS",
         ]
         for port_class in valid_classes:
-            assert _is_trade_port_class(port_class), f"{port_class} should be valid"
+            assert is_trade_port_class(port_class), f"{port_class} should be valid"
 
-    def test_is_trade_port_class_invalid_classes(self):
+    def testis_trade_port_class_invalid_classes(self):
         """Test that invalid port classes are rejected."""
         invalid_classes = [
             "ABC", "123", "BBBS", "B", "BS", "SPECIAL", "XYZ"
         ]
         for port_class in invalid_classes:
-            assert not _is_trade_port_class(port_class), f"{port_class} should be invalid"
+            assert not is_trade_port_class(port_class), f"{port_class} should be invalid"
 
-    def test_is_trade_port_class_none_and_empty(self):
+    def testis_trade_port_class_none_and_empty(self):
         """Test handling of None and empty strings."""
-        assert not _is_trade_port_class(None)
-        assert not _is_trade_port_class("")
-        assert not _is_trade_port_class("   ")
+        assert not is_trade_port_class(None)
+        assert not is_trade_port_class("")
+        assert not is_trade_port_class("   ")
 
 
 class TestSpecialPortGuards:
     """Test special port detection and guards (Fix #4)."""
 
-    def test_guard_trade_port_no_port(self):
+    def testguard_trade_port_no_port(self):
         """Test that guard raises error when no port is present."""
         bot = MagicMock()
         screen = "You are in empty space. No port here."
 
         with pytest.raises(RuntimeError, match="no_port"):
-            _guard_trade_port(bot, screen, "buy")
+            guard_trade_port(bot, screen, "buy")
 
-    def test_guard_trade_port_stardock(self):
+    def testguard_trade_port_stardock(self):
         """Test that Stardock is detected as special port."""
         bot = MagicMock()
         screen = """
@@ -63,9 +63,9 @@ class TestSpecialPortGuards:
         """
 
         with pytest.raises(RuntimeError, match="special_port"):
-            _guard_trade_port(bot, screen, "sell")
+            guard_trade_port(bot, screen, "sell")
 
-    def test_guard_trade_port_rylos(self):
+    def testguard_trade_port_rylos(self):
         """Test that Rylos is detected as special port."""
         bot = MagicMock()
         screen = """
@@ -74,9 +74,9 @@ class TestSpecialPortGuards:
         """
 
         with pytest.raises(RuntimeError, match="special_port"):
-            _guard_trade_port(bot, screen, "buy")
+            guard_trade_port(bot, screen, "buy")
 
-    def test_guard_trade_port_hardware(self):
+    def testguard_trade_port_hardware(self):
         """Test that Hardware vendor is detected as special port (Fix #4)."""
         bot = MagicMock()
         screen = """
@@ -85,9 +85,9 @@ class TestSpecialPortGuards:
         """
 
         with pytest.raises(RuntimeError, match="special_port"):
-            _guard_trade_port(bot, screen, "buy")
+            guard_trade_port(bot, screen, "buy")
 
-    def test_guard_trade_port_mcplasma(self):
+    def testguard_trade_port_mcplasma(self):
         """Test that McPlasma vendor is detected as special port (Fix #4)."""
         bot = MagicMock()
         screen = """
@@ -95,20 +95,20 @@ class TestSpecialPortGuards:
         """
 
         with pytest.raises(RuntimeError, match="special_port"):
-            _guard_trade_port(bot, screen, "sell")
+            guard_trade_port(bot, screen, "sell")
 
-    def test_guard_trade_port_valid_port(self):
+    def testguard_trade_port_valid_port(self):
         """Test that valid trade ports pass the guard."""
         bot = MagicMock()
         bot.game_state = None
 
-        # Mock _extract_port_info to return valid port
-        with patch('bbsbot.games.tw2002.trading._extract_port_info') as mock_extract:
+        # Mock extract_port_info to return valid port
+        with patch('bbsbot.games.tw2002.trading.extract_port_info') as mock_extract:
             mock_extract.return_value = (True, "BBS", "Trading Post")
 
             # Should not raise any exception
             try:
-                _guard_trade_port(bot, "Port: Trading Post (Class BBS)", "buy")
+                guard_trade_port(bot, "Port: Trading Post (Class BBS)", "buy")
             except RuntimeError:
                 pytest.fail("Valid port should not raise RuntimeError")
 
@@ -116,7 +116,7 @@ class TestSpecialPortGuards:
 class TestPortInfoExtraction:
     """Test port information extraction from screens."""
 
-    def test_extract_port_info_with_class(self):
+    def testextract_port_info_with_class(self):
         """Test extracting port info when class is present."""
         bot = MagicMock()
         bot.game_state = None
@@ -126,13 +126,13 @@ class TestPortInfoExtraction:
         Port: Trading Station (Class BBS)
         """
 
-        has_port, port_class, port_name = _extract_port_info(bot, screen)
+        has_port, port_class, port_name = extract_port_info(bot, screen)
 
         assert has_port is True
         assert port_class == "BBS"
         assert "Trading Station" in port_name if port_name else True
 
-    def test_extract_port_info_no_port(self):
+    def testextract_port_info_no_port(self):
         """Test extraction when no port is present."""
         bot = MagicMock()
         bot.game_state = None
@@ -142,11 +142,11 @@ class TestPortInfoExtraction:
         Empty space
         """
 
-        has_port, port_class, port_name = _extract_port_info(bot, screen)
+        has_port, port_class, port_name = extract_port_info(bot, screen)
 
         assert has_port is None or has_port is False
 
-    def test_extract_port_info_class_only(self):
+    def testextract_port_info_class_only(self):
         """Test extraction with port class but no name."""
         bot = MagicMock()
         bot.game_state = None
@@ -155,7 +155,7 @@ class TestPortInfoExtraction:
         Port: (SSB)
         """
 
-        has_port, port_class, port_name = _extract_port_info(bot, screen)
+        has_port, port_class, port_name = extract_port_info(bot, screen)
 
         assert port_class == "SSB"
 
@@ -166,7 +166,7 @@ class TestWarpVerification:
     @pytest.mark.asyncio
     async def test_warp_to_sector_success(self):
         """Test successful warp with verification."""
-        from bbsbot.games.tw2002.trading import _warp_to_sector
+        from bbsbot.games.tw2002.trading import warp_to_sector as _warp_to_sector
 
         bot = MagicMock()
         bot.current_sector = 100
@@ -174,7 +174,7 @@ class TestWarpVerification:
         bot.session.send = AsyncMock()
 
         # Mock wait_and_respond to simulate warp prompt and arrival
-        with patch('bbsbot.games.tw2002.trading.wait_and_respond') as mock_wait:
+        with patch('bbsbot.games.tw2002.trading.navigation.wait_and_respond') as mock_wait:
             # First call: warp sector prompt
             # Second call: arrival at target
             mock_wait.side_effect = [
@@ -182,8 +182,8 @@ class TestWarpVerification:
                 ("single_key", "prompt.sector_command", "Sector 200 [?]:", {}),
             ]
 
-            with patch('bbsbot.games.tw2002.trading.send_input') as mock_send:
-                with patch('bbsbot.games.tw2002.trading._extract_sector_from_screen') as mock_extract:
+            with patch('bbsbot.games.tw2002.trading.navigation.send_input') as mock_send:
+                with patch('bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen') as mock_extract:
                     mock_extract.return_value = 200
 
                     await _warp_to_sector(bot, 200)
@@ -194,7 +194,7 @@ class TestWarpVerification:
     @pytest.mark.asyncio
     async def test_warp_to_sector_already_there(self):
         """Test warp when already at target sector."""
-        from bbsbot.games.tw2002.trading import _warp_to_sector
+        from bbsbot.games.tw2002.trading import warp_to_sector as _warp_to_sector
 
         bot = MagicMock()
         bot.current_sector = 150
@@ -209,22 +209,22 @@ class TestWarpVerification:
     @pytest.mark.asyncio
     async def test_warp_verification_failure(self):
         """Test that warp verification catches failures (Fix #3)."""
-        from bbsbot.games.tw2002.trading import _warp_to_sector
+        from bbsbot.games.tw2002.trading import warp_to_sector as _warp_to_sector
 
         bot = MagicMock()
         bot.current_sector = 100
         bot.session = AsyncMock()
         bot.session.send = AsyncMock()
 
-        with patch('bbsbot.games.tw2002.trading.wait_and_respond') as mock_wait:
+        with patch('bbsbot.games.tw2002.trading.navigation.wait_and_respond') as mock_wait:
             # Simulate warp that lands at wrong sector
             mock_wait.side_effect = [
                 ("multi_key", "prompt.warp_sector", "Enter sector:", {}),
                 ("single_key", "prompt.sector_command", "Sector 150:", {}),  # Wrong sector
             ]
 
-            with patch('bbsbot.games.tw2002.trading.send_input'):
-                with patch('bbsbot.games.tw2002.trading._extract_sector_from_screen') as mock_extract:
+            with patch('bbsbot.games.tw2002.trading.navigation.send_input'):
+                with patch('bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen') as mock_extract:
                     mock_extract.return_value = 150  # Landed at 150 instead of 200
 
                     with pytest.raises(RuntimeError, match="warp_failed:150"):
@@ -237,13 +237,13 @@ class TestWarpPromptValidation:
     @pytest.mark.asyncio
     async def test_warp_saves_correct_input_type(self):
         """Test that warp_input_type is saved from actual warp prompt (Fix #2)."""
-        from bbsbot.games.tw2002.trading import _warp_to_sector
+        from bbsbot.games.tw2002.trading import warp_to_sector as _warp_to_sector
 
         bot = MagicMock()
         bot.current_sector = 100
         bot.session = AsyncMock()
 
-        with patch('bbsbot.games.tw2002.trading.wait_and_respond') as mock_wait:
+        with patch('bbsbot.games.tw2002.trading.navigation.wait_and_respond') as mock_wait:
             # Simulate pause prompt followed by warp prompt
             mock_wait.side_effect = [
                 ("any_key", "prompt.pause_simple", "[Pause]", {}),  # Pause first
@@ -251,8 +251,8 @@ class TestWarpPromptValidation:
                 ("single_key", "prompt.sector_command", "Sector 200:", {}),
             ]
 
-            with patch('bbsbot.games.tw2002.trading.send_input') as mock_send:
-                with patch('bbsbot.games.tw2002.trading._extract_sector_from_screen') as mock_extract:
+            with patch('bbsbot.games.tw2002.trading.navigation.send_input') as mock_send:
+                with patch('bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen') as mock_extract:
                     mock_extract.return_value = 200
 
                     await _warp_to_sector(bot, 200)
