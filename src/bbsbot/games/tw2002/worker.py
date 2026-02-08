@@ -378,11 +378,29 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     finally:
         # Stop periodic reporter first (prevents stale updates during shutdown)
         await worker.stop_status_reporter()
-        # Report final completed state before disconnecting
+        # Report final completed state WITH ALL STATS before disconnecting
         try:
+            final_status = {
+                "state": "completed",
+                "activity_context": "FINISHED",
+                "sector": worker.current_sector or 0,
+                "credits": worker.current_credits or 0,
+                "turns_executed": worker.turns_used,
+                "exit_reason": "target_reached",
+            }
+            # Include game state stats if available
+            if worker.game_state:
+                final_status["turns_max"] = worker.game_state.turns_left or 0
+                if hasattr(worker.game_state, "player_name") and worker.game_state.player_name:
+                    final_status["username"] = worker.game_state.player_name
+                if hasattr(worker.game_state, "ship_type") and worker.game_state.ship_type:
+                    final_status["ship_level"] = worker.game_state.ship_type
+                if hasattr(worker.game_state, "ship_name") and worker.game_state.ship_name:
+                    final_status["ship_name"] = worker.game_state.ship_name
+
             await worker._http_client.post(
                 f"{worker.manager_url}/bot/{worker.bot_id}/status",
-                json={"state": "completed", "activity_context": "FINISHED"},
+                json=final_status,
             )
         except Exception:
             pass
