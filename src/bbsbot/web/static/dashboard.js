@@ -53,10 +53,20 @@
   }
 
   function getActivityBadge(context) {
-    if (!context) return "IDLE";
-    if (context.includes("trading") || context.includes("bank")) return "TRADING";
-    if (context.includes("battle") || context.includes("combat")) return "BATTLING";
-    if (context.includes("explore") || context.includes("navigation") || context.includes("warp")) return "EXPLORING";
+    if (!context) return "💤 IDLE";
+    const lower = context.toLowerCase();
+    // Map activities to emojis
+    if (lower.includes("trading") || lower.includes("bank")) return "💰 TRADING";
+    if (lower.includes("battle") || lower.includes("combat")) return "⚔️ BATTLING";
+    if (lower.includes("explore") || lower.includes("navigation") || lower.includes("warp")) return "🗺️ EXPLORING";
+    if (lower.includes("thinking")) return "🤔 THINKING";
+    if (lower.includes("orienting")) return "🧭 " + context.replace("ORIENTING: ", "");
+    if (lower.includes("upgrading")) return "⬆️ UPGRADING";
+    if (lower.includes("sector_command")) return "📍 AT PROMPT";
+    if (lower.includes("port")) return "🏪 AT PORT";
+    if (lower.includes("planet")) return "🌍 AT PLANET";
+    if (lower.includes("queued")) return "🕐 QUEUED";
+    if (lower.includes("disconnected")) return "❌ DISCONNECTED";
     return context.toUpperCase();
   }
 
@@ -102,10 +112,23 @@
         const isRunning = b.state === "running";
         const isDead = ["completed", "error", "stopped", "disconnected"].includes(b.state);
         const isQueued = b.state === "queued";
-        const activity = b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state.toUpperCase() : "IDLE");
+
+        // For completed bots, show summary instead of just "COMPLETED"
+        let activity;
+        if (b.state === "completed" && b.completed_at) {
+          const duration = Math.floor((b.completed_at - (b.last_update_time - (b.uptime_seconds || 0))) / 60);
+          activity = `✅ FINISHED (${duration}m)`;
+        } else if (b.state === "error") {
+          activity = `❌ ${b.exit_reason || "ERROR"}`.toUpperCase();
+        } else if (b.state === "stopped") {
+          activity = "⏸️ STOPPED";
+        } else {
+          activity = getActivityBadge(b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state : "IDLE"));
+        }
+
         const activityClass = getActivityClass(activity);
         let activityHtml = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
-        if (b.last_action_time) {
+        if (b.last_action_time && isRunning) {
           activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
         }
 
