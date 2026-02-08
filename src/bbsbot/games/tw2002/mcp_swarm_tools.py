@@ -11,8 +11,7 @@ from typing import Any
 import httpx
 from mcp.server import Server
 
-# Manager connection
-MANAGER_URL = "http://localhost:8000"
+from bbsbot.defaults import MANAGER_URL
 
 
 def _get_client() -> httpx.Client:
@@ -158,7 +157,7 @@ def register_swarm_tools(server: Server) -> None:
         with _get_client() as client:
             response = client.post(
                 f"{MANAGER_URL}/bot/{bot_id}/set-goal",
-                json={"goal": goal},
+                params={"goal": goal},
             )
             return response.json()
 

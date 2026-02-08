@@ -78,6 +78,9 @@ class TradingBot:
         # Detected prompts tracking
         self.detected_prompts: list[dict] = []
 
+        # Last semantic extraction data (populated by io.wait_and_respond callbacks)
+        self.last_semantic_data: dict = {}
+
         # Error tracking
         self.error_count = 0
         self.loop_detection = LoopDetector(threshold=3)
@@ -308,6 +311,10 @@ class TradingBot:
                 except Exception:
                     kv_data = {}
 
+                # Merge kv_data with last_semantic_data for completeness
+                merged_kv = dict(self.last_semantic_data)
+                merged_kv.update({k: v for k, v in kv_data.items() if v is not None})
+
                 # Use cached knowledge
                 self.game_state = GameState(
                     context=quick_state.context,
@@ -315,10 +322,10 @@ class TradingBot:
                     raw_screen=quick_state.screen,
                     prompt_id=quick_state.prompt_id,
                     # Extract critical state from semantic data
-                    credits=kv_data.get('credits'),
-                    turns_left=kv_data.get('turns_left'),
-                    fighters=kv_data.get('fighters'),
-                    shields=kv_data.get('shields'),
+                    credits=merged_kv.get('credits'),
+                    turns_left=merged_kv.get('turns_left'),
+                    fighters=merged_kv.get('fighters'),
+                    shields=merged_kv.get('shields'),
                 )
                 # Fill in from knowledge if available
                 if self.sector_knowledge and quick_state.sector:

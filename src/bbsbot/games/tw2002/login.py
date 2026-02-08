@@ -93,6 +93,13 @@ def _get_actual_prompt(screen: str) -> str:
     if "(n)ew name or (b)bs name" in last_lines and "alias" not in last_line:
         return "name_selection"
 
+    # Private game password prompt - MUST check before generic password prompt
+    # Variations: "private game", "password is required to enter this game"
+    if ("private game" in last_lines or "required to enter this game" in last_lines) and (
+        "password" in last_line
+    ):
+        return "private_game_password"
+
     # Password prompt (check last line only to avoid matching completed passwords)
     if last_line.startswith("password?"):
         return "password_prompt"
@@ -103,10 +110,6 @@ def _get_actual_prompt(screen: str) -> str:
         for line in lines[-3:]:
             if "(type y or n)" in line.lower() and "yes" not in line.lower():
                 return "new_character_prompt"
-
-    # Private game password prompt - check both last line and recent lines
-    if "private game" in last_lines and ("enter a password" in last_lines or "password" in last_line):
-        return "private_game_password"
 
     # Show today's log?
     if "show today's log" in last_line and "(y/n)" in last_line:
@@ -360,6 +363,7 @@ async def login_sequence(
     # IMPORTANT: See games/tw2002/TWGS_LOGIN_FLOW.md for flow documentation
     print("\nWaiting for game to load...")
     description_mode_exits = 0  # Track how many times we exit description mode
+    menu_reentries = 0  # Track re-entering game selection (indicates wrong password)
 
     # Initialize kv_data for Phase 3 (may have been set to None in Phase 1 fallback)
     kv_data = {}
@@ -499,7 +503,13 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "menu_selection":
-            print(f"      → At menu, selecting game {game_letter}")
+            menu_reentries += 1
+            if menu_reentries > 3:
+                raise RuntimeError(
+                    f"Returned to game menu {menu_reentries} times - "
+                    f"likely wrong game password for game {game_letter}"
+                )
+            print(f"      → At menu, selecting game {game_letter} (re-entry #{menu_reentries})")
             await bot.session.send(game_letter)
             await asyncio.sleep(0.3)
 

@@ -8,6 +8,7 @@ from typing import Callable
 import click
 
 from bbsbot.app import create_app
+from bbsbot.cli_swarm import swarm_commands
 from bbsbot.settings import Settings
 
 
@@ -415,6 +416,28 @@ def tui(host: str, port: int, log_path: str | None) -> None:
     from bbsbot.tui import run_tui
 
     asyncio.run(run_tui(host=host, port=port, log_path=log_path))
+
+
+cli.add_command(swarm_commands, name="swarm")
+
+
+@cli.command("s", hidden=True)
+@click.option("--bot-id", default=None)
+def status_alias(bot_id: str | None) -> None:
+    """Alias for swarm status."""
+    from bbsbot.cli_swarm import status_impl
+
+    status_impl(bot_id)
+
+
+@cli.command("sp", hidden=True)
+@click.option("--config", required=True)
+@click.option("--bot-id", default=None)
+def spawn_alias(config: str, bot_id: str | None) -> None:
+    """Alias for swarm spawn."""
+    from bbsbot.cli_swarm import spawn_impl
+
+    spawn_impl(config, bot_id)
 
 
 def main() -> None:

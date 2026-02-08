@@ -16,12 +16,20 @@ from typing import Any
 
 import psutil
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel as PydanticBaseModel
 import uvicorn
 
+from bbsbot.defaults import MANAGER_HOST, MANAGER_PORT
 from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class SpawnBatchRequest(PydanticBaseModel):
+    """Request body for batch spawning bots."""
+    config_paths: list[str]
 
 
 @dataclass
@@ -82,9 +90,30 @@ class SwarmManager:
 
         self.app = FastAPI(title="BBSBot Swarm Manager")
         self._setup_routes()
+        self._setup_dashboard()
 
         # Load saved state if exists
         self._load_state()
+
+    def _setup_dashboard(self) -> None:
+        """Mount web dashboard static files and route."""
+        web_dir = Path(__file__).parent / "web"
+        static_dir = web_dir / "static"
+
+        if static_dir.is_dir():
+            self.app.mount(
+                "/static",
+                StaticFiles(directory=str(static_dir)),
+                name="static",
+            )
+
+        dashboard_html = web_dir / "dashboard.html"
+
+        @self.app.get("/dashboard", response_class=HTMLResponse)
+        async def dashboard():
+            if dashboard_html.exists():
+                return dashboard_html.read_text()
+            return HTMLResponse("<h1>Dashboard not found</h1>", status_code=404)
 
     def _setup_routes(self) -> None:
         """Setup FastAPI routes."""
@@ -94,9 +123,9 @@ class SwarmManager:
             return {"status": "ok"}
 
         @self.app.post("/swarm/spawn")
-        async def spawn(config_path: str, bot_id: str | None = None):
+        async def spawn(config_path: str, bot_id: str = ""):
             try:
-                if bot_id is None:
+                if not bot_id:
                     bot_id = f"bot_{len(self.bots):03d}"
                 bot_id = await self.spawn_bot(config_path, bot_id)
                 return {"bot_id": bot_id, "pid": self.bots[bot_id].pid}
@@ -106,7 +135,8 @@ class SwarmManager:
                 )
 
         @self.app.post("/swarm/spawn-batch")
-        async def spawn_batch(config_paths: list[str]):
+        async def spawn_batch(request: SpawnBatchRequest):
+            config_paths = request.config_paths
             try:
                 bot_ids = await self.spawn_swarm(config_paths)
                 return {
@@ -161,6 +191,32 @@ class SwarmManager:
             await self.kill_bot(bot_id)
             return {"killed": bot_id}
 
+        @self.app.post("/bot/{bot_id}/status")
+        async def update_status(bot_id: str, update: dict):
+            if bot_id not in self.bots:
+                return JSONResponse(
+                    {"error": f"Bot {bot_id} not found"},
+                    status_code=404,
+                )
+            bot = self.bots[bot_id]
+            if "sector" in update:
+                bot.sector = update["sector"]
+            if "credits" in update:
+                bot.credits = update["credits"]
+            if "turns_executed" in update:
+                bot.turns_executed = update["turns_executed"]
+            if "state" in update:
+                bot.state = update["state"]
+            bot.last_update_time = time.time()
+            return {"ok": True}
+
+        @self.app.post("/bot/{bot_id}/register")
+        async def register_bot(bot_id: str, data: dict):
+            # Bot already tracked from spawn; just update last_update_time
+            if bot_id in self.bots:
+                self.bots[bot_id].last_update_time = time.time()
+            return {"ok": True}
+
         @self.app.post("/bot/{bot_id}/set-goal")
         async def set_goal(bot_id: str, goal: str):
             if bot_id not in self.bots:
@@ -211,6 +267,8 @@ class SwarmManager:
 
         # Spawn bot worker subprocess
         cmd = [
+            "uv",
+            "run",
             "python",
             "-m",
             "bbsbot.games.tw2002.worker",
@@ -221,10 +279,15 @@ class SwarmManager:
         ]
 
         try:
+            log_dir = Path("logs/workers")
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / f"{bot_id}.log"
+            log_handle = open(log_file, "w")
+
             process = subprocess.Popen(
                 cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
             )
 
             self.bots[bot_id] = BotStatus(
@@ -380,7 +443,7 @@ class SwarmManager:
         except Exception as e:
             logger.error(f"Failed to load state: {e}")
 
-    async def run(self, host: str = "localhost", port: int = 8000):
+    async def run(self, host: str = MANAGER_HOST, port: int = MANAGER_PORT):
         """Run the manager server.
 
         Args:

@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 import re
 
+from bbsbot.logging import get_logger
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
 from bbsbot.games.tw2002.visualization import GoalStatusDisplay
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Commodity name patterns for matching in "How many holds of X" prompts
 _COMMODITY_PATTERNS = {
@@ -45,6 +45,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
     while turns_used < max_turns:
         turns_used += 1
+        bot.turns_used = turns_used
 
         # Get current state (with scan optimization)
         try:
@@ -253,6 +254,7 @@ async def execute_port_trade(
     initial_credits = bot.current_credits or 0
     pending_trade = False
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
+    target_seen = False  # Track if we ever saw the target commodity prompt
 
     # Dock at port
     await bot.session.send("P")
@@ -305,6 +307,7 @@ async def execute_port_trade(
                 # Targeted trading: only trade the target commodity
                 is_target = bool(target_re.search(prompt_line))
                 if is_target:
+                    target_seen = True
                     if max_quantity > 0:
                         qty_str = str(max_quantity)
                     else:
@@ -313,9 +316,23 @@ async def execute_port_trade(
                     pending_trade = True
                     logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
                 else:
-                    await bot.session.send("0\r")
-                    pending_trade = False
-                    logger.debug("Skipping non-target commodity")
+                    # If we haven't seen the target commodity yet, the port
+                    # may have skipped it (e.g., player has 0 cargo to sell).
+                    # Accept whatever is available instead of skipping everything.
+                    if not target_seen:
+                        logger.info(
+                            "Target %s skipped by port, accepting available commodity",
+                            commodity,
+                        )
+                        if max_quantity > 0:
+                            await bot.session.send(f"{max_quantity}\r")
+                        else:
+                            await bot.session.send("\r")
+                        pending_trade = True
+                    else:
+                        await bot.session.send("0\r")
+                        pending_trade = False
+                        logger.debug("Skipping non-target commodity (target already traded)")
             else:
                 # Trade all: accept default for everything
                 if max_quantity > 0:

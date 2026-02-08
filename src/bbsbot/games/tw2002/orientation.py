@@ -1172,12 +1172,18 @@ async def _gather_state(
         # Credits: Always prefer semantic data if display parsing fails
         # The D command often returns a prompt instead of actual display data
         state.credits = get_with_fallback('credits')
-        # If we got 0 or None, try semantic data (0 is invalid for newborns)
+        # If we got 0 or None, try semantic data from kv_data
         if (state.credits is None or state.credits == 0) and kv_data and 'credits' in kv_data:
             semantic_credits = kv_data.get('credits')
             if semantic_credits is not None and semantic_credits > 0:
                 state.credits = semantic_credits
                 print(f"  [Orient] Using semantic credits (fallback from 0): {state.credits}")
+        # Final fallback: bot.last_semantic_data (populated by io callbacks)
+        if (state.credits is None or state.credits == 0):
+            bot_semantic = getattr(bot, 'last_semantic_data', {})
+            if bot_semantic.get('credits') and bot_semantic['credits'] > 0:
+                state.credits = bot_semantic['credits']
+                print(f"  [Orient] Using bot.last_semantic_data credits: {state.credits}")
 
         state.turns_left = get_with_fallback('turns_left')
 

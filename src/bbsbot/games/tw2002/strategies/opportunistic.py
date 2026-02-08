@@ -6,10 +6,10 @@ encountered during exploration. Balances exploration with profit.
 
 from __future__ import annotations
 
-import logging
 import random
 
 from pydantic import BaseModel, ConfigDict, Field
+from bbsbot.logging import get_logger
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
@@ -18,13 +18,14 @@ from bbsbot.games.tw2002.strategies.base import (
     TradingStrategy,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExplorationState(BaseModel):
     """Tracks exploration progress."""
 
     wanders_without_trade: int = 0
+    consecutive_trade_failures: int = 0
     last_trade_sector: int | None = None
     explored_this_session: set[int] = Field(default_factory=set)
 
@@ -54,20 +55,22 @@ class OpportunisticStrategy(TradingStrategy):
         """Determine next action based on current state.
 
         Priority:
-        1. Escape from home planet if on one (no profitable trades there)
+        1. Escape after repeated trade failures (stuck detection)
         2. Check for danger/retreat
         3. Check for banking opportunity
         4. Check for upgrade opportunity
         5. Trade if at a port with cargo or profit opportunity
         6. Explore or wander
         """
-        # CRITICAL: Escape home planet first - no profitable trading there
-        # Home planets only show the player's own commodities, not trading opportunities
-        if state.has_planet and len(state.warps or []) > 0:
-            # We're on a planet with warps available - move away immediately
-            logger.info("On home planet, moving away to find trading opportunities")
-            target = state.warps[0]  # Take first available warp
-            return TradeAction.MOVE, {"target_sector": target, "path": [target]}
+        # If we've failed trades multiple times at this sector, move away
+        if self._exploration.consecutive_trade_failures >= 2 and state.warps:
+            self._exploration.consecutive_trade_failures = 0
+            target = random.choice(state.warps)
+            logger.info(
+                "Repeated trade failures at sector %s, exploring sector %s",
+                state.sector, target,
+            )
+            return TradeAction.EXPLORE, {"direction": target}
 
         # Safety checks first
         if self.should_retreat(state):
@@ -108,6 +111,11 @@ class OpportunisticStrategy(TradingStrategy):
         if self._exploration.wanders_without_trade >= self._settings.max_wander_without_trade:
             logger.warning("Max wander without trade reached, resetting")
             self._exploration.wanders_without_trade = 0
+
+        # Fallback: if we have warps, just explore somewhere
+        if state.warps:
+            target = random.choice(state.warps)
+            return TradeAction.EXPLORE, {"direction": target}
 
         # Nothing to do
         return TradeAction.WAIT, {}
@@ -158,6 +166,9 @@ class OpportunisticStrategy(TradingStrategy):
         Class format: "BBS" = Buys Fuel, Buys Organics, Sells Equipment
         Position: 0=Fuel Ore, 1=Organics, 2=Equipment
 
+        For new players with no cargo, prefer "S" (buy) commodities since
+        the port will skip sell prompts when holds are empty.
+
         Args:
             sector: Sector with the port
             port_class: Port class string (e.g., "BBS", "SSB")
@@ -169,30 +180,30 @@ class OpportunisticStrategy(TradingStrategy):
         if not port_class or len(port_class) != 3:
             return None
 
-        # Determine what we can trade
-        # For opportunistic, we just want any tradeable commodity
         commodities = ["fuel_ore", "organics", "equipment"]
+
+        # Prefer "S" (buy) opportunities - these always work regardless of cargo
         for i, char in enumerate(port_class):
-            if char == "B":  # Port buys = we sell
-                # We'd need cargo to sell
-                # For now, estimate profit based on typical margins
-                return TradeOpportunity(
-                    buy_sector=0,  # Will be filled when we find a selling port
-                    sell_sector=sector,
-                    commodity=commodities[i],
-                    expected_profit=500,  # Conservative estimate
-                    distance=distance,
-                    confidence=0.6,
-                )
-            elif char == "S":  # Port sells = we buy
-                # We can buy here
+            if char == "S":  # Port sells = we buy
                 return TradeOpportunity(
                     buy_sector=sector,
-                    sell_sector=0,  # Will be filled when we find a buying port
+                    sell_sector=0,
                     commodity=commodities[i],
                     expected_profit=500,
                     distance=distance,
-                    confidence=0.6,
+                    confidence=0.7,
+                )
+
+        # Fall back to "B" (sell) - requires player to have cargo
+        for i, char in enumerate(port_class):
+            if char == "B":  # Port buys = we sell
+                return TradeOpportunity(
+                    buy_sector=0,
+                    sell_sector=sector,
+                    commodity=commodities[i],
+                    expected_profit=500,
+                    distance=distance,
+                    confidence=0.4,  # Lower confidence - may not have cargo
                 )
 
         return None
@@ -293,11 +304,22 @@ class OpportunisticStrategy(TradingStrategy):
         """Record action result and update exploration state."""
         super().record_result(result)
 
-        if result.action == TradeAction.TRADE and result.success:
-            self._exploration.wanders_without_trade = 0
-            self._exploration.last_trade_sector = result.new_sector
+        if result.action == TradeAction.TRADE:
+            if result.success and result.profit > 0:
+                self._exploration.wanders_without_trade = 0
+                self._exploration.consecutive_trade_failures = 0
+                self._exploration.last_trade_sector = result.new_sector
+            else:
+                # Trade attempted but failed or no profit
+                self._exploration.consecutive_trade_failures += 1
+                logger.info(
+                    "Trade failure #%d at sector %s",
+                    self._exploration.consecutive_trade_failures,
+                    result.new_sector,
+                )
         elif result.action in (TradeAction.MOVE, TradeAction.EXPLORE):
             self._exploration.wanders_without_trade += 1
+            self._exploration.consecutive_trade_failures = 0  # Reset on movement
             if result.new_sector:
                 self._exploration.explored_this_session.add(result.new_sector)
 

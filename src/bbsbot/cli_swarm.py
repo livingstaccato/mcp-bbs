@@ -1,6 +1,7 @@
 """CLI for swarm management.
 
 Provides command-line interface to control the swarm manager.
+Integrates into the main bbsbot CLI as `bbsbot swarm <cmd>`.
 """
 
 from __future__ import annotations
@@ -8,19 +9,47 @@ from __future__ import annotations
 import asyncio
 import glob
 import json
+import subprocess
+import time
 from pathlib import Path
-from typing import Optional
 
 import click
 import httpx
 from rich.console import Console
 from rich.table import Table
-from rich.live import Live
-from rich.layout import Layout
+
+from bbsbot.defaults import MANAGER_URL
 
 console = Console()
 
-MANAGER_URL = "http://localhost:8000"
+
+def ensure_manager_running(manager_url: str = MANAGER_URL) -> bool:
+    """Start the swarm manager if it isn't already running."""
+    try:
+        if httpx.get(f"{manager_url}/health", timeout=2).status_code == 200:
+            return True
+    except Exception:
+        pass
+
+    console.print("[yellow]Starting manager...[/yellow]")
+    subprocess.Popen(
+        ["uv", "run", "python", "-m", "bbsbot.manager"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+    for _ in range(20):
+        time.sleep(0.5)
+        try:
+            if httpx.get(f"{manager_url}/health", timeout=1).status_code == 200:
+                console.print("[green]Manager started[/green]")
+                return True
+        except Exception:
+            continue
+
+    console.print("[red]Failed to start manager[/red]")
+    return False
 
 
 def format_uptime(seconds: float) -> str:
@@ -38,22 +67,13 @@ def format_credits(credits: int) -> str:
     return f"{credits:,}"
 
 
-@click.group()
-def cli() -> None:
-    """BBSBot Swarm Manager CLI."""
-    pass
+# ── Implementation functions (usable from aliases and shell) ──
 
 
-@cli.command()
-@click.option("--config", required=True, help="Path to bot config file")
-@click.option("--bot-id", default=None, help="Custom bot ID")
-def spawn(config: str, bot_id: Optional[str]) -> None:
-    """Spawn a single bot.
-
-    Args:
-        config: Path to bot config YAML file
-        bot_id: Optional custom bot ID
-    """
+def spawn_impl(config: str, bot_id: str | None = None) -> None:
+    """Spawn a single bot."""
+    if not ensure_manager_running():
+        return
     if not Path(config).exists():
         console.print(f"[red]Error: Config not found: {config}")
         return
@@ -65,7 +85,6 @@ def spawn(config: str, bot_id: Optional[str]) -> None:
                 params={"config_path": config, "bot_id": bot_id or ""},
             )
             data = response.json()
-
             if response.status_code == 200:
                 console.print(
                     f"[green]✓[/green] Spawned bot: "
@@ -77,20 +96,15 @@ def spawn(config: str, bot_id: Optional[str]) -> None:
             console.print(f"[red]Error: {e}")
 
 
-@cli.command()
-@click.option("--count", default=111, help="Number of bots to spawn")
-@click.option("--pattern", default="config/test_matrix/*.yaml", help="Config file pattern")
-@click.option("--stagger", default=0.5, type=float, help="Delay between spawns (seconds)")
-def spawn_swarm(count: int, pattern: str, stagger: float) -> None:
-    """Spawn multiple bots (swarm).
-
-    Args:
-        count: Number of bots to spawn
-        pattern: Glob pattern for config files
-        stagger: Delay between spawns in seconds
-    """
+def spawn_swarm_impl(
+    count: int = 111,
+    pattern: str = "config/test_matrix/*.yaml",
+    stagger: float = 0.5,
+) -> None:
+    """Spawn multiple bots."""
+    if not ensure_manager_running():
+        return
     configs = glob.glob(pattern)[:count]
-
     if not configs:
         console.print(f"[red]Error: No configs found matching: {pattern}")
         return
@@ -107,14 +121,13 @@ def spawn_swarm(count: int, pattern: str, stagger: float) -> None:
                 json={"config_paths": configs},
             )
             data = response.json()
-
             if response.status_code == 200:
                 console.print(
                     f"[green]✓[/green] Spawned "
                     f"[cyan]{data['count']}[/cyan] bots"
                 )
-                for bot_id in data["bot_ids"][:5]:
-                    console.print(f"  - {bot_id}")
+                for bid in data["bot_ids"][:5]:
+                    console.print(f"  - {bid}")
                 if len(data["bot_ids"]) > 5:
                     console.print(
                         f"  ... and {len(data['bot_ids']) - 5} more"
@@ -125,14 +138,10 @@ def spawn_swarm(count: int, pattern: str, stagger: float) -> None:
             console.print(f"[red]Error: {e}")
 
 
-@cli.command()
-@click.option("--bot-id", default=None, help="Show specific bot status")
-def status(bot_id: Optional[str]) -> None:
-    """Get swarm status.
-
-    Args:
-        bot_id: Optional specific bot to show
-    """
+def status_impl(bot_id: str | None = None) -> None:
+    """Show swarm or single-bot status."""
+    if not ensure_manager_running():
+        return
     with httpx.Client() as client:
         try:
             if bot_id:
@@ -157,8 +166,7 @@ def status(bot_id: Optional[str]) -> None:
                 response = client.get(f"{MANAGER_URL}/swarm/status")
                 data = response.json()
 
-                # Summary
-                console.print(f"\n[cyan]Swarm Status[/cyan]")
+                console.print("\n[cyan]Swarm Status[/cyan]")
                 console.print(
                     f"  Running: [green]{data['running']}[/green] / "
                     f"{data['total_bots']}"
@@ -180,7 +188,6 @@ def status(bot_id: Optional[str]) -> None:
                     f"[cyan]{format_uptime(data['uptime_seconds'])}[/cyan]"
                 )
 
-                # Bot table
                 if data["bots"]:
                     table = Table(title="Bot Details")
                     table.add_column("Bot ID", style="cyan")
@@ -212,21 +219,16 @@ def status(bot_id: Optional[str]) -> None:
                         console.print(
                             f"\n... and {len(data['bots']) - 20} more bots"
                         )
-
                     console.print(table)
 
         except Exception as e:
             console.print(f"[red]Error: {e}")
 
 
-@cli.command()
-@click.option("--bot-id", required=True, help="Bot to pause")
-def pause(bot_id: str) -> None:
-    """Pause a running bot.
-
-    Args:
-        bot_id: ID of bot to pause
-    """
+def pause_impl(bot_id: str) -> None:
+    """Pause a running bot."""
+    if not ensure_manager_running():
+        return
     with httpx.Client() as client:
         try:
             response = client.post(
@@ -242,14 +244,10 @@ def pause(bot_id: str) -> None:
             console.print(f"[red]Error: {e}")
 
 
-@cli.command()
-@click.option("--bot-id", required=True, help="Bot to resume")
-def resume(bot_id: str) -> None:
-    """Resume a paused bot.
-
-    Args:
-        bot_id: ID of bot to resume
-    """
+def resume_impl(bot_id: str) -> None:
+    """Resume a paused bot."""
+    if not ensure_manager_running():
+        return
     with httpx.Client() as client:
         try:
             response = client.post(
@@ -265,45 +263,36 @@ def resume(bot_id: str) -> None:
             console.print(f"[red]Error: {e}")
 
 
-@cli.command()
-@click.option("--bot-id", required=True, help="Bot to kill")
-def kill(bot_id: str) -> None:
-    """Terminate a bot.
-
-    Args:
-        bot_id: ID of bot to terminate
-    """
-    if click.confirm(f"Kill bot {bot_id}?"):
-        with httpx.Client() as client:
-            try:
-                response = client.delete(
-                    f"{MANAGER_URL}/bot/{bot_id}"
+def kill_impl(bot_id: str, confirm: bool = True) -> None:
+    """Terminate a bot."""
+    if not ensure_manager_running():
+        return
+    if confirm and not click.confirm(f"Kill bot {bot_id}?"):
+        return
+    with httpx.Client() as client:
+        try:
+            response = client.delete(
+                f"{MANAGER_URL}/bot/{bot_id}"
+            )
+            if response.status_code == 200:
+                console.print(f"[green]✓[/green] Killed bot: {bot_id}")
+            else:
+                console.print(
+                    f"[red]Error: {response.json().get('error')}"
                 )
-                if response.status_code == 200:
-                    console.print(f"[green]✓[/green] Killed bot: {bot_id}")
-                else:
-                    console.print(
-                        f"[red]Error: {response.json().get('error')}"
-                    )
-            except Exception as e:
-                console.print(f"[red]Error: {e}")
+        except Exception as e:
+            console.print(f"[red]Error: {e}")
 
 
-@cli.command()
-@click.option("--bot-id", required=True, help="Bot to modify")
-@click.option("--goal", required=True, help="New goal")
-def set_goal(bot_id: str, goal: str) -> None:
-    """Set bot goal.
-
-    Args:
-        bot_id: ID of bot
-        goal: New goal (e.g., 'exploration', 'profit', 'banking')
-    """
+def set_goal_impl(bot_id: str, goal: str) -> None:
+    """Set bot goal."""
+    if not ensure_manager_running():
+        return
     with httpx.Client() as client:
         try:
             response = client.post(
                 f"{MANAGER_URL}/bot/{bot_id}/set-goal",
-                json={"goal": goal},
+                params={"goal": goal},
             )
             if response.status_code == 200:
                 console.print(
@@ -317,15 +306,16 @@ def set_goal(bot_id: str, goal: str) -> None:
             console.print(f"[red]Error: {e}")
 
 
-@cli.command()
-def watch() -> None:
+def watch_impl() -> None:
     """Watch swarm status in real-time (WebSocket)."""
+    if not ensure_manager_running():
+        return
     console.print("[cyan]Connecting to swarm manager...[/cyan]")
 
     try:
         import websockets
 
-        async def watch_swarm():
+        async def watch_swarm() -> None:
             uri = MANAGER_URL.replace("http", "ws") + "/ws/swarm"
             async with websockets.connect(uri) as websocket:
                 console.print(
@@ -334,12 +324,10 @@ def watch() -> None:
                 console.print(
                     "[yellow]Press Ctrl+C to stop[/yellow]\n"
                 )
-
                 while True:
                     message = await websocket.recv()
                     data = json.loads(message)
 
-                    # Clear and print status
                     console.clear()
                     console.print(
                         f"[cyan]Swarm Status - "
@@ -359,7 +347,6 @@ def watch() -> None:
                         f"[cyan]{data['total_turns']:,}[/cyan]\n"
                     )
 
-                    # Show top bots by credits
                     if data["bots"]:
                         top_bots = sorted(
                             data["bots"],
@@ -390,5 +377,86 @@ def watch() -> None:
         console.print(f"[red]Error: {e}")
 
 
-if __name__ == "__main__":
-    cli()
+# ── Click command group ──
+
+
+@click.group("swarm")
+def swarm_commands() -> None:
+    """Swarm manager commands."""
+
+
+@swarm_commands.command()
+@click.option("--config", required=True, help="Path to bot config file")
+@click.option("--bot-id", default=None, help="Custom bot ID")
+def spawn(config: str, bot_id: str | None) -> None:
+    """Spawn a single bot."""
+    spawn_impl(config, bot_id)
+
+
+@swarm_commands.command("spawn-swarm")
+@click.option("--count", default=111, help="Number of bots to spawn")
+@click.option("--pattern", default="config/test_matrix/*.yaml", help="Config file pattern")
+@click.option("--stagger", default=0.5, type=float, help="Delay between spawns")
+def spawn_swarm(count: int, pattern: str, stagger: float) -> None:
+    """Spawn multiple bots (swarm)."""
+    spawn_swarm_impl(count, pattern, stagger)
+
+
+@swarm_commands.command()
+@click.option("--bot-id", default=None, help="Show specific bot status")
+def status(bot_id: str | None) -> None:
+    """Get swarm status."""
+    status_impl(bot_id)
+
+
+@swarm_commands.command()
+@click.option("--bot-id", required=True, help="Bot to pause")
+def pause(bot_id: str) -> None:
+    """Pause a running bot."""
+    pause_impl(bot_id)
+
+
+@swarm_commands.command()
+@click.option("--bot-id", required=True, help="Bot to resume")
+def resume(bot_id: str) -> None:
+    """Resume a paused bot."""
+    resume_impl(bot_id)
+
+
+@swarm_commands.command()
+@click.option("--bot-id", required=True, help="Bot to kill")
+def kill(bot_id: str) -> None:
+    """Terminate a bot."""
+    kill_impl(bot_id)
+
+
+@swarm_commands.command("set-goal")
+@click.option("--bot-id", required=True, help="Bot to modify")
+@click.option("--goal", required=True, help="New goal")
+def set_goal(bot_id: str, goal: str) -> None:
+    """Set bot goal."""
+    set_goal_impl(bot_id, goal)
+
+
+@swarm_commands.command()
+def watch() -> None:
+    """Watch swarm status in real-time (WebSocket)."""
+    watch_impl()
+
+
+@swarm_commands.command()
+def monitor() -> None:
+    """Live TUI dashboard."""
+    if not ensure_manager_running():
+        return
+    from bbsbot.tui.swarm_monitor import SwarmMonitor
+
+    asyncio.run(SwarmMonitor().run())
+
+
+@swarm_commands.command("shell")
+def swarm_shell() -> None:
+    """Interactive REPL for swarm management."""
+    from bbsbot.swarm_shell import SwarmShell
+
+    SwarmShell().cmdloop()

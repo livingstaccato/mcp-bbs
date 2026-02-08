@@ -1,0 +1,29 @@
+{
+  "timestamp": 1770517011.903711,
+  "bots": {
+    "alpha": {
+      "bot_id": "alpha",
+      "pid": 77712,
+      "config": "config/test_matrix/01_game_A_opportunistic.yaml",
+      "state": "completed",
+      "sector": 0,
+      "credits": 0,
+      "turns_executed": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770516273.997466,
+      "error_message": null
+    },
+    "bravo": {
+      "bot_id": "bravo",
+      "pid": 77980,
+      "config": "config/test_matrix/02_game_B_opportunistic.yaml",
+      "state": "completed",
+      "sector": 512,
+      "credits": 997,
+      "turns_executed": 30,
+      "uptime_seconds": 0,
+      "last_update_time": 1770516450.5555022,
+      "error_message": null
+    }
+  }
+}

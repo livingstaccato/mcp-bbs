@@ -92,6 +92,10 @@ async def wait_and_respond(
             print(f"semantic {kv}")
             _update_semantic_relationships(bot, semantic)
             _write_semantic_log(bot, semantic)
+            # Merge into bot's semantic data so orient can access it.
+            # Use merge (not replace) so credits from earlier screens
+            # persist even if later screens don't show them.
+            bot.last_semantic_data.update(semantic)
 
     # TW2002-specific: Filter prompts for errors and loops
     def on_prompt_detected(detected: dict) -> bool:
