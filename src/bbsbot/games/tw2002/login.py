@@ -373,11 +373,12 @@ async def login_sequence(
         step += 1
         try:
             # Game loading takes 11+ seconds, need longer timeout
-            # Increased to 30s to handle server load during swarm spawning
+            # Increased to 40s to handle slow server response during swarm spawning
+            # When 20+ bots connect simultaneously, server becomes very slow
             # During character creation, ignore loop detection for ship/planet names
             ignore_loop = {"prompt.ship_name", "prompt.planet_name"}
             input_type, prompt_id, screen, phase3_kv_data = await wait_and_respond(
-                bot, timeout_ms=30000, ignore_loop_for=ignore_loop
+                bot, timeout_ms=40000, ignore_loop_for=ignore_loop
             )
             # Always update kv_data from Phase 3 responses
             if phase3_kv_data:
