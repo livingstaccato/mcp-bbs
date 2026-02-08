@@ -24,7 +24,7 @@ configure_logging()
 log = get_logger(__name__)
 
 
-def _register_game_tools(mcp_app: FastMCP, game_filter: str | None = None) -> None:
+def _register_game_tools(mcp_app: FastMCP, tool_prefixes: str | None = None) -> None:
     """Register game-specific MCP tools.
 
     Imports and registers tools from game modules. Each game can
@@ -32,8 +32,8 @@ def _register_game_tools(mcp_app: FastMCP, game_filter: str | None = None) -> No
 
     Args:
         mcp_app: FastMCP application to register tools with
-        game_filter: If provided, only register tools with matching prefix
-                    (e.g., 'tw2002' registers only tw2002_* tools)
+        tool_prefixes: Comma-separated tool prefixes to include (e.g., 'tw2002_' or 'bbs_,tw2002_')
+                      If not provided, no game tools are registered
     """
     try:
         from fastmcp.tools.tool import FunctionTool
@@ -46,17 +46,21 @@ def _register_game_tools(mcp_app: FastMCP, game_filter: str | None = None) -> No
         manager = get_manager()
         all_tools = manager.get_all_tools()
 
-        # Add each tool to the MCP app, optionally filtering by game
+        # Parse prefixes (if provided)
+        allowed_prefixes = set()
+        if tool_prefixes:
+            allowed_prefixes = {p.strip() for p in tool_prefixes.split(",")}
+
+        # Add each tool to the MCP app, filtering by prefix
         added_count = 0
         for tool_name, tool_func in all_tools.items():
-            # Only register game tools if a specific game filter is provided
-            # If no filter, skip all game tools (only BBS tools will be available)
-            if not game_filter:
+            # If prefixes specified, only include matching tools
+            if allowed_prefixes:
+                if not any(tool_name.startswith(prefix) for prefix in allowed_prefixes):
+                    continue  # Skip tools that don't match any prefix
+            else:
+                # No prefixes specified, skip all game tools
                 continue
-
-            expected_prefix = f"{game_filter}_"
-            if not tool_name.startswith(expected_prefix):
-                continue  # Skip tools that don't match filter
 
             # Convert raw function from registry to FunctionTool
             # so FastMCP can work with it
@@ -65,8 +69,8 @@ def _register_game_tools(mcp_app: FastMCP, game_filter: str | None = None) -> No
             log.debug(f"mcp_game_tool_added: {tool_name}")
             added_count += 1
 
-        if game_filter:
-            log.info(f"mcp_game_tools_registered: {added_count} tools for game '{game_filter}'")
+        if tool_prefixes:
+            log.info(f"mcp_game_tools_registered: {added_count} tools with prefixes: {tool_prefixes}")
 
     except Exception as e:
         log.warning(f"mcp_game_tools_registration_failed: {e}")
@@ -118,18 +122,18 @@ _active_session_id: str | None = None
 KNOWLEDGE_ROOT: Path | None = None
 
 
-def create_app(settings: Settings, game_filter: str | None = None) -> FastMCP:
+def create_app(settings: Settings, tool_prefixes: str | None = None) -> FastMCP:
     """Configure globals and return the FastMCP app.
 
     Args:
         settings: Application settings
-        game_filter: If provided, only register tools for this game
+        tool_prefixes: Comma-separated tool prefixes to include (e.g., 'tw2002_' or 'bbs_,tw2002_')
     """
     global KNOWLEDGE_ROOT
     KNOWLEDGE_ROOT = validate_knowledge_root(settings.knowledge_root)
 
-    # Register game-specific tools with optional filter
-    _register_game_tools(app, game_filter=game_filter)
+    # Register game-specific tools with optional prefix filter
+    _register_game_tools(app, tool_prefixes=tool_prefixes)
 
     return app
 

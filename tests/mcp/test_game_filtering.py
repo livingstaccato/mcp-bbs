@@ -10,48 +10,43 @@ from fastmcp import FastMCP
 
 
 @pytest.mark.asyncio
-async def test_register_no_tools_without_filter() -> None:
-    """Test that NO game tools are registered when no filter is provided.
+async def test_register_no_tools_without_prefixes() -> None:
+    """Test that NO game tools are registered when no prefixes are provided.
 
-    Game tools should only be registered when explicitly requested via --game flag.
-    BBS tools are registered separately via @app.tool() decorators.
+    Game tools should only be registered when explicitly requested via --tools flag.
     """
     # Create a fresh app
     mcp = FastMCP("test-all")
 
-    # Register with no filter (should register nothing)
-    _register_game_tools(mcp, game_filter=None)
+    # Register with no prefixes (should register nothing)
+    _register_game_tools(mcp, tool_prefixes=None)
 
     # Get the tools using get_tools()
     tools = await mcp.get_tools()
 
-    # Should have NO tools (game tools only registered when filter provided)
+    # Should have NO tools (game tools only registered when prefixes provided)
     tool_names = [t.name for t in tools.values()]
 
-    assert len(tool_names) == 0, "Should have NO game tools when no filter is provided"
+    assert len(tool_names) == 0, "Should have NO game tools when no prefixes are provided"
 
 
 @pytest.mark.asyncio
 async def test_register_filtered_tools_tw2002() -> None:
-    """Test that only tw2002 tools are registered when game_filter='tw2002'.
-
-    Note: BBS tools are not filtered (always included per design decision).
-    """
+    """Test that only tw2002 tools are registered when tool_prefixes='tw2002_'."""
     # Create a fresh app
     mcp = FastMCP("test-tw2002")
 
-    # Register only tw2002 tools (BBS tools are still included, not filtered)
-    _register_game_tools(mcp, game_filter="tw2002")
+    # Register only tw2002 tools
+    _register_game_tools(mcp, tool_prefixes="tw2002_")
 
     # Get the tools
     tools = await mcp.get_tools()
     tool_names = [t.name for t in tools.values()]
 
-    # Check that we have tw2002 tools (BBS tools won't be in this app
-    # since this is just the game tools registration)
+    # Check that we have tw2002 tools
     has_tw2002 = any(name.startswith("tw2002_") for name in tool_names)
 
-    assert has_tw2002, "Should have tw2002_* tools when filtered to tw2002"
+    assert has_tw2002, "Should have tw2002_* tools when prefixes='tw2002_'"
 
     # No other game tools should be present
     for name in tool_names:
