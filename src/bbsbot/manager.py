@@ -296,7 +296,35 @@ class SwarmManager:
         try:
             with open(self.state_file) as f:
                 state = json.load(f)
-                logger.info(f"Loaded state from {self.state_file}")
+                # Load bots from previous state
+                for bot_id, bot_data in state.get("bots", {}).items():
+                    if bot_id not in self.bots:
+                        # Reconstruct BotStatus from saved data
+                        self.bots[bot_id] = BotStatus(
+                            bot_id=bot_data.get("bot_id", bot_id),
+                            pid=bot_data.get("pid", 0),
+                            config=bot_data.get("config", ""),
+                            state=bot_data.get("state", "stopped"),
+                            sector=bot_data.get("sector", 0),
+                            credits=bot_data.get("credits", 0),
+                            turns_executed=bot_data.get("turns_executed", 0),
+                            turns_max=bot_data.get("turns_max", 500),
+                            uptime_seconds=bot_data.get("uptime_seconds", 0),
+                            last_update_time=bot_data.get("last_update_time", time.time()),
+                            error_message=bot_data.get("error_message"),
+                            last_action=bot_data.get("last_action"),
+                            last_action_time=bot_data.get("last_action_time", 0),
+                            activity_context=bot_data.get("activity_context"),
+                            error_type=bot_data.get("error_type"),
+                            error_timestamp=bot_data.get("error_timestamp"),
+                            exit_reason=bot_data.get("exit_reason"),
+                            recent_actions=bot_data.get("recent_actions", []),
+                            username=bot_data.get("username"),
+                            ship_name=bot_data.get("ship_name"),
+                            ship_level=bot_data.get("ship_level"),
+                            port_location=bot_data.get("port_location"),
+                        )
+                logger.info(f"Loaded {len(state.get('bots', {}))} bots from {self.state_file}")
         except Exception as e:
             logger.error(f"Failed to load state: {e}")
 

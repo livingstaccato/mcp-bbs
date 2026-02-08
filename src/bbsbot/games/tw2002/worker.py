@@ -92,6 +92,8 @@ class WorkerBot(TradingBot):
                     activity = "LOGGING_IN"
 
             # Extract character/ship info from game state
+            # Always include username and ship_level, even if None
+            # This helps the dashboard track character progression
             username = None
             ship_level = None
 
@@ -100,22 +102,33 @@ class WorkerBot(TradingBot):
                 username = getattr(self.game_state, "player_name", None) or self.character_name
                 # Get ship type (e.g., "Merchant Cruiser", "Scout Ship")
                 ship_level = getattr(self.game_state, "ship_type", None)
+            else:
+                # If no game_state yet, still use character_name as fallback username
+                username = self.character_name
+
+            # Build status update dict
+            status_data = {
+                "sector": self.current_sector or 0,
+                "credits": credits,
+                "turns_executed": self.turns_used,
+                "turns_max": turns_max,
+                "state": "running",
+                "last_action": self.current_action,
+                "last_action_time": self.current_action_time,
+                "activity_context": activity,
+                "recent_actions": self.recent_actions[-10:],  # Last 10 actions
+            }
+
+            # Only include username/ship_level if they have values
+            # This preserves previously-known values in the manager
+            if username:
+                status_data["username"] = username
+            if ship_level:
+                status_data["ship_level"] = ship_level
 
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",
-                json={
-                    "sector": self.current_sector or 0,
-                    "credits": credits,
-                    "turns_executed": self.turns_used,
-                    "turns_max": turns_max,
-                    "state": "running",
-                    "last_action": self.current_action,
-                    "last_action_time": self.current_action_time,
-                    "activity_context": activity,
-                    "recent_actions": self.recent_actions[-10:],  # Last 10 actions
-                    "username": username,
-                    "ship_level": ship_level,
-                },
+                json=status_data,
             )
         except Exception as e:
             logger.debug(f"Failed to report status: {e}")
