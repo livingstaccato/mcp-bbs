@@ -83,10 +83,10 @@ class SessionManager:
             ConnectionError: If connection fails
             ValueError: If unknown transport type
         """
+        # Check for reusable session (lock only for brief read)
         async with self._lock:
-            # Check for reusable session
             if reuse:
-                for session_id, session in self._sessions.items():
+                for sid, session in self._sessions.items():
                     if session.host == host and session.port == port and session.is_connected():
                         # Update size if different
                         if session.emulator.cols != cols or session.emulator.rows != rows:
@@ -94,62 +94,74 @@ class SessionManager:
                         # Send newline if requested
                         if send_newline:
                             await session.send("\r\n")
-                        log.info("session_reused", session_id=session_id, host=host, port=port)
-                        return session_id
+                        log.info("session_reused", session_id=sid, host=host, port=port)
+                        return sid
 
             # Check session limit
             if len(self._sessions) >= self._max_sessions:
                 raise RuntimeError(f"Max sessions ({self._max_sessions}) reached")
 
-            # Create transport
-            if transport_type == "telnet":
-                transport = TelnetTransport()
-            else:
-                raise ValueError(f"Unknown transport: {transport_type}")
-
-            # Connect with timeout
-            try:
-                await asyncio.wait_for(
-                    transport.connect(host, port, cols=cols, rows=rows, term=term, **options),
-                    timeout=timeout,
-                )
-            except TimeoutError as e:
-                raise ConnectionError(f"Connection timeout to {host}:{port}") from e
-
-            # Create session components
+            # Reserve a session ID WITHOUT holding the lock during connection
             if not session_id:
                 session_id = str(uuid.uuid4())
-
             self._session_counter += 1
-            emulator = TerminalEmulator(cols, rows, term)
-            session = Session(
-                session_id=session_id,
-                session_number=self._session_counter,
-                transport=transport,
-                emulator=emulator,
-                host=host,
-                port=port,
+            session_number = self._session_counter
+
+        # **CRITICAL FIX**: Move network connection OUTSIDE the lock
+        # This allows multiple bots to connect in parallel instead of serially
+        # Validate transport type first (quick check)
+        if transport_type == "telnet":
+            transport = TelnetTransport()
+        else:
+            raise ValueError(f"Unknown transport: {transport_type}")
+
+        # Connect with timeout - NO LOCK HELD
+        try:
+            await asyncio.wait_for(
+                transport.connect(host, port, cols=cols, rows=rows, term=term, **options),
+                timeout=timeout,
             )
+        except TimeoutError as e:
+            raise ConnectionError(f"Connection timeout to {host}:{port}") from e
+        except Exception as e:
+            raise ConnectionError(f"Failed to connect to {host}:{port}: {e}") from e
+
+        # Create session components and register (reacquire lock for registration)
+        emulator = TerminalEmulator(cols, rows, term)
+        session = Session(
+            session_id=session_id,
+            session_number=session_number,
+            transport=transport,
+            emulator=emulator,
+            host=host,
+            port=port,
+        )
+
+        async with self._lock:
+            # Double-check we haven't exceeded limits while we were connecting
+            if len(self._sessions) >= self._max_sessions:
+                await transport.disconnect()
+                raise RuntimeError(f"Max sessions ({self._max_sessions}) reached")
 
             self._sessions[session_id] = session
             self._emit_session_created(session)
 
-            # Send newline if requested
-            if send_newline:
-                await session.send("\r\n")
+        # Send newline if requested (after registration)
+        if send_newline:
+            await session.send("\r\n")
 
-            log.info(
-                "session_created",
-                session_id=session_id,
-                session_number=self._session_counter,
-                host=host,
-                port=port,
-                cols=cols,
-                rows=rows,
-                term=term,
-            )
+        log.info(
+            "session_created",
+            session_id=session_id,
+            session_number=session_number,
+            host=host,
+            port=port,
+            cols=cols,
+            rows=rows,
+            term=term,
+        )
 
-            return session_id
+        return session_id
 
     async def get_session(self, session_id: str) -> Session:
         """Get session by ID.
