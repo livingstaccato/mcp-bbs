@@ -67,6 +67,8 @@
     if (lower.includes("explore")) return "exploring";
     if (lower.includes("select")) return "selecting";
     if (lower.includes("log") || lower.includes("connect")) return "connecting";
+    if (lower.includes("queue")) return "queued";
+    if (lower.includes("completed") || lower.includes("error") || lower.includes("stopped")) return "dead";
     return "idle";
   }
 
@@ -98,20 +100,15 @@
         const isRunning = b.state === "running";
         const isDead = ["completed", "error", "stopped"].includes(b.state);
         const isQueued = b.state === "queued";
-        const activity = b.activity_context || "IDLE";
+        const activity = b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state.toUpperCase() : "IDLE");
         const activityClass = getActivityClass(activity);
-        const hasError = b.state === "error" && (b.error_message || b.error_type);
-
         let activityHtml = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
         if (b.last_action_time) {
           activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
         }
 
         const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", stopped: "⚫", queued: "🟡", warning: "🟠"}[b.state] || "⚪";
-        let stateHtml = `<span class="state ${b.state}" title="${b.state}">${stateEmoji}</span>`;
-        if (hasError) {
-          stateHtml += ` <span class="error-badge" title="Error: ${esc(b.error_type)}" onclick="window._openErrorModal('${esc(b.bot_id)}')">!</span>`;
-        }
+        let stateHtml = `<span class="state ${b.state}" title="${b.state}" style="cursor:pointer" onclick="window._openErrorModal('${esc(b.bot_id)}')">${stateEmoji}</span>`;
 
         const turns_max = b.turns_max || 500;
         const turnsDisplay = `${b.turns_executed} / ${turns_max}`;
@@ -157,17 +154,27 @@
   window._openErrorModal = function (botId) {
     if (!lastData || !lastData.bots) return;
     const bot = lastData.bots.find(b => b.bot_id === botId);
-    if (!bot || bot.state !== "error") return;
+    if (!bot) return;
 
-    const timestamp = bot.error_timestamp
-      ? new Date(bot.error_timestamp * 1000).toLocaleString()
-      : "Unknown";
-
-    const html = `
+    let html = `
       <div class="field">
         <div class="label">Bot ID</div>
         <div class="value">${esc(bot.bot_id)}</div>
       </div>
+      <div class="field">
+        <div class="label">State</div>
+        <div class="value">${esc(bot.state)}</div>
+      </div>
+      <div class="field">
+        <div class="label">Activity</div>
+        <div class="value">${esc(bot.activity_context || "None")}</div>
+      </div>`;
+
+    if (bot.state === "error") {
+      const timestamp = bot.error_timestamp
+        ? new Date(bot.error_timestamp * 1000).toLocaleString()
+        : "Unknown";
+      html += `
       <div class="field">
         <div class="label">Error Type</div>
         <div class="value" style="color: var(--red);">${esc(bot.error_type || "Unknown")}</div>
@@ -183,7 +190,10 @@
       <div class="field">
         <div class="label">Exit Reason</div>
         <div class="value">${esc(bot.exit_reason || "exception")}</div>
-      </div>
+      </div>`;
+    }
+
+    html += `
       <div class="field">
         <div class="label">Last Action</div>
         <div class="value">${esc(bot.last_action || "None")}</div>

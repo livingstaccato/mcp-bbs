@@ -1021,10 +1021,17 @@ async def _reach_safe_state(
 
     Raises:
         OrientationError if unable to reach safe state
+        ConnectionError if session is disconnected
     """
     gentle_keys = [" ", "\r", " ", "\r", "Q", " ", "\r", "Q", " ", "\r"]
 
+    # Pre-check: is the session even connected?
+    if hasattr(bot, 'session') and hasattr(bot.session, 'is_connected'):
+        if not bot.session.is_connected():
+            raise ConnectionError("Session disconnected - cannot orient")
+
     last_screen = ""
+    consecutive_blank = 0
 
     for attempt in range(max_attempts):
         # Wait for screen to stabilize (handles baud rate rendering)
@@ -1038,6 +1045,23 @@ async def _reach_safe_state(
                 last_screen = screen
         except Exception:
             screen = last_screen
+
+        # Blank screen handling: progressive wake-up keys
+        if not screen.strip():
+            consecutive_blank += 1
+            # After 3 blank screens, check if connection is dead
+            if consecutive_blank >= 3 and hasattr(bot, 'session') and hasattr(bot.session, 'is_connected'):
+                if not bot.session.is_connected():
+                    raise ConnectionError("Session disconnected during orientation (blank screen)")
+            wake_keys = [" ", "\r", "?", "\x1b", "?\r", "\x7f"]
+            if attempt < len(wake_keys):
+                key = wake_keys[attempt]
+                print(f"  [Orient] Blank screen, wake key {repr(key)} ({attempt + 1}/{max_attempts})...")
+                await bot.session.send(key)
+                await asyncio.sleep(0.5)
+                continue
+        else:
+            consecutive_blank = 0
 
         # Check if we're in a safe state using our context detection
         context = _detect_context(screen)

@@ -304,11 +304,11 @@ class SwarmManager:
             now = time.time()
             for bot in self.bots.values():
                 if bot.state in ("running",) and now - bot.last_update_time > 60:
-                    logger.warning(f"Bot {bot.bot_id} timeout")
+                    logger.warning(f"Bot {bot.bot_id} heartbeat timeout (no status update in 60s)")
                     bot.state = "error"
-                    bot.error_message = "No status update (timeout)"
-                    bot.error_type = "TimeoutError"
-                    bot.exit_reason = "status_timeout"
+                    bot.error_message = "No heartbeat in 60s - bot process may have crashed or is stuck"
+                    bot.error_type = "HeartbeatTimeout"
+                    bot.exit_reason = "heartbeat_timeout"
                     import time as time_module
                     bot.error_timestamp = time_module.time()
 

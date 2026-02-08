@@ -8,6 +8,7 @@ import re
 
 from bbsbot.logging import get_logger
 from bbsbot.games.tw2002.config import BotConfig
+from bbsbot.games.tw2002.orientation import OrientationError
 from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
 from bbsbot.games.tw2002.visualization import GoalStatusDisplay
 
@@ -41,6 +42,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     max_turns = config.session.max_turns_per_session
 
     turns_used = 0
+    consecutive_orient_failures = 0
     goal_status_display: GoalStatusDisplay | None = None
 
     while turns_used < max_turns:
@@ -69,24 +71,39 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     else:
                         print("  ✗ Could not escape loop, skipping turn")
                         break
-                elif isinstance(e, (TimeoutError, ConnectionError)):
-                    # Retry on network timeouts/connection errors
+                elif isinstance(e, (TimeoutError, ConnectionError, OrientationError)):
+                    # Retry on network timeouts, connection errors, and orientation failures
                     orient_retries += 1
                     if orient_retries < max_orient_retries:
-                        # Exponential backoff: 1s, 2s, 3s (gives BBS more time to recover)
                         backoff_s = orient_retries
-                        print(f"\n⚠️  Network error: {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries}) in {backoff_s}s...")
+                        print(f"\n⚠️  {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries}) in {backoff_s}s...")
                         await asyncio.sleep(backoff_s)
                         continue
                     else:
-                        print(f"✗ Max retries exceeded for network error, skipping turn")
+                        print(f"✗ Max retries exceeded for {type(e).__name__}, skipping turn")
                         break
                 else:
                     raise
 
         if state is None:
-            # Skip this turn if we couldn't get state
+            # Track consecutive orient failures for clean exit on dead connections
+            consecutive_orient_failures += 1
+            if consecutive_orient_failures >= 5:
+                if hasattr(bot, 'session') and hasattr(bot.session, 'is_connected') and not bot.session.is_connected():
+                    print(f"\n✗ Connection lost after {consecutive_orient_failures} consecutive orientation failures")
+                    break
+                # Still connected but orient keeps failing - try full recovery
+                print(f"\n⚠️  {consecutive_orient_failures} consecutive failures, attempting full recovery...")
+                try:
+                    await bot.recover()
+                    consecutive_orient_failures = 0
+                except Exception:
+                    print(f"✗ Recovery failed after {consecutive_orient_failures} failures, exiting")
+                    break
             continue
+
+        # Successful orient - reset failure counter
+        consecutive_orient_failures = 0
 
         # After first successful orient, push full state to dashboard immediately
         if turns_used == 1 and hasattr(bot, 'report_status'):
