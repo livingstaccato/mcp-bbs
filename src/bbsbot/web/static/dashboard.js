@@ -118,10 +118,11 @@
         <td>${esc(b.bot_id)}</td>
         <td>${stateHtml}</td>
         <td>${activityHtml}</td>
+        <td>${esc(b.username || "-")}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${formatCredits(b.credits)}</td>
+        <td>${esc(b.ship_level || "-")}</td>
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
-        <td>${esc(b.config || "")}</td>
         <td class="actions">
           <button class="btn logs" onclick="window._openLogs('${esc(b.bot_id)}')">Logs</button>
           <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"}>Restart</button>

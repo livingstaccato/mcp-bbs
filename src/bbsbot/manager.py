@@ -51,6 +51,11 @@ class BotStatus:
     exit_reason: str | None = None        # "target_reached", "out_of_turns", "login_failed", etc
     # Action feed (last 10 actions)
     recent_actions: list[dict] = field(default_factory=list)
+    # Character/game info for dashboard display
+    username: str | None = None          # Character name
+    ship_name: str | None = None         # Current ship name
+    ship_level: str | None = None        # Ship class/level (Fighter, Trader, etc)
+    port_location: int | None = None     # Current port sector
 
 
 @dataclass

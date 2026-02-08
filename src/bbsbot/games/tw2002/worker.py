@@ -91,6 +91,11 @@ class WorkerBot(TradingBot):
                 if hasattr(self, 'session') and self.session:
                     activity = "LOGGING_IN"
 
+            # Extract character/ship info for dashboard
+            username = self.character_name if self.character_name != self.bot_id else None
+            ship_name = None
+            ship_level = None
+
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",
                 json={
@@ -103,6 +108,9 @@ class WorkerBot(TradingBot):
                     "last_action_time": self.current_action_time,
                     "activity_context": activity,
                     "recent_actions": self.recent_actions[-10:],  # Last 10 actions
+                    "username": username,
+                    "ship_name": ship_name,
+                    "ship_level": ship_level,
                 },
             )
         except Exception as e:

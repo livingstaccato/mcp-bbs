@@ -126,6 +126,14 @@ async def update_status(bot_id: str, update: dict):
         bot.exit_reason = update["exit_reason"]
     if "recent_actions" in update:
         bot.recent_actions = update["recent_actions"]
+    if "username" in update:
+        bot.username = update["username"]
+    if "ship_name" in update:
+        bot.ship_name = update["ship_name"]
+    if "ship_level" in update:
+        bot.ship_level = update["ship_level"]
+    if "port_location" in update:
+        bot.port_location = update["port_location"]
     import time
 
     bot.last_update_time = time.time()
