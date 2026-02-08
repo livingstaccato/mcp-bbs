@@ -24,6 +24,38 @@ configure_logging()
 log = get_logger(__name__)
 
 
+def _register_bbs_tools(mcp_app: FastMCP, allowed_prefixes: set[str] | None = None) -> None:
+    """Conditionally register BBS tools based on allowed prefixes.
+
+    Args:
+        mcp_app: FastMCP application to register tools with
+        allowed_prefixes: Set of allowed tool prefixes. If None, no BBS tools are registered
+                         (default behavior when no --tools flag provided).
+                         If set is provided, only register BBS tools if "bbs_" is in the set.
+    """
+    # If no prefixes specified, don't register any BBS tools
+    if allowed_prefixes is None:
+        return
+
+    # If prefixes specified, only register BBS tools if "bbs_" is explicitly requested
+    if "bbs_" not in allowed_prefixes:
+        return
+
+    # Get all BBS tools from the default app (which has them via decorators)
+    try:
+        # Get the default app's tools via _tool_manager
+        default_tools = _default_app._tool_manager._tools
+
+        # Copy all tools that start with 'bbs_'
+        for tool_name, tool in default_tools.items():
+            if tool_name.startswith("bbs_"):
+                mcp_app.add_tool(tool)
+                log.debug(f"mcp_bbs_tool_registered: {tool_name}")
+
+    except Exception as e:
+        log.warning(f"mcp_bbs_tools_registration_failed: {e}")
+
+
 def _register_game_tools(mcp_app: FastMCP, tool_prefixes: str | None = None) -> None:
     """Register game-specific MCP tools.
 
@@ -111,7 +143,7 @@ def decode_escape_sequences(s: str) -> str:
     return re.sub(pattern, replace_escape, s)
 
 
-app = FastMCP("bbsbot")
+_default_app = FastMCP("bbsbot")  # Global used only for BBS tool decoration
 session_manager = SessionManager()
 watch_manager: WatchManager | None = None
 _watch_registered = False
@@ -121,6 +153,9 @@ _active_session_id: str | None = None
 
 KNOWLEDGE_ROOT: Path | None = None
 
+# Reference to current app for tool registration
+app = _default_app
+
 
 def create_app(settings: Settings, tool_prefixes: str | None = None) -> FastMCP:
     """Configure globals and return the FastMCP app.
@@ -128,14 +163,26 @@ def create_app(settings: Settings, tool_prefixes: str | None = None) -> FastMCP:
     Args:
         settings: Application settings
         tool_prefixes: Comma-separated tool prefixes to include (e.g., 'tw2002_' or 'bbs_,tw2002_')
+                      If not provided, no tools are exposed.
     """
     global KNOWLEDGE_ROOT
     KNOWLEDGE_ROOT = validate_knowledge_root(settings.knowledge_root)
 
-    # Register game-specific tools with optional prefix filter
-    _register_game_tools(app, tool_prefixes=tool_prefixes)
+    # Create a new app instance for this server
+    mcp = FastMCP("bbsbot")
 
-    return app
+    # Parse prefixes (None means no tools, empty string after split also means no tools)
+    allowed_prefixes = None
+    if tool_prefixes:
+        allowed_prefixes = {p.strip() for p in tool_prefixes.split(",")}
+
+    # Conditionally register BBS tools based on prefix filter
+    _register_bbs_tools(mcp, allowed_prefixes=allowed_prefixes)
+
+    # Register game-specific tools with optional prefix filter
+    _register_game_tools(mcp, tool_prefixes=tool_prefixes)
+
+    return mcp
 
 
 def _attach_watch(session: Any) -> None:
