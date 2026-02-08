@@ -78,6 +78,9 @@ class WorkerBot(TradingBot):
                         activity = "TRADING"
                     elif context in ("navigation", "warp", "sector_command", "planet_command", "citadel_command"):
                         activity = "EXPLORING"
+                    elif "menu" in context.lower() or "selection" in context.lower():
+                        # Generic menu/selection context (game picker, character select, etc)
+                        activity = "SELECTING"
                     else:
                         activity = context.upper()
                 else:

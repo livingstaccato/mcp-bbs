@@ -65,6 +65,8 @@
     if (lower.includes("trade")) return "trading";
     if (lower.includes("battle")) return "battling";
     if (lower.includes("explore")) return "exploring";
+    if (lower.includes("select")) return "selecting";
+    if (lower.includes("log") || lower.includes("connect")) return "connecting";
     return "idle";
   }
 
