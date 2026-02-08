@@ -186,6 +186,66 @@ async def kill(bot_id: str):
     return {"killed": bot_id}
 
 
+@router.get("/bot/{bot_id}/events")
+async def get_bot_events(bot_id: str):
+    """Get simplified event ledger for a bot (state changes, errors, key milestones)."""
+    assert _manager is not None
+    if bot_id not in _manager.bots:
+        return JSONResponse(
+            {"error": f"Bot {bot_id} not found", "events": []},
+            status_code=404,
+        )
+
+    bot = _manager.bots[bot_id]
+    import time as time_module
+
+    events = []
+    now = time_module.time()
+
+    # Add state/activity-based events from recent actions
+    if bot.recent_actions:
+        for action in bot.recent_actions:
+            action_time = action.get("time", 0)
+            events.append({
+                "timestamp": action_time,
+                "type": "action",
+                "action": action.get("action", "UNKNOWN"),
+                "sector": action.get("sector"),
+                "result": action.get("result"),
+                "details": action.get("details"),
+            })
+
+    # Add error event if applicable
+    if bot.error_timestamp:
+        events.append({
+            "timestamp": bot.error_timestamp,
+            "type": "error",
+            "error_type": bot.error_type,
+            "error_message": bot.error_message,
+        })
+
+    # Add state change event
+    if bot.last_update_time:
+        events.append({
+            "timestamp": bot.last_update_time,
+            "type": "status_update",
+            "state": bot.state,
+            "activity": bot.activity_context,
+            "sector": bot.sector,
+            "credits": bot.credits,
+            "turns_executed": bot.turns_executed,
+        })
+
+    # Sort by timestamp descending (most recent first)
+    events.sort(key=lambda e: e["timestamp"], reverse=True)
+
+    return {
+        "bot_id": bot_id,
+        "state": bot.state,
+        "events": events[:50],  # Return last 50 events
+    }
+
+
 @router.post("/bot/{bot_id}/restart")
 async def restart_bot(bot_id: str):
     """Restart a bot by killing it and respawning with same config.

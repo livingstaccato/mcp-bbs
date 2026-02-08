@@ -124,7 +124,7 @@
         <td>${esc(b.ship_level || "-")}</td>
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td class="actions">
-          <button class="btn logs" onclick="window._openLogs('${esc(b.bot_id)}')">Logs</button>
+          <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')">Activity</button>
           <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"}>Restart</button>
           <button class="btn kill" onclick="window._killBot('${esc(b.bot_id)}')" ${isRunning ? "" : "disabled"}>Kill</button>
         </td>
@@ -346,6 +346,65 @@
       closeLogs();
     }
   });
+
+  // --- Event ledger (simplified activity log) ---
+  window._openEventLedger = async function (botId) {
+    // Use the same modal as logs but with event ledger content
+    if (logWs) {
+      logWs.close();
+      logWs = null;
+    }
+
+    logContent.innerHTML = "";
+    logTitle.textContent = "Activity: " + botId;
+    logStatus.innerHTML = "Loading...";
+    logAutoScroll = true;
+    logModal.classList.add("open");
+
+    try {
+      const resp = await fetch("/bot/" + encodeURIComponent(botId) + "/events");
+      if (!resp.ok) {
+        logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Error: " + resp.status + " " + resp.statusText + "</div>";
+        logStatus.textContent = "Error";
+        return;
+      }
+
+      const data = await resp.json();
+      const events = data.events || [];
+
+      if (events.length === 0) {
+        logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--fg2);\">No events yet</div>";
+        logStatus.textContent = "Loaded";
+        return;
+      }
+
+      const lines = [];
+      for (const event of events) {
+        const time = new Date(event.timestamp * 1000).toLocaleTimeString();
+        let line = time + " ";
+
+        if (event.type === "action") {
+          line += "[ACTION] " + event.action + " @ sector " + event.sector;
+          if (event.result) line += " → " + event.result;
+          if (event.details) line += " (" + event.details + ")";
+        } else if (event.type === "error") {
+          line += "[ERROR] " + (event.error_type || "Unknown error") + ": " + (event.error_message || "");
+        } else if (event.type === "status_update") {
+          line += "[STATUS] " + event.state + " | " + (event.activity || "idle");
+          if (event.sector) line += " @ " + event.sector;
+          line += " | Credits: " + formatCredits(event.credits || 0) + " | Turns: " + (event.turns_executed || 0);
+        }
+
+        lines.push(line);
+      }
+
+      appendLogLines(lines);
+      logStatus.textContent = "Loaded " + events.length + " events";
+    } catch (e) {
+      logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Network error: " + e.message + "</div>";
+      logStatus.textContent = "Error";
+    }
+  };
 
   // --- Swarm WebSocket connection ---
   function connect() {
