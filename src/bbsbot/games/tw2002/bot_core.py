@@ -138,7 +138,17 @@ class TradingBot:
 
         Returns:
             The initialized TradingStrategy
+
+        Raises:
+            RuntimeError: If sector_knowledge is not initialized
         """
+        # CRITICAL: Ensure knowledge is initialized before creating strategy
+        if self.sector_knowledge is None:
+            raise RuntimeError(
+                "Cannot initialize strategy: sector_knowledge is None. "
+                "Call init_knowledge() before init_strategy()"
+            )
+
         strategy_name = self.config.trading.strategy
 
         if strategy_name == "profitable_pairs":

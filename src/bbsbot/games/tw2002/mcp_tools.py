@@ -18,7 +18,11 @@ registry = create_registry("tw2002")
 
 # Import other tool modules to register their tools
 # Import is placed after registry creation so they can use it
-from bbsbot.games.tw2002 import mcp_tools_goals, mcp_tools_intervention  # noqa: E402, F401
+from bbsbot.games.tw2002 import (  # noqa: E402, F401
+    mcp_tools_control,
+    mcp_tools_goals,
+    mcp_tools_intervention,
+)
 
 
 def _get_active_bot():
