@@ -504,7 +504,7 @@ async def login_sequence(
 
         elif actual_prompt == "menu_selection":
             menu_reentries += 1
-            if menu_reentries > 3:
+            if menu_reentries > 6:
                 raise RuntimeError(
                     f"Returned to game menu {menu_reentries} times - "
                     f"likely wrong game password for game {game_letter}"

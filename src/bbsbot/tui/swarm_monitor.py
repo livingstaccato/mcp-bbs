@@ -1,8 +1,4 @@
-"""Live TUI dashboard for swarm monitoring.
-
-Renders an htop-style terminal UI with real-time bot status
-via WebSocket connection to the swarm manager.
-"""
+"""Live TUI dashboard for swarm monitoring."""
 
 from __future__ import annotations
 
@@ -17,6 +13,7 @@ import time
 import tty
 
 from bbsbot.defaults import MANAGER_URL
+from bbsbot.tui.log_viewer import LogViewerOverlay
 
 ANSI_RESET = "\x1b[0m"
 ANSI_HIDE_CURSOR = "\x1b[?25l"
@@ -24,7 +21,6 @@ ANSI_SHOW_CURSOR = "\x1b[?25h"
 ANSI_ALT_SCREEN = "\x1b[?1049h"
 ANSI_EXIT_ALT = "\x1b[?1049l"
 ANSI_BOLD = "\x1b[1m"
-ANSI_DIM = "\x1b[2m"
 
 # xterm-256color palette
 FG_GREEN = "\x1b[38;5;82m"
@@ -42,23 +38,12 @@ BG_SELECTED = "\x1b[48;5;238m"
 
 STATE_COLORS = {
     "running": FG_GREEN,
-    "paused": FG_YELLOW,
     "completed": FG_BLUE,
     "error": FG_RED,
     "stopped": FG_GRAY,
 }
 
-# Box drawing
 BOX_H = "\u2500"
-BOX_V = "\u2502"
-BOX_TL = "\u250c"
-BOX_TR = "\u2510"
-BOX_BL = "\u2514"
-BOX_BR = "\u2518"
-BOX_T = "\u252c"
-BOX_B = "\u2534"
-BOX_L = "\u251c"
-BOX_R = "\u2524"
 
 
 def _move(row: int, col: int) -> str:
@@ -86,13 +71,11 @@ def _format_credits(credits: int) -> str:
 
 
 def _bar(value: int, total: int, width: int) -> str:
-    """Render a horizontal bar chart."""
     if total == 0:
         return " " * width
     filled = int((value / total) * width) if total else 0
     filled = min(filled, width)
-    bar = "\u2588" * filled + "\u2591" * (width - filled)
-    return bar
+    return "\u2588" * filled + "\u2591" * (width - filled)
 
 
 class SwarmMonitor:
@@ -112,6 +95,9 @@ class SwarmMonitor:
         self._last_update = 0.0
         self._ws_connected = False
         self._error_msg = ""
+        self._log_viewer = LogViewerOverlay(manager_url)
+        self._confirm_action: str | None = None  # "kill" or "restart"
+        self._confirm_bot_id: str | None = None
 
     async def run(self) -> None:
         self._install_terminal()
@@ -136,6 +122,7 @@ class SwarmMonitor:
             with contextlib.suppress(Exception):
                 await poll_task
         finally:
+            self._log_viewer.close()
             loop.remove_reader(self._stdin_fd)
             self._restore_terminal()
 
@@ -152,8 +139,22 @@ class SwarmMonitor:
     def _mark_dirty(self) -> None:
         self._dirty = True
 
+    def _get_selected_bot_id(self) -> str | None:
+        """Get the bot_id of the currently selected row."""
+        bots = self._get_sorted_bots()
+        if 0 <= self._selected_row < len(bots):
+            return bots[self._selected_row].get("bot_id")
+        return None
+
+    def _get_sorted_bots(self) -> list[dict]:
+        bots = self._swarm_data.get("bots", [])
+        return sorted(
+            bots,
+            key=lambda b: b.get(self._sort_key, ""),
+            reverse=self._sort_reverse,
+        )
+
     async def _ws_loop(self) -> None:
-        """Connect via WebSocket for real-time updates."""
         try:
             import websockets
         except ImportError:
@@ -175,7 +176,6 @@ class SwarmMonitor:
                             self._last_update = time.time()
                             self._dirty = True
                         except TimeoutError:
-                            # Send ping to keep alive
                             await ws.send("ping")
             except Exception:
                 self._ws_connected = False
@@ -183,7 +183,6 @@ class SwarmMonitor:
                 await asyncio.sleep(2)
 
     async def _poll_loop(self) -> None:
-        """Fallback HTTP polling when WebSocket unavailable."""
         import httpx
 
         while not self._stop:
@@ -191,8 +190,7 @@ class SwarmMonitor:
                 try:
                     async with httpx.AsyncClient() as client:
                         resp = await client.get(
-                            f"{self.manager_url}/swarm/status",
-                            timeout=5,
+                            f"{self.manager_url}/swarm/status", timeout=5,
                         )
                         if resp.status_code == 200:
                             self._swarm_data = resp.json()
@@ -208,19 +206,85 @@ class SwarmMonitor:
             return
         key = ch.decode(errors="ignore")
 
+        # Handle confirmation dialog
+        if self._confirm_action:
+            match key:
+                case "y" | "Y":
+                    bot_id = self._confirm_bot_id
+                    action = self._confirm_action
+                    self._confirm_action = None
+                    self._confirm_bot_id = None
+                    if bot_id:
+                        asyncio.create_task(self._execute_action(action, bot_id))
+                case _:
+                    self._confirm_action = None
+                    self._confirm_bot_id = None
+            self._dirty = True
+            return
+
+        # Handle log viewer keys
+        if self._log_viewer.active:
+            match key:
+                case "\x1b" | "\x1b\x1b":  # ESC
+                    self._log_viewer.close()
+                case "k" | "\x1b[A":  # up
+                    self._log_viewer.scroll_up()
+                case "j" | "\x1b[B":  # down
+                    self._log_viewer.scroll_down()
+                case "G":
+                    self._log_viewer.scroll_to_bottom()
+                case "q":
+                    self._log_viewer.close()
+            self._dirty = True
+            return
+
+        # Main view keys
         match key:
             case "q":
                 self._stop = True
-            case "j" | "\x1b[B":  # down
+            case "j" | "\x1b[B":
                 self._selected_row += 1
-            case "k" | "\x1b[A":  # up
+            case "k" | "\x1b[A":
                 self._selected_row = max(0, self._selected_row - 1)
             case "s":
                 self._cycle_sort()
             case "r":
                 self._sort_reverse = not self._sort_reverse
+            case "l" | "\r":  # l or Enter - open logs
+                bot_id = self._get_selected_bot_id()
+                if bot_id:
+                    self._log_viewer.open(bot_id)
+            case "K":  # Kill (capital K)
+                bot_id = self._get_selected_bot_id()
+                if bot_id:
+                    self._confirm_action = "kill"
+                    self._confirm_bot_id = bot_id
+            case "R":  # Restart (capital R)
+                bot_id = self._get_selected_bot_id()
+                if bot_id:
+                    self._confirm_action = "restart"
+                    self._confirm_bot_id = bot_id
             case _:
                 pass
+        self._dirty = True
+
+    async def _execute_action(self, action: str, bot_id: str) -> None:
+        """Execute a kill or restart action via HTTP."""
+        import httpx
+
+        try:
+            async with httpx.AsyncClient() as client:
+                match action:
+                    case "kill":
+                        await client.delete(
+                            f"{self.manager_url}/bot/{bot_id}", timeout=10,
+                        )
+                    case "restart":
+                        await client.post(
+                            f"{self.manager_url}/bot/{bot_id}/restart", timeout=10,
+                        )
+        except Exception:
+            pass
         self._dirty = True
 
     def _cycle_sort(self) -> None:
@@ -233,7 +297,7 @@ class SwarmMonitor:
         out: list[str] = []
         out.append(_clear())
 
-        # ── Header ──
+        # Header
         out.append(_move(1, 1))
         out.append(BG_HEADER + ANSI_BOLD + FG_CYAN)
         title = " BBSBOT SWARM MONITOR "
@@ -257,10 +321,26 @@ class SwarmMonitor:
             sys.stdout.flush()
             return
 
+        # Calculate split: if log viewer is active, table gets top 30%
+        if self._log_viewer.active:
+            table_end_row = max(8, rows * 30 // 100)
+            log_start_row = table_end_row + 1
+        else:
+            table_end_row = rows - 1  # leave room for help bar
+            log_start_row = rows
+
         row = 3
         row = self._render_summary(out, row, cols, data)
         row += 1
-        row = self._render_bot_table(out, row, cols, rows, data)
+        row = self._render_bot_table(out, row, cols, table_end_row, data)
+
+        # Log viewer overlay
+        if self._log_viewer.active:
+            out.append(self._log_viewer.render(log_start_row, rows - 1, cols))
+
+        # Confirm dialog
+        if self._confirm_action and self._confirm_bot_id:
+            out.append(self._render_confirm(rows, cols))
 
         # Help bar at bottom
         out.append(_move(rows, 1) + self._render_help_bar(cols))
@@ -279,7 +359,6 @@ class SwarmMonitor:
         turns = data.get("total_turns", 0)
         uptime = data.get("uptime_seconds", 0)
 
-        # Row 1: counts
         out.append(_move(row, 2))
         out.append(
             f"{FG_WHITE}Bots: {FG_GREEN}{running}{FG_WHITE}/{total}  "
@@ -289,7 +368,6 @@ class SwarmMonitor:
             f"{ANSI_RESET}"
         )
 
-        # Row 2: credits/turns + bar
         out.append(_move(row + 1, 2))
         bar_width = min(30, cols - 50)
         running_bar = _bar(running, max(total, 1), bar_width)
@@ -305,17 +383,10 @@ class SwarmMonitor:
     def _render_bot_table(
         self, out: list[str], row: int, cols: int, total_rows: int, data: dict
     ) -> int:
-        bots = data.get("bots", [])
+        bots = self._get_sorted_bots()
         if not bots:
             out.append(_move(row, 2) + FG_GRAY + "No bots" + ANSI_RESET)
             return row + 1
-
-        # Sort
-        bots = sorted(
-            bots,
-            key=lambda b: b.get(self._sort_key, ""),
-            reverse=self._sort_reverse,
-        )
 
         # Column widths
         id_w = max(10, min(20, max(len(b.get("bot_id", "")) for b in bots) + 2))
@@ -346,7 +417,7 @@ class SwarmMonitor:
         row += 1
 
         # Clamp selection
-        max_display = total_rows - row - 2
+        max_display = total_rows - row
         if max_display < 1:
             max_display = 1
         self._selected_row = max(0, min(self._selected_row, len(bots) - 1))
@@ -395,12 +466,37 @@ class SwarmMonitor:
 
         return row
 
-    def _render_help_bar(self, cols: int) -> str:
-        keys = (
-            f"{ANSI_BOLD}{FG_WHITE}q{ANSI_RESET}{FG_GRAY} quit  "
-            f"{ANSI_BOLD}{FG_WHITE}j/k{ANSI_RESET}{FG_GRAY} nav  "
-            f"{ANSI_BOLD}{FG_WHITE}s{ANSI_RESET}{FG_GRAY} sort:{self._sort_key}  "
-            f"{ANSI_BOLD}{FG_WHITE}r{ANSI_RESET}{FG_GRAY} reverse"
-            f"{ANSI_RESET}"
+    def _render_confirm(self, rows: int, cols: int) -> str:
+        """Render a confirmation prompt near the bottom."""
+        action = self._confirm_action or ""
+        bot_id = self._confirm_bot_id or ""
+        msg = f" {action.upper()} bot {bot_id}? [y/N] "
+        col = max(1, (cols - len(msg)) // 2)
+        return (
+            _move(rows - 2, col)
+            + BG_HEADER + ANSI_BOLD
+            + (FG_RED if action == "kill" else FG_GREEN)
+            + msg
+            + ANSI_RESET
         )
-        return BG_HEADER + keys + " " * max(cols - 60, 0) + ANSI_RESET
+
+    def _render_help_bar(self, cols: int) -> str:
+        if self._log_viewer.active:
+            keys = (
+                f"{ANSI_BOLD}{FG_WHITE}ESC{ANSI_RESET}{FG_GRAY} close  "
+                f"{ANSI_BOLD}{FG_WHITE}j/k{ANSI_RESET}{FG_GRAY} scroll  "
+                f"{ANSI_BOLD}{FG_WHITE}G{ANSI_RESET}{FG_GRAY} bottom"
+                f"{ANSI_RESET}"
+            )
+        else:
+            keys = (
+                f"{ANSI_BOLD}{FG_WHITE}q{ANSI_RESET}{FG_GRAY} quit  "
+                f"{ANSI_BOLD}{FG_WHITE}j/k{ANSI_RESET}{FG_GRAY} nav  "
+                f"{ANSI_BOLD}{FG_WHITE}l{ANSI_RESET}{FG_GRAY} logs  "
+                f"{ANSI_BOLD}{FG_WHITE}K{ANSI_RESET}{FG_GRAY} kill  "
+                f"{ANSI_BOLD}{FG_WHITE}R{ANSI_RESET}{FG_GRAY} restart  "
+                f"{ANSI_BOLD}{FG_WHITE}s{ANSI_RESET}{FG_GRAY} sort:{self._sort_key}  "
+                f"{ANSI_BOLD}{FG_WHITE}r{ANSI_RESET}{FG_GRAY} reverse"
+                f"{ANSI_RESET}"
+            )
+        return BG_HEADER + keys + " " * max(cols - 80, 0) + ANSI_RESET

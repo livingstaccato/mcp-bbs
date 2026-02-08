@@ -83,7 +83,7 @@ class TradingBot:
 
         # Error tracking
         self.error_count = 0
-        self.loop_detection = LoopDetector(threshold=3)
+        self.loop_detection = LoopDetector(threshold=10)
         self.last_prompt_id: str | None = None
 
         # Session tracking
@@ -606,7 +606,7 @@ class TradingBot:
         return await trading.execute_route(self, route, quantity, max_retries, data_dir)
 
     # I/O methods
-    async def wait_and_respond(self, prompt_id_pattern: str | None = None, timeout_ms: int = 10000):
+    async def wait_and_respond(self, prompt_id_pattern: str | None = None, timeout_ms: int = 15000):
         """Wait for prompt and return (input_type, prompt_id, screen)."""
         return await io.wait_and_respond(self, prompt_id_pattern, timeout_ms)
 

@@ -48,23 +48,43 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         bot.turns_used = turns_used
 
         # Get current state (with scan optimization)
-        try:
-            state = await bot.orient()
-        except Exception as e:
-            # Check if we're stuck in a loop
-            from bbsbot.games.tw2002 import errors
+        orient_retries = 0
+        max_orient_retries = 3
+        state = None
 
-            if "Stuck in loop" in str(e) or "loop_detected" in str(e):
-                print(f"\n⚠️  Loop detected, attempting escape...")
-                escaped = await errors.escape_loop(bot)
-                if escaped:
-                    print("  ✓ Escaped from loop, retrying orientation...")
-                    state = await bot.orient()
+        while orient_retries < max_orient_retries and state is None:
+            try:
+                state = await bot.orient()
+            except Exception as e:
+                # Check if we're stuck in a loop
+                from bbsbot.games.tw2002 import errors
+
+                if "Stuck in loop" in str(e) or "loop_detected" in str(e):
+                    print(f"\n⚠️  Loop detected, attempting escape...")
+                    escaped = await errors.escape_loop(bot)
+                    if escaped:
+                        print("  ✓ Escaped from loop, retrying orientation...")
+                        orient_retries += 1
+                        continue
+                    else:
+                        print("  ✗ Could not escape loop, skipping turn")
+                        break
+                elif isinstance(e, (TimeoutError, ConnectionError)):
+                    # Retry on network timeouts/connection errors
+                    orient_retries += 1
+                    if orient_retries < max_orient_retries:
+                        print(f"\n⚠️  Network error: {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries})...")
+                        await asyncio.sleep(1)  # Brief pause before retry
+                        continue
+                    else:
+                        print(f"✗ Max retries exceeded for network error, skipping turn")
+                        break
                 else:
-                    print("  ✗ Could not escape loop, skipping turn")
-                    continue
-            else:
-                raise
+                    raise
+
+        if state is None:
+            # Skip this turn if we couldn't get state
+            continue
 
         char_state.update_from_game_state(state)
 
@@ -126,77 +146,78 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         profit = 0
         success = True
 
-        # Execute action
-        if action == TradeAction.TRADE:
-            opportunity = params.get("opportunity")
-            trade_action = params.get("action")  # "buy" or "sell" for pair trading
-            commodity = opportunity.commodity if opportunity else params.get("commodity")
+        # Execute action with error recovery
+        try:
+            if action == TradeAction.TRADE:
+                opportunity = params.get("opportunity")
+                trade_action = params.get("action")  # "buy" or "sell" for pair trading
+                commodity = opportunity.commodity if opportunity else params.get("commodity")
 
-            if commodity:
-                print(f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})")
-                profit = await execute_port_trade(bot, commodity=commodity)
-                if profit != 0:
-                    char_state.record_trade(profit)
-                    print(f"  Result: {profit:+,} credits")
+                if commodity:
+                    print(f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})")
+                    profit = await execute_port_trade(bot, commodity=commodity)
+                    if profit != 0:
+                        char_state.record_trade(profit)
+                        print(f"  Result: {profit:+,} credits")
+                    else:
+                        print(f"  No trade executed")
+                        success = False
                 else:
-                    print(f"  No trade executed")
-                    success = False
-            else:
-                print(f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})")
-                profit = await execute_port_trade(bot, commodity=None)
-                if profit != 0:
-                    char_state.record_trade(profit)
-                    print(f"  Result: {profit:+,} credits")
-                else:
-                    print(f"  No trade executed")
-                    success = False
+                    print(f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})")
+                    profit = await execute_port_trade(bot, commodity=None)
+                    if profit != 0:
+                        char_state.record_trade(profit)
+                        print(f"  Result: {profit:+,} credits")
+                    else:
+                        print(f"  No trade executed")
+                        success = False
 
-        elif action == TradeAction.MOVE:
-            target = params.get("target_sector")
-            path = params.get("path")
-            from_sector = state.sector
-            if path and len(path) > 1:
-                print(f"  Navigating: {' -> '.join(str(s) for s in path)}")
-                success = await warp_along_path(bot, path)
-            elif target:
-                print(f"  Moving to sector {target}")
-                success = await warp_to_sector(bot, target)
+            elif action == TradeAction.MOVE:
+                target = params.get("target_sector")
+                path = params.get("path")
+                from_sector = state.sector
+                if path and len(path) > 1:
+                    print(f"  Navigating: {' -> '.join(str(s) for s in path)}")
+                    success = await warp_along_path(bot, path)
+                elif target:
+                    print(f"  Moving to sector {target}")
+                    success = await warp_to_sector(bot, target)
 
-        elif action == TradeAction.EXPLORE:
-            direction = params.get("direction")
-            from_sector = state.sector
-            if direction:
-                print(f"  Exploring sector {direction}")
-                success = await warp_to_sector(bot, direction)
+            elif action == TradeAction.EXPLORE:
+                direction = params.get("direction")
+                from_sector = state.sector
+                if direction:
+                    print(f"  Exploring sector {direction}")
+                    success = await warp_to_sector(bot, direction)
 
-        elif action == TradeAction.BANK:
-            print("  Banking credits...")
-            try:
+            elif action == TradeAction.BANK:
+                print("  Banking credits...")
                 result = await bot.banking.deposit(bot, state)
                 if result.success:
                     print(f"  Deposited {result.deposited:,}")
-            except Exception as e:
-                print(f"  Banking failed: {e}")
 
-        elif action == TradeAction.UPGRADE:
-            upgrade_type = params.get("upgrade_type")
-            print(f"  Upgrading: {upgrade_type} (not yet implemented)")
+            elif action == TradeAction.UPGRADE:
+                upgrade_type = params.get("upgrade_type")
+                print(f"  Upgrading: {upgrade_type} (not yet implemented)")
 
-        elif action == TradeAction.RETREAT:
-            safe_sector = params.get("safe_sector")
-            if safe_sector:
-                print(f"  Retreating to sector {safe_sector}")
-                await warp_to_sector(bot, safe_sector)
+            elif action == TradeAction.RETREAT:
+                safe_sector = params.get("safe_sector")
+                if safe_sector:
+                    print(f"  Retreating to sector {safe_sector}")
+                    await warp_to_sector(bot, safe_sector)
 
-        elif action == TradeAction.WAIT:
-            print("  No action available, exploring randomly")
-            if state.warps:
-                target = random.choice(state.warps)
-                await warp_to_sector(bot, target)
+            elif action == TradeAction.WAIT:
+                print("  No action available, exploring randomly")
+                if state.warps:
+                    target = random.choice(state.warps)
+                    await warp_to_sector(bot, target)
 
-        elif action == TradeAction.DONE:
-            print("  Strategy complete")
-            break
+            elif action == TradeAction.DONE:
+                print("  Strategy complete")
+                break
+        except Exception as e:
+            print(f"  ⚠️  Action failed: {type(e).__name__}: {e}")
+            success = False
 
         result = TradeResult(
             success=success,

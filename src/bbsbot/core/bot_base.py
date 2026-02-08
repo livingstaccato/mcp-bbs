@@ -53,7 +53,7 @@ class BotBase:
         # Loop detection (legacy - new bots should use LoopDetector directly)
         self.loop_detection: dict[str, int] = {}
         self.last_prompt_id: str | None = None
-        self.stuck_threshold = 3
+        self.stuck_threshold = 10  # Increased from 3 to allow legitimate repeated prompts
 
         # Session tracking
         self.session_start_time = time.time()
