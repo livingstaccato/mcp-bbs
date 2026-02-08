@@ -73,8 +73,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     # Retry on network timeouts/connection errors
                     orient_retries += 1
                     if orient_retries < max_orient_retries:
-                        print(f"\n⚠️  Network error: {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries})...")
-                        await asyncio.sleep(1)  # Brief pause before retry
+                        # Exponential backoff: 1s, 2s, 3s (gives BBS more time to recover)
+                        backoff_s = orient_retries
+                        print(f"\n⚠️  Network error: {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries}) in {backoff_s}s...")
+                        await asyncio.sleep(backoff_s)
                         continue
                     else:
                         print(f"✗ Max retries exceeded for network error, skipping turn")

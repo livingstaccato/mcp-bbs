@@ -957,7 +957,7 @@ async def _wait_for_screen_stability(
     bot: TradingBot,
     stability_ms: int = 100,
     max_wait_ms: int = 2000,
-    read_interval_ms: int = 50,
+    read_interval_ms: int = 500,
 ) -> str:
     """Wait until screen content stops changing (handles baud rate rendering).
 
@@ -968,7 +968,7 @@ async def _wait_for_screen_stability(
         bot: TradingBot instance
         stability_ms: How long screen must be unchanged to be considered stable
         max_wait_ms: Maximum total time to wait
-        read_interval_ms: How often to poll the screen
+        read_interval_ms: How often to poll the screen (default 500ms to avoid tight loops)
 
     Returns:
         Stable screen content
