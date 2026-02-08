@@ -60,19 +60,33 @@ class WorkerBot(TradingBot):
             if credits == 0 and self.game_state and self.game_state.credits:
                 credits = self.game_state.credits
 
+            # Determine turns_max from config if available
+            turns_max = getattr(self.config, 'session', {})
+            if hasattr(turns_max, 'max_turns_per_session'):
+                turns_max = turns_max.max_turns_per_session
+            else:
+                turns_max = 500  # Default fallback
+
             # Map game context to human-readable activity
-            activity = "IDLE"
+            activity = "INITIALIZING"
             if self.game_state:
                 context = getattr(self.game_state, "context", None)
                 if context:
                     if context == "combat":
                         activity = "BATTLING"
-                    elif context in ("port_trading", "bank", "ship_shop"):
+                    elif context in ("port_trading", "bank", "ship_shop", "port_menu"):
                         activity = "TRADING"
-                    elif context in ("navigation", "warp"):
+                    elif context in ("navigation", "warp", "sector_command", "planet_command", "citadel_command"):
                         activity = "EXPLORING"
                     else:
                         activity = context.upper()
+                else:
+                    # game_state exists but context is None - likely during login
+                    activity = "CONNECTING"
+            else:
+                # No game_state yet - check if we have a session
+                if hasattr(self, 'session') and self.session:
+                    activity = "LOGGING_IN"
 
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",
@@ -80,6 +94,7 @@ class WorkerBot(TradingBot):
                     "sector": self.current_sector or 0,
                     "credits": credits,
                     "turns_executed": self.turns_used,
+                    "turns_max": turns_max,
                     "state": "running",
                     "last_action": self.current_action,
                     "last_action_time": self.current_action_time,

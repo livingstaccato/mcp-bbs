@@ -106,6 +106,8 @@ async def update_status(bot_id: str, update: dict):
         bot.credits = update["credits"]
     if "turns_executed" in update:
         bot.turns_executed = update["turns_executed"]
+    if "turns_max" in update:
+        bot.turns_max = update["turns_max"]
     if "state" in update:
         bot.state = update["state"]
     if "last_action" in update:

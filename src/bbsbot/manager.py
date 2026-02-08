@@ -37,6 +37,7 @@ class BotStatus:
     sector: int = 0
     credits: int = 0
     turns_executed: int = 0
+    turns_max: int = 500  # Max turns for this session
     uptime_seconds: float = 0
     last_update_time: float = field(default_factory=time.time)
     error_message: str | None = None

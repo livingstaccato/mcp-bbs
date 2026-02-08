@@ -109,13 +109,16 @@
           stateHtml += ` <span class="error-badge" title="Error: ${esc(b.error_type)}" onclick="window._openErrorModal('${esc(b.bot_id)}')">!</span>`;
         }
 
+        const turns_max = b.turns_max || 500;
+        const turnsDisplay = `${b.turns_executed} / ${turns_max}`;
+
         return `<tr>
         <td>${esc(b.bot_id)}</td>
         <td>${stateHtml}</td>
         <td>${activityHtml}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${formatCredits(b.credits)}</td>
-        <td class="numeric">${b.turns_executed}</td>
+        <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td>${esc(b.config || "")}</td>
         <td class="actions">
           <button class="btn logs" onclick="window._openLogs('${esc(b.bot_id)}')">Logs</button>
