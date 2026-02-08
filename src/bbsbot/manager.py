@@ -175,7 +175,8 @@ class SwarmManager:
                 bot_ids.append(bot_id)
             except Exception as e:
                 logger.error(f"Failed to spawn bot {i} with {config}: {e}")
-            await asyncio.sleep(0.5)
+            # Increased spawn interval from 0.5s to 2s to reduce server load
+            await asyncio.sleep(2.0)
         return bot_ids
 
     async def kill_bot(self, bot_id: str) -> None:

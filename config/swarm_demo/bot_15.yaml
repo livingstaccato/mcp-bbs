@@ -1,17 +1,17 @@
-connection:
-  host: localhost
-  port: 2002
-  game_letter: B
-trading:
-  strategy: opportunistic
-  opportunistic:
-    explore_chance: 0.6
-    max_wander_without_trade: 5
-session:
-  max_turns_per_session: 500
-  target_credits: 500000
 banking:
   enabled: true
   min_credits_to_bank: 25000
+connection:
+  game_letter: B
+  host: localhost
+  port: 2002
+session:
+  max_turns_per_session: 500
+  target_credits: 500000
+trading:
+  opportunistic:
+    explore_chance: 0.6
+    max_wander_without_trade: 5
+  strategy: opportunistic
 upgrades:
   enabled: false

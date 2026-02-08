@@ -373,10 +373,11 @@ async def login_sequence(
         step += 1
         try:
             # Game loading takes 11+ seconds, need longer timeout
+            # Increased to 30s to handle server load during swarm spawning
             # During character creation, ignore loop detection for ship/planet names
             ignore_loop = {"prompt.ship_name", "prompt.planet_name"}
             input_type, prompt_id, screen, phase3_kv_data = await wait_and_respond(
-                bot, timeout_ms=20000, ignore_loop_for=ignore_loop
+                bot, timeout_ms=30000, ignore_loop_for=ignore_loop
             )
             # Always update kv_data from Phase 3 responses
             if phase3_kv_data:
@@ -504,14 +505,15 @@ async def login_sequence(
 
         elif actual_prompt == "menu_selection":
             menu_reentries += 1
-            if menu_reentries > 6:
+            if menu_reentries > 20:
                 raise RuntimeError(
                     f"Returned to game menu {menu_reentries} times - "
                     f"likely wrong game password for game {game_letter}"
                 )
             print(f"      → At menu, selecting game {game_letter} (re-entry #{menu_reentries})")
             await bot.session.send(game_letter)
-            await asyncio.sleep(0.3)
+            # Increase delay between retries to avoid overwhelming server
+            await asyncio.sleep(0.5 if menu_reentries <= 3 else 1.0)
 
         elif actual_prompt in ("any_key", "pause"):
             print("      → Pressing space to continue")
