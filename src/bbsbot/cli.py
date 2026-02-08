@@ -25,6 +25,7 @@ def cli() -> None:
 @click.option("--watch-clear/--no-watch-clear", default=False, show_default=True)
 @click.option("--watch-metadata/--no-watch-metadata", default=False, show_default=True)
 @click.option("--watch-include-text/--no-watch-include-text", default=False, show_default=True)
+@click.option("--game", type=str, default=None, help="Filter MCP tools to specific game (e.g., 'tw2002'). If not provided, all tools are exposed.")
 def serve(
     watch_socket: bool,
     watch_host: str,
@@ -33,8 +34,16 @@ def serve(
     watch_clear: bool,
     watch_metadata: bool,
     watch_include_text: bool,
+    game: str | None,
 ) -> None:
-    """Run the FastMCP server (stdio transport)."""
+    """Run the FastMCP server (stdio transport).
+
+    By default, exposes all game and BBS tools. Use --game to filter to a specific game.
+
+    Examples:
+        bbsbot serve                 # All tools
+        bbsbot serve --game tw2002   # Only TW2002 tools
+    """
     if watch_socket:
         from bbsbot.watch import watch_settings
 
@@ -46,7 +55,7 @@ def serve(
         watch_settings.metadata = watch_metadata
         watch_settings.include_snapshot_text = watch_include_text
 
-    app = create_app(Settings())
+    app = create_app(Settings(), game_filter=game)
     app.run()
 
 
@@ -169,6 +178,18 @@ def script(name: str, args: tuple[str, ...]) -> None:
 @cli.group("tw2002")
 def tw2002_group() -> None:
     """Trade Wars 2002 commands."""
+
+
+@tw2002_group.command("mcp")
+def tw2002_mcp_serve() -> None:
+    """Start MCP server for TW2002 only.
+
+    Equivalent to: bbsbot serve --game tw2002
+
+    This command automatically filters tools to TW2002-specific operations.
+    """
+    app = create_app(Settings(), game_filter="tw2002")
+    app.run()
 
 
 @tw2002_group.command("check")

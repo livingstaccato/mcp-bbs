@@ -303,3 +303,48 @@ async def get_bot_status() -> dict[str, Any]:
     }
 
     return result
+
+
+@registry.tool()
+async def debug(command: str, **kwargs: Any) -> dict[str, Any]:
+    """Debug proxy that delegates to BBS debugging tools.
+
+    This is a convenience wrapper around bbs_debug_* tools that provides
+    game-aware defaults and simplified API.
+
+    Args:
+        command: Debug command to run. Options:
+            - 'bot_state': Get bot runtime state
+            - 'learning_state': Get learning engine state
+            - 'llm_stats': Get LLM usage statistics
+            - 'session_events': Query recent session events
+        **kwargs: Additional arguments passed to underlying tool
+
+    Returns:
+        Result from underlying debug tool
+
+    Examples:
+        await tw2002_debug(command='bot_state')
+        await tw2002_debug(command='session_events', limit=10)
+    """
+    from bbsbot.mcp.server import (
+        bbs_debug_bot_state,
+        bbs_debug_learning_state,
+        bbs_debug_llm_stats,
+        bbs_debug_session_events,
+    )
+
+    match command:
+        case "bot_state":
+            return await bbs_debug_bot_state(**kwargs)
+        case "learning_state":
+            return await bbs_debug_learning_state(**kwargs)
+        case "llm_stats":
+            return await bbs_debug_llm_stats(**kwargs)
+        case "session_events":
+            return await bbs_debug_session_events(**kwargs)
+        case _:
+            raise ValueError(
+                f"Unknown command: {command}. "
+                f"Valid options: bot_state, learning_state, llm_stats, session_events"
+            )

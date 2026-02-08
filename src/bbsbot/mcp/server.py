@@ -24,13 +24,20 @@ configure_logging()
 log = get_logger(__name__)
 
 
-def _register_game_tools(mcp_app: FastMCP) -> None:
+def _register_game_tools(mcp_app: FastMCP, game_filter: str | None = None) -> None:
     """Register game-specific MCP tools.
 
     Imports and registers tools from game modules. Each game can
     define its own tools with custom prefixes (e.g., tw2002_, tedit_).
+
+    Args:
+        mcp_app: FastMCP application to register tools with
+        game_filter: If provided, only register tools with matching prefix
+                    (e.g., 'tw2002' registers only tw2002_* tools)
     """
     try:
+        from fastmcp.tools.tool import FunctionTool
+
         # Import TW2002 tools (triggers registration)
         from bbsbot.games.tw2002 import mcp_tools as tw2002_tools
         from bbsbot.mcp.registry import get_manager
@@ -39,12 +46,26 @@ def _register_game_tools(mcp_app: FastMCP) -> None:
         manager = get_manager()
         all_tools = manager.get_all_tools()
 
-        # Add each tool to the MCP app
+        # Add each tool to the MCP app, optionally filtering by game
+        added_count = 0
         for tool_name, tool_func in all_tools.items():
-            mcp_app.add_tool(tool_func, name=tool_name)
-            log.debug(f"mcp_game_tool_added: {tool_name}")
+            # Apply game filter if provided
+            if game_filter:
+                expected_prefix = f"{game_filter}_"
+                if not tool_name.startswith(expected_prefix):
+                    continue  # Skip tools that don't match filter
 
-        log.info(f"mcp_game_tools_registered: {len(all_tools)} tools from {len(manager.list_registries())} games")
+            # Convert raw function from registry to FunctionTool
+            # so FastMCP can work with it
+            tool = FunctionTool.from_function(tool_func, name=tool_name)
+            mcp_app.add_tool(tool)
+            log.debug(f"mcp_game_tool_added: {tool_name}")
+            added_count += 1
+
+        if game_filter:
+            log.info(f"mcp_game_tools_registered: {added_count} tools for game '{game_filter}'")
+        else:
+            log.info(f"mcp_game_tools_registered: {added_count} tools from {len(manager.list_registries())} games")
 
     except Exception as e:
         log.warning(f"mcp_game_tools_registration_failed: {e}")
@@ -96,13 +117,18 @@ _active_session_id: str | None = None
 KNOWLEDGE_ROOT: Path | None = None
 
 
-def create_app(settings: Settings) -> FastMCP:
-    """Configure globals and return the FastMCP app."""
+def create_app(settings: Settings, game_filter: str | None = None) -> FastMCP:
+    """Configure globals and return the FastMCP app.
+
+    Args:
+        settings: Application settings
+        game_filter: If provided, only register tools for this game
+    """
     global KNOWLEDGE_ROOT
     KNOWLEDGE_ROOT = validate_knowledge_root(settings.knowledge_root)
 
-    # Register game-specific tools
-    _register_game_tools(app)
+    # Register game-specific tools with optional filter
+    _register_game_tools(app, game_filter=game_filter)
 
     return app
 
