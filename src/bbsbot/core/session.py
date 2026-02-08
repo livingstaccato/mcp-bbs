@@ -201,6 +201,10 @@ class Session(BaseModel):
             except Exception:
                 continue
 
+    def get_screen(self) -> str:
+        """Return current emulator screen content without any I/O wait."""
+        return self.emulator.get_snapshot().get("screen", "")
+
     def is_awaiting_read(self) -> bool:
         """Return True if a send occurred without a subsequent read."""
         return self._awaiting_read

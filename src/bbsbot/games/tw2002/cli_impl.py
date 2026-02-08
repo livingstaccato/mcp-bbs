@@ -46,6 +46,11 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     goal_status_display: GoalStatusDisplay | None = None
 
     while turns_used < max_turns:
+        # Allow the Swarm Dashboard to pause automation while hijacked.
+        await_if_hijacked = getattr(bot, "await_if_hijacked", None)
+        if callable(await_if_hijacked):
+            await await_if_hijacked()
+
         turns_used += 1
         bot.turns_used = turns_used
 
@@ -75,7 +80,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     # Retry on network timeouts, connection errors, and orientation failures
                     orient_retries += 1
                     if orient_retries < max_orient_retries:
-                        backoff_s = orient_retries
+                        backoff_s = orient_retries * 0.5
                         print(f"\n⚠️  {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries}) in {backoff_s}s...")
                         await asyncio.sleep(backoff_s)
                         continue
@@ -88,7 +93,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         if state is None:
             # Track consecutive orient failures for clean exit on dead connections
             consecutive_orient_failures += 1
-            if consecutive_orient_failures >= 5:
+            if consecutive_orient_failures >= 10:
                 if hasattr(bot, 'session') and hasattr(bot.session, 'is_connected') and not bot.session.is_connected():
                     print(f"\n✗ Connection lost after {consecutive_orient_failures} consecutive orientation failures")
                     break
@@ -166,6 +171,11 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         print(f"  Strategy: {action.name}")
 
+        # Log AI reasoning to bot action feed and dashboard activity
+        ai_reasoning = None
+        if hasattr(strategy, '_last_reasoning') and strategy._last_reasoning:
+            ai_reasoning = strategy._last_reasoning
+
         profit = 0
         success = True
 
@@ -174,9 +184,24 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         if hasattr(bot, 'log_action'):
             bot.current_action = action.name
             bot.current_action_time = time.time()
+            # Log AI decision with reasoning
+            if ai_reasoning:
+                bot.log_action(
+                    action=f"AI:{action.name}",
+                    sector=state.sector,
+                    details=ai_reasoning[:200],
+                    result="pending",
+                )
+                # Set activity context with AI reasoning for dashboard
+                bot.ai_activity = f"AI: {action.name} ({ai_reasoning[:80]})"
 
         # Execute action with error recovery
         try:
+            # Pause again right before acting (lets hijack take effect between planning and acting).
+            await_if_hijacked2 = getattr(bot, "await_if_hijacked", None)
+            if callable(await_if_hijacked2):
+                await await_if_hijacked2()
+
             if action == TradeAction.TRADE:
                 opportunity = params.get("opportunity")
                 trade_action = params.get("action")  # "buy" or "sell" for pair trading

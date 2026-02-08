@@ -92,9 +92,7 @@ async def spawn_batch(request: SpawnBatchRequest):
 @router.get("/swarm/status")
 async def status():
     assert _manager is not None
-    from dataclasses import asdict
-
-    return asdict(_manager.get_swarm_status())
+    return _manager.get_swarm_status().model_dump()
 
 
 @router.post("/swarm/kill-all")
@@ -131,13 +129,11 @@ async def clear_swarm():
 @router.get("/bot/{bot_id}/status")
 async def bot_status(bot_id: str):
     assert _manager is not None
-    from dataclasses import asdict
-
     if bot_id not in _manager.bots:
         return JSONResponse(
             {"error": f"Bot {bot_id} not found"}, status_code=404
         )
-    return asdict(_manager.bots[bot_id])
+    return _manager.bots[bot_id].model_dump()
 
 
 @router.post("/bot/{bot_id}/status")

@@ -3,6 +3,8 @@
 Converts game state into effective LLM prompts.
 """
 
+from __future__ import annotations
+
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.llm.types import ChatMessage
 
@@ -22,16 +24,14 @@ ACTIONS:
 - BANK: Deposit credits
 - UPGRADE: Buy ship improvements
 - RETREAT: Flee from danger
-- WAIT: Do nothing
+- WAIT: Do nothing (use sparingly)
 - DONE: Stop playing
 
-Respond in JSON format:
-{
-  "action": "TRADE|MOVE|EXPLORE|BANK|UPGRADE|RETREAT|WAIT|DONE",
-  "reasoning": "brief explanation",
-  "confidence": 0.0-1.0,
-  "parameters": {...}
-}
+IMPORTANT: You MUST respond with ONLY a JSON object. No other text before or after.
+Do NOT include explanations, markdown, or code blocks. Just raw JSON.
+
+Example response:
+{"action": "TRADE", "reasoning": "Port sells equipment cheaply, good profit opportunity", "confidence": 0.85, "parameters": {"commodity": "equipment"}}
 
 Parameter formats:
 - TRADE: {"commodity": "fuel_ore|organics|equipment"}
@@ -54,6 +54,7 @@ class PromptBuilder:
         stats: dict,
         goal_description: str | None = None,
         goal_instructions: str | None = None,
+        stuck_action: str | None = None,
     ) -> list[ChatMessage]:
         """Build chat messages for LLM.
 
@@ -63,6 +64,7 @@ class PromptBuilder:
             stats: Strategy statistics
             goal_description: Current goal description
             goal_instructions: Current goal instructions
+            stuck_action: If set, the action the LLM has been repeating
 
         Returns:
             List of chat messages (system + user)
@@ -78,6 +80,13 @@ CURRENT GOAL: {goal_description}
             system_prompt = f"{SYSTEM_PROMPT_BASE}\n\nYour goal is to maximize profit per turn while managing risk."
 
         user_prompt = self._build_user_prompt(state, knowledge, stats)
+
+        # Inject stuck hint if the LLM keeps repeating the same action
+        if stuck_action:
+            user_prompt += (
+                f"\n\nWARNING: Your last 3 actions were all {stuck_action}. "
+                f"You MUST choose a DIFFERENT action this time."
+            )
 
         return [
             ChatMessage(role="system", content=system_prompt),

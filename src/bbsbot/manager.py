@@ -10,7 +10,7 @@ import asyncio
 import json
 import subprocess
 import time
-from dataclasses import asdict, dataclass, field
+from pydantic import BaseModel, Field
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from bbsbot.api import log_routes, swarm_routes
+from bbsbot.api import term_routes
 from bbsbot.defaults import MANAGER_HOST, MANAGER_PORT
 from bbsbot.log_service import LogService
 from bbsbot.logging import get_logger
@@ -26,8 +27,7 @@ from bbsbot.logging import get_logger
 logger = get_logger(__name__)
 
 
-@dataclass
-class BotStatus:
+class BotStatus(BaseModel):
     """Status of a single bot instance."""
 
     bot_id: str
@@ -39,7 +39,7 @@ class BotStatus:
     turns_executed: int = 0
     turns_max: int = 500  # Max turns for this session
     uptime_seconds: float = 0
-    last_update_time: float = field(default_factory=time.time)
+    last_update_time: float = Field(default_factory=time.time)
     error_message: str | None = None
     # Activity tracking
     last_action: str | None = None        # "TRADING", "EXPLORING", "BATTLING", etc
@@ -50,7 +50,7 @@ class BotStatus:
     error_timestamp: float | None = None  # When error occurred
     exit_reason: str | None = None        # "target_reached", "out_of_turns", "login_failed", etc
     # Action feed (last 10 actions)
-    recent_actions: list[dict] = field(default_factory=list)
+    recent_actions: list[dict] = Field(default_factory=list)
     # Character/game info for dashboard display
     username: str | None = None          # Character name
     ship_name: str | None = None         # Current ship name
@@ -58,8 +58,7 @@ class BotStatus:
     port_location: int | None = None     # Current port sector
 
 
-@dataclass
-class SwarmStatus:
+class SwarmStatus(BaseModel):
     """Overall swarm status."""
 
     total_bots: int
@@ -121,6 +120,7 @@ class SwarmManager:
         """Setup FastAPI routes via sub-routers and WebSocket."""
         self.app.include_router(swarm_routes.setup(self))
         self.app.include_router(log_routes.setup(self.log_service))
+        self.app.include_router(term_routes.setup(self))
 
         @self.app.websocket("/ws/swarm")
         async def websocket_endpoint(websocket: WebSocket):
@@ -272,12 +272,12 @@ class SwarmManager:
             total_bots=len(bots),
             running=sum(1 for b in bots if b.state == "running"),
             completed=sum(1 for b in bots if b.state == "completed"),
-            errors=sum(1 for b in bots if b.state == "error"),
+            errors=sum(1 for b in bots if b.state in ("error", "disconnected")),
             stopped=sum(1 for b in bots if b.state == "stopped"),
             total_credits=sum(b.credits for b in bots),
             total_turns=sum(b.turns_executed for b in bots),
             uptime_seconds=time.time() - self.start_time,
-            bots=[asdict(b) for b in bots],
+            bots=[b.model_dump() for b in bots],
         )
 
     async def _monitor_processes(self) -> None:
@@ -317,7 +317,7 @@ class SwarmManager:
     async def _broadcast_status(self) -> None:
         """Broadcast status to all connected WebSocket clients."""
         status = self.get_swarm_status()
-        message = json.dumps(asdict(status))
+        message = json.dumps(status.model_dump())
 
         disconnected = set()
         for client in self.websocket_clients:
@@ -333,7 +333,7 @@ class SwarmManager:
         state = {
             "timestamp": time.time(),
             "bots": {
-                bot_id: asdict(bot)
+                bot_id: bot.model_dump()
                 for bot_id, bot in self.bots.items()
             },
         }
@@ -350,12 +350,18 @@ class SwarmManager:
                 # Load bots from previous state
                 for bot_id, bot_data in state.get("bots", {}).items():
                     if bot_id not in self.bots:
+                        # Loaded bots have no process handle - if they were
+                        # "running" before the manager crashed, mark them
+                        # "stopped" since we can't verify their actual state.
+                        saved_state = bot_data.get("state", "stopped")
+                        if saved_state in ("running", "disconnected"):
+                            saved_state = "stopped"
                         # Reconstruct BotStatus from saved data
                         self.bots[bot_id] = BotStatus(
                             bot_id=bot_data.get("bot_id", bot_id),
                             pid=bot_data.get("pid", 0),
                             config=bot_data.get("config", ""),
-                            state=bot_data.get("state", "stopped"),
+                            state=saved_state,
                             sector=bot_data.get("sector", 0),
                             credits=bot_data.get("credits", 0),
                             turns_executed=bot_data.get("turns_executed", 0),

@@ -558,27 +558,47 @@ class QuickState(BaseModel):
         return f"[{self.context}] {loc}"
 
 
-async def where_am_i(bot: "TradingBot", timeout_ms: int = 500) -> QuickState:
+async def where_am_i(bot: "TradingBot", timeout_ms: int = 50) -> QuickState:
     """Fast state check - quickly determine where we are.
 
-    This is the FAST "where am I" function. It reads the screen once,
-    detects context, and returns immediately. Use this when you need
-    to quickly check state without full orientation.
+    This is the FAST "where am I" function. It checks the current screen
+    buffer first (instant, no I/O), only doing a read if the buffer is empty.
 
     For full state gathering, use orient() instead.
 
     Args:
         bot: TradingBot instance
-        timeout_ms: Max time to wait for screen data
+        timeout_ms: Max time to wait for screen data (only used if buffer is empty)
 
     Returns:
         QuickState with context and basic info
     """
     try:
-        result = await bot.session.read(timeout_ms=timeout_ms, max_bytes=8192)
-        screen = result.get("screen", "")
-        prompt_detected = result.get("prompt_detected", {})
-        prompt_id = prompt_detected.get("prompt_id", "")
+        # Try instant screen buffer first (no I/O wait)
+        screen = ""
+        prompt_id = ""
+        if hasattr(bot.session, 'get_screen'):
+            screen = bot.session.get_screen()
+        if screen.strip():
+            # TCP health probe: verify connection is alive (not just stale buffer)
+            try:
+                result = await bot.session.read(timeout_ms=10, max_bytes=1024)
+                # If we got new data, use the updated screen
+                new_screen = result.get("screen", "")
+                if new_screen.strip():
+                    screen = new_screen
+                prompt_detected = result.get("prompt_detected", {})
+                prompt_id = prompt_detected.get("prompt_id", "")
+            except ConnectionError:
+                raise  # Dead connection
+            except Exception:
+                pass  # Timeout is fine - connection alive, buffer valid
+        else:
+            # Buffer empty - must do a blocking read
+            result = await bot.session.read(timeout_ms=timeout_ms, max_bytes=8192)
+            screen = result.get("screen", "")
+            prompt_detected = result.get("prompt_detected", {})
+            prompt_id = prompt_detected.get("prompt_id", "")
     except Exception:
         return QuickState(context="unknown", suggested_action="reconnect")
 
@@ -962,7 +982,7 @@ async def _wait_for_screen_stability(
     bot: TradingBot,
     stability_ms: int = 100,
     max_wait_ms: int = 2000,
-    read_interval_ms: int = 500,
+    read_interval_ms: int = 100,
 ) -> str:
     """Wait until screen content stops changing (handles baud rate rendering).
 
@@ -978,6 +998,21 @@ async def _wait_for_screen_stability(
     Returns:
         Stable screen content
     """
+    # Fast check: if screen buffer already has content, do a quick TCP probe
+    # then return. The probe ensures dead connections are detected early instead
+    # of returning stale buffer data.
+    if hasattr(bot.session, 'get_screen'):
+        screen = bot.session.get_screen()
+        if screen.strip():
+            # TCP health probe: quick non-blocking read to verify connection is alive
+            try:
+                await bot.session.read(timeout_ms=10, max_bytes=1024)
+            except ConnectionError:
+                raise  # Dead connection - propagate immediately
+            except Exception:
+                pass  # Timeout is fine - connection is alive
+            return screen
+
     last_screen = ""
     last_change_time = time()
     start_time = time()
@@ -1002,9 +1037,18 @@ async def _wait_for_screen_stability(
             if stable_ms >= stability_ms and last_screen.strip():
                 break
 
-        await asyncio.sleep(read_interval_ms / 1000)
+        # Only sleep between polls if screen is still changing
+        # (avoid wasting 500ms when screen is already stable but empty)
+        await asyncio.sleep(0.05)
 
     return last_screen
+
+
+def _set_orient_progress(bot: TradingBot, step: int, max_steps: int, phase: str) -> None:
+    """Update orient progress on bot for dashboard visibility."""
+    bot._orient_step = step
+    bot._orient_max = max_steps
+    bot._orient_phase = phase
 
 
 async def _reach_safe_state(
@@ -1034,6 +1078,8 @@ async def _reach_safe_state(
     consecutive_blank = 0
 
     for attempt in range(max_attempts):
+        _set_orient_progress(bot, attempt + 1, max_attempts, "safe_state")
+
         # Wait for screen to stabilize (handles baud rate rendering)
         try:
             screen = await _wait_for_screen_stability(
@@ -1049,16 +1095,19 @@ async def _reach_safe_state(
         # Blank screen handling: progressive wake-up keys
         if not screen.strip():
             consecutive_blank += 1
+            _set_orient_progress(bot, attempt + 1, max_attempts, "blank_wake")
             # After 3 blank screens, check if connection is dead
             if consecutive_blank >= 3 and hasattr(bot, 'session') and hasattr(bot.session, 'is_connected'):
                 if not bot.session.is_connected():
                     raise ConnectionError("Session disconnected during orientation (blank screen)")
-            wake_keys = [" ", "\r", "?", "\x1b", "?\r", "\x7f"]
+            # SAFE keys only - no Enter/CR which could confirm trades or trigger warps
+            # NUL first: true no-op but proves TCP socket is alive
+            wake_keys = ["\x00", " ", "\x1b", "?", " ", "\x7f"]
             if attempt < len(wake_keys):
                 key = wake_keys[attempt]
                 print(f"  [Orient] Blank screen, wake key {repr(key)} ({attempt + 1}/{max_attempts})...")
                 await bot.session.send(key)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.2)
                 continue
         else:
             consecutive_blank = 0
@@ -1067,26 +1116,26 @@ async def _reach_safe_state(
         context = _detect_context(screen)
 
         if context in ("sector_command", "citadel_command"):
+            _set_orient_progress(bot, 0, 0, "")
             print(f"  [Orient] Safe state reached: {context}")
             return context, "", screen
 
         if context == "planet_command":
-            # On planet citadel - quit back to sector with 'Q'
             print(f"  [Orient] On planet citadel, pressing Q to return to space...")
             await bot.session.send("Q")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.2)
             continue
 
         if context == "pause":
             print(f"  [Orient] Dismissing pause screen...")
             await bot.session.send(" ")
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.15)
             continue
 
         if context in ("menu", "port_menu"):
             print(f"  [Orient] In {context}, sending Q to back out...")
             await bot.session.send("Q")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.2)
             continue
 
         # Unknown or unrecognized - try gentle escape
@@ -1095,8 +1144,9 @@ async def _reach_safe_state(
             key_name = repr(key).replace("'", "")
             print(f"  [Orient] State '{context}', trying {key_name} ({attempt + 1}/{max_attempts})...")
             await bot.session.send(key)
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.15)
 
+    _set_orient_progress(bot, 0, 0, "failed")
     raise OrientationError(
         f"Failed to reach safe state after {max_attempts} attempts",
         screen=last_screen,
@@ -1144,7 +1194,7 @@ async def _gather_state(
         from bbsbot.games.tw2002.io import wait_and_respond
         try:
             # Quick read to get semantic extraction without changing screen
-            result = await bot.session.read(timeout_ms=100, max_bytes=1024)
+            result = await bot.session.read(timeout_ms=10, max_bytes=1024)
             kv_data = result.get("kv_data", {})
             if kv_data.get('credits'):
                 print(f"  [Orient] Extracted semantic data: credits={kv_data.get('credits')}")
@@ -1167,7 +1217,7 @@ async def _gather_state(
     # Send 'D' for full display
     print(f"  [Orient] Sending D for full status...")
     await bot.session.send("D")
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(0.1)
 
     # Read display output
     # Use longer timeout for heavily loaded servers (match login timeout)
@@ -1285,19 +1335,27 @@ async def orient(
     Raises:
         OrientationError if unable to establish safe state
     """
+    t0 = time()
+    _set_orient_progress(bot, 0, 10, "starting")
     print("\n[Orientation] Starting...")
 
     # Layer 1: Safety
     context, prompt_id, screen = await _reach_safe_state(bot)
+    t1 = time()
 
     # Layer 2: Context
+    _set_orient_progress(bot, 0, 0, "gather")
     state = await _gather_state(bot, context, screen, prompt_id)
+    t2 = time()
 
     # Layer 3: Navigation - Record what we learned
     if knowledge and state.sector:
         knowledge.record_observation(state)
-        print(f"  [Orient] Recorded sector {state.sector} to knowledge base")
 
-    print(f"  [Orient] Complete: {state.summary()}")
+    _set_orient_progress(bot, 0, 0, "")
+    total_ms = (t2 - t0) * 1000
+    safe_ms = (t1 - t0) * 1000
+    gather_ms = (t2 - t1) * 1000
+    print(f"  [Orient] Complete: {state.summary()} [{total_ms:.0f}ms: safe={safe_ms:.0f}ms gather={gather_ms:.0f}ms]")
 
     return state

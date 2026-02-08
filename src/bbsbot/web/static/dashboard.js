@@ -65,8 +65,10 @@
     if (lower.includes("trade")) return "trading";
     if (lower.includes("battle")) return "battling";
     if (lower.includes("explore")) return "exploring";
+    if (lower.includes("orient")) return "orienting";
     if (lower.includes("select")) return "selecting";
     if (lower.includes("log") || lower.includes("connect")) return "connecting";
+    if (lower.includes("disconnect")) return "dead";
     if (lower.includes("queue")) return "queued";
     if (lower.includes("completed") || lower.includes("error") || lower.includes("stopped")) return "dead";
     return "idle";
@@ -98,7 +100,7 @@
     tbody.innerHTML = bots
       .map((b) => {
         const isRunning = b.state === "running";
-        const isDead = ["completed", "error", "stopped"].includes(b.state);
+        const isDead = ["completed", "error", "stopped", "disconnected"].includes(b.state);
         const isQueued = b.state === "queued";
         const activity = b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state.toUpperCase() : "IDLE");
         const activityClass = getActivityClass(activity);
@@ -107,7 +109,7 @@
           activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
         }
 
-        const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", stopped: "⚫", queued: "🟡", warning: "🟠"}[b.state] || "⚪";
+        const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", stopped: "⚫", queued: "🟡", warning: "🟠", disconnected: "🔴"}[b.state] || "⚪";
         let stateHtml = `<span class="state ${b.state}" title="${b.state}" style="cursor:pointer" onclick="window._openErrorModal('${esc(b.bot_id)}')">${stateEmoji}</span>`;
 
         const turns_max = b.turns_max || 500;
@@ -123,6 +125,7 @@
         <td>${esc(b.ship_level || "-")}</td>
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td class="actions">
+          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')">Terminal</button>
           <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')">Activity</button>
           <button class="btn" onclick="window._openLogs('${esc(b.bot_id)}')" style="border-color:var(--fg2);color:var(--fg2);">Logs</button>
           <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"}>Restart</button>
@@ -131,6 +134,9 @@
       </tr>`;
       })
       .join("");
+
+    // Update terminal stats if open
+    updateTermStats();
   }
 
   // --- Sort headers ---
@@ -487,4 +493,197 @@
 
   poll();
   connect();
+
+  // --- Terminal spy/hijack modal (xterm.js) ---
+  let termWs = null;
+  let term = null;
+  let termBotId = null;
+  let hijacked = false;
+  let hijackedByMe = false;
+
+  const termModal = $("#term-modal");
+  const termTitle = $("#term-title");
+  const termStats = $("#term-stats");
+  const termStatus = $("#term-status");
+  const termEl = $("#term");
+  const btnTermHijack = $("#term-hijack");
+  const btnTermRelease = $("#term-release");
+  const btnTermResync = $("#term-resync");
+  const btnTermClose = $("#term-close");
+
+  function updateTermStats() {
+    if (!termBotId || !lastData || !lastData.bots || !termStats) return;
+    const bot = lastData.bots.find(b => b.bot_id === termBotId);
+    if (!bot) return;
+    const turnsMax = bot.turns_max || 500;
+    const activity = bot.activity_context || bot.state || "-";
+    termStats.innerHTML = [
+      `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
+      `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
+      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${bot.turns_executed || 0}/${turnsMax}</span></span>`,
+      `<span class="stat"><span class="stat-label">Ship</span><span class="stat-value">${esc(bot.ship_level || "-")}</span></span>`,
+      `<span class="stat"><span class="stat-label">User</span><span class="stat-value">${esc(bot.username || "-")}</span></span>`,
+      `<span class="stat"><span class="stat-label">Activity</span><span class="stat-value">${esc(activity)}</span></span>`,
+    ].join("");
+  }
+
+  function ensureTerm() {
+    if (term) return term;
+    if (!window.Terminal) {
+      const msg = "xterm.js not loaded (CDN failed). Hard refresh and check DevTools console.";
+      termStatus.innerHTML = '<span class="bad">&#9679; Error</span> ' + esc(msg);
+      showToast(msg, "error");
+      throw new Error(msg);
+    }
+    term = new window.Terminal({
+      convertEol: true,
+      cursorBlink: true,
+      fontFamily: "'SF Mono','Fira Code','Cascadia Code',monospace",
+      fontSize: 13,
+      theme: { background: "#0b0f14" }
+    });
+    term.open(termEl);
+    term.focus();
+    // xterm sometimes opens before layout has settled in a modal.
+    try { term.refresh(0, term.rows - 1); } catch (_) {}
+    term.onData((data) => {
+      if (!termWs || termWs.readyState !== WebSocket.OPEN) return;
+      if (!hijackedByMe) return;
+      termWs.send(JSON.stringify({ type: "input", data }));
+    });
+    return term;
+  }
+
+  function setTermUiState() {
+    if (!termWs || termWs.readyState !== WebSocket.OPEN) {
+      btnTermHijack.disabled = true;
+      btnTermRelease.disabled = true;
+      return;
+    }
+    if (!hijacked) {
+      btnTermHijack.disabled = false;
+      btnTermRelease.disabled = true;
+      return;
+    }
+    btnTermHijack.disabled = true;
+    btnTermRelease.disabled = !hijackedByMe;
+  }
+
+  function connectTerm(botId) {
+    // Close existing connection
+    if (termWs) {
+      try { termWs.close(); } catch (_) {}
+      termWs = null;
+    }
+
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = proto + "//" + location.host + "/ws/bot/" + encodeURIComponent(botId) + "/term";
+    termWs = new WebSocket(wsUrl);
+
+    termWs.onopen = () => {
+      termStatus.innerHTML = '<span class="live">&#9679; Connected</span> (watch)';
+      setTermUiState();
+      // Ask for a snapshot immediately
+      termWs.send(JSON.stringify({ type: "snapshot_req" }));
+    };
+
+    termWs.onmessage = (e) => {
+      let msg = null;
+      try { msg = JSON.parse(e.data); } catch (_) { return; }
+      if (!msg || !msg.type) return;
+
+      if (msg.type === "term" && msg.data) {
+        try { ensureTerm().write(msg.data); } catch (_) {}
+      } else if (msg.type === "snapshot") {
+        try {
+          const t = ensureTerm();
+          t.reset();
+          // Clear + home, then write plain snapshot text
+          t.write("\u001b[2J\u001b[H");
+          const screen = (msg.screen || "").replace(/\n/g, "\r\n");
+          t.write(screen);
+        } catch (_) {}
+      } else if (msg.type === "hello") {
+        hijacked = !!msg.hijacked;
+        hijackedByMe = !!msg.hijacked_by_me;
+        setTermUiState();
+      } else if (msg.type === "hijack_state") {
+        hijacked = !!msg.hijacked;
+        hijackedByMe = msg.owner === "me";
+        if (hijacked) {
+          termStatus.innerHTML = hijackedByMe
+            ? '<span class="warn">&#9679; Hijacked (you)</span>'
+            : '<span class="bad">&#9679; Hijacked (other)</span>';
+        } else {
+          termStatus.innerHTML = '<span class="live">&#9679; Connected</span> (watch)';
+        }
+        setTermUiState();
+      } else if (msg.type === "error") {
+        termStatus.innerHTML = '<span class="bad">&#9679; Error</span> ' + esc(msg.message || "unknown");
+      }
+    };
+
+    termWs.onclose = () => {
+      termStatus.textContent = "Disconnected";
+      hijacked = false;
+      hijackedByMe = false;
+      setTermUiState();
+      termWs = null;
+    };
+
+    termWs.onerror = () => {
+      try { termWs.close(); } catch (_) {}
+    };
+  }
+
+  window._openTerminal = function (botId) {
+    termBotId = botId;
+    termTitle.textContent = "Terminal: " + botId;
+    termStatus.textContent = "Connecting...";
+    hijacked = false;
+    hijackedByMe = false;
+    updateTermStats();
+    termModal.classList.add("open");
+    try {
+      const t = ensureTerm();
+      t.reset();
+      t.write("\u001b[2J\u001b[H");
+      t.write("Connecting...\r\n");
+    } catch (_) {}
+    connectTerm(botId);
+  };
+
+  function closeTerm() {
+    termModal.classList.remove("open");
+    termBotId = null;
+    hijacked = false;
+    hijackedByMe = false;
+    if (termWs) {
+      try { termWs.close(); } catch (_) {}
+      termWs = null;
+    }
+    setTermUiState();
+  }
+
+  if (btnTermClose) btnTermClose.addEventListener("click", closeTerm);
+  if (termModal) termModal.addEventListener("click", (e) => { if (e.target === termModal) closeTerm(); });
+  if (btnTermResync) btnTermResync.addEventListener("click", () => {
+    if (termWs && termWs.readyState === WebSocket.OPEN) {
+      termWs.send(JSON.stringify({ type: "snapshot_req" }));
+    }
+  });
+  if (btnTermHijack) btnTermHijack.addEventListener("click", () => {
+    if (!termWs || termWs.readyState !== WebSocket.OPEN) return;
+    termWs.send(JSON.stringify({ type: "hijack_request" }));
+  });
+  if (btnTermRelease) btnTermRelease.addEventListener("click", () => {
+    if (!termWs || termWs.readyState !== WebSocket.OPEN) return;
+    termWs.send(JSON.stringify({ type: "hijack_release" }));
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && termModal && termModal.classList.contains("open")) {
+      closeTerm();
+    }
+  });
 })();

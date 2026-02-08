@@ -73,6 +73,18 @@ class AIStrategy(TradingStrategy):
         self.fallback_until_turn = 0
         self._current_turn = 0
 
+        # Stuck detection: track recent action names
+        self._recent_actions: list[str] = []
+        self._stuck_threshold: int = 3
+
+        # Ollama verification: warm up model on first call
+        self._ollama_verified: bool = False
+
+        # Conversation history for LLM context across turns
+        self._conversation_history: list[ChatMessage] = []
+        self._max_history_turns: int = 20
+        self._last_reasoning: str = ""
+
         # Feedback loop
         self._recent_events: deque = deque(maxlen=100)  # Rolling window
         self._last_feedback_turn = 0
@@ -159,6 +171,18 @@ class AIStrategy(TradingStrategy):
         """
         self._current_turn += 1
 
+        # Verify Ollama is available on first call (warm up model)
+        if not self._ollama_verified:
+            try:
+                model = self.config.llm.get_model()
+                info = await self.llm_manager.verify_model(model)
+                self._ollama_verified = True
+                print(f"  [AI] Connected to Ollama, model: {info.get('name', model)}")
+            except Exception as e:
+                logger.error(f"ollama_not_available: {e}")
+                print(f"  [AI] Ollama not available: {e}, using fallback strategy")
+                return self.fallback.get_next_action(state)
+
         # Re-evaluate goal if needed
         await self._maybe_reevaluate_goal(state)
 
@@ -212,26 +236,46 @@ class AIStrategy(TradingStrategy):
         ):
             await self._periodic_feedback(state)
 
-        # Check if in fallback mode
-        if self.consecutive_failures >= self._settings.fallback_threshold:
+        # Graduated fallback: scale cooldown with consecutive failures
+        if self.consecutive_failures > 0:
             if self._current_turn < self.fallback_until_turn:
                 logger.debug(
-                    f"ai_strategy_fallback_active: turn={self._current_turn}, until={self.fallback_until_turn}"
+                    f"ai_strategy_fallback_active: turn={self._current_turn}, "
+                    f"until={self.fallback_until_turn}, failures={self.consecutive_failures}"
                 )
                 return self.fallback.get_next_action(state)
-            else:
-                # Try LLM again after cooldown
+            elif self.consecutive_failures >= self._settings.fallback_threshold:
+                # Cooldown expired, try LLM again
                 logger.info("ai_strategy_fallback_cooldown_expired")
                 self.consecutive_failures = 0
 
+        # Check if stuck (same action N times in a row)
+        stuck_action: str | None = None
+        if (
+            len(self._recent_actions) >= self._stuck_threshold
+            and len(set(self._recent_actions[-self._stuck_threshold:])) == 1
+        ):
+            stuck_action = self._recent_actions[-1]
+            logger.warning(f"ai_stuck_detected: {stuck_action} x{self._stuck_threshold}")
+
         # Try LLM decision
         try:
-            action, params, trace = await self._make_llm_decision(state)
+            action, params, trace = await self._make_llm_decision(state, stuck_action=stuck_action)
 
             # Validate decision
             validated = self._validate_decision(action, params, state)
             if validated:
                 self.consecutive_failures = 0
+                # Track action for stuck detection
+                self._recent_actions.append(action.name)
+                if len(self._recent_actions) > self._stuck_threshold + 2:
+                    self._recent_actions = self._recent_actions[-(self._stuck_threshold + 2):]
+
+                # If we were stuck AND the LLM returned the same action again, force fallback
+                if stuck_action and action.name == stuck_action:
+                    logger.warning(f"ai_still_stuck: {stuck_action}, forcing fallback")
+                    return self.fallback.get_next_action(state)
+
                 logger.info(f"ai_strategy_decision: action={action.name}, params={params}")
                 # Record event for feedback
                 self._record_event(
@@ -266,24 +310,36 @@ class AIStrategy(TradingStrategy):
             logger.warning(f"ai_strategy_failure: {e}, consecutive={self.consecutive_failures + 1}")
             self.consecutive_failures += 1
 
-            # Enter fallback mode if threshold reached
-            if self.consecutive_failures >= self._settings.fallback_threshold:
-                self.fallback_until_turn = self._current_turn + self._settings.fallback_duration_turns
-                logger.warning(f"ai_strategy_entering_fallback: until_turn={self.fallback_until_turn}")
+            # Graduated fallback duration based on failure count
+            match self.consecutive_failures:
+                case 1:
+                    # Single failure: retry immediately next turn
+                    self.fallback_until_turn = 0
+                case 2 | 3:
+                    # 2-3 failures: short fallback
+                    self.fallback_until_turn = self._current_turn + 2
+                    logger.warning(f"ai_strategy_short_fallback: until_turn={self.fallback_until_turn}")
+                case _:
+                    # 4+ failures: longer fallback
+                    duration = min(self.consecutive_failures * 2, 10)
+                    self.fallback_until_turn = self._current_turn + duration
+                    logger.warning(f"ai_strategy_long_fallback: until_turn={self.fallback_until_turn}")
 
             return self.fallback.get_next_action(state)
 
     async def _make_llm_decision(
         self,
         state: GameState,
+        stuck_action: str | None = None,
     ) -> tuple[TradeAction, dict, dict]:
         """Make decision using LLM.
 
         Args:
             state: Current game state
+            stuck_action: If set, the action the LLM keeps repeating
 
         Returns:
-            Tuple of (action, parameters)
+            Tuple of (action, parameters, trace)
 
         Raises:
             LLMError: On LLM errors
@@ -294,13 +350,19 @@ class AIStrategy(TradingStrategy):
         goal_description = goal_config.description if goal_config else None
         goal_instructions = goal_config.instructions if goal_config else None
 
-        messages = self.prompt_builder.build(
+        base_messages = self.prompt_builder.build(
             state,
             self.knowledge,
             self.stats,
             goal_description=goal_description,
             goal_instructions=goal_instructions,
+            stuck_action=stuck_action,
         )
+
+        # Build full message list: system + conversation history + current state
+        system_msg = base_messages[0]  # system prompt
+        current_state_msg = base_messages[1]  # current user prompt
+        messages = [system_msg] + self._conversation_history + [current_state_msg]
 
         model = self.config.llm.get_model()
         request = ChatRequest(
@@ -327,20 +389,70 @@ class AIStrategy(TradingStrategy):
             raise
         duration_ms = (time.time() - start_time) * 1000
 
-        # Parse response
+        # Parse response - with one retry on parse failure
         try:
             action, params = self.parser.parse(response, state)
-        except Exception as e:
-            await self._log_llm_decision_error(
-                state=state,
-                model=model,
-                request=request,
-                messages=messages,
-                duration_ms=duration_ms,
-                error=e,
-                raw_response=getattr(response.message, "content", None),
-            )
-            raise
+        except Exception as first_error:
+            # Retry once with a correction prompt
+            logger.warning(f"ai_json_parse_failed, retrying with correction: {first_error}")
+            try:
+                retry_messages = messages + [
+                    ChatMessage(role="assistant", content=response.message.content),
+                    ChatMessage(
+                        role="user",
+                        content=(
+                            'Your response was not valid JSON. Respond with ONLY a JSON object like: '
+                            '{"action": "TRADE", "reasoning": "...", "parameters": {}}'
+                        ),
+                    ),
+                ]
+                retry_request = ChatRequest(
+                    messages=retry_messages,
+                    model=model,
+                    temperature=0.3,
+                    max_tokens=300,
+                )
+                response = await self.llm_manager.chat(retry_request)
+                duration_ms = (time.time() - start_time) * 1000
+                action, params = self.parser.parse(response, state)
+                logger.info("ai_json_retry_succeeded")
+            except Exception as retry_error:
+                await self._log_llm_decision_error(
+                    state=state,
+                    model=model,
+                    request=request,
+                    messages=messages,
+                    duration_ms=duration_ms,
+                    error=retry_error,
+                    raw_response=getattr(response.message, "content", None),
+                )
+                raise
+
+        # Extract reasoning and store for external access
+        self._last_reasoning = self._extract_reasoning(response.message.content)
+
+        # Append this exchange to conversation history (compact summary + response)
+        compact_state = (
+            f"Turn {self._current_turn}: Sector {state.sector}, "
+            f"Credits {state.credits}, Turns left {state.turns_left}"
+        )
+        if state.has_port:
+            compact_state += f", Port {state.port_class}"
+        self._conversation_history.append(
+            ChatMessage(role="user", content=compact_state)
+        )
+        self._conversation_history.append(
+            ChatMessage(role="assistant", content=response.message.content)
+        )
+
+        # Trim history to max length (each exchange = 2 messages)
+        max_messages = self._max_history_turns * 2
+        if len(self._conversation_history) > max_messages:
+            self._conversation_history = self._conversation_history[-max_messages:]
+
+        # Print reasoning to bot logs
+        if self._last_reasoning:
+            print(f"  🤖 {self._last_reasoning}")
 
         trace = {
             "provider": self.config.llm.provider,
@@ -371,6 +483,21 @@ class AIStrategy(TradingStrategy):
         if len(s) <= limit:
             return s
         return s[:limit] + "\n[...truncated...]"
+
+    @staticmethod
+    def _extract_reasoning(content: str) -> str:
+        """Extract reasoning field from LLM JSON response."""
+        import json as _json
+        import re as _re
+
+        try:
+            data = _json.loads(content)
+            return data.get("reasoning", "")
+        except _json.JSONDecodeError:
+            pass
+        # Try extracting from markdown code block or raw JSON
+        match = _re.search(r'"reasoning"\s*:\s*"([^"]*)"', content)
+        return match.group(1) if match else ""
 
     async def _log_llm_decision(
         self,

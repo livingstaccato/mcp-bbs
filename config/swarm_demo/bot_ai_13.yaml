@@ -1,0 +1,22 @@
+connection:
+  host: localhost
+  port: 2002
+  game_letter: B
+session:
+  max_turns_per_session: 500
+  target_credits: 500000
+trading:
+  strategy: ai_strategy
+  ai_strategy:
+    enabled: true
+    feedback_enabled: true
+    feedback_interval_turns: 10
+llm:
+  provider: ollama
+  ollama:
+    model: gemma3
+    base_url: http://localhost:11434
+    timeout_seconds: 30
+banking:
+  enabled: true
+  min_credits_to_bank: 25000

@@ -1,6 +1,6 @@
 """LLM manager for provider lifecycle management."""
 
-import logging
+from __future__ import annotations
 
 from bbsbot.llm.base import LLMProvider
 from bbsbot.llm.cache import LLMCache
@@ -8,8 +8,9 @@ from bbsbot.llm.config import LLMConfig
 from bbsbot.llm.exceptions import LLMError
 from bbsbot.llm.types import ChatRequest, ChatResponse, CompletionRequest, CompletionResponse
 from bbsbot.llm.usage_tracker import UsageTracker
+from bbsbot.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMManager:
@@ -144,6 +145,28 @@ class LLMManager:
             self._cache.set(request, response)
 
         return response
+
+    async def verify_model(self, model: str) -> dict:
+        """Verify a model is available and warm it up.
+
+        For Ollama provider, this checks the model is pulled and loads it
+        into memory with keep_alive so subsequent requests are fast.
+
+        Args:
+            model: Model name to verify
+
+        Returns:
+            Dict with model info
+
+        Raises:
+            LLMError: If model is unavailable or provider doesn't support verification
+        """
+        provider = await self.get_provider()
+        if hasattr(provider, "check_model"):
+            return await provider.check_model(model)
+        # For non-Ollama providers, just verify connectivity
+        logger.info("verify_model_skipped", provider=self.config.provider, model=model)
+        return {"name": model}
 
     def get_usage_stats(self) -> dict:
         """Get token usage statistics.

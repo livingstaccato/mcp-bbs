@@ -40,6 +40,12 @@ class WorkerBot(TradingBot):
         self.current_action: str | None = None
         self.current_action_time: float = 0
         self.recent_actions: list[dict] = []
+        self.ai_activity: str | None = None  # AI reasoning for dashboard
+        # Hijack support (paused automation + read pump)
+        self._hijacked: bool = False
+        self._hijack_event: asyncio.Event = asyncio.Event()
+        self._hijack_event.set()  # not hijacked by default
+        self._hijack_pump_task: asyncio.Task | None = None
 
     async def register_with_manager(self) -> None:
         """Register this bot with the swarm manager."""
@@ -91,6 +97,14 @@ class WorkerBot(TradingBot):
                 if hasattr(self, 'session') and self.session:
                     activity = "LOGGING_IN"
 
+            # Override with AI reasoning if available
+            if self.ai_activity:
+                activity = self.ai_activity
+                self.ai_activity = None  # Clear after reporting
+
+            if self._hijacked:
+                activity = "HIJACKED"
+
             # Extract character/ship info from game state
             # Always include username and ship_level, even if None
             # This helps the dashboard track character progression
@@ -106,15 +120,36 @@ class WorkerBot(TradingBot):
                 # If no game_state yet, still use character_name as fallback username
                 username = self.character_name
 
+            # Determine actual state from session connectivity
+            connected = (
+                hasattr(self, 'session')
+                and self.session is not None
+                and hasattr(self.session, 'is_connected')
+                and self.session.is_connected()
+            )
+            actual_state = "running" if connected else "disconnected"
+            if not connected:
+                activity = "DISCONNECTED"
+
+            # Orient progress (set by orientation.py _set_orient_progress)
+            orient_step = getattr(self, '_orient_step', 0)
+            orient_max = getattr(self, '_orient_max', 0)
+            orient_phase = getattr(self, '_orient_phase', '')
+            if orient_phase:
+                activity = f"ORIENTING ({orient_step}/{orient_max})"
+
             # Build status update dict
             status_data = {
                 "sector": self.current_sector or 0,
                 "turns_executed": self.turns_used,
                 "turns_max": turns_max,
-                "state": "running",
+                "state": actual_state,
                 "last_action": self.current_action,
                 "last_action_time": self.current_action_time,
                 "activity_context": activity,
+                "orient_step": orient_step,
+                "orient_max": orient_max,
+                "orient_phase": orient_phase,
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
             }
 
@@ -135,6 +170,41 @@ class WorkerBot(TradingBot):
             )
         except Exception as e:
             logger.debug(f"Failed to report status: {e}")
+
+    async def await_if_hijacked(self) -> None:
+        """Block automation while the dashboard is hijacking this bot."""
+        await self._hijack_event.wait()
+
+    async def set_hijacked(self, enabled: bool) -> None:
+        """Enable/disable hijack mode (pause automation + run read pump)."""
+        if enabled == self._hijacked:
+            return
+        self._hijacked = enabled
+
+        if enabled:
+            self._hijack_event.clear()
+
+            async def _pump() -> None:
+                # Keep pulling from transport so terminal keeps updating while hijacked.
+                try:
+                    while self._hijacked and self.session and self.session.is_connected():
+                        await self.session.read(timeout_ms=250, max_bytes=8192)
+                        await asyncio.sleep(0.05)
+                except asyncio.CancelledError:
+                    return
+                except Exception:
+                    return
+
+            self._hijack_pump_task = asyncio.create_task(_pump())
+        else:
+            self._hijack_event.set()
+            if self._hijack_pump_task is not None:
+                self._hijack_pump_task.cancel()
+                try:
+                    await self._hijack_pump_task
+                except asyncio.CancelledError:
+                    pass
+                self._hijack_pump_task = None
 
     async def start_status_reporter(self, interval: float = 5.0) -> None:
         """Start background task to report status periodically."""
@@ -194,6 +264,7 @@ class WorkerBot(TradingBot):
     async def cleanup(self) -> None:
         """Clean up resources."""
         await self.stop_status_reporter()
+        await self.set_hijacked(False)
         await self._http_client.aclose()
 
 
@@ -218,6 +289,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     config_obj = BotConfig(**config_dict)
 
     worker = WorkerBot(bot_id, config_obj, manager_url)
+    term_bridge = None
 
     try:
         # Register with manager
@@ -232,6 +304,16 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
             host=config_obj.connection.host,
             port=config_obj.connection.port,
         )
+
+        # Optional: connect terminal bridge (best-effort).
+        try:
+            from bbsbot.swarm.term_bridge import TermBridge
+
+            term_bridge = TermBridge(worker, bot_id=bot_id, manager_url=manager_url)
+            term_bridge.attach_session()
+            await term_bridge.start()
+        except Exception as e:
+            logger.warning(f"Terminal bridge disabled: {e}")
 
         # Login sequence
         logger.info("Starting login sequence")
@@ -272,8 +354,26 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
         # Report detailed error to manager
         await worker.report_error(e, exit_reason="exception")
     finally:
-        # Final status report
-        await worker.report_status()
+        # Stop periodic reporter first (prevents stale updates during shutdown)
+        await worker.stop_status_reporter()
+        # Report final completed state before disconnecting
+        try:
+            await worker._http_client.post(
+                f"{worker.manager_url}/bot/{worker.bot_id}/status",
+                json={"state": "completed", "activity_context": "FINISHED"},
+            )
+        except Exception:
+            pass
+        # Disconnect BBS session so the node is freed immediately
+        try:
+            await worker.disconnect()
+        except Exception:
+            pass
+        if term_bridge is not None:
+            try:
+                await term_bridge.stop()
+            except Exception:
+                pass
         await worker.cleanup()
 
 

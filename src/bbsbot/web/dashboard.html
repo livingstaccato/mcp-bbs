@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BBSBot Swarm Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 <style>
 :root {
   --bg: #0d1117;
@@ -196,6 +197,94 @@ tbody tr:hover { background: var(--bg3); }
 .log-content .log-line { margin: 0; }
 .log-content .log-line:nth-child(even) { background: rgba(255,255,255,0.015); }
 
+/* Terminal modal */
+.term-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+}
+.term-modal-overlay.open { display: flex; }
+.term-modal {
+  width: 92vw;
+  height: 88vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.term-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.term-modal-header h2 {
+  font-size: 14px;
+  color: var(--cyan);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.term-stats {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg2);
+  overflow-x: auto;
+  padding: 0 8px;
+}
+.term-stats .stat {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  white-space: nowrap;
+}
+.term-stats .stat-label {
+  color: var(--fg2);
+  opacity: 0.7;
+}
+.term-stats .stat-value {
+  color: var(--fg);
+  font-weight: 500;
+}
+.term-stats .stat-value.credits { color: var(--green); }
+.term-stats .stat-value.sector { color: var(--yellow); }
+.term-stats .stat-value.turns { color: var(--cyan); }
+.term-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.term-status {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--fg2);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.term-status .live { color: var(--green); }
+.term-status .warn { color: var(--yellow); }
+.term-status .bad { color: var(--red); }
+.term-container {
+  flex: 1;
+  padding: 8px;
+  background: #0b0f14;
+}
+#term {
+  width: 100%;
+  height: 100%;
+}
+
 /* Activity badge */
 .activity-badge {
   display: inline-block;
@@ -208,6 +297,8 @@ tbody tr:hover { background: var(--bg3); }
 .activity-badge.trading { background: rgba(63,185,80,0.2); color: var(--green); }
 .activity-badge.exploring { background: rgba(88,166,255,0.2); color: var(--blue); }
 .activity-badge.battling { background: rgba(248,81,73,0.2); color: var(--red); }
+.activity-badge.orienting { background: rgba(210,153,34,0.3); color: var(--yellow); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
 .activity-badge.selecting { background: rgba(210,153,34,0.2); color: var(--yellow); }
 .activity-badge.connecting { background: rgba(57,197,207,0.2); color: var(--cyan); }
 .activity-badge.queued { background: rgba(210,153,34,0.15); color: var(--yellow); }
@@ -389,6 +480,26 @@ tbody tr:hover { background: var(--bg3); }
   </table>
 </div>
 
+<!-- Terminal modal -->
+<div class="term-modal-overlay" id="term-modal">
+  <div class="term-modal" role="dialog" aria-modal="true" aria-label="Terminal">
+    <div class="term-modal-header">
+      <h2 id="term-title">Terminal</h2>
+      <div class="term-stats" id="term-stats"></div>
+      <div class="term-actions">
+        <button class="btn" id="term-resync" title="Request a fresh snapshot">Resync</button>
+        <button class="btn kill" id="term-hijack" title="Pause bot automation and take control">Hijack</button>
+        <button class="btn restart" id="term-release" title="Release control and resume automation" disabled>Release</button>
+        <button class="btn" id="term-close">Close</button>
+      </div>
+    </div>
+    <div class="term-status" id="term-status">Disconnected</div>
+    <div class="term-container">
+      <div id="term"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Error detail modal -->
 <div class="error-modal-overlay" id="error-modal-overlay">
   <div class="error-modal">
@@ -417,6 +528,7 @@ tbody tr:hover { background: var(--bg3); }
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
 <script src="/static/dashboard.js"></script>
 </body>
 </html>

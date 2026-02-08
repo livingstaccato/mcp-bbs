@@ -50,7 +50,10 @@ def game_state():
 @pytest.fixture
 def ai_strategy(bot_config, sector_knowledge):
     """Create AI strategy for testing."""
-    return AIStrategy(bot_config, sector_knowledge)
+    strategy = AIStrategy(bot_config, sector_knowledge)
+    # Skip Ollama verification in tests
+    strategy._ollama_verified = True
+    return strategy
 
 
 def test_ai_strategy_init(ai_strategy):
@@ -85,25 +88,29 @@ async def test_ai_strategy_successful_decision(ai_strategy, game_state):
 
 @pytest.mark.asyncio
 async def test_ai_strategy_fallback_on_failure(ai_strategy, game_state):
-    """Test fallback activation on failures."""
+    """Test graduated fallback activation on failures."""
     # Simulate LLM failures
     with patch.object(ai_strategy.llm_manager, "chat", side_effect=Exception("LLM error")):
-        # First failure
+        # First failure - retry immediately (no fallback cooldown)
         action1, _ = await ai_strategy._get_next_action_async(game_state)
         assert ai_strategy.consecutive_failures == 1
+        assert ai_strategy.fallback_until_turn == 0  # No cooldown on single failure
 
-        # Second failure
+        # Second failure - enters short fallback (2 turns)
         action2, _ = await ai_strategy._get_next_action_async(game_state)
         assert ai_strategy.consecutive_failures == 2
+        assert ai_strategy.fallback_until_turn > 0  # Now in fallback
 
-        # Third failure - should enter fallback mode
+        # Third attempt - still in fallback cooldown, uses fallback directly
         action3, _ = await ai_strategy._get_next_action_async(game_state)
-        assert ai_strategy.consecutive_failures == 3
-        assert ai_strategy.fallback_until_turn > 0
+        # Failures stay at 2 because LLM wasn't called (in fallback mode)
+        assert ai_strategy.consecutive_failures == 2
+        assert action3 is not None
 
-        # Fourth attempt - should use fallback
+        # Fourth attempt - fallback expired, LLM tried again and fails
         action4, _ = await ai_strategy._get_next_action_async(game_state)
-        # Fallback returns a valid action
+        # Now it tried LLM again (cooldown expired) and failed
+        assert ai_strategy.consecutive_failures == 3
         assert action4 is not None
 
 

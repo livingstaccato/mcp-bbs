@@ -65,6 +65,7 @@ class OllamaProvider:
                 "model": request.model,
                 "prompt": request.prompt,
                 "stream": False,
+                "keep_alive": "60m",
                 "options": {
                     "temperature": request.temperature,
                 },
@@ -129,6 +130,7 @@ class OllamaProvider:
                 "model": request.model,
                 "messages": messages,
                 "stream": False,
+                "keep_alive": "60m",
                 "options": {
                     "temperature": request.temperature,
                 },
@@ -194,6 +196,7 @@ class OllamaProvider:
             "model": request.model,
             "messages": messages,
             "stream": True,
+            "keep_alive": "60m",
             "options": {
                 "temperature": request.temperature,
             },
@@ -248,6 +251,77 @@ class OllamaProvider:
         except Exception as e:
             logger.warning("ollama_health_check_failed", error=str(e))
             return False
+
+    async def check_model(self, model: str) -> dict:
+        """Verify a model is available and warm it up to keep it loaded in memory.
+
+        Calls /api/tags to check model exists, then sends a no-op generate
+        request with keep_alive to load the model into GPU/RAM and keep it there.
+
+        Args:
+            model: Model name to check
+
+        Returns:
+            Dict with model info (name, size, etc.)
+
+        Raises:
+            LLMModelNotFoundError: If model is not pulled
+            LLMConnectionError: If Ollama is unreachable
+        """
+        # Step 1: Verify model exists in local registry
+        try:
+            response = await self._client.get("/api/tags")
+            response.raise_for_status()
+        except httpx.ConnectError as e:
+            raise LLMConnectionError(
+                f"Failed to connect to Ollama at {self.config.base_url}"
+            ) from e
+        except httpx.TimeoutException as e:
+            raise LLMTimeoutError(
+                f"Ollama health check timed out after {self.config.timeout_seconds}s"
+            ) from e
+
+        data = response.json()
+        models = data.get("models", [])
+        model_info = None
+        for m in models:
+            # Match by name (with or without :latest tag)
+            m_name = m.get("name", "")
+            if m_name == model or m_name == f"{model}:latest" or m_name.startswith(f"{model}:"):
+                model_info = m
+                break
+
+        if not model_info:
+            available = [m.get("name", "") for m in models]
+            raise LLMModelNotFoundError(
+                f"Model '{model}' not found. Available: {available}"
+            )
+
+        # Step 2: Warm up - load model into memory and keep it alive
+        # Send a minimal generate request to force model loading
+        try:
+            warmup_response = await self._client.post(
+                "/api/generate",
+                json={
+                    "model": model,
+                    "prompt": "",
+                    "stream": False,
+                    "keep_alive": "60m",  # Keep model loaded for 60 minutes
+                    "options": {"num_predict": 1},
+                },
+                timeout=httpx.Timeout(120.0),  # Model loading can be slow
+            )
+            warmup_response.raise_for_status()
+            logger.info("ollama_model_warmed_up", model=model)
+        except Exception as e:
+            # Warmup failure is non-fatal - model may still work
+            logger.warning("ollama_model_warmup_failed", model=model, error=str(e))
+
+        return {
+            "name": model_info.get("name", model),
+            "size": model_info.get("size", 0),
+            "modified_at": model_info.get("modified_at", ""),
+        }
 
     async def close(self) -> None:
         """Cleanup HTTP client."""

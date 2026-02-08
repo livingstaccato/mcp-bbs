@@ -1,5 +1,7 @@
 """Configuration models for LLM providers."""
 
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -9,7 +11,7 @@ class OllamaConfig(BaseModel):
     """Configuration for Ollama provider."""
 
     base_url: str = "http://localhost:11434"
-    model: str = "llama2"
+    model: str = "gemma3"
     timeout_seconds: float = 30.0
     max_retries: int = 3
     retry_delay_seconds: float = 1.0

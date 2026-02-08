@@ -292,6 +292,8 @@ class TradingBot:
             OrientationError if unable to establish safe state
         """
         # Check if we need to scan before full orient
+        from time import time as _time
+        t0 = _time()
         should_scan = force_scan or self.needs_scan()
 
         if should_scan:
@@ -306,7 +308,7 @@ class TradingBot:
                 # Extract semantic data for credits and other state
                 # The session read already captured kv_data during where_am_i()
                 try:
-                    result = await self.session.read(timeout_ms=100, max_bytes=1024)
+                    result = await self.session.read(timeout_ms=10, max_bytes=1024)
                     kv_data = result.get("kv_data", {})
                 except Exception:
                     kv_data = {}
@@ -336,6 +338,8 @@ class TradingBot:
                         self.game_state.port_class = info.port_class
                         self.game_state.has_planet = info.has_planet
                         self.game_state.planet_names = info.planet_names
+                fast_ms = (_time() - t0) * 1000
+                print(f"  [Orient] Fast path: {self.game_state.summary()} [{fast_ms:.0f}ms]")
             else:
                 # Not safe, need full orient
                 self.game_state = await orient(self, self.sector_knowledge)

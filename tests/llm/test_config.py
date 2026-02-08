@@ -10,7 +10,7 @@ def test_ollama_config_defaults():
     config = OllamaConfig()
 
     assert config.base_url == "http://localhost:11434"
-    assert config.model == "llama2"
+    assert config.model == "gemma3"
     assert config.timeout_seconds == 30.0
     assert config.max_retries == 3
 
@@ -23,7 +23,7 @@ def test_llm_config_defaults():
     assert config.ollama is not None
     assert config.openai is None
     assert config.gemini is None
-    assert config.get_model() == "llama2"
+    assert config.get_model() == "gemma3"
 
 
 def test_llm_config_with_custom_ollama():
