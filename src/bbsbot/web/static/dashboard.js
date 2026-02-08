@@ -53,20 +53,20 @@
   }
 
   function getActivityBadge(context) {
-    if (!context) return "💤 IDLE";
+    if (!context) return "IDLE";
     const lower = context.toLowerCase();
-    // Map activities to emojis
-    if (lower.includes("trading") || lower.includes("bank")) return "💰 TRADING";
-    if (lower.includes("battle") || lower.includes("combat")) return "⚔️ BATTLING";
-    if (lower.includes("explore") || lower.includes("navigation") || lower.includes("warp")) return "🗺️ EXPLORING";
-    if (lower.includes("thinking")) return "🤔 THINKING";
-    if (lower.includes("orienting")) return "🧭 " + context.replace("ORIENTING: ", "");
-    if (lower.includes("upgrading")) return "⬆️ UPGRADING";
-    if (lower.includes("sector_command")) return "📍 AT PROMPT";
-    if (lower.includes("port")) return "🏪 AT PORT";
-    if (lower.includes("planet")) return "🌍 AT PLANET";
-    if (lower.includes("queued")) return "🕐 QUEUED";
-    if (lower.includes("disconnected")) return "❌ DISCONNECTED";
+    // Simplify activity names (no emojis)
+    if (lower.includes("trading") || lower.includes("bank")) return "TRADING";
+    if (lower.includes("battle") || lower.includes("combat")) return "BATTLING";
+    if (lower.includes("explore") || lower.includes("navigation") || lower.includes("warp")) return "EXPLORING";
+    if (lower.includes("thinking")) return "THINKING";
+    if (lower.includes("orienting")) return context.replace("ORIENTING: ", "Orient: ");
+    if (lower.includes("upgrading")) return "UPGRADING";
+    if (lower.includes("sector_command")) return "AT PROMPT";
+    if (lower.includes("port")) return "AT PORT";
+    if (lower.includes("planet")) return "AT PLANET";
+    if (lower.includes("queued")) return "QUEUED";
+    if (lower.includes("disconnected")) return "DISCONNECTED";
     return context.toUpperCase();
   }
 
@@ -113,15 +113,14 @@
         const isDead = ["completed", "error", "stopped", "disconnected"].includes(b.state);
         const isQueued = b.state === "queued";
 
-        // For completed bots, show summary instead of just "COMPLETED"
+        // For completed/stopped bots, show final state
         let activity;
-        if (b.state === "completed" && b.completed_at) {
-          const duration = Math.floor((b.completed_at - (b.last_update_time - (b.uptime_seconds || 0))) / 60);
-          activity = `✅ FINISHED (${duration}m)`;
+        if (b.state === "completed") {
+          activity = b.completed_at ? "FINISHED" : "COMPLETED";
         } else if (b.state === "error") {
-          activity = `❌ ${b.exit_reason || "ERROR"}`.toUpperCase();
+          activity = b.exit_reason ? b.exit_reason.toUpperCase() : "ERROR";
         } else if (b.state === "stopped") {
-          activity = "⏸️ STOPPED";
+          activity = "STOPPED";
         } else {
           activity = getActivityBadge(b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state : "IDLE"));
         }
@@ -148,11 +147,11 @@
         <td>${esc(b.ship_level || "-")}</td>
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td class="actions">
-          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')">Terminal</button>
-          <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')">Activity</button>
-          <button class="btn" onclick="window._openLogs('${esc(b.bot_id)}')" style="border-color:var(--fg2);color:var(--fg2);">Logs</button>
-          <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"}>Restart</button>
-          <button class="btn kill" onclick="window._killBot('${esc(b.bot_id)}')" ${isRunning ? "" : "disabled"}>Kill</button>
+          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
+          <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')" title="Activity">📊</button>
+          <button class="btn" onclick="window._openLogs('${esc(b.bot_id)}')" style="border-color:var(--fg2);color:var(--fg2);" title="Logs">📝</button>
+          <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"} title="Restart">🔄</button>
+          <button class="btn kill" onclick="window._killBot('${esc(b.bot_id)}')" ${isRunning ? "" : "disabled"} title="Kill">⏹️</button>
         </td>
       </tr>`;
       })
