@@ -10,32 +10,25 @@ from fastmcp import FastMCP
 
 
 @pytest.mark.asyncio
-async def test_register_all_tools_no_filter() -> None:
-    """Test that all game tools are registered when no filter is provided.
+async def test_register_no_tools_without_filter() -> None:
+    """Test that NO game tools are registered when no filter is provided.
 
-    Note: This tests only the game tools registration, not BBS tools.
-    BBS tools are registered separately in the main app via @app.tool() decorators.
+    Game tools should only be registered when explicitly requested via --game flag.
+    BBS tools are registered separately via @app.tool() decorators.
     """
     # Create a fresh app
     mcp = FastMCP("test-all")
 
-    # Register all game tools (no filter)
+    # Register with no filter (should register nothing)
     _register_game_tools(mcp, game_filter=None)
 
     # Get the tools using get_tools()
     tools = await mcp.get_tools()
 
-    # Should have tools from multiple registries
+    # Should have NO tools (game tools only registered when filter provided)
     tool_names = [t.name for t in tools.values()]
 
-    # Check that we have tw2002 tools (this is what _register_game_tools does)
-    has_tw2002 = any(name.startswith("tw2002_") for name in tool_names)
-
-    assert has_tw2002, "Should have tw2002_* tools when no filter is provided"
-
-    # When no filter is provided, we should get all game tools, not just tw2002
-    # For now, just verify we have game tools registered
-    assert len(tool_names) > 0, "Should have some game tools registered"
+    assert len(tool_names) == 0, "Should have NO game tools when no filter is provided"
 
 
 @pytest.mark.asyncio

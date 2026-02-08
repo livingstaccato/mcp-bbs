@@ -49,11 +49,14 @@ def _register_game_tools(mcp_app: FastMCP, game_filter: str | None = None) -> No
         # Add each tool to the MCP app, optionally filtering by game
         added_count = 0
         for tool_name, tool_func in all_tools.items():
-            # Apply game filter if provided
-            if game_filter:
-                expected_prefix = f"{game_filter}_"
-                if not tool_name.startswith(expected_prefix):
-                    continue  # Skip tools that don't match filter
+            # Only register game tools if a specific game filter is provided
+            # If no filter, skip all game tools (only BBS tools will be available)
+            if not game_filter:
+                continue
+
+            expected_prefix = f"{game_filter}_"
+            if not tool_name.startswith(expected_prefix):
+                continue  # Skip tools that don't match filter
 
             # Convert raw function from registry to FunctionTool
             # so FastMCP can work with it
@@ -64,8 +67,6 @@ def _register_game_tools(mcp_app: FastMCP, game_filter: str | None = None) -> No
 
         if game_filter:
             log.info(f"mcp_game_tools_registered: {added_count} tools for game '{game_filter}'")
-        else:
-            log.info(f"mcp_game_tools_registered: {added_count} tools from {len(manager.list_registries())} games")
 
     except Exception as e:
         log.warning(f"mcp_game_tools_registration_failed: {e}")
