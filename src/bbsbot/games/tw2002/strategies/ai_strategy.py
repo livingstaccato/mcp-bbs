@@ -24,21 +24,23 @@ from bbsbot.games.tw2002.strategies.base import (
 )
 from bbsbot.games.tw2002.strategies.ai.parser import ResponseParser
 from bbsbot.games.tw2002.strategies.ai.prompts import PromptBuilder
+from bbsbot.games.tw2002.strategies.ai import (
+    decision_maker,
+    feedback_loop,
+    goals,
+    orchestration,
+    validator,
+)
 from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
 from bbsbot.llm.exceptions import LLMError
 from bbsbot.llm.manager import LLMManager
-from bbsbot.llm.types import ChatMessage, ChatRequest, ChatResponse
+from bbsbot.llm.types import ChatMessage
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
     from bbsbot.logging.session_logger import SessionLogger
 
 logger = get_logger(__name__)
-
-# Feedback loop prompt template
-FEEDBACK_SYSTEM_PROMPT = """You are analyzing Trade Wars 2002 gameplay to identify patterns and suggest improvements.
-Focus on: trade efficiency, route optimization, resource management, and strategic decision-making.
-Keep your analysis concise (2-3 observations)."""
 
 
 class AIStrategy(TradingStrategy):
@@ -166,169 +168,15 @@ class AIStrategy(TradingStrategy):
     async def _get_next_action_async(self, state: GameState) -> tuple[TradeAction, dict]:
         """Async implementation of get_next_action.
 
+        Delegates to orchestration module for the main decision flow.
+
         Args:
             state: Current game state
 
         Returns:
             Tuple of (action, parameters)
         """
-        self._current_turn += 1
-
-        # Verify Ollama is available on first call (warm up model)
-        if not self._ollama_verified:
-            try:
-                model = self.config.llm.get_model()
-                info = await self.llm_manager.verify_model(model)
-                self._ollama_verified = True
-                print(f"  [AI] Connected to Ollama, model: {info.get('name', model)}")
-            except Exception as e:
-                logger.error(f"ollama_not_available: {e}")
-                print(f"  [AI] Ollama not available: {e}, using fallback strategy")
-                return self.fallback.get_next_action(state)
-
-        # Re-evaluate goal if needed
-        await self._maybe_reevaluate_goal(state)
-
-        # Check for intervention triggers
-        should_intervene, reason, context = self._intervention_trigger.should_intervene(
-            current_turn=self._current_turn,
-            state=state,
-            strategy=self,
-        )
-
-        if should_intervene:
-            try:
-                # Build intervention prompt and query LLM
-                recommendation = await self._intervention_advisor.analyze(
-                    state=state,
-                    recent_decisions=self._get_recent_decisions(),
-                    strategy_stats=self.stats,
-                    goal_phases=self._goal_phases,
-                    anomalies=context.get("anomalies", []),
-                    opportunities=context.get("opportunities", []),
-                    trigger_reason=reason,
-                )
-
-                # Log intervention
-                await self._intervention_trigger.log_intervention(
-                    turn=self._current_turn,
-                    reason=reason,
-                    context=context,
-                    recommendation=recommendation,
-                )
-
-                # Apply recommendation if auto-apply enabled
-                if self._settings.intervention.auto_apply:
-                    result = self._apply_intervention(recommendation, state)
-                    if result:
-                        action, params = result
-                        logger.info(
-                            "intervention_applied",
-                            action=action.name,
-                            recommendation=recommendation.get("recommendation"),
-                        )
-                        return action, params
-            except Exception as e:
-                logger.error("intervention_analysis_failed", error=str(e))
-
-        # Periodic feedback loop
-        if (
-            self._settings.feedback_enabled
-            and self._current_turn % self._settings.feedback_interval_turns == 0
-            and self.consecutive_failures < self._settings.fallback_threshold
-        ):
-            await self._periodic_feedback(state)
-
-        # Graduated fallback: scale cooldown with consecutive failures
-        if self.consecutive_failures > 0:
-            if self._current_turn < self.fallback_until_turn:
-                logger.debug(
-                    f"ai_strategy_fallback_active: turn={self._current_turn}, "
-                    f"until={self.fallback_until_turn}, failures={self.consecutive_failures}"
-                )
-                return self.fallback.get_next_action(state)
-            elif self.consecutive_failures >= self._settings.fallback_threshold:
-                # Cooldown expired, try LLM again
-                logger.info("ai_strategy_fallback_cooldown_expired")
-                self.consecutive_failures = 0
-
-        # Check if stuck (same action N times in a row)
-        stuck_action: str | None = None
-        if (
-            len(self._recent_actions) >= self._stuck_threshold
-            and len(set(self._recent_actions[-self._stuck_threshold:])) == 1
-        ):
-            stuck_action = self._recent_actions[-1]
-            logger.warning(f"ai_stuck_detected: {stuck_action} x{self._stuck_threshold}")
-
-        # Try LLM decision
-        try:
-            action, params, trace = await self._make_llm_decision(state, stuck_action=stuck_action)
-
-            # Validate decision
-            validated = self._validate_decision(action, params, state)
-            if validated:
-                self.consecutive_failures = 0
-                # Track action for stuck detection
-                self._recent_actions.append(action.name)
-                if len(self._recent_actions) > self._stuck_threshold + 2:
-                    self._recent_actions = self._recent_actions[-(self._stuck_threshold + 2):]
-
-                # If we were stuck AND the LLM returned the same action again, force fallback
-                if stuck_action and action.name == stuck_action:
-                    logger.warning(f"ai_still_stuck: {stuck_action}, forcing fallback")
-                    return self.fallback.get_next_action(state)
-
-                logger.info(f"ai_strategy_decision: action={action.name}, params={params}")
-                # Record event for feedback
-                self._record_event(
-                    "decision",
-                    {
-                        "turn": self._current_turn,
-                        "action": action.name,
-                        "params": params,
-                        "sector": state.sector,
-                        "credits": state.credits,
-                    },
-                )
-                await self._log_llm_decision(
-                    state=state,
-                    trace=trace,
-                    action=action,
-                    params=params,
-                    validated=True,
-                )
-                return action, params
-            else:
-                await self._log_llm_decision(
-                    state=state,
-                    trace=trace,
-                    action=action,
-                    params=params,
-                    validated=False,
-                )
-                raise ValueError("Invalid LLM decision")
-
-        except Exception as e:
-            logger.warning(f"ai_strategy_failure: {e}, consecutive={self.consecutive_failures + 1}")
-            self.consecutive_failures += 1
-
-            # Graduated fallback duration based on failure count
-            match self.consecutive_failures:
-                case 1:
-                    # Single failure: retry immediately next turn
-                    self.fallback_until_turn = 0
-                case 2 | 3:
-                    # 2-3 failures: short fallback
-                    self.fallback_until_turn = self._current_turn + 2
-                    logger.warning(f"ai_strategy_short_fallback: until_turn={self.fallback_until_turn}")
-                case _:
-                    # 4+ failures: longer fallback
-                    duration = min(self.consecutive_failures * 2, 10)
-                    self.fallback_until_turn = self._current_turn + duration
-                    logger.warning(f"ai_strategy_long_fallback: until_turn={self.fallback_until_turn}")
-
-            return self.fallback.get_next_action(state)
+        return await orchestration.orchestrate_decision(self, state)
 
     async def _make_llm_decision(
         self,
@@ -337,257 +185,23 @@ class AIStrategy(TradingStrategy):
     ) -> tuple[TradeAction, dict, dict]:
         """Make decision using LLM.
 
+        Delegates to decision_maker module.
+
         Args:
             state: Current game state
             stuck_action: If set, the action the LLM keeps repeating
 
         Returns:
             Tuple of (action, parameters, trace)
-
-        Raises:
-            LLMError: On LLM errors
-            ValueError: On invalid response
         """
-        # Build prompt with current goal
-        goal_config = self._get_goal_config(self._current_goal_id)
-        goal_description = goal_config.description if goal_config else None
-        goal_instructions = goal_config.instructions if goal_config else None
-
-        base_messages = self.prompt_builder.build(
-            state,
-            self.knowledge,
-            self.stats,
-            goal_description=goal_description,
-            goal_instructions=goal_instructions,
+        return await decision_maker.make_llm_decision(
+            strategy=self,
+            llm_manager=self.llm_manager,
+            parser=self.parser,
+            state=state,
             stuck_action=stuck_action,
         )
 
-        # Build full message list: system + conversation history + current state
-        system_msg = base_messages[0]  # system prompt
-        current_state_msg = base_messages[1]  # current user prompt
-        messages = [system_msg] + self._conversation_history + [current_state_msg]
-
-        model = self.config.llm.get_model()
-        request = ChatRequest(
-            messages=messages,
-            model=model,
-            temperature=0.7,
-            max_tokens=500,
-        )
-
-        start_time = time.time()
-        self._is_thinking = True  # Set flag for dashboard
-        try:
-            response = await self.llm_manager.chat(request)
-        except Exception as e:
-            self._is_thinking = False
-            duration_ms = (time.time() - start_time) * 1000
-            await self._log_llm_decision_error(
-                state=state,
-                model=model,
-                request=request,
-                messages=messages,
-                duration_ms=duration_ms,
-                error=e,
-                raw_response=None,
-            )
-            raise
-        duration_ms = (time.time() - start_time) * 1000
-
-        # Parse response - with one retry on parse failure
-        try:
-            action, params = self.parser.parse(response, state)
-        except Exception as first_error:
-            # Retry once with a correction prompt
-            logger.warning(f"ai_json_parse_failed, retrying with correction: {first_error}")
-            try:
-                retry_messages = messages + [
-                    ChatMessage(role="assistant", content=response.message.content),
-                    ChatMessage(
-                        role="user",
-                        content=(
-                            'Your response was not valid JSON. Respond with ONLY a JSON object like: '
-                            '{"action": "TRADE", "reasoning": "...", "parameters": {}}'
-                        ),
-                    ),
-                ]
-                retry_request = ChatRequest(
-                    messages=retry_messages,
-                    model=model,
-                    temperature=0.3,
-                    max_tokens=300,
-                )
-                response = await self.llm_manager.chat(retry_request)
-                duration_ms = (time.time() - start_time) * 1000
-                action, params = self.parser.parse(response, state)
-                logger.info("ai_json_retry_succeeded")
-            except Exception as retry_error:
-                await self._log_llm_decision_error(
-                    state=state,
-                    model=model,
-                    request=request,
-                    messages=messages,
-                    duration_ms=duration_ms,
-                    error=retry_error,
-                    raw_response=getattr(response.message, "content", None),
-                )
-                self._is_thinking = False
-                raise
-
-        # Extract reasoning and store for external access
-        self._last_reasoning = self._extract_reasoning(response.message.content)
-
-        # Append this exchange to conversation history (compact summary + response)
-        compact_state = (
-            f"Turn {self._current_turn}: Sector {state.sector}, "
-            f"Credits {state.credits}, Turns left {state.turns_left}"
-        )
-        if state.has_port:
-            compact_state += f", Port {state.port_class}"
-        self._conversation_history.append(
-            ChatMessage(role="user", content=compact_state)
-        )
-        self._conversation_history.append(
-            ChatMessage(role="assistant", content=response.message.content)
-        )
-
-        # Trim history to max length (each exchange = 2 messages)
-        max_messages = self._max_history_turns * 2
-        if len(self._conversation_history) > max_messages:
-            self._conversation_history = self._conversation_history[-max_messages:]
-
-        # Print reasoning to bot logs
-        if self._last_reasoning:
-            print(f"  🤖 {self._last_reasoning}")
-
-        trace = {
-            "provider": self.config.llm.provider,
-            "model": model,
-            "request": {
-                "temperature": request.temperature,
-                "max_tokens": request.max_tokens,
-                "timeout_ms": getattr(self._settings, "timeout_ms", None),
-            },
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "response": {
-                "content": response.message.content,
-                "usage": {
-                    "prompt": response.usage.prompt_tokens if response.usage else 0,
-                    "completion": response.usage.completion_tokens if response.usage else 0,
-                    "total": response.usage.total_tokens if response.usage else 0,
-                },
-                "cached": bool(getattr(response, "cached", False)),
-                "duration_ms": duration_ms,
-            },
-        }
-
-        self._is_thinking = False
-        return action, params, trace
-
-    def _truncate(self, s: str | None, limit: int = 50_000) -> str:
-        if s is None:
-            return ""
-        if len(s) <= limit:
-            return s
-        return s[:limit] + "\n[...truncated...]"
-
-    @staticmethod
-    def _extract_reasoning(content: str) -> str:
-        """Extract reasoning field from LLM JSON response."""
-        import json as _json
-        import re as _re
-
-        try:
-            data = _json.loads(content)
-            return data.get("reasoning", "")
-        except _json.JSONDecodeError:
-            pass
-        # Try extracting from markdown code block or raw JSON
-        match = _re.search(r'"reasoning"\s*:\s*"([^"]*)"', content)
-        return match.group(1) if match else ""
-
-    async def _log_llm_decision(
-        self,
-        *,
-        state: GameState,
-        trace: dict,
-        action: TradeAction,
-        params: dict,
-        validated: bool,
-    ) -> None:
-        """Best-effort logging of the primary decision prompt/response to session JSONL."""
-        if not self._session_logger:
-            return
-        try:
-            messages = trace.get("messages", [])
-            for m in messages:
-                if isinstance(m, dict) and "content" in m:
-                    m["content"] = self._truncate(str(m.get("content", "")))
-            response = trace.get("response", {})
-            if isinstance(response, dict) and "content" in response:
-                response["content"] = self._truncate(str(response.get("content", "")))
-
-            event_data = {
-                "turn": self._current_turn,
-                "goal_id": self._current_goal_id,
-                "provider": trace.get("provider", self.config.llm.provider),
-                "model": trace.get("model", ""),
-                "request": trace.get("request", {}),
-                "messages": messages,
-                "response": response,
-                "parsed": {"action": action.name, "params": params},
-                "validated": bool(validated),
-                "state_hint": {
-                    "sector": state.sector,
-                    "credits": state.credits,
-                    "turns_left": state.turns_left,
-                    "context": getattr(state, "context", None),
-                },
-            }
-            await self._session_logger.log_event("llm.decision", event_data)
-        except Exception as e:
-            # Never break trading because logging failed.
-            logger.debug(f"llm_decision_log_failed: {e}")
-
-    async def _log_llm_decision_error(
-        self,
-        *,
-        state: GameState,
-        model: str,
-        request: ChatRequest,
-        messages: list[ChatMessage],
-        duration_ms: float,
-        error: Exception,
-        raw_response: str | None,
-    ) -> None:
-        if not self._session_logger:
-            return
-        try:
-            event_data = {
-                "turn": self._current_turn,
-                "goal_id": self._current_goal_id,
-                "provider": self.config.llm.provider,
-                "model": model,
-                "request": {
-                    "temperature": request.temperature,
-                    "max_tokens": request.max_tokens,
-                    "timeout_ms": getattr(self._settings, "timeout_ms", None),
-                },
-                "messages": [{"role": m.role, "content": self._truncate(m.content)} for m in messages],
-                "duration_ms": duration_ms,
-                "error_type": type(error).__name__,
-                "error_message": str(error),
-                "raw_response": self._truncate(raw_response),
-                "state_hint": {
-                    "sector": state.sector,
-                    "credits": state.credits,
-                    "turns_left": state.turns_left,
-                    "context": getattr(state, "context", None),
-                },
-            }
-            await self._session_logger.log_event("llm.decision_error", event_data)
-        except Exception as e:
-            logger.debug(f"llm_decision_error_log_failed: {e}")
 
     def _validate_decision(
         self,
@@ -597,44 +211,9 @@ class AIStrategy(TradingStrategy):
     ) -> bool:
         """Validate LLM decision against game state.
 
-        Args:
-            action: Proposed action
-            params: Action parameters
-            state: Current game state
-
-        Returns:
-            True if decision is valid
+        Delegates to validator module.
         """
-        # MOVE requires valid target
-        if action == TradeAction.MOVE:
-            target = params.get("target_sector")
-            if target is None:
-                return False
-            # Target should be in warps or known sectors
-            if state.warps and target not in state.warps:
-                logger.debug("invalid_move_target", target=target, warps=state.warps)
-                return False
-
-        # TRADE requires being at a port
-        if action == TradeAction.TRADE:
-            if not state.has_port:
-                logger.debug("trade_without_port")
-                return False
-
-        # BANK requires banking enabled
-        if action == TradeAction.BANK:
-            if not self.config.banking.enabled:
-                logger.debug("bank_not_enabled")
-                return False
-
-        # UPGRADE requires upgrade type
-        if action == TradeAction.UPGRADE:
-            upgrade_type = params.get("upgrade_type")
-            if upgrade_type not in ("holds", "fighters", "shields"):
-                logger.debug("invalid_upgrade_type", upgrade_type=upgrade_type)
-                return False
-
-        return True
+        return validator.validate_decision(action, params, state, self.config)
 
     def find_opportunities(self, state: GameState) -> list[TradeOpportunity]:
         """Find trading opportunities.
@@ -689,499 +268,6 @@ class AIStrategy(TradingStrategy):
             }
         )
 
-    async def _periodic_feedback(self, state: GameState) -> None:
-        """Generate periodic gameplay analysis using LLM.
-
-        Args:
-            state: Current game state
-        """
-        # Collect data from last N turns
-        lookback = self._settings.feedback_lookback_turns
-        start_turn = self._current_turn - lookback
-        recent_events = [e for e in self._recent_events if e.get("turn", 0) >= start_turn]
-
-        # Build analysis prompt
-        messages = [
-            ChatMessage(role="system", content=FEEDBACK_SYSTEM_PROMPT),
-            ChatMessage(role="user", content=self._build_feedback_prompt(state, recent_events, start_turn)),
-        ]
-
-        # Query LLM
-        request = ChatRequest(
-            messages=messages,
-            model=self.config.llm.ollama.model,
-            temperature=0.7,
-            max_tokens=self._settings.feedback_max_tokens,
-        )
-
-        start_time = time.time()
-        try:
-            response = await self.llm_manager.chat(request)
-            duration_ms = (time.time() - start_time) * 1000
-
-            # Log to event ledger
-            await self._log_feedback(state, messages, response, duration_ms, recent_events)
-
-            logger.info(
-                f"feedback_generated: turn={self._current_turn}, tokens={response.usage.total_tokens if response.usage else 0}"
-            )
-
-        except Exception as e:
-            logger.warning(f"feedback_loop_error: {e}")
-
-    def _build_feedback_prompt(
-        self,
-        state: GameState,
-        events: list[dict],
-        start_turn: int,
-    ) -> str:
-        """Build feedback analysis prompt.
-
-        Args:
-            state: Current game state
-            events: Recent events to analyze
-            start_turn: Starting turn number for analysis
-
-        Returns:
-            Formatted prompt string
-        """
-        # Count event types
-        decisions = [e for e in events if e.get("type") == "decision"]
-        trades = [e for e in events if e.get("type") == "trade"]
-
-        # Calculate profit if we have trade data
-        profit = 0
-        if trades:
-            for trade in trades:
-                if trade.get("action") == "sell":
-                    profit += trade.get("total", 0)
-                elif trade.get("action") == "buy":
-                    profit -= trade.get("total", 0)
-
-        # Format values safely
-        credits_str = f"{state.credits:,}" if state.credits is not None else "Unknown"
-        sector_str = str(state.sector) if state.sector is not None else "Unknown"
-        turns_str = str(state.turns_left) if state.turns_left is not None else "Unknown"
-        holds_str = f"{state.holds_free}/{state.holds_total}" if state.holds_free is not None else "Unknown"
-
-        return f"""GAMEPLAY SUMMARY (Turns {start_turn}-{self._current_turn}):
-
-Current Status:
-- Location: Sector {sector_str}
-- Credits: {credits_str}
-- Turns Remaining: {turns_str}
-- Ship: {holds_str} holds free
-
-Recent Activity:
-- Decisions Made: {len(decisions)}
-- Trades Executed: {len(trades)}
-- Net Profit This Period: {profit:,} credits
-
-Recent Decisions:
-{self._format_recent_decisions(decisions[-5:])}
-
-Performance Metrics:
-- Profit Per Turn: {profit / len(events) if events else 0:.1f}
-- Decisions Per Turn: {len(decisions) / self._settings.feedback_lookback_turns:.2f}
-
-Analyze the recent gameplay. What patterns do you notice? What's working well?
-What could be improved? Keep your analysis concise (2-3 observations)."""
-
-    def _format_recent_decisions(self, decisions: list[dict]) -> str:
-        """Format recent decisions for prompt.
-
-        Args:
-            decisions: List of decision events
-
-        Returns:
-            Formatted string
-        """
-        if not decisions:
-            return "  None"
-
-        lines = []
-        for d in decisions:
-            action = d.get("action", "unknown")
-            sector = d.get("sector", "?")
-            turn = d.get("turn", "?")
-            lines.append(f"  Turn {turn}: {action} at sector {sector}")
-
-        return "\n".join(lines)
-
-    async def _log_feedback(
-        self,
-        state: GameState,
-        messages: list[ChatMessage],
-        response: ChatResponse,
-        duration_ms: float,
-        events: list[dict],
-    ) -> None:
-        """Log feedback to event ledger.
-
-        Args:
-            state: Current game state
-            messages: Chat messages sent
-            response: LLM response
-            duration_ms: Response time in milliseconds
-            events: Events analyzed
-        """
-        if not self._session_logger:
-            logger.warning("feedback_no_logger: Cannot log feedback without session logger")
-            return
-
-        event_data = {
-            "turn": self._current_turn,
-            "turn_range": [
-                self._current_turn - self._settings.feedback_lookback_turns,
-                self._current_turn,
-            ],
-            "prompt": messages[1].content if len(messages) > 1 else "",
-            "response": response.message.content,
-            "context": {
-                "sector": state.sector,
-                "credits": state.credits,
-                "trades_this_period": len([e for e in events if e.get("type") == "trade"]),
-            },
-            "metadata": {
-                "model": self.config.llm.ollama.model,
-                "tokens": {
-                    "prompt": response.usage.prompt_tokens if response.usage else 0,
-                    "completion": response.usage.completion_tokens if response.usage else 0,
-                    "total": response.usage.total_tokens if response.usage else 0,
-                },
-                "cached": response.cached if hasattr(response, "cached") else False,
-                "duration_ms": duration_ms,
-            },
-        }
-
-        await self._session_logger.log_event("llm.feedback", event_data)
-
-    # -------------------------------------------------------------------------
-    # Goals System
-    # -------------------------------------------------------------------------
-
-    def get_current_goal(self) -> str:
-        """Get current goal ID.
-
-        Returns:
-            Goal ID string
-        """
-        return self._current_goal_id
-
-    def set_goal(self, goal_id: str, duration_turns: int = 0, state: GameState | None = None) -> None:
-        """Manually set current goal.
-
-        Args:
-            goal_id: Goal ID to activate
-            duration_turns: How many turns to maintain (0 = until changed)
-            state: Current game state for metrics
-        """
-        if goal_id not in [g.id for g in self._settings.goals.available]:
-            available = [g.id for g in self._settings.goals.available]
-            logger.warning(f"goal_not_found: {goal_id}, available: {available}")
-            return
-
-        old_goal = self._current_goal_id
-        self._current_goal_id = goal_id
-
-        if duration_turns > 0:
-            self._manual_override_until_turn = self._current_turn + duration_turns
-        else:
-            self._manual_override_until_turn = None
-
-        # Start new phase
-        reason = f"Manual override for {duration_turns} turns" if duration_turns > 0 else "Manual override"
-        self._start_goal_phase(
-            goal_id=goal_id,
-            trigger_type="manual",
-            reason=reason,
-            state=state,
-        )
-
-        logger.info(f"goal_changed: {old_goal} -> {goal_id}, duration={duration_turns}")
-
-        # Display timeline visualization on manual goal change
-        if self._settings.show_goal_visualization:
-            from bbsbot.games.tw2002.visualization import GoalTimeline
-
-            timeline = GoalTimeline(
-                phases=self._goal_phases,
-                current_turn=self._current_turn,
-                max_turns=self._max_turns,
-            )
-            lines: list[str] = []
-            lines.append("\n" + "=" * 80)
-            lines.append(f"MANUAL GOAL OVERRIDE: {old_goal.upper()} → {goal_id.upper()}")
-            if duration_turns > 0:
-                lines.append(f"Duration: {duration_turns} turns")
-            lines.append("=" * 80)
-            lines.append(timeline.render_progress_bar())
-            lines.append(timeline.render_legend())
-            lines.append("=" * 80 + "\n")
-            text = "\n".join(lines)
-            print(text)
-            self._emit_viz("timeline", text)
-
-        # Log to event ledger
-        if self._session_logger:
-            import asyncio
-
-            try:
-                asyncio.create_task(
-                    self._session_logger.log_event(
-                        "goal.changed",
-                        {
-                            "turn": self._current_turn,
-                            "old_goal": old_goal,
-                            "new_goal": goal_id,
-                            "duration_turns": duration_turns,
-                            "manual_override": True,
-                        },
-                    )
-                )
-            except Exception as e:
-                logger.warning(f"goal_event_logging_failed: {e}")
-
-    def _get_goal_config(self, goal_id: str):
-        """Get goal configuration by ID.
-
-        Args:
-            goal_id: Goal identifier
-
-        Returns:
-            Goal config or None
-        """
-        for goal in self._settings.goals.available:
-            if goal.id == goal_id:
-                return goal
-        return None
-
-    async def _maybe_reevaluate_goal(self, state: GameState) -> None:
-        """Re-evaluate current goal if needed.
-
-        Args:
-            state: Current game state
-        """
-        # Skip if manual override is active
-        if self._manual_override_until_turn is not None:
-            if self._current_turn < self._manual_override_until_turn:
-                return
-            else:
-                # Override expired
-                self._manual_override_until_turn = None
-                logger.info("goal_manual_override_expired")
-
-        # Skip if not using auto-select
-        if self._settings.goals.current != "auto":
-            return
-
-        # Check if it's time to re-evaluate
-        turns_since_eval = self._current_turn - self._last_goal_evaluation_turn
-        if turns_since_eval < self._settings.goals.reevaluate_every_turns:
-            return
-
-        # Re-evaluate and potentially change goal
-        new_goal_id = await self._select_goal(state)
-        if new_goal_id != self._current_goal_id:
-            old_goal = self._current_goal_id
-            self._current_goal_id = new_goal_id
-
-            # Determine reason for auto-selection
-            goal_config = self._get_goal_config(new_goal_id)
-            reason = f"Auto-selected: {goal_config.description if goal_config else 'triggers matched'}"
-
-            # Start new phase
-            self._start_goal_phase(
-                goal_id=new_goal_id,
-                trigger_type="auto",
-                reason=reason,
-                state=state,
-            )
-
-            logger.info(f"goal_auto_changed: {old_goal} -> {new_goal_id}")
-
-            # Display timeline visualization on goal change
-            if self._settings.show_goal_visualization:
-                from bbsbot.games.tw2002.visualization import GoalTimeline
-
-                timeline = GoalTimeline(
-                    phases=self._goal_phases,
-                    current_turn=self._current_turn,
-                    max_turns=self._max_turns,
-                )
-                lines: list[str] = []
-                lines.append("\n" + "=" * 80)
-                lines.append(f"GOAL CHANGED: {old_goal.upper()} → {new_goal_id.upper()}")
-                lines.append("=" * 80)
-                lines.append(timeline.render_progress_bar())
-                lines.append(timeline.render_legend())
-                lines.append("=" * 80 + "\n")
-                text = "\n".join(lines)
-                print(text)
-                self._emit_viz("timeline", text)
-
-            # Log to event ledger
-            if self._session_logger:
-                await self._session_logger.log_event(
-                    "goal.changed",
-                    {
-                        "turn": self._current_turn,
-                        "old_goal": old_goal,
-                        "new_goal": new_goal_id,
-                        "duration_turns": 0,
-                        "manual_override": False,
-                        "auto_selected": True,
-                    },
-                )
-
-        self._last_goal_evaluation_turn = self._current_turn
-
-    async def _select_goal(self, state: GameState) -> str:
-        """Auto-select best goal based on game state.
-
-        Args:
-            state: Current game state
-
-        Returns:
-            Best goal ID
-        """
-        priority_weights = {"low": 1, "medium": 2, "high": 3}
-
-        # Score each goal
-        scored_goals = []
-        for goal in self._settings.goals.available:
-            score = self._evaluate_goal_triggers(goal, state)
-            priority_weight = priority_weights.get(goal.priority, 2)
-            final_score = score * priority_weight
-            scored_goals.append((goal.id, final_score, goal.priority))
-
-        # Pick highest scoring goal
-        if scored_goals:
-            best = max(scored_goals, key=lambda x: x[1])
-            return best[0]
-
-        # Fallback to profit if no triggers match
-        return "profit"
-
-    def _evaluate_goal_triggers(self, goal, state: GameState) -> float:
-        """Evaluate how well a goal's triggers match current state.
-
-        Args:
-            goal: Goal configuration
-            state: Current game state
-
-        Returns:
-            Score from 0.0 (no match) to 1.0 (perfect match)
-        """
-        triggers = goal.trigger_when
-        matches = 0
-        total_conditions = 0
-
-        # Check credits conditions
-        if triggers.credits_below is not None:
-            total_conditions += 1
-            if state.credits is not None and state.credits < triggers.credits_below:
-                matches += 1
-
-        if triggers.credits_above is not None:
-            total_conditions += 1
-            if state.credits is not None and state.credits > triggers.credits_above:
-                matches += 1
-
-        # Check fighters conditions
-        if triggers.fighters_below is not None:
-            total_conditions += 1
-            if state.fighters is not None and state.fighters < triggers.fighters_below:
-                matches += 1
-
-        if triggers.fighters_above is not None:
-            total_conditions += 1
-            if state.fighters is not None and state.fighters > triggers.fighters_above:
-                matches += 1
-
-        # Check shields conditions
-        if triggers.shields_below is not None:
-            total_conditions += 1
-            if state.shields is not None and state.shields < triggers.shields_below:
-                matches += 1
-
-        if triggers.shields_above is not None:
-            total_conditions += 1
-            if state.shields is not None and state.shields > triggers.shields_above:
-                matches += 1
-
-        # Check turns conditions
-        if triggers.turns_remaining_above is not None:
-            total_conditions += 1
-            if state.turns_left is not None and state.turns_left > triggers.turns_remaining_above:
-                matches += 1
-
-        if triggers.turns_remaining_below is not None:
-            total_conditions += 1
-            if state.turns_left is not None and state.turns_left < triggers.turns_remaining_below:
-                matches += 1
-
-        # Check sector knowledge (would need to query self.knowledge)
-        if triggers.sectors_known_below is not None:
-            total_conditions += 1
-            known_count = self.knowledge.known_sector_count() if self.knowledge else 0
-            if known_count < triggers.sectors_known_below:
-                matches += 1
-
-        # If no conditions specified, give low score
-        if total_conditions == 0:
-            return 0.1
-
-        # Return match ratio
-        return matches / total_conditions
-
-    def _start_goal_phase(
-        self,
-        goal_id: str,
-        trigger_type: str,
-        reason: str,
-        state: GameState | None = None,
-    ) -> None:
-        """Start a new goal phase.
-
-        Args:
-            goal_id: Goal ID to start
-            trigger_type: "auto" or "manual"
-            reason: Why this goal was selected
-            state: Current game state for metrics
-        """
-        # Close current phase if active
-        if self._current_phase:
-            self._current_phase.end_turn = self._current_turn
-            self._current_phase.status = "completed"
-
-            # Record end metrics
-            if state:
-                self._current_phase.metrics["end_credits"] = state.credits
-                self._current_phase.metrics["end_fighters"] = state.fighters
-                self._current_phase.metrics["end_shields"] = state.shields
-                self._current_phase.metrics["end_holds"] = state.holds_total
-
-        # Create new phase
-        metrics = {}
-        if state:
-            metrics = {
-                "start_credits": state.credits,
-                "start_fighters": state.fighters,
-                "start_shields": state.shields,
-                "start_holds": state.holds_total,
-            }
-
-        self._current_phase = GoalPhase(
-            goal_id=goal_id,
-            start_turn=self._current_turn,
-            end_turn=None,
-            status="active",
-            trigger_type=trigger_type,
-            metrics=metrics,
-            reason=reason,
-        )
-        self._goal_phases.append(self._current_phase)
 
     def record_action_result(
         self,
@@ -1370,6 +456,26 @@ What could be improved? Keep your analysis concise (2-3 observations)."""
             "reason": reason,
             "goal": self._current_goal_id,
         }
+
+    # =========================================================================
+    # Goal Management Wrappers - Delegate to goals module
+    # =========================================================================
+
+    def get_current_goal(self) -> str:
+        """Get current goal ID."""
+        return goals.get_current_goal(self)
+
+    def set_goal(self, goal_id: str, duration_turns: int = 0, state: GameState | None = None, trigger_type: str = "") -> None:
+        """Manually set current goal."""
+        goals.set_goal(self, goal_id, duration_turns, state)
+
+    def _get_goal_config(self, goal_id: str):
+        """Get goal configuration by ID."""
+        return goals.get_goal_config(self, goal_id)
+
+    def _start_goal_phase(self, goal_id: str, trigger_type: str, reason: str, state: GameState | None = None) -> None:
+        """Start a new goal phase."""
+        goals.start_goal_phase(self, goal_id, trigger_type, reason, state)
 
     async def cleanup(self) -> None:
         """Cleanup resources."""
