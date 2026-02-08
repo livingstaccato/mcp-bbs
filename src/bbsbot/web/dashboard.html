@@ -103,6 +103,8 @@ tbody tr:hover { background: var(--bg3); }
 .state.completed { color: var(--blue); }
 .state.error { color: var(--red); }
 .state.stopped { color: var(--fg2); }
+.state.queued { color: var(--yellow); }
+.state.warning { color: #f0883e; }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Action buttons */
@@ -346,6 +348,10 @@ tbody tr:hover { background: var(--bg3); }
 <body>
 <div class="header">
   <h1>BBSBOT SWARM DASHBOARD</h1>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
+    <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
+  </div>
   <div class="status">
     <span class="dot disconnected" id="dot"></span>
     <span id="conn-status">Connecting...</span>

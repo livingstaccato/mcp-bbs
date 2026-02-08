@@ -109,7 +109,6 @@ class WorkerBot(TradingBot):
             # Build status update dict
             status_data = {
                 "sector": self.current_sector or 0,
-                "credits": credits,
                 "turns_executed": self.turns_used,
                 "turns_max": turns_max,
                 "state": "running",
@@ -119,11 +118,15 @@ class WorkerBot(TradingBot):
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
             }
 
+            # Only include credits if > 0 (prevents overwriting good data during reconnect)
+            if credits > 0:
+                status_data["credits"] = credits
+
             # Only include username/ship_level if they have values
             # This preserves previously-known values in the manager
             if username:
                 status_data["username"] = username
-            if ship_level:
+            if ship_level and ship_level not in ("0", "None", ""):
                 status_data["ship_level"] = ship_level
 
             await self._http_client.post(

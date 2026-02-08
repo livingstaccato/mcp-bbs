@@ -33,7 +33,7 @@ class BotStatus:
     bot_id: str
     pid: int
     config: str
-    state: str  # running, completed, error, stopped
+    state: str  # queued, running, completed, error, stopped
     sector: int = 0
     credits: int = 0
     turns_executed: int = 0
@@ -165,12 +165,18 @@ class SwarmManager:
                 stderr=subprocess.STDOUT,
             )
 
-            self.bots[bot_id] = BotStatus(
-                bot_id=bot_id,
-                pid=process.pid,
-                config=config_path,
-                state="running",
-            )
+            if bot_id in self.bots:
+                # Update pre-registered queued bot
+                self.bots[bot_id].pid = process.pid
+                self.bots[bot_id].state = "running"
+                self.bots[bot_id].last_update_time = time.time()
+            else:
+                self.bots[bot_id] = BotStatus(
+                    bot_id=bot_id,
+                    pid=process.pid,
+                    config=config_path,
+                    state="running",
+                )
             self.processes[bot_id] = process
 
             logger.info(f"Bot {bot_id} spawned with PID {process.pid}")
@@ -181,19 +187,64 @@ class SwarmManager:
             logger.error(f"Failed to spawn bot {bot_id}: {e}")
             raise RuntimeError(f"Failed to spawn bot: {e}")
 
-    async def spawn_swarm(self, config_paths: list[str]) -> list[str]:
-        """Spawn multiple bots from config list."""
+    async def spawn_swarm(
+        self,
+        config_paths: list[str],
+        group_size: int = 5,
+        group_delay: float = 60.0,
+    ) -> list[str]:
+        """Spawn multiple bots in staggered groups.
+
+        Args:
+            config_paths: List of config file paths for each bot.
+            group_size: Number of bots to spawn simultaneously per group.
+            group_delay: Seconds to wait between groups (allows logins to complete).
+        """
         bot_ids = []
+        total = len(config_paths)
+
+        # Pre-register all bots as queued so they appear in dashboard immediately
+        base_index = len(self.bots)
         for i, config in enumerate(config_paths):
-            bot_id = f"bot_{len(self.bots):03d}"
-            try:
-                await self.spawn_bot(config, bot_id)
-                bot_ids.append(bot_id)
-            except Exception as e:
-                logger.error(f"Failed to spawn bot {i} with {config}: {e}")
-            # Increased spawn interval to 12s - critical for reliable logins
-            # Each bot takes 60-90s to login, so 12s spacing = ~5-7 concurrent logins max
-            await asyncio.sleep(12.0)
+            bot_id = f"bot_{base_index + i:03d}"
+            if bot_id not in self.bots:
+                self.bots[bot_id] = BotStatus(
+                    bot_id=bot_id,
+                    pid=0,
+                    config=config,
+                    state="queued",
+                )
+        await self._broadcast_status()
+
+        for group_start in range(0, total, group_size):
+            group_end = min(group_start + group_size, total)
+            group_configs = config_paths[group_start:group_end]
+            group_num = (group_start // group_size) + 1
+            total_groups = (total + group_size - 1) // group_size
+
+            logger.info(
+                f"Spawning group {group_num}/{total_groups}: "
+                f"bots {group_start + 1}-{group_end} of {total}"
+            )
+
+            # Spawn all bots in this group concurrently
+            for i, config in enumerate(group_configs):
+                bot_id = f"bot_{base_index + group_start + i:03d}"
+                try:
+                    await self.spawn_bot(config, bot_id)
+                    bot_ids.append(bot_id)
+                except Exception as e:
+                    logger.error(f"Failed to spawn {bot_id} with {config}: {e}")
+
+            # Wait between groups to let logins complete before next batch
+            if group_end < total:
+                logger.info(
+                    f"Group {group_num} done ({len(group_configs)} spawned). "
+                    f"Waiting {group_delay}s before next group..."
+                )
+                await asyncio.sleep(group_delay)
+
+        logger.info(f"Swarm spawn complete: {len(bot_ids)}/{total} bots started")
         return bot_ids
 
     async def kill_bot(self, bot_id: str) -> None:
@@ -252,7 +303,7 @@ class SwarmManager:
 
             now = time.time()
             for bot in self.bots.values():
-                if bot.state == "running" and now - bot.last_update_time > 60:
+                if bot.state in ("running",) and now - bot.last_update_time > 60:
                     logger.warning(f"Bot {bot.bot_id} timeout")
                     bot.state = "error"
                     bot.error_message = "No status update (timeout)"

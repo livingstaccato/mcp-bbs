@@ -88,6 +88,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             # Skip this turn if we couldn't get state
             continue
 
+        # After first successful orient, push full state to dashboard immediately
+        if turns_used == 1 and hasattr(bot, 'report_status'):
+            await bot.report_status()
+
         char_state.update_from_game_state(state)
 
         # Update bot's current credits from state (needed for trade quantity calculations)

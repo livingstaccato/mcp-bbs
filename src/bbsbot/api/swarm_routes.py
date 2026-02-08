@@ -29,6 +29,8 @@ class SpawnBatchRequest(BaseModel):
     """Request body for batch spawning bots."""
 
     config_paths: list[str]
+    group_size: int = 5
+    group_delay: float = 60.0
 
 
 def setup(manager: SwarmManager) -> APIRouter:
@@ -65,11 +67,26 @@ async def spawn(config_path: str, bot_id: str = ""):
 @router.post("/swarm/spawn-batch")
 async def spawn_batch(request: SpawnBatchRequest):
     assert _manager is not None
-    try:
-        bot_ids = await _manager.spawn_swarm(request.config_paths)
-        return {"bot_ids": bot_ids, "count": len(bot_ids)}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+    total = len(request.config_paths)
+    groups = (total + request.group_size - 1) // request.group_size
+
+    # Run spawning in background so the API returns immediately
+    asyncio.create_task(
+        _manager.spawn_swarm(
+            request.config_paths,
+            group_size=request.group_size,
+            group_delay=request.group_delay,
+        )
+    )
+
+    return {
+        "status": "spawning",
+        "total_bots": total,
+        "group_size": request.group_size,
+        "group_delay": request.group_delay,
+        "total_groups": groups,
+        "estimated_time_seconds": (groups - 1) * request.group_delay,
+    }
 
 
 @router.get("/swarm/status")
@@ -78,6 +95,37 @@ async def status():
     from dataclasses import asdict
 
     return asdict(_manager.get_swarm_status())
+
+
+@router.post("/swarm/kill-all")
+async def kill_all():
+    """Kill all running bots in the swarm."""
+    assert _manager is not None
+    killed = []
+    for bot_id in list(_manager.processes.keys()):
+        try:
+            await _manager.kill_bot(bot_id)
+            killed.append(bot_id)
+        except Exception as e:
+            logger.error(f"Failed to kill {bot_id}: {e}")
+    return {"killed": killed, "count": len(killed)}
+
+
+@router.post("/swarm/clear")
+async def clear_swarm():
+    """Clear all bot entries (running bots are killed first)."""
+    assert _manager is not None
+    # Kill running bots first
+    for bot_id in list(_manager.processes.keys()):
+        try:
+            await _manager.kill_bot(bot_id)
+        except Exception:
+            pass
+    count = len(_manager.bots)
+    _manager.bots.clear()
+    _manager.processes.clear()
+    await _manager._broadcast_status()
+    return {"cleared": count}
 
 
 @router.get("/bot/{bot_id}/status")
@@ -103,9 +151,12 @@ async def update_status(bot_id: str, update: dict):
     if "sector" in update:
         bot.sector = update["sector"]
     if "credits" in update:
-        bot.credits = update["credits"]
+        # Only update credits if new value > 0 (prevents reset during reconnect)
+        if update["credits"] > 0:
+            bot.credits = update["credits"]
     if "turns_executed" in update:
-        bot.turns_executed = update["turns_executed"]
+        # Turns should only increase (high-water mark)
+        bot.turns_executed = max(bot.turns_executed, update["turns_executed"])
     if "turns_max" in update:
         bot.turns_max = update["turns_max"]
     if "state" in update:

@@ -97,6 +97,7 @@
       .map((b) => {
         const isRunning = b.state === "running";
         const isDead = ["completed", "error", "stopped"].includes(b.state);
+        const isQueued = b.state === "queued";
         const activity = b.activity_context || "IDLE";
         const activityClass = getActivityClass(activity);
         const hasError = b.state === "error" && (b.error_message || b.error_type);
@@ -106,7 +107,8 @@
           activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
         }
 
-        let stateHtml = `<span class="state ${b.state}">${b.state}</span>`;
+        const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", stopped: "⚫", queued: "🟡", warning: "🟠"}[b.state] || "⚪";
+        let stateHtml = `<span class="state ${b.state}" title="${b.state}">${stateEmoji}</span>`;
         if (hasError) {
           stateHtml += ` <span class="error-badge" title="Error: ${esc(b.error_type)}" onclick="window._openErrorModal('${esc(b.bot_id)}')">!</span>`;
         }
@@ -125,6 +127,7 @@
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td class="actions">
           <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')">Activity</button>
+          <button class="btn" onclick="window._openLogs('${esc(b.bot_id)}')" style="border-color:var(--fg2);color:var(--fg2);">Logs</button>
           <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"}>Restart</button>
           <button class="btn kill" onclick="window._killBot('${esc(b.bot_id)}')" ${isRunning ? "" : "disabled"}>Kill</button>
         </td>
@@ -440,6 +443,36 @@
       const resp = await fetch("/swarm/status");
       if (resp.ok) update(await resp.json());
     } catch (_) {}
+  }
+
+  // --- Swarm control buttons ---
+  const btnKillAll = $("#btn-kill-all");
+  const btnClear = $("#btn-clear");
+
+  if (btnKillAll) {
+    btnKillAll.addEventListener("click", async function () {
+      if (!confirm("Kill ALL running bots?")) return;
+      try {
+        const resp = await fetch("/swarm/kill-all", { method: "POST" });
+        const data = await resp.json();
+        showToast("Killed " + data.count + " bots", "success");
+      } catch (e) {
+        showToast("Network error", "error");
+      }
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener("click", async function () {
+      if (!confirm("Clear ALL bot entries? (running bots will be killed first)")) return;
+      try {
+        const resp = await fetch("/swarm/clear", { method: "POST" });
+        const data = await resp.json();
+        showToast("Cleared " + data.cleared + " bots", "success");
+      } catch (e) {
+        showToast("Network error", "error");
+      }
+    });
   }
 
   poll();

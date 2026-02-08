@@ -855,6 +855,11 @@ def _parse_display_screen(screen: str) -> dict:
     if holds_used_match and 'holds_total' in result:
         result['holds_free'] = result['holds_total'] - int(holds_used_match.group(1))
 
+    # Player name: "Trader Name      : SomeName"
+    name_match = re.search(r'(?:trader\s+)?name\s*:\s*(.+)', screen, re.IGNORECASE)
+    if name_match:
+        result['player_name'] = name_match.group(1).strip()
+
     # Ship type: "Ship type        : Merchant Cruiser"
     ship_match = re.search(r'ship\s+type\s*:\s*(.+)', screen, re.IGNORECASE)
     if ship_match:
@@ -1197,6 +1202,7 @@ async def _gather_state(
         state.holds_total = get_with_fallback('holds_total')
         state.holds_free = get_with_fallback('holds_free')
         state.ship_type = get_with_fallback('ship_type')
+        state.player_name = get_with_fallback('player_name')
         state.alignment = get_with_fallback('alignment')
         state.experience = get_with_fallback('experience')
         state.corp_id = get_with_fallback('corp_id')
