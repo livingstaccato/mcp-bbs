@@ -1,5 +1,5 @@
 {
-  "timestamp": 1770589325.144405,
+  "timestamp": 1770590165.1695528,
   "bots": {
     "bot_000": {
       "bot_id": "bot_000",
@@ -251,91 +251,91 @@
       "bot_id": "bot_003",
       "pid": 31460,
       "config": "config/swarm_demo/bot_02.yaml",
-      "state": "running",
-      "sector": 656,
-      "credits": 228138,
-      "turns_executed": 168,
+      "state": "completed",
+      "sector": 567,
+      "credits": 232911,
+      "turns_executed": 282,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770589320.869051,
-      "completed_at": null,
+      "last_update_time": 1770590067.98577,
+      "completed_at": 1770590075.276617,
       "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770589319.359831,
-      "activity_context": "EXPLORING",
+      "last_action": "TRADE",
+      "last_action_time": 1770589971.2155252,
+      "activity_context": "FINISHED",
       "error_type": null,
       "error_timestamp": null,
-      "exit_reason": null,
+      "exit_reason": "target_reached",
       "recent_actions": [
         {
-          "time": 1770589286.476695,
+          "time": 1770589743.305027,
+          "action": "EXPLORE",
+          "sector": 567,
+          "details": "126",
+          "result": "success"
+        },
+        {
+          "time": 1770589750.573246,
+          "action": "EXPLORE",
+          "sector": 567,
+          "details": "567",
+          "result": "failure"
+        },
+        {
+          "time": 1770589817.50192,
           "action": "TRADE",
-          "sector": 407,
+          "sector": 567,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770589289.257173,
+          "time": 1770589884.5290902,
           "action": "TRADE",
-          "sector": 407,
+          "sector": 567,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770589291.022934,
+          "time": 1770589886.2926989,
           "action": "EXPLORE",
-          "sector": 407,
-          "details": "552",
+          "sector": 567,
+          "details": "498",
           "result": "success"
         },
         {
-          "time": 1770589293.798484,
+          "time": 1770589890.240743,
+          "action": "EXPLORE",
+          "sector": 567,
+          "details": "126",
+          "result": "success"
+        },
+        {
+          "time": 1770589894.1868281,
+          "action": "EXPLORE",
+          "sector": 567,
+          "details": "126",
+          "result": "success"
+        },
+        {
+          "time": 1770589903.948417,
+          "action": "EXPLORE",
+          "sector": 498,
+          "details": "567",
+          "result": "failure"
+        },
+        {
+          "time": 1770589970.987277,
           "action": "TRADE",
-          "sector": 552,
+          "sector": 567,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770589296.582062,
+          "time": 1770590038.6185448,
           "action": "TRADE",
-          "sector": 552,
+          "sector": 567,
           "details": "all_commodities",
           "result": "failure"
-        },
-        {
-          "time": 1770589298.347543,
-          "action": "EXPLORE",
-          "sector": 552,
-          "details": "103",
-          "result": "success"
-        },
-        {
-          "time": 1770589302.298549,
-          "action": "EXPLORE",
-          "sector": 552,
-          "details": "271",
-          "result": "success"
-        },
-        {
-          "time": 1770589313.419106,
-          "action": "EXPLORE",
-          "sector": 103,
-          "details": "656",
-          "result": "failure"
-        },
-        {
-          "time": 1770589317.364469,
-          "action": "EXPLORE",
-          "sector": 656,
-          "details": "103",
-          "result": "failure"
-        },
-        {
-          "time": 1770589319.129834,
-          "action": "EXPLORE",
-          "sector": 103,
-          "details": "656",
-          "result": "success"
         }
       ],
       "username": "bot_003",
