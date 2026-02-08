@@ -91,10 +91,15 @@ class WorkerBot(TradingBot):
                 if hasattr(self, 'session') and self.session:
                     activity = "LOGGING_IN"
 
-            # Extract character/ship info for dashboard
-            username = self.character_name if self.character_name != self.bot_id else None
-            ship_name = None
+            # Extract character/ship info from game state
+            username = None
             ship_level = None
+
+            if self.game_state:
+                # Get player name from game state, fall back to character name
+                username = getattr(self.game_state, "player_name", None) or self.character_name
+                # Get ship type (e.g., "Merchant Cruiser", "Scout Ship")
+                ship_level = getattr(self.game_state, "ship_type", None)
 
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",
@@ -109,7 +114,6 @@ class WorkerBot(TradingBot):
                     "activity_context": activity,
                     "recent_actions": self.recent_actions[-10:],  # Last 10 actions
                     "username": username,
-                    "ship_name": ship_name,
                     "ship_level": ship_level,
                 },
             )

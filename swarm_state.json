@@ -1,122 +1,582 @@
 {
-  "timestamp": 1770572991.685735,
+  "timestamp": 1770573183.953173,
   "bots": {
-    "bot_001": {
-      "bot_id": "bot_001",
-      "pid": 83187,
-      "config": "config/swarm_demo/bot_01.yaml",
+    "bot_027": {
+      "bot_id": "bot_027",
+      "pid": 86019,
+      "config": "config/swarm_demo/bot_07.yaml",
       "state": "running",
-      "sector": 352,
+      "sector": 219,
       "credits": 0,
-      "turns_executed": 144,
+      "turns_executed": 11,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572989.959615,
-      "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770571831.706336,
-      "activity_context": "SECTOR_COMMAND",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770571828.71487,
-          "action": "EXPLORE",
-          "sector": 352,
-          "details": "549",
-          "result": "success"
-        },
-        {
-          "time": 1770571841.9391308,
-          "action": "EXPLORE",
-          "sector": 352,
-          "details": "921",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_002": {
-      "bot_id": "bot_002",
-      "pid": 83332,
-      "config": "config/swarm_demo/bot_02.yaml",
-      "state": "running",
-      "sector": 167,
-      "credits": 0,
-      "turns_executed": 22,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572990.619961,
+      "last_update_time": 1770573183.456498,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770572738.892709,
+      "last_action_time": 1770573040.185035,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770572736.572748,
+          "time": 1770573035.448179,
+          "action": "WAIT",
+          "sector": 219,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573039.876041,
           "action": "TRADE",
-          "sector": 167,
+          "sector": 219,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770572812.070944,
+          "time": 1770573111.3736398,
           "action": "TRADE",
-          "sector": 167,
+          "sector": 219,
           "details": "all_commodities",
           "result": "failure"
         }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
-    "bot_003": {
-      "bot_id": "bot_003",
-      "pid": 83412,
-      "config": "config/swarm_demo/bot_03.yaml",
+    "bot_028": {
+      "bot_id": "bot_028",
+      "pid": 86129,
+      "config": "config/swarm_demo/bot_08.yaml",
       "state": "running",
-      "sector": 352,
+      "sector": 960,
       "credits": 0,
-      "turns_executed": 141,
+      "turns_executed": 9,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572989.19007,
+      "last_update_time": 1770573179.8866172,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770573051.3075469,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770573048.989852,
+          "action": "EXPLORE",
+          "sector": 960,
+          "details": "740",
+          "result": "success"
+        },
+        {
+          "time": 1770573124.482767,
+          "action": "TRADE",
+          "sector": 960,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_029": {
+      "bot_id": "bot_029",
+      "pid": 86203,
+      "config": "config/swarm_demo/bot_09.yaml",
+      "state": "running",
+      "sector": 849,
+      "credits": 0,
+      "turns_executed": 128,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573181.274951,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770572183.051521,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572167.5330691,
+          "action": "TRADE",
+          "sector": 562,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770572171.973205,
+          "action": "TRADE",
+          "sector": 562,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770572177.746449,
+          "action": "EXPLORE",
+          "sector": 562,
+          "details": "849",
+          "result": "success"
+        },
+        {
+          "time": 1770572182.243861,
+          "action": "TRADE",
+          "sector": 562,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770572184.561476,
+          "action": "TRADE",
+          "sector": 849,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_030": {
+      "bot_id": "bot_030",
+      "pid": 86350,
+      "config": "config/swarm_demo/bot_10.yaml",
+      "state": "running",
+      "sector": 505,
+      "credits": 96179,
+      "turns_executed": 195,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573181.065708,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770573175.472438,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770573122.681984,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573131.128333,
+          "action": "EXPLORE",
+          "sector": 541,
+          "details": "380",
+          "result": "failure"
+        },
+        {
+          "time": 1770573137.06964,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573141.494205,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573148.93139,
+          "action": "EXPLORE",
+          "sector": 219,
+          "details": "960",
+          "result": "failure"
+        },
+        {
+          "time": 1770573153.359061,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573157.7869608,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573166.226758,
+          "action": "EXPLORE",
+          "sector": 178,
+          "details": "896",
+          "result": "failure"
+        },
+        {
+          "time": 1770573174.6654341,
+          "action": "EXPLORE",
+          "sector": 741,
+          "details": "152",
+          "result": "failure"
+        },
+        {
+          "time": 1770573179.092261,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_001": {
+      "bot_id": "bot_001",
+      "pid": 86357,
+      "config": "config/swarm_demo/bot_01.yaml",
+      "state": "running",
+      "sector": 183,
+      "credits": 0,
+      "turns_executed": 52,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573183.281655,
       "error_message": null,
       "last_action": "EXPLORE",
-      "last_action_time": 1770571855.995507,
+      "last_action_time": 1770572720.0040011,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572731.555517,
+          "action": "EXPLORE",
+          "sector": 183,
+          "details": "462",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_031": {
+      "bot_id": "bot_031",
+      "pid": 86405,
+      "config": "config/swarm_demo/bot_11.yaml",
+      "state": "running",
+      "sector": 849,
+      "credits": 0,
+      "turns_executed": 123,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573183.798382,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770572190.6422331,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572199.8915782,
+          "action": "EXPLORE",
+          "sector": 849,
+          "details": "713",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_002": {
+      "bot_id": "bot_002",
+      "pid": 86413,
+      "config": "config/swarm_demo/bot_02.yaml",
+      "state": "running",
+      "sector": 549,
+      "credits": 0,
+      "turns_executed": 166,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573182.107428,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770571843.71805,
       "activity_context": "SECTOR_COMMAND",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770571853.009151,
+          "time": 1770571840.7268639,
           "action": "EXPLORE",
-          "sector": 352,
-          "details": "667",
+          "sector": 549,
+          "details": "352",
           "result": "success"
         },
         {
-          "time": 1770571866.225526,
+          "time": 1770571853.9501498,
           "action": "EXPLORE",
-          "sector": 352,
-          "details": "667",
+          "sector": 549,
+          "details": "997",
           "result": "failure"
         }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_032": {
+      "bot_id": "bot_032",
+      "pid": 86489,
+      "config": "config/swarm_demo/bot_12.yaml",
+      "state": "running",
+      "sector": 380,
+      "credits": 95885,
+      "turns_executed": 184,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573182.7818182,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770573179.265524,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770573132.971501,
+          "action": "EXPLORE",
+          "sector": 219,
+          "details": "960",
+          "result": "failure"
+        },
+        {
+          "time": 1770573137.401058,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573145.8456671,
+          "action": "TRADE",
+          "sector": 219,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573154.284705,
+          "action": "EXPLORE",
+          "sector": 219,
+          "details": "727",
+          "result": "failure"
+        },
+        {
+          "time": 1770573158.7126641,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573163.140918,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573164.119252,
+          "action": "WAIT",
+          "sector": 178,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573171.71399,
+          "action": "EXPLORE",
+          "sector": 741,
+          "details": "152",
+          "result": "failure"
+        },
+        {
+          "time": 1770573176.1409101,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573178.4563289,
+          "action": "TRADE",
+          "sector": 380,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_003": {
+      "bot_id": "bot_003",
+      "pid": 86497,
+      "config": "config/swarm_demo/bot_03.yaml",
+      "state": "running",
+      "sector": 380,
+      "credits": 0,
+      "turns_executed": 49,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573183.030219,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770572744.768557,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572756.322326,
+          "action": "EXPLORE",
+          "sector": 380,
+          "details": "505",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_033": {
+      "bot_id": "bot_033",
+      "pid": 86552,
+      "config": "config/swarm_demo/bot_13.yaml",
+      "state": "running",
+      "sector": 741,
+      "credits": 95984,
+      "turns_executed": 34,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573182.639062,
+      "error_message": null,
+      "last_action": "BANK",
+      "last_action_time": 1770573182.059614,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770573174.792147,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573175.599642,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573176.407485,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573177.215044,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573178.0238411,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573178.830356,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573179.637456,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573180.4443798,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573181.251724,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770573182.059623,
+          "action": "BANK",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
     "bot_004": {
       "bot_id": "bot_004",
-      "pid": 83473,
+      "pid": 86560,
       "config": "config/swarm_demo/bot_04.yaml",
       "state": "running",
       "sector": 667,
       "credits": 0,
-      "turns_executed": 140,
+      "turns_executed": 163,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572990.9129071,
+      "last_update_time": 1770573181.071001,
       "error_message": null,
       "last_action": "EXPLORE",
       "last_action_time": 1770571867.7386081,
@@ -139,208 +599,457 @@
           "details": "352",
           "result": "failure"
         }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
-    "bot_005": {
-      "bot_id": "bot_005",
-      "pid": 83542,
-      "config": "config/swarm_demo/bot_05.yaml",
+    "bot_034": {
+      "bot_id": "bot_034",
+      "pid": 86620,
+      "config": "config/swarm_demo/bot_14.yaml",
       "state": "running",
-      "sector": 178,
-      "credits": 0,
-      "turns_executed": 18,
+      "sector": 380,
+      "credits": 96179,
+      "turns_executed": 151,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572991.477849,
+      "last_update_time": 1770573180.711712,
       "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572768.402588,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770573176.896302,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770572841.580415,
+          "time": 1770573130.113051,
+          "action": "EXPLORE",
+          "sector": 219,
+          "details": "541",
+          "result": "success"
+        },
+        {
+          "time": 1770573135.044178,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573139.469455,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573147.908788,
+          "action": "EXPLORE",
+          "sector": 219,
+          "details": "727",
+          "result": "failure"
+        },
+        {
+          "time": 1770573152.3372428,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573156.764389,
           "action": "TRADE",
           "sector": 178,
           "details": "all_commodities",
           "result": "failure"
+        },
+        {
+          "time": 1770573164.31163,
+          "action": "EXPLORE",
+          "sector": 178,
+          "details": "541",
+          "result": "failure"
+        },
+        {
+          "time": 1770573171.4531221,
+          "action": "MOVE",
+          "sector": 741,
+          "details": "380",
+          "result": "success"
+        },
+        {
+          "time": 1770573173.769294,
+          "action": "TRADE",
+          "sector": 380,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573176.087639,
+          "action": "TRADE",
+          "sector": 380,
+          "details": "all_commodities",
+          "result": "failure"
         }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
-    "bot_006": {
-      "bot_id": "bot_006",
-      "pid": 83610,
-      "config": "config/swarm_demo/bot_06.yaml",
+    "bot_005": {
+      "bot_id": "bot_005",
+      "pid": 86630,
+      "config": "config/swarm_demo/bot_05.yaml",
       "state": "running",
-      "sector": 726,
+      "sector": 866,
       "credits": 0,
-      "turns_executed": 130,
+      "turns_executed": 162,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572989.9573498,
+      "last_update_time": 1770573183.340745,
       "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770571891.749193,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770571879.982913,
       "activity_context": "SECTOR_COMMAND",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770571888.76,
+          "time": 1770571876.997935,
           "action": "EXPLORE",
-          "sector": 726,
-          "details": "562",
+          "sector": 866,
+          "details": "726",
           "result": "success"
         },
         {
-          "time": 1770571957.52953,
-          "action": "TRADE",
+          "time": 1770571890.2172952,
+          "action": "EXPLORE",
+          "sector": 866,
+          "details": "667",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_035": {
+      "bot_id": "bot_035",
+      "pid": 86687,
+      "config": "config/swarm_demo/bot_15.yaml",
+      "state": "running",
+      "sector": 726,
+      "credits": 0,
+      "turns_executed": 117,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573183.389685,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770572235.3213089,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572244.303603,
+          "action": "EXPLORE",
           "sector": 726,
+          "details": "562",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_006": {
+      "bot_id": "bot_006",
+      "pid": 86694,
+      "config": "config/swarm_demo/bot_06.yaml",
+      "state": "running",
+      "sector": 178,
+      "credits": 0,
+      "turns_executed": 38,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573183.914353,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770572780.6854599,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572851.864047,
+          "action": "TRADE",
+          "sector": 178,
           "details": "all_commodities",
           "result": "failure"
         }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_036": {
+      "bot_id": "bot_036",
+      "pid": 86745,
+      "config": "config/swarm_demo/bot_16.yaml",
+      "state": "running",
+      "sector": 178,
+      "credits": 96179,
+      "turns_executed": 188,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573180.1293812,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770573179.810185,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770573137.6691048,
+          "action": "EXPLORE",
+          "sector": 219,
+          "details": "727",
+          "result": "failure"
+        },
+        {
+          "time": 1770573143.610807,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573149.0476842,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573157.4890518,
+          "action": "EXPLORE",
+          "sector": 541,
+          "details": "380",
+          "result": "failure"
+        },
+        {
+          "time": 1770573161.4170198,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573163.73471,
+          "action": "TRADE",
+          "sector": 741,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573166.655276,
+          "action": "EXPLORE",
+          "sector": 741,
+          "details": "178",
+          "result": "success"
+        },
+        {
+          "time": 1770573169.475074,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573173.901349,
+          "action": "TRADE",
+          "sector": 178,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573176.821743,
+          "action": "EXPLORE",
+          "sector": 380,
+          "details": "505",
+          "result": "success"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
     "bot_007": {
       "bot_id": "bot_007",
-      "pid": 83668,
+      "pid": 86753,
       "config": "config/swarm_demo/bot_07.yaml",
       "state": "running",
       "sector": 178,
       "credits": 0,
-      "turns_executed": 16,
+      "turns_executed": 1,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572990.177112,
+      "last_update_time": 1770573180.4507048,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770572792.133128,
+      "last_action_time": 1770573161.028818,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_037": {
+      "bot_id": "bot_037",
+      "pid": 86810,
+      "config": "config/swarm_demo/bot_17.yaml",
+      "state": "running",
+      "sector": 726,
+      "credits": 0,
+      "turns_executed": 114,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573182.513323,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770572259.44726,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770572863.30787,
-          "action": "TRADE",
-          "sector": 178,
-          "details": "all_commodities",
+          "time": 1770572268.597026,
+          "action": "EXPLORE",
+          "sector": 726,
+          "details": "866",
           "result": "failure"
         }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
     "bot_008": {
       "bot_id": "bot_008",
-      "pid": 83737,
+      "pid": 86824,
       "config": "config/swarm_demo/bot_08.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 126,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572988.909666,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770571915.064346,
-      "activity_context": "SECTOR_COMMAND",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770571914.2563572,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770571986.2880409,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_009": {
-      "bot_id": "bot_009",
-      "pid": 83847,
-      "config": "config/swarm_demo/bot_09.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 125,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572991.15587,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770571927.381234,
-      "activity_context": "SECTOR_COMMAND",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770571926.573498,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770571998.573753,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_010": {
-      "bot_id": "bot_010",
-      "pid": 83976,
-      "config": "config/swarm_demo/bot_10.yaml",
       "state": "running",
       "sector": 741,
       "credits": 0,
-      "turns_executed": 19,
+      "turns_executed": 42,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572991.1579149,
+      "last_update_time": 1770573182.9881,
       "error_message": null,
       "last_action": "EXPLORE",
-      "last_action_time": 1770572828.128584,
+      "last_action_time": 1770572804.768575,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770572837.688378,
+          "time": 1770572816.318632,
           "action": "EXPLORE",
           "sector": 741,
           "details": "645",
           "result": "failure"
         }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
-    "bot_011": {
-      "bot_id": "bot_011",
-      "pid": 84062,
-      "config": "config/swarm_demo/bot_11.yaml",
+    "bot_038": {
+      "bot_id": "bot_038",
+      "pid": 86877,
+      "config": "config/swarm_demo/bot_18.yaml",
       "state": "running",
-      "sector": 218,
+      "sector": 541,
       "credits": 0,
-      "turns_executed": 17,
+      "turns_executed": 5,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572990.635822,
+      "last_update_time": 1770573183.2322822,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770573181.823806,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770573165.326252,
+          "action": "TRADE",
+          "sector": 741,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573167.642539,
+          "action": "TRADE",
+          "sector": 741,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770573175.08029,
+          "action": "EXPLORE",
+          "sector": 741,
+          "details": "178",
+          "result": "failure"
+        },
+        {
+          "time": 1770573179.505785,
+          "action": "TRADE",
+          "sector": 541,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_009": {
+      "bot_id": "bot_009",
+      "pid": 86888,
+      "config": "config/swarm_demo/bot_09.yaml",
+      "state": "running",
+      "sector": 178,
+      "credits": 0,
+      "turns_executed": 1,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573181.607917,
       "error_message": null,
       "last_action": null,
       "last_action_time": 0,
@@ -348,441 +1057,191 @@
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
-      "recent_actions": []
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_039": {
+      "bot_id": "bot_039",
+      "pid": 86943,
+      "config": "config/swarm_demo/bot_19.yaml",
+      "state": "running",
+      "sector": 335,
+      "credits": 0,
+      "turns_executed": 113,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573181.3158798,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770572287.007082,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572286.2000158,
+          "action": "TRADE",
+          "sector": 335,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770572294.201646,
+          "action": "TRADE",
+          "sector": 335,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_010": {
+      "bot_id": "bot_010",
+      "pid": 86950,
+      "config": "config/swarm_demo/bot_10.yaml",
+      "state": "running",
+      "sector": 562,
+      "credits": 0,
+      "turns_executed": 147,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573183.3879628,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770571939.423748,
+      "activity_context": "SECTOR_COMMAND",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770571938.615662,
+          "action": "TRADE",
+          "sector": 562,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770572010.63393,
+          "action": "TRADE",
+          "sector": 562,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_011": {
+      "bot_id": "bot_011",
+      "pid": 87019,
+      "config": "config/swarm_demo/bot_11.yaml",
+      "state": "running",
+      "sector": 218,
+      "credits": 0,
+      "turns_executed": 38,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573180.7874901,
+      "error_message": null,
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "LOGGING_IN",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_041": {
+      "bot_id": "bot_041",
+      "pid": 87127,
+      "config": "config/swarm_demo/bot_01.yaml",
+      "state": "running",
+      "sector": 1,
+      "credits": 0,
+      "turns_executed": 98,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770573179.9356759,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770572312.18155,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770572309.8634958,
+          "action": "TRADE",
+          "sector": 1,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770572317.977132,
+          "action": "TRADE",
+          "sector": 1,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     },
     "bot_012": {
       "bot_id": "bot_012",
-      "pid": 84142,
+      "pid": 87134,
       "config": "config/swarm_demo/bot_12.yaml",
       "state": "running",
-      "sector": 152,
-      "credits": 0,
-      "turns_executed": 9,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572990.490379,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572852.480439,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572923.66003,
-          "action": "TRADE",
-          "sector": 152,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_013": {
-      "bot_id": "bot_013",
-      "pid": 84202,
-      "config": "config/swarm_demo/bot_13.yaml",
-      "state": "running",
       "sector": 562,
       "credits": 0,
-      "turns_executed": 119,
+      "turns_executed": 144,
       "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770572989.200855,
+      "last_update_time": 1770573182.10329,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770571975.4630048,
+      "last_action_time": 1770571963.12941,
       "activity_context": "SECTOR_COMMAND",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770571974.647707,
+          "time": 1770571962.322848,
           "action": "TRADE",
           "sector": 562,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770572046.648706,
+          "time": 1770572034.344105,
           "action": "TRADE",
           "sector": 562,
           "details": "all_commodities",
           "result": "failure"
         }
-      ]
-    },
-    "bot_014": {
-      "bot_id": "bot_014",
-      "pid": 84269,
-      "config": "config/swarm_demo/bot_14.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 118,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572991.157164,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770571987.40466,
-      "activity_context": "SECTOR_COMMAND",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770571986.591008,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572058.5853388,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_015": {
-      "bot_id": "bot_015",
-      "pid": 84331,
-      "config": "config/swarm_demo/bot_15.yaml",
-      "state": "running",
-      "sector": 741,
-      "credits": 0,
-      "turns_executed": 11,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572989.594068,
-      "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770572891.62516,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572901.181728,
-          "action": "EXPLORE",
-          "sector": 741,
-          "details": "152",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_016": {
-      "bot_id": "bot_016",
-      "pid": 84389,
-      "config": "config/swarm_demo/bot_16.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 114,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572989.960335,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572011.179884,
-      "activity_context": "SECTOR_COMMAND",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572010.372405,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572082.364016,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_017": {
-      "bot_id": "bot_017",
-      "pid": 84453,
-      "config": "config/swarm_demo/bot_17.yaml",
-      "state": "running",
-      "sector": 178,
-      "credits": 0,
-      "turns_executed": 3,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572990.5547142,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572918.540689,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572916.2215092,
-          "action": "TRADE",
-          "sector": 178,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572989.739727,
-          "action": "TRADE",
-          "sector": 178,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_018": {
-      "bot_id": "bot_018",
-      "pid": 84506,
-      "config": "config/swarm_demo/bot_18.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 111,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572989.593261,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572035.87197,
-      "activity_context": "SECTOR_COMMAND",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572035.0645719,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572107.0560021,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_019": {
-      "bot_id": "bot_019",
-      "pid": 84573,
-      "config": "config/swarm_demo/bot_19.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 110,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572990.9213471,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572047.247214,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572046.439255,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572118.449044,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_021": {
-      "bot_id": "bot_021",
-      "pid": 84752,
-      "config": "config/swarm_demo/bot_01.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 107,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572990.0384169,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572071.33547,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572070.527751,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572142.52606,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_022": {
-      "bot_id": "bot_022",
-      "pid": 84834,
-      "config": "config/swarm_demo/bot_02.yaml",
-      "state": "running",
-      "sector": 727,
-      "credits": 0,
-      "turns_executed": 2,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572990.578336,
-      "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770572972.676064,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572983.9896262,
-          "action": "EXPLORE",
-          "sector": 727,
-          "details": "17",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_023": {
-      "bot_id": "bot_023",
-      "pid": 85667,
-      "config": "config/swarm_demo/bot_03.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 104,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572989.436836,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572095.807743,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572094.999677,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572167.0082119,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_024": {
-      "bot_id": "bot_024",
-      "pid": 85725,
-      "config": "config/swarm_demo/bot_04.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 103,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572990.899988,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572107.24895,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572106.4426198,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572178.4554071,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
-    },
-    "bot_025": {
-      "bot_id": "bot_025",
-      "pid": 85796,
-      "config": "config/swarm_demo/bot_05.yaml",
-      "state": "running",
-      "sector": 562,
-      "credits": 0,
-      "turns_executed": 101,
-      "turns_max": 500,
-      "uptime_seconds": 0,
-      "last_update_time": 1770572987.8650198,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770572119.223779,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770572118.413312,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770572190.420962,
-          "action": "TRADE",
-          "sector": 562,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ]
+      ],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
     }
   }
 }
