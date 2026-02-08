@@ -108,9 +108,26 @@ async def update_status(bot_id: str, update: dict):
         bot.turns_executed = update["turns_executed"]
     if "state" in update:
         bot.state = update["state"]
+    if "last_action" in update:
+        bot.last_action = update["last_action"]
+    if "last_action_time" in update:
+        bot.last_action_time = update["last_action_time"]
+    if "activity_context" in update:
+        bot.activity_context = update["activity_context"]
+    if "error_message" in update:
+        bot.error_message = update["error_message"]
+    if "error_type" in update:
+        bot.error_type = update["error_type"]
+    if "error_timestamp" in update:
+        bot.error_timestamp = update["error_timestamp"]
+    if "exit_reason" in update:
+        bot.exit_reason = update["exit_reason"]
+    if "recent_actions" in update:
+        bot.recent_actions = update["recent_actions"]
     import time
 
     bot.last_update_time = time.time()
+    await _manager._broadcast_status()
     return {"ok": True}
 
 

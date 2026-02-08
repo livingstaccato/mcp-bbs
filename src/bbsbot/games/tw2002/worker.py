@@ -36,6 +36,10 @@ class WorkerBot(TradingBot):
         self.bot_id = bot_id
         self.manager_url = manager_url
         self._http_client = httpx.AsyncClient(timeout=10)
+        # Activity tracking
+        self.current_action: str | None = None
+        self.current_action_time: float = 0
+        self.recent_actions: list[dict] = []
 
     async def register_with_manager(self) -> None:
         """Register this bot with the swarm manager."""
@@ -56,6 +60,20 @@ class WorkerBot(TradingBot):
             if credits == 0 and self.game_state and self.game_state.credits:
                 credits = self.game_state.credits
 
+            # Map game context to human-readable activity
+            activity = "IDLE"
+            if self.game_state:
+                context = getattr(self.game_state, "context", None)
+                if context:
+                    if context == "combat":
+                        activity = "BATTLING"
+                    elif context in ("port_trading", "bank", "ship_shop"):
+                        activity = "TRADING"
+                    elif context in ("navigation", "warp"):
+                        activity = "EXPLORING"
+                    else:
+                        activity = context.upper()
+
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",
                 json={
@@ -63,6 +81,10 @@ class WorkerBot(TradingBot):
                     "credits": credits,
                     "turns_executed": self.turns_used,
                     "state": "running",
+                    "last_action": self.current_action,
+                    "last_action_time": self.current_action_time,
+                    "activity_context": activity,
+                    "recent_actions": self.recent_actions[-10:],  # Last 10 actions
                 },
             )
         except Exception as e:
@@ -88,6 +110,40 @@ class WorkerBot(TradingBot):
                 await self._report_task
             except asyncio.CancelledError:
                 pass
+
+    def log_action(self, action: str, sector: int, details: str | None = None, result: str = "pending") -> None:
+        """Log a bot action for the action feed."""
+        import time
+        action_entry = {
+            "time": time.time(),
+            "action": action,
+            "sector": sector,
+            "details": details,
+            "result": result,
+        }
+        self.recent_actions.append(action_entry)
+        # Keep only last 10 actions
+        if len(self.recent_actions) > 10:
+            self.recent_actions = self.recent_actions[-10:]
+
+    async def report_error(self, error: Exception, exit_reason: str = "exception") -> None:
+        """Report detailed error information to manager."""
+        import time
+        try:
+            await self._http_client.post(
+                f"{self.manager_url}/bot/{self.bot_id}/status",
+                json={
+                    "state": "error",
+                    "error_message": str(error),
+                    "error_type": type(error).__name__,
+                    "error_timestamp": time.time(),
+                    "exit_reason": exit_reason,
+                    "last_action": self.current_action,
+                    "recent_actions": self.recent_actions[-10:],
+                },
+            )
+        except Exception as e:
+            logger.debug(f"Failed to report error: {e}")
 
     async def cleanup(self) -> None:
         """Clean up resources."""
@@ -167,6 +223,8 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
     except Exception as e:
         logger.error(f"Bot worker error: {e}", exc_info=True)
+        # Report detailed error to manager
+        await worker.report_error(e, exit_reason="exception")
     finally:
         # Final status report
         await worker.report_status()

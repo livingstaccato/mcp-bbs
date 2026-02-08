@@ -146,6 +146,12 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         profit = 0
         success = True
 
+        # Log action to bot's action feed (if worker bot)
+        import time
+        if hasattr(bot, 'log_action'):
+            bot.current_action = action.name
+            bot.current_action_time = time.time()
+
         # Execute action with error recovery
         try:
             if action == TradeAction.TRADE:
@@ -218,6 +224,23 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         except Exception as e:
             print(f"  ⚠️  Action failed: {type(e).__name__}: {e}")
             success = False
+
+        # Log action to bot's action feed (if worker bot)
+        if hasattr(bot, 'log_action'):
+            details = None
+            if action == TradeAction.TRADE:
+                commodity = params.get("commodity")
+                details = commodity or "all_commodities"
+            elif action in (TradeAction.MOVE, TradeAction.EXPLORE):
+                target = params.get("target_sector") or params.get("direction")
+                details = str(target)
+
+            bot.log_action(
+                action=action.name,
+                sector=state.sector,
+                details=details,
+                result="success" if success else "failure"
+            )
 
         result = TradeResult(
             success=success,

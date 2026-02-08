@@ -40,6 +40,16 @@ class BotStatus:
     uptime_seconds: float = 0
     last_update_time: float = field(default_factory=time.time)
     error_message: str | None = None
+    # Activity tracking
+    last_action: str | None = None        # "TRADING", "EXPLORING", "BATTLING", etc
+    last_action_time: float = 0           # timestamp of last action
+    activity_context: str | None = None   # current game context
+    # Error tracking
+    error_type: str | None = None         # Exception class name (e.g., "TimeoutError")
+    error_timestamp: float | None = None  # When error occurred
+    exit_reason: str | None = None        # "target_reached", "out_of_turns", "login_failed", etc
+    # Action feed (last 10 actions)
+    recent_actions: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -220,9 +230,17 @@ class SwarmManager:
                 if process.poll() is not None:
                     exit_code = process.returncode
                     logger.warning(f"Bot {bot_id} exited with code {exit_code}")
-                    self.bots[bot_id].state = (
-                        "error" if exit_code != 0 else "completed"
-                    )
+                    bot = self.bots[bot_id]
+                    if exit_code == 0:
+                        bot.state = "completed"
+                        if not bot.exit_reason:
+                            bot.exit_reason = "target_reached"
+                    else:
+                        bot.state = "error"
+                        if not bot.exit_reason:
+                            bot.exit_reason = f"exit_code_{exit_code}"
+                        if not bot.error_message:
+                            bot.error_message = f"Process exited with code {exit_code}"
                     del self.processes[bot_id]
                     await self._broadcast_status()
 
@@ -232,6 +250,10 @@ class SwarmManager:
                     logger.warning(f"Bot {bot.bot_id} timeout")
                     bot.state = "error"
                     bot.error_message = "No status update (timeout)"
+                    bot.error_type = "TimeoutError"
+                    bot.exit_reason = "status_timeout"
+                    import time as time_module
+                    bot.error_timestamp = time_module.time()
 
             await asyncio.sleep(self.health_check_interval)
 

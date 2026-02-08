@@ -37,10 +37,35 @@
     return h + "h" + String(m).padStart(2, "0") + "m";
   }
 
+  function formatRelativeTime(timestamp) {
+    if (!timestamp) return "N/A";
+    const now = Date.now() / 1000;
+    const age = now - timestamp;
+    if (age < 60) return Math.floor(age) + "s ago";
+    if (age < 3600) return Math.floor(age / 60) + "m ago";
+    return Math.floor(age / 3600) + "h ago";
+  }
+
   function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
     return d.innerHTML;
+  }
+
+  function getActivityBadge(context) {
+    if (!context) return "IDLE";
+    if (context.includes("trading") || context.includes("bank")) return "TRADING";
+    if (context.includes("battle") || context.includes("combat")) return "BATTLING";
+    if (context.includes("explore") || context.includes("navigation") || context.includes("warp")) return "EXPLORING";
+    return context.toUpperCase();
+  }
+
+  function getActivityClass(activity) {
+    const lower = (activity || "").toLowerCase();
+    if (lower.includes("trade")) return "trading";
+    if (lower.includes("battle")) return "battling";
+    if (lower.includes("explore")) return "exploring";
+    return "idle";
   }
 
   // --- Bot table rendering ---
@@ -70,9 +95,24 @@
       .map((b) => {
         const isRunning = b.state === "running";
         const isDead = ["completed", "error", "stopped"].includes(b.state);
+        const activity = b.activity_context || "IDLE";
+        const activityClass = getActivityClass(activity);
+        const hasError = b.state === "error" && (b.error_message || b.error_type);
+
+        let activityHtml = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
+        if (b.last_action_time) {
+          activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
+        }
+
+        let stateHtml = `<span class="state ${b.state}">${b.state}</span>`;
+        if (hasError) {
+          stateHtml += ` <span class="error-badge" title="Error: ${esc(b.error_type)}" onclick="window._openErrorModal('${esc(b.bot_id)}')">!</span>`;
+        }
+
         return `<tr>
         <td>${esc(b.bot_id)}</td>
-        <td><span class="state ${b.state}">${b.state}</span></td>
+        <td>${stateHtml}</td>
+        <td>${activityHtml}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${formatCredits(b.credits)}</td>
         <td class="numeric">${b.turns_executed}</td>
@@ -99,6 +139,75 @@
       }
       if (lastData) update(lastData);
     });
+  });
+
+  // --- Error modal ---
+  const errorModalOverlay = $("#error-modal-overlay");
+  const errorModalContent = $("#error-modal-content");
+
+  window._openErrorModal = function (botId) {
+    if (!lastData || !lastData.bots) return;
+    const bot = lastData.bots.find(b => b.bot_id === botId);
+    if (!bot || bot.state !== "error") return;
+
+    const timestamp = bot.error_timestamp
+      ? new Date(bot.error_timestamp * 1000).toLocaleString()
+      : "Unknown";
+
+    const html = `
+      <div class="field">
+        <div class="label">Bot ID</div>
+        <div class="value">${esc(bot.bot_id)}</div>
+      </div>
+      <div class="field">
+        <div class="label">Error Type</div>
+        <div class="value" style="color: var(--red);">${esc(bot.error_type || "Unknown")}</div>
+      </div>
+      <div class="field">
+        <div class="label">Error Message</div>
+        <div class="value" style="color: var(--red);">${esc(bot.error_message || "No message")}</div>
+      </div>
+      <div class="field">
+        <div class="label">Error Timestamp</div>
+        <div class="value">${esc(timestamp)}</div>
+      </div>
+      <div class="field">
+        <div class="label">Exit Reason</div>
+        <div class="value">${esc(bot.exit_reason || "exception")}</div>
+      </div>
+      <div class="field">
+        <div class="label">Last Action</div>
+        <div class="value">${esc(bot.last_action || "None")}</div>
+      </div>
+      ${(bot.recent_actions && bot.recent_actions.length > 0) ? `
+      <div class="field">
+        <div class="label">Recent Actions</div>
+        <div class="value">
+          ${bot.recent_actions.slice(-5).map(a => {
+            const time = new Date(a.time * 1000).toLocaleTimeString();
+            return `${time} ${a.action} (${a.sector}): ${a.result}`;
+          }).join("\\n")}
+        </div>
+      </div>
+      ` : ""}
+    `;
+
+    errorModalContent.innerHTML = html;
+    errorModalOverlay.classList.add("open");
+  };
+
+  function closeErrorModal() {
+    errorModalOverlay.classList.remove("open");
+  }
+
+  $("#error-modal-close").addEventListener("click", closeErrorModal);
+  errorModalOverlay.addEventListener("click", function (e) {
+    if (e.target === errorModalOverlay) closeErrorModal();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && errorModalOverlay.classList.contains("open")) {
+      closeErrorModal();
+    }
   });
 
   // --- Bot actions ---
