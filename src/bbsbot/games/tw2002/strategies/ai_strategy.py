@@ -477,6 +477,10 @@ class AIStrategy(TradingStrategy):
         """Start a new goal phase."""
         goals.start_goal_phase(self, goal_id, trigger_type, reason, state)
 
+    async def _select_goal(self, state: GameState) -> str:
+        """Auto-select best goal based on game state."""
+        return await goals.select_goal(self, state)
+
     async def cleanup(self) -> None:
         """Cleanup resources."""
         # Close final phase
