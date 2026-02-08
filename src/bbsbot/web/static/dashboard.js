@@ -513,6 +513,55 @@
     });
   }
 
+  const btnSpawn = $("#btn-spawn");
+  const spawnCount = $("#spawn-count");
+  const spawnConfig = $("#spawn-config");
+
+  if (btnSpawn) {
+    btnSpawn.addEventListener("click", async function () {
+      const count = parseInt(spawnCount.value) || 5;
+      const configDir = spawnConfig.value || "swarm_demo";
+
+      if (count < 1 || count > 100) {
+        showToast("Count must be between 1 and 100", "error");
+        return;
+      }
+
+      // Build list of config paths
+      const configs = [];
+      for (let i = 1; i <= count; i++) {
+        configs.push(`config/${configDir}/bot_${String(i).padStart(2, '0')}.yaml`);
+      }
+
+      try {
+        btnSpawn.disabled = true;
+        btnSpawn.textContent = "Spawning...";
+
+        const resp = await fetch("/swarm/spawn-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config_paths: configs,
+            group_size: 5,
+            group_delay: 12.0
+          })
+        });
+
+        const data = await resp.json();
+        showToast(`Spawning ${data.total_bots} bots in ${data.total_groups} groups (~${Math.floor(data.estimated_time_seconds / 60)}m)`, "success");
+
+        setTimeout(() => {
+          btnSpawn.disabled = false;
+          btnSpawn.textContent = "Spawn";
+        }, 2000);
+      } catch (e) {
+        showToast("Spawn failed: " + e.message, "error");
+        btnSpawn.disabled = false;
+        btnSpawn.textContent = "Spawn";
+      }
+    });
+  }
+
   poll();
   connect();
 
