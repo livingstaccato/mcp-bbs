@@ -40,6 +40,7 @@ class BotStatus(BaseModel):
     turns_max: int = 500  # Max turns for this session
     uptime_seconds: float = 0
     last_update_time: float = Field(default_factory=time.time)
+    completed_at: float | None = None  # Timestamp when bot completed
     error_message: str | None = None
     # Activity tracking
     last_action: str | None = None        # "TRADING", "EXPLORING", "BATTLING", etc
@@ -290,6 +291,7 @@ class SwarmManager:
                     bot = self.bots[bot_id]
                     if exit_code == 0:
                         bot.state = "completed"
+                        bot.completed_at = time.time()
                         if not bot.exit_reason:
                             bot.exit_reason = "target_reached"
                     else:
@@ -368,6 +370,7 @@ class SwarmManager:
                             turns_max=bot_data.get("turns_max", 500),
                             uptime_seconds=bot_data.get("uptime_seconds", 0),
                             last_update_time=bot_data.get("last_update_time", time.time()),
+                            completed_at=bot_data.get("completed_at"),
                             error_message=bot_data.get("error_message"),
                             last_action=bot_data.get("last_action"),
                             last_action_time=bot_data.get("last_action_time", 0),

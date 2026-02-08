@@ -106,16 +106,19 @@ class WorkerBot(TradingBot):
                 activity = "HIJACKED"
 
             # Extract character/ship info from game state
-            # Always include username and ship_level, even if None
+            # Always include username, ship_level, ship_name even if None
             # This helps the dashboard track character progression
             username = None
             ship_level = None
+            ship_name = None
 
             if self.game_state:
                 # Get player name from game state, fall back to character name
                 username = getattr(self.game_state, "player_name", None) or self.character_name
                 # Get ship type (e.g., "Merchant Cruiser", "Scout Ship")
                 ship_level = getattr(self.game_state, "ship_type", None)
+                # Get custom ship name (e.g., "SS Enterprise", "The Swift Venture")
+                ship_name = getattr(self.game_state, "ship_name", None)
             else:
                 # If no game_state yet, still use character_name as fallback username
                 username = self.character_name
@@ -136,7 +139,24 @@ class WorkerBot(TradingBot):
             orient_max = getattr(self, '_orient_max', 0)
             orient_phase = getattr(self, '_orient_phase', '')
             if orient_phase:
-                activity = f"ORIENTING ({orient_step}/{orient_max})"
+                # Show meaningful phase instead of confusing (0/0)
+                if orient_step > 0 and orient_max > 0:
+                    activity = f"ORIENTING: Step {orient_step}/{orient_max}"
+                else:
+                    # Map phase names to readable strings
+                    phase_names = {
+                        "starting": "Initializing",
+                        "gather": "Gathering state",
+                        "safe_state": "Finding safe prompt",
+                        "blank_wake": "Waking connection",
+                        "failed": "Failed",
+                    }
+                    phase_display = phase_names.get(orient_phase, orient_phase.title())
+                    activity = f"ORIENTING: {phase_display}"
+
+            # Check if AI strategy is thinking (waiting for LLM response)
+            if self.strategy and hasattr(self.strategy, '_is_thinking') and self.strategy._is_thinking:
+                activity = "THINKING"
 
             # Build status update dict
             status_data = {
@@ -157,12 +177,14 @@ class WorkerBot(TradingBot):
             if credits > 0:
                 status_data["credits"] = credits
 
-            # Only include username/ship_level if they have values
+            # Only include username/ship_level/ship_name if they have values
             # This preserves previously-known values in the manager
             if username:
                 status_data["username"] = username
             if ship_level and ship_level not in ("0", "None", ""):
                 status_data["ship_level"] = ship_level
+            if ship_name and ship_name not in ("0", "None", ""):
+                status_data["ship_name"] = ship_name
 
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",

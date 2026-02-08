@@ -45,6 +45,7 @@ class GameState(BaseModel):
     fighters: int | None = None
     shields: int | None = None
     ship_type: str | None = None
+    ship_name: str | None = None  # Custom ship name like "SS Enterprise"
 
     # Player status
     alignment: int | None = None
@@ -65,6 +66,7 @@ class GameState(BaseModel):
     raw_screen: str = ""
     prompt_id: str | None = None
     timestamp: float = Field(default_factory=time)
+    orientation_step: str | None = None  # "Attempt 2/10: Parsing display"
 
     model_config = ConfigDict(extra="ignore")
 
@@ -884,6 +886,15 @@ def _parse_display_screen(screen: str) -> dict:
     ship_match = re.search(r'ship\s+type\s*:\s*(.+)', screen, re.IGNORECASE)
     if ship_match:
         result['ship_type'] = ship_match.group(1).strip()
+
+    # Ship name: "Your ship        : SS Enterprise" or "Ship             : The Swift Venture"
+    # Look for "ship" or "your ship" NOT followed by "type"
+    ship_name_match = re.search(r'(?:your\s+)?ship\s*:\s*(.+?)(?:\s*$|\n)', screen, re.IGNORECASE)
+    if ship_name_match:
+        name = ship_name_match.group(1).strip()
+        # Make sure we didn't capture "Ship type" line
+        if not name.lower().startswith('type'):
+            result['ship_name'] = name
 
     # Alignment: "Alignment        : 500 (Good)"
     align_match = re.search(r'alignment\s*:\s*(-?\d+)', screen, re.IGNORECASE)

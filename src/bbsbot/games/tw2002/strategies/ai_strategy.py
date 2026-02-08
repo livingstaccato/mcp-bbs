@@ -80,6 +80,9 @@ class AIStrategy(TradingStrategy):
         # Ollama verification: warm up model on first call
         self._ollama_verified: bool = False
 
+        # LLM activity status (for dashboard visibility)
+        self._is_thinking: bool = False
+
         # Conversation history for LLM context across turns
         self._conversation_history: list[ChatMessage] = []
         self._max_history_turns: int = 20
@@ -373,9 +376,11 @@ class AIStrategy(TradingStrategy):
         )
 
         start_time = time.time()
+        self._is_thinking = True  # Set flag for dashboard
         try:
             response = await self.llm_manager.chat(request)
         except Exception as e:
+            self._is_thinking = False
             duration_ms = (time.time() - start_time) * 1000
             await self._log_llm_decision_error(
                 state=state,
@@ -426,6 +431,7 @@ class AIStrategy(TradingStrategy):
                     error=retry_error,
                     raw_response=getattr(response.message, "content", None),
                 )
+                self._is_thinking = False
                 raise
 
         # Extract reasoning and store for external access
@@ -475,6 +481,7 @@ class AIStrategy(TradingStrategy):
             },
         }
 
+        self._is_thinking = False
         return action, params, trace
 
     def _truncate(self, s: str | None, limit: int = 50_000) -> str:
