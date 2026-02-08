@@ -1,8 +1,8 @@
 # Handoff: Game-Specific MCP Tools Implementation
 
 **Completed**: 2026-02-08
-**Session**: Claude Opus
-**Status**: ✅ COMPLETE - All 3 phases implemented and tested
+**Session**: Claude Opus, Claude Haiku
+**Status**: ✅ COMPLETE - All 3 phases implemented, tested, + BBS tool filtering fix applied (2026-02-08)
 
 ## Summary
 
@@ -112,6 +112,29 @@ result = await tw2002_debug(command='bot_state')
 - `5b818a7` - Fix: Only register game tools when --game filter is explicitly provided
 - `645dec3` - Add comprehensive documentation for game-specific MCP tools
 - `d19b0a2` - Refactor: Replace game-specific MCP command with granular --tools flag
+- `eb5287b` - Fix: Make BBS tool registration conditional based on --tools flag (CRITICAL)
+
+## Critical Fix: BBS Tool Registration (2026-02-08)
+
+**Problem**: BBS tools were registered via `@app.tool()` decorators at module import time, bypassing the `--tools` prefix filter. When users ran `bbsbot serve --tools tw2002_`, they still saw all 37 BBS tools instead of just TW2002 tools.
+
+**Root Cause**: The `app = FastMCP("bbsbot")` was created at module level, and all BBS tools were decorated with `@app.tool()` which executed at import time before any filtering logic.
+
+**Solution**:
+1. Move `app` creation into `create_app()` function instead of module level
+2. Keep `_default_app` at module level for the decorators to use
+3. Add `_register_bbs_tools()` function that conditionally registers BBS tools based on `allowed_prefixes`
+4. Check if "bbs_" is in the prefix filter before registering BBS tools
+
+**Results**:
+- ✓ `bbsbot serve` (no --tools flag): 0 tools
+- ✓ `bbsbot serve --tools bbs_`: 37 BBS tools only
+- ✓ `bbsbot serve --tools tw2002_`: 8 TW2002 tools only
+- ✓ `bbsbot serve --tools bbs_,tw2002_`: 45 total tools (37 BBS + 8 TW2002)
+- ✓ All 84 tests pass (including 6 MCP filtering tests)
+
+**Files Modified**:
+- `src/bbsbot/mcp/server.py` - Added `_register_bbs_tools()`, refactored `create_app()`
 
 ## Documentation
 
