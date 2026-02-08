@@ -1,0 +1,394 @@
+"""CLI for swarm management.
+
+Provides command-line interface to control the swarm manager.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import glob
+import json
+from pathlib import Path
+from typing import Optional
+
+import click
+import httpx
+from rich.console import Console
+from rich.table import Table
+from rich.live import Live
+from rich.layout import Layout
+
+console = Console()
+
+MANAGER_URL = "http://localhost:8000"
+
+
+def format_uptime(seconds: float) -> str:
+    """Format uptime in human readable format."""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        return f"{seconds / 60:.1f}m"
+    else:
+        return f"{seconds / 3600:.1f}h"
+
+
+def format_credits(credits: int) -> str:
+    """Format credits with thousands separator."""
+    return f"{credits:,}"
+
+
+@click.group()
+def cli() -> None:
+    """BBSBot Swarm Manager CLI."""
+    pass
+
+
+@cli.command()
+@click.option("--config", required=True, help="Path to bot config file")
+@click.option("--bot-id", default=None, help="Custom bot ID")
+def spawn(config: str, bot_id: Optional[str]) -> None:
+    """Spawn a single bot.
+
+    Args:
+        config: Path to bot config YAML file
+        bot_id: Optional custom bot ID
+    """
+    if not Path(config).exists():
+        console.print(f"[red]Error: Config not found: {config}")
+        return
+
+    with httpx.Client() as client:
+        try:
+            response = client.post(
+                f"{MANAGER_URL}/swarm/spawn",
+                params={"config_path": config, "bot_id": bot_id or ""},
+            )
+            data = response.json()
+
+            if response.status_code == 200:
+                console.print(
+                    f"[green]✓[/green] Spawned bot: "
+                    f"[cyan]{data['bot_id']}[/cyan] (PID: {data['pid']})"
+                )
+            else:
+                console.print(f"[red]Error: {data.get('error', 'Unknown')}")
+        except Exception as e:
+            console.print(f"[red]Error: {e}")
+
+
+@cli.command()
+@click.option("--count", default=111, help="Number of bots to spawn")
+@click.option("--pattern", default="config/test_matrix/*.yaml", help="Config file pattern")
+@click.option("--stagger", default=0.5, type=float, help="Delay between spawns (seconds)")
+def spawn_swarm(count: int, pattern: str, stagger: float) -> None:
+    """Spawn multiple bots (swarm).
+
+    Args:
+        count: Number of bots to spawn
+        pattern: Glob pattern for config files
+        stagger: Delay between spawns in seconds
+    """
+    configs = glob.glob(pattern)[:count]
+
+    if not configs:
+        console.print(f"[red]Error: No configs found matching: {pattern}")
+        return
+
+    console.print(
+        f"[cyan]Spawning {len(configs)} bots with "
+        f"{stagger}s stagger...[/cyan]"
+    )
+
+    with httpx.Client() as client:
+        try:
+            response = client.post(
+                f"{MANAGER_URL}/swarm/spawn-batch",
+                json={"config_paths": configs},
+            )
+            data = response.json()
+
+            if response.status_code == 200:
+                console.print(
+                    f"[green]✓[/green] Spawned "
+                    f"[cyan]{data['count']}[/cyan] bots"
+                )
+                for bot_id in data["bot_ids"][:5]:
+                    console.print(f"  - {bot_id}")
+                if len(data["bot_ids"]) > 5:
+                    console.print(
+                        f"  ... and {len(data['bot_ids']) - 5} more"
+                    )
+            else:
+                console.print(f"[red]Error: {data.get('error', 'Unknown')}")
+        except Exception as e:
+            console.print(f"[red]Error: {e}")
+
+
+@cli.command()
+@click.option("--bot-id", default=None, help="Show specific bot status")
+def status(bot_id: Optional[str]) -> None:
+    """Get swarm status.
+
+    Args:
+        bot_id: Optional specific bot to show
+    """
+    with httpx.Client() as client:
+        try:
+            if bot_id:
+                response = client.get(
+                    f"{MANAGER_URL}/bot/{bot_id}/status"
+                )
+                if response.status_code == 200:
+                    bot = response.json()
+                    console.print(f"\n[cyan]Bot Status: {bot['bot_id']}[/cyan]")
+                    console.print(f"  PID: {bot['pid']}")
+                    console.print(f"  State: {bot['state']}")
+                    console.print(f"  Sector: {bot['sector']}")
+                    console.print(
+                        f"  Credits: {format_credits(bot['credits'])}"
+                    )
+                    console.print(f"  Turns: {bot['turns_executed']}")
+                else:
+                    console.print(
+                        f"[red]Error: {response.json().get('error')}"
+                    )
+            else:
+                response = client.get(f"{MANAGER_URL}/swarm/status")
+                data = response.json()
+
+                # Summary
+                console.print(f"\n[cyan]Swarm Status[/cyan]")
+                console.print(
+                    f"  Running: [green]{data['running']}[/green] / "
+                    f"{data['total_bots']}"
+                )
+                console.print(
+                    f"  Completed: [green]{data['completed']}[/green]"
+                )
+                console.print(f"  Errors: [red]{data['errors']}[/red]")
+                console.print(
+                    f"  Total Credits: "
+                    f"[cyan]{format_credits(data['total_credits'])}[/cyan]"
+                )
+                console.print(
+                    f"  Total Turns: "
+                    f"[cyan]{data['total_turns']:,}[/cyan]"
+                )
+                console.print(
+                    f"  Uptime: "
+                    f"[cyan]{format_uptime(data['uptime_seconds'])}[/cyan]"
+                )
+
+                # Bot table
+                if data["bots"]:
+                    table = Table(title="Bot Details")
+                    table.add_column("Bot ID", style="cyan")
+                    table.add_column("State")
+                    table.add_column("Sector", justify="right")
+                    table.add_column("Credits", justify="right")
+                    table.add_column("Turns", justify="right")
+
+                    for bot in sorted(
+                        data["bots"],
+                        key=lambda b: b["bot_id"],
+                    )[:20]:
+                        state_color = {
+                            "running": "green",
+                            "paused": "yellow",
+                            "completed": "blue",
+                            "error": "red",
+                        }.get(bot["state"], "white")
+
+                        table.add_row(
+                            bot["bot_id"],
+                            f"[{state_color}]{bot['state']}[/{state_color}]",
+                            str(bot["sector"]),
+                            format_credits(bot["credits"]),
+                            str(bot["turns_executed"]),
+                        )
+
+                    if len(data["bots"]) > 20:
+                        console.print(
+                            f"\n... and {len(data['bots']) - 20} more bots"
+                        )
+
+                    console.print(table)
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}")
+
+
+@cli.command()
+@click.option("--bot-id", required=True, help="Bot to pause")
+def pause(bot_id: str) -> None:
+    """Pause a running bot.
+
+    Args:
+        bot_id: ID of bot to pause
+    """
+    with httpx.Client() as client:
+        try:
+            response = client.post(
+                f"{MANAGER_URL}/bot/{bot_id}/pause"
+            )
+            if response.status_code == 200:
+                console.print(f"[green]✓[/green] Paused bot: {bot_id}")
+            else:
+                console.print(
+                    f"[red]Error: {response.json().get('error')}"
+                )
+        except Exception as e:
+            console.print(f"[red]Error: {e}")
+
+
+@cli.command()
+@click.option("--bot-id", required=True, help="Bot to resume")
+def resume(bot_id: str) -> None:
+    """Resume a paused bot.
+
+    Args:
+        bot_id: ID of bot to resume
+    """
+    with httpx.Client() as client:
+        try:
+            response = client.post(
+                f"{MANAGER_URL}/bot/{bot_id}/resume"
+            )
+            if response.status_code == 200:
+                console.print(f"[green]✓[/green] Resumed bot: {bot_id}")
+            else:
+                console.print(
+                    f"[red]Error: {response.json().get('error')}"
+                )
+        except Exception as e:
+            console.print(f"[red]Error: {e}")
+
+
+@cli.command()
+@click.option("--bot-id", required=True, help="Bot to kill")
+def kill(bot_id: str) -> None:
+    """Terminate a bot.
+
+    Args:
+        bot_id: ID of bot to terminate
+    """
+    if click.confirm(f"Kill bot {bot_id}?"):
+        with httpx.Client() as client:
+            try:
+                response = client.delete(
+                    f"{MANAGER_URL}/bot/{bot_id}"
+                )
+                if response.status_code == 200:
+                    console.print(f"[green]✓[/green] Killed bot: {bot_id}")
+                else:
+                    console.print(
+                        f"[red]Error: {response.json().get('error')}"
+                    )
+            except Exception as e:
+                console.print(f"[red]Error: {e}")
+
+
+@cli.command()
+@click.option("--bot-id", required=True, help="Bot to modify")
+@click.option("--goal", required=True, help="New goal")
+def set_goal(bot_id: str, goal: str) -> None:
+    """Set bot goal.
+
+    Args:
+        bot_id: ID of bot
+        goal: New goal (e.g., 'exploration', 'profit', 'banking')
+    """
+    with httpx.Client() as client:
+        try:
+            response = client.post(
+                f"{MANAGER_URL}/bot/{bot_id}/set-goal",
+                json={"goal": goal},
+            )
+            if response.status_code == 200:
+                console.print(
+                    f"[green]✓[/green] Set {bot_id} goal to: {goal}"
+                )
+            else:
+                console.print(
+                    f"[red]Error: {response.json().get('error')}"
+                )
+        except Exception as e:
+            console.print(f"[red]Error: {e}")
+
+
+@cli.command()
+def watch() -> None:
+    """Watch swarm status in real-time (WebSocket)."""
+    console.print("[cyan]Connecting to swarm manager...[/cyan]")
+
+    try:
+        import websockets
+
+        async def watch_swarm():
+            uri = MANAGER_URL.replace("http", "ws") + "/ws/swarm"
+            async with websockets.connect(uri) as websocket:
+                console.print(
+                    "[green]✓[/green] Connected to swarm manager"
+                )
+                console.print(
+                    "[yellow]Press Ctrl+C to stop[/yellow]\n"
+                )
+
+                while True:
+                    message = await websocket.recv()
+                    data = json.loads(message)
+
+                    # Clear and print status
+                    console.clear()
+                    console.print(
+                        f"[cyan]Swarm Status - "
+                        f"Uptime: {format_uptime(data['uptime_seconds'])}"
+                        f"[/cyan]\n"
+                    )
+                    console.print(
+                        f"Running: [green]{data['running']}[/green] / "
+                        f"{data['total_bots']} | "
+                        f"Completed: [cyan]{data['completed']}[/cyan] | "
+                        f"Errors: [red]{data['errors']}[/red]\n"
+                    )
+                    console.print(
+                        f"Total Credits: "
+                        f"[cyan]{format_credits(data['total_credits'])}[/cyan] | "
+                        f"Total Turns: "
+                        f"[cyan]{data['total_turns']:,}[/cyan]\n"
+                    )
+
+                    # Show top bots by credits
+                    if data["bots"]:
+                        top_bots = sorted(
+                            data["bots"],
+                            key=lambda b: b["credits"],
+                            reverse=True,
+                        )[:10]
+
+                        console.print("[cyan]Top Bots by Credits:[/cyan]")
+                        for bot in top_bots:
+                            credits = format_credits(bot["credits"])
+                            console.print(
+                                f"  {bot['bot_id']}: "
+                                f"{credits} credits, "
+                                f"Sector {bot['sector']}, "
+                                f"Turn {bot['turns_executed']}"
+                            )
+
+        asyncio.run(watch_swarm())
+
+    except ImportError:
+        console.print(
+            "[red]Error: websockets library not found[/red]\n"
+            "Install with: pip install websockets"
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopped watching[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error: {e}")
+
+
+if __name__ == "__main__":
+    cli()
