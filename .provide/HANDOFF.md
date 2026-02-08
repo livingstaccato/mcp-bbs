@@ -6,10 +6,10 @@
 
 ## Summary
 
-Successfully implemented game-specific MCP tools with filtering, game-specific commands, and proxy tools. Users can now:
+Successfully implemented granular tool prefix filtering and proxy tools. Users can now:
 
-1. Filter tools by game: `bbsbot serve --game tw2002`
-2. Use game-specific commands: `bbsbot tw2002 mcp`
+1. Specify exact tool prefixes: `bbsbot serve --tools bbs_,tw2002_`
+2. Run multiple instances with different tools
 3. Access simplified proxy tools: `tw2002_debug(command='bot_state')`
 
 ## Problem & Solution
@@ -20,28 +20,27 @@ Successfully implemented game-specific MCP tools with filtering, game-specific c
 
 ## What Was Built
 
-### Phase 1: Game Filtering (Complete ✓)
+### Phase 1: Tool Prefix Filtering (Complete ✓)
 
 **Changed Files**:
-- `src/bbsbot/mcp/server.py` - Added `game_filter` parameter to `_register_game_tools()`
-- `src/bbsbot/cli.py` - Added `--game` option to `serve` command
-- `src/bbsbot/app.py` - Pass-through of `game_filter` parameter
+- `src/bbsbot/mcp/server.py` - Added `tool_prefixes` parameter with comma-separated prefix parsing
+- `src/bbsbot/cli.py` - Added `--tools` option to `serve` command
+- `src/bbsbot/app.py` - Pass-through of `tool_prefixes` parameter
 
 **CLI Usage**:
 ```bash
-bbsbot serve --game tw2002  # Only TW2002 tools
-bbsbot serve                # All tools (default)
+bbsbot serve                     # No game tools (BBS only by default)
+bbsbot serve --tools bbs_        # BBS tools only (explicit)
+bbsbot serve --tools tw2002_     # TW2002 tools only
+bbsbot serve --tools bbs_,tw2002_ # Both BBS and TW2002 tools
 ```
 
-### Phase 2: Game-Specific Commands (Complete ✓)
+### Phase 2: Removed Redundancy (Complete ✓)
 
 **Changed Files**:
-- `src/bbsbot/cli.py` - Added `@tw2002_group.command("mcp")`
+- `src/bbsbot/cli.py` - Removed `@tw2002_group.command("mcp")`
 
-**CLI Usage**:
-```bash
-bbsbot tw2002 mcp  # Equivalent to: bbsbot serve --game tw2002
-```
+**Rationale**: Nested command was redundant with `bbsbot serve --tools tw2002_`. Single `--tools` flag is clearer and more flexible.
 
 ### Phase 3: Proxy Tools (Complete ✓)
 
@@ -110,6 +109,9 @@ result = await tw2002_debug(command='bot_state')
 
 - `01e9a15` - Phase 1-2: Implement game-specific MCP tools with filtering and game commands
 - `3f68b8c` - Phase 3: Add twbot_debug proxy tool for simplified BBS tool access
+- `5b818a7` - Fix: Only register game tools when --game filter is explicitly provided
+- `645dec3` - Add comprehensive documentation for game-specific MCP tools
+- `d19b0a2` - Refactor: Replace game-specific MCP command with granular --tools flag
 
 ## Documentation
 
