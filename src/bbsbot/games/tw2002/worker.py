@@ -390,7 +390,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
             }
             # Include game state stats if available
             if worker.game_state:
-                final_status["turns_max"] = worker.game_state.turns_left or 0
+                # Don't use turns_left (it's 0 at completion), keep existing turns_max
                 if hasattr(worker.game_state, "player_name") and worker.game_state.player_name:
                     final_status["username"] = worker.game_state.player_name
                 if hasattr(worker.game_state, "ship_type") and worker.game_state.ship_type:

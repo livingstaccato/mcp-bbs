@@ -1,4 +1,151 @@
 {
-  "timestamp": 1770587945.1075509,
-  "bots": {}
+  "timestamp": 1770588305.117753,
+  "bots": {
+    "bot_000": {
+      "bot_id": "bot_000",
+      "pid": 28708,
+      "config": "config/swarm_demo/bot_01.yaml",
+      "state": "completed",
+      "sector": 197,
+      "credits": 220738,
+      "turns_executed": 500,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588156.427176,
+      "completed_at": 1770588165.130325,
+      "error_message": null,
+      "last_action": "BANK",
+      "last_action_time": 1770588152.6388638,
+      "activity_context": "FINISHED",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "target_reached",
+      "recent_actions": [
+        {
+          "time": 1770588150.502775,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588150.741239,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588150.970431,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588151.2011058,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588151.440543,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588151.677449,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588151.916367,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588152.156394,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588152.397266,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770588152.638887,
+          "action": "BANK",
+          "sector": 197,
+          "details": null,
+          "result": "success"
+        }
+      ],
+      "username": "bot_000",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_001": {
+      "bot_id": "bot_001",
+      "pid": 28709,
+      "config": "config/swarm_demo/bot_02.yaml",
+      "state": "completed",
+      "sector": 0,
+      "credits": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588112.7827258,
+      "completed_at": 1770588115.1254988,
+      "error_message": "No prompt detected within 90000ms",
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "FINISHED",
+      "error_type": "TimeoutError",
+      "error_timestamp": 1770588112.7773252,
+      "exit_reason": "target_reached",
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    },
+    "bot_002": {
+      "bot_id": "bot_002",
+      "pid": 28710,
+      "config": "config/swarm_demo/bot_03.yaml",
+      "state": "completed",
+      "sector": 0,
+      "credits": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
+      "uptime_seconds": 0,
+      "last_update_time": 1770588111.053382,
+      "completed_at": 1770588115.126213,
+      "error_message": "No prompt detected within 90000ms",
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "FINISHED",
+      "error_type": "TimeoutError",
+      "error_timestamp": 1770588111.048139,
+      "exit_reason": "target_reached",
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null
+    }
+  }
 }
