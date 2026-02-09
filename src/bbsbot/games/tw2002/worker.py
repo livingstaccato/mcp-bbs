@@ -61,6 +61,8 @@ class WorkerBot(TradingBot):
         self._last_turns_seen: int = 0
         # Lifecycle state reported to manager (do not overwrite with "running" just because connected).
         self.lifecycle_state: str = "running"
+        # Preserve last non-pause activity so pause screens don't overwrite Activity.
+        self._last_activity_context: str | None = None
 
     def _note_progress(self) -> None:
         self._last_progress_mono = time.monotonic()
@@ -207,6 +209,9 @@ class WorkerBot(TradingBot):
                         activity = "GAME_SELECTION_MENU"
                     else:
                         activity = "IN_GAME_MENU"
+                elif current_context == "pause":
+                    # Keep Activity stable; show PAUSED in Status instead.
+                    activity = self._last_activity_context or ("IN_GAME" if (self.current_sector and self.current_sector > 0) else "LOGGING_IN")
                 elif current_context == "unknown":
                     # Fallback: check if in game
                     in_game = self.current_sector and self.current_sector > 0
@@ -321,6 +326,11 @@ class WorkerBot(TradingBot):
                 "prompt_id": prompt_id,
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
             }
+
+            # Update "last activity" memory after we've computed the final Activity value.
+            # Do not record pause screens, since they are transient overlays.
+            if current_context != "pause" and activity and activity not in ("DISCONNECTED", "CONNECTING", "INITIALIZING"):
+                self._last_activity_context = activity
 
             # Always send credits, even if 0 (only skip if negative sentinel)
             status_data["credits"] = max(0, credits)  # Never send -1
