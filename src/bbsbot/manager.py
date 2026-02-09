@@ -57,6 +57,10 @@ class BotStatus(BaseModel):
     ship_name: str | None = None         # Current ship name
     ship_level: str | None = None        # Ship class/level (Fighter, Trader, etc)
     port_location: int | None = None     # Current port sector
+    # Hijack/MCP control tracking
+    is_hijacked: bool = False            # Whether bot is under MCP control
+    hijacked_at: float | None = None     # Timestamp when hijack started
+    hijacked_by: str | None = None       # Who/what hijacked it (e.g., "mcp", "user")
 
 
 class SwarmStatus(BaseModel):

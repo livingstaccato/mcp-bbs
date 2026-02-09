@@ -26,6 +26,25 @@ def _get_active_bot():
     return bot
 
 
+def _mark_hijacked(bot: object, tool_name: str) -> None:
+    """Mark bot as hijacked via MCP tool."""
+    import time
+
+    try:
+        # Try to update manager status if available
+        if hasattr(bot, "session_id") and hasattr(bot, "session_manager"):
+            session_id = bot.session_id
+            manager = bot.session_manager
+            if manager and hasattr(manager, "bots"):
+                if session_id in manager.bots:
+                    status = manager.bots[session_id]
+                    status.is_hijacked = True
+                    status.hijacked_at = time.time()
+                    status.hijacked_by = tool_name
+    except Exception as e:
+        logger.debug(f"Could not mark bot as hijacked: {e}")
+
+
 @registry.tool()
 async def get_bot_health() -> dict[str, Any]:
     """Monitor bot health and runtime status.
@@ -395,6 +414,7 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
                         "error": "sector parameter required",
                     }
                 bot.session.send(f"W\r{sector}\r")
+                _mark_hijacked(bot, "force_action")
                 logger.info(f"Forced warp to sector {sector}")
                 return {
                     "success": True,
@@ -403,6 +423,7 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
 
             case "dock":
                 bot.session.send("D\r")
+                _mark_hijacked(bot, "force_action")
                 logger.info("Forced dock")
                 return {
                     "success": True,
@@ -411,6 +432,7 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
 
             case "scan":
                 bot.session.send("D\r")
+                _mark_hijacked(bot, "force_action")
                 logger.info("Forced scan")
                 return {
                     "success": True,

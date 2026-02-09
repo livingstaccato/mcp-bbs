@@ -108,6 +108,25 @@ tbody tr:hover { background: var(--bg3); }
 .state.warning { color: #f0883e; }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
 
+/* Hijack indicator */
+.hijack-badge {
+  display: inline-block;
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--red);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid var(--red);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* Action buttons */
 .actions { white-space: nowrap; }
 .btn {
@@ -477,6 +496,7 @@ tbody tr:hover { background: var(--bg3); }
         <th data-sort="bot_id">Bot ID</th>
         <th data-sort="state">State</th>
         <th>Activity</th>
+        <th data-sort="is_hijacked">Status</th>
         <th data-sort="username">Username</th>
         <th data-sort="sector">Sector</th>
         <th data-sort="credits">Credits</th>

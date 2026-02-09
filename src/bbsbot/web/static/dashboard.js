@@ -134,6 +134,13 @@
         const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", stopped: "⚫", queued: "🟡", warning: "🟠", disconnected: "🔴"}[b.state] || "⚪";
         let stateHtml = `<span class="state ${b.state}" title="${b.state}" style="cursor:pointer" onclick="window._openErrorModal('${esc(b.bot_id)}')">${stateEmoji}</span>`;
 
+        // Hijack status
+        let hijackHtml = "-";
+        if (b.is_hijacked) {
+          const hijackedTime = b.hijacked_at ? new Date(b.hijacked_at * 1000).toLocaleTimeString() : "now";
+          hijackHtml = `<span class="hijack-badge" title="Hijacked at ${hijackedTime} by ${b.hijacked_by}">🔒 HIJACKED</span>`;
+        }
+
         const turns_max = b.turns_max || 500;
         const turnsDisplay = `${b.turns_executed} / ${turns_max}`;
 
@@ -144,6 +151,7 @@
         <td>${esc(b.bot_id)}</td>
         <td>${stateHtml}</td>
         <td>${activityHtml}</td>
+        <td>${hijackHtml}</td>
         <td>${esc(b.username || "-")}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${creditsDisplay}</td>
