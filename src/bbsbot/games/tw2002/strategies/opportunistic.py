@@ -270,8 +270,9 @@ class OpportunisticStrategy(TradingStrategy):
     def _has_known_buyer_for(self, state_sector: int, commodity: str, max_hops: int = 8) -> bool:
         """Return True if we know at least one reachable port that buys commodity.
 
-        If we have observed pricing, prefer ports where we have a buy quote (port buys from us),
-        since that enables profit-aware routing.
+        We do not require price quotes here (especially after server reset).
+        Liquidity/price knowledge influences scoring elsewhere; this gate is just
+        "do we know a reachable buyer exists at all".
         """
         idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
         if idx is None:
@@ -281,9 +282,6 @@ class OpportunisticStrategy(TradingStrategy):
             if not info or not info.has_port or not info.port_class or len(info.port_class) != 3:
                 continue
             if info.port_class[idx] != "B":
-                continue
-            # If we have price knowledge, require the buyer quote to be present.
-            if (info.port_prices or {}).get(commodity) and ((info.port_prices.get(commodity) or {}).get("buy") is None):
                 continue
             path = self.knowledge.find_path(state_sector, sector, max_hops=max_hops)
             if path:

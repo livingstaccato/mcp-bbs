@@ -288,6 +288,16 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         max_affordable = max(0, int(credits // int(buy_unit)))
         qty = min(holds_free, max_affordable)
+
+        # Liquidity caps from port market table.
+        # - buy port must be selling commodity (supply)
+        # - sell port must be buying commodity (demand)
+        buy_supply = (buy_info.port_trading_units or {}).get(pair.commodity)
+        sell_demand = (sell_info.port_trading_units or {}).get(pair.commodity)
+        if buy_supply is not None:
+            qty = min(qty, int(buy_supply))
+        if sell_demand is not None:
+            qty = min(qty, int(sell_demand))
         if qty <= 0:
             return 0
 
