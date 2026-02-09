@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import random
+import string
 
 import click
 import httpx
@@ -666,7 +668,20 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     term_bridge = None
 
     # Resolve credentials once from config; retries use the same.
-    username = config_obj.connection.username or bot_id
+    # Username / character name:
+    # - If config provides a username, we keep it stable (reuses the same character).
+    # - If not provided, generate a unique one per worker start so we always create a fresh character.
+    def _auto_username() -> str:
+        base = "".join(ch for ch in bot_id if ch.isalnum()).lower()
+        base = base[:8] if base else "bot"
+        suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+        return f"{base}{suffix}"
+
+    username = config_obj.connection.username or _auto_username()
+    try:
+        worker.character_name = username  # Make status reflect the actual character name promptly.
+    except Exception:
+        pass
     explicit_char_pw = (config_dict or {}).get("connection", {}).get("character_password")
     explicit_char_cfg_pw = (config_dict or {}).get("character", {}).get("password")
     character_password = explicit_char_pw or explicit_char_cfg_pw or username
