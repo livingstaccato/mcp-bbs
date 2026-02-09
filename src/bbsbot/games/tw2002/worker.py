@@ -527,6 +527,9 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
         logger.error(f"Bot worker error: {e}", exc_info=True)
         # Report detailed error to manager
         await worker.report_error(e, exit_reason="exception")
+        # Propagate so the process exits non-zero. Otherwise the manager may
+        # misclassify crashes as "completed" based on exit code alone.
+        raise
     finally:
         # Stop periodic reporter first (prevents stale updates during shutdown)
         await worker.stop_status_reporter()

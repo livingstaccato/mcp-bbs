@@ -295,10 +295,17 @@ class SwarmManager:
                     logger.warning(f"Bot {bot_id} exited with code {exit_code}")
                     bot = self.bots[bot_id]
                     if exit_code == 0:
-                        bot.state = "completed"
-                        bot.completed_at = time.time()
-                        if not bot.exit_reason:
-                            bot.exit_reason = "target_reached"
+                        # If the worker reported an error before exiting, preserve it.
+                        # Otherwise "clean exit" can incorrectly look like success.
+                        if bot.state == "error" or bot.error_message:
+                            bot.state = "error"
+                            if not bot.exit_reason:
+                                bot.exit_reason = "reported_error_then_exit_0"
+                        else:
+                            bot.state = "completed"
+                            bot.completed_at = time.time()
+                            if not bot.exit_reason:
+                                bot.exit_reason = "target_reached"
                     else:
                         bot.state = "error"
                         if not bot.exit_reason:
