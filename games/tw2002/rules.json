@@ -154,7 +154,7 @@
         "match_mode": "regex"
       },
       "negative_match": {
-        "pattern": "(?i)password[?:]",
+        "pattern": "(?is)password\\??\\s*\\Z",
         "match_mode": "regex"
       },
       "screen": {
@@ -167,11 +167,11 @@
       "kind": "pause",
       "input_type": "any_key",
       "match": {
-        "pattern": "(?is)\\[pause\\][^\\n]*\\s*$",
+        "pattern": "(?is)\\[pause\\][^\\n]*\\s*\\Z",
         "match_mode": "regex"
       },
       "negative_match": {
-        "pattern": "(?i)password[?:]|selection\\s*\\(|enter\\s+your\\s+choice",
+        "pattern": "(?is)(password\\??\\s*|selection\\s*\\(.*|enter\\s+your\\s+choice\\s*:?\\s*)\\Z",
         "match_mode": "regex"
       },
       "screen": {
