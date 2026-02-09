@@ -184,3 +184,37 @@ async def send_input(
     # Use framework InputSender for actual sending
     sender = InputSender(bot.session)
     await sender.send_input(keys, input_type, wait_after_sec=wait_after)
+
+
+async def send_masked_password(
+    bot,
+    password: str,
+    *,
+    wait_echo_ms: int = 400,
+    wait_after: float = 0.2,
+) -> None:
+    """Send a password to TWGS/TW2002 prompts.
+
+    We intentionally split the password text from the Enter key.
+
+    Rationale: On this stack, sending e.g. "game\r" as a single string can be
+    interpreted as extra masked characters ("******" vs "****"), causing
+    "Invalid password" loops. See `games/tw2002/docs/bbs-login-solution.md`.
+    """
+    printable = password.replace("\r", "\\r").replace("\n", "\\n")
+    print(f"status action=send_password step={bot.step_count} keys={printable}")
+
+    # 1) Send the password text without Enter.
+    await bot.session.send(password)
+
+    # 2) Give the server a moment to echo masked characters ("****").
+    # We do not strictly require the echo; we just avoid bundling Enter.
+    try:
+        await bot.session.wait_for_update(timeout_ms=wait_echo_ms)
+    except Exception:
+        pass
+
+    # 3) Submit with Enter as a separate keystroke.
+    await bot.session.send("\r")
+    if wait_after > 0:
+        await asyncio.sleep(wait_after)

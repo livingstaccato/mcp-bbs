@@ -12,7 +12,7 @@ The TWGS login flow is complex:
 
 import asyncio
 
-from bbsbot.games.tw2002.io import wait_and_respond, send_input
+from bbsbot.games.tw2002.io import wait_and_respond, send_input, send_masked_password
 from bbsbot.games.tw2002.parsing import _extract_game_options, _select_trade_wars_game
 from bbsbot.games.tw2002.logging_utils import logger
 
@@ -264,7 +264,7 @@ async def login_sequence(
         elif "character_password" in prompt_id:
             # Character password for new character
             print(f"      → Character password prompt, sending password")
-            await send_input(bot, character_password, input_type)
+            await send_masked_password(bot, character_password)
 
         elif "create_character" in prompt_id:
             # Character creation confirmation - answer Y
@@ -488,12 +488,14 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "password_prompt":
-            print(f"      → Password prompt, sending password")
-            await send_input(bot, character_password, "multi_key")
+            # Generic Password? prompt: in this login flow, treat it like a character password prompt.
+            # We still use split-send to avoid CR/LF masking issues.
+            print(f"      → Password prompt, sending character password")
+            await send_masked_password(bot, character_password)
 
         elif actual_prompt == "private_game_password":
             print(f"      → Private game password prompt, sending game password")
-            await send_input(bot, game_password, "multi_key")
+            await send_masked_password(bot, game_password)
 
         elif actual_prompt == "new_character_prompt":
             print("      → New character prompt, answering Y to create character")
@@ -549,7 +551,13 @@ async def login_sequence(
 
         elif "private_game_password" in prompt_id:
             print(f"      → Sending game password (pattern)")
-            await send_input(bot, game_password, input_type)
+            await send_masked_password(bot, game_password)
+
+        elif "game_password" in prompt_id:
+            # Some servers emit a plain `Password?` without the "private game" banner.
+            # Treat this as a game password request, not a character password.
+            print(f"      → Game password prompt (pattern), sending game password")
+            await send_masked_password(bot, game_password)
 
         elif "corporate_listings" in prompt_id:
             # Corporate listings menu - send Q to quit
