@@ -17,7 +17,8 @@ SAFE_CONTEXTS = {"sector_command", "planet_command", "citadel_command", "stardoc
 ACTION_CONTEXTS = {
     "port_menu", "port_trading", "bank", "ship_shop", "hardware_shop",
     "combat", "message_system", "tavern", "grimy_trader", "gambling",
-    "computer_menu", "cim_mode", "course_plotter", "underground"
+    "computer_menu", "cim_mode", "course_plotter", "underground",
+    "corporate_listings"
 }
 TRANSITION_CONTEXTS = {"pause", "more", "confirm", "port_report", "eavesdrop"}
 NAVIGATION_CONTEXTS = {"warping", "autopilot"}
@@ -196,6 +197,11 @@ def detect_context(screen: str) -> str:
         return "login"
     if "create new character" in last_lines:
         return "login"
+
+    # === CORPORATE LISTINGS MENU ===
+    # Handle the TW2002 Corporate Listings menu that appears early in game
+    if "corporate listings" in full_screen and "which listing" in last_line:
+        return "corporate_listings"
 
     # === GENERIC MENU ===
     if "selection" in last_line or "enter your choice" in last_line:
@@ -427,6 +433,14 @@ async def recover_to_safe_state(
             # Port menu - try Q then Enter to fully exit
             print(f"  [Recovery] Port menu - sending Q+Enter to exit...")
             await bot.session.send("Q\r")  # Q to quit menu, Enter to confirm
+            await asyncio.sleep(0.5)
+            attempt += 1
+            continue
+
+        if state.context == "corporate_listings":
+            # Corporate listings menu - send Q to quit
+            print(f"  [Recovery] Corporate listings - sending Q to exit...")
+            await bot.session.send("Q")
             await asyncio.sleep(0.5)
             attempt += 1
             continue
