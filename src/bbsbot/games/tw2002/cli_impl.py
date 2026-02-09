@@ -408,6 +408,11 @@ async def execute_port_trade(
     pending_trade = False
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
     target_seen = False  # Track if we ever saw the target commodity prompt
+    credits_available: int | None = None
+
+    # Guardrails for haggle loops when the bot doesn't have enough credits.
+    offered_all_credits: bool = False
+    insufficient_haggle_loops: int = 0
 
     # Dock at port
     await bot.session.send("P")
@@ -428,6 +433,15 @@ async def execute_port_trade(
         await bot.session.wait_for_update(timeout_ms=2000)
         screen = bot.session.snapshot().get("screen", "")
         screen_lower = screen.lower()
+
+        # Keep a running credits estimate from the live screen. This is more
+        # reliable than cached state during login/orientation/trade screens.
+        m_credits = re.search(r"\byou (?:only )?have\s+(\d+)\s+credits\b", screen_lower)
+        if m_credits:
+            try:
+                credits_available = int(m_credits.group(1))
+            except Exception:
+                pass
 
         # Check for error loops (e.g., "not in corporation" repeated)
         if errors._check_for_error_loop(bot, screen):
@@ -452,47 +466,51 @@ async def execute_port_trade(
 
         # Quantity prompt: "How many holds of X do you want to buy/sell?"
         if "how many" in last_lines:
+            offered_all_credits = False
+            insufficient_haggle_loops = 0
+
             # Find the "how many" line to identify the commodity
             how_many_lines = [l for l in lines if "how many" in l.lower()]
             prompt_line = how_many_lines[-1].lower() if how_many_lines else last_lines
+            is_buy = " buy" in prompt_line or prompt_line.strip().startswith("how many") and " buy" in prompt_line
+            is_sell = " sell" in prompt_line
 
             if target_re:
                 # Targeted trading: only trade the target commodity
                 is_target = bool(target_re.search(prompt_line))
                 if is_target:
                     target_seen = True
-                    if max_quantity > 0:
-                        qty_str = str(max_quantity)
-                    else:
-                        qty_str = ""  # Empty = accept default (max)
-                    await bot.session.send(f"{qty_str}\r")
-                    pending_trade = True
-                    logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
-                else:
-                    # If we haven't seen the target commodity yet, the port
-                    # may have skipped it (e.g., player has 0 cargo to sell).
-                    # Accept whatever is available instead of skipping everything.
-                    if not target_seen:
-                        logger.info(
-                            "Target %s skipped by port, accepting available commodity",
-                            commodity,
-                        )
-                        if max_quantity > 0:
-                            await bot.session.send(f"{max_quantity}\r")
-                        else:
-                            await bot.session.send("\r")
-                        pending_trade = True
-                    else:
+                    if is_buy and credits_available is not None and credits_available < 1000 and max_quantity <= 0:
+                        # Low-credit safety: don't start a buy flow that will haggle-loop.
                         await bot.session.send("0\r")
                         pending_trade = False
-                        logger.debug("Skipping non-target commodity (target already traded)")
-            else:
-                # Trade all: accept default for everything
-                if max_quantity > 0:
-                    await bot.session.send(f"{max_quantity}\r")
+                        logger.info("Skipping buy (low credits=%s): %s", credits_available, commodity)
+                    else:
+                        if max_quantity > 0:
+                            qty_str = str(max_quantity)
+                        else:
+                            qty_str = ""  # Empty = accept default (max)
+                        await bot.session.send(f"{qty_str}\r")
+                        pending_trade = True
+                        logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
                 else:
-                    await bot.session.send("\r")
-                pending_trade = True
+                    # Strict targeted trade: skip anything that's not the target to avoid
+                    # buying/selling unintended commodities (and getting stuck haggling).
+                    await bot.session.send("0\r")
+                    pending_trade = False
+                    logger.debug("Skipping non-target commodity (target=%s)", commodity)
+            else:
+                # Trade all: avoid buys when credits are very low; still allow sells.
+                if is_buy and credits_available is not None and credits_available < 1000 and max_quantity <= 0:
+                    await bot.session.send("0\r")
+                    pending_trade = False
+                    logger.info("Skipping buy (low credits=%s)", credits_available)
+                else:
+                    if max_quantity > 0:
+                        await bot.session.send(f"{max_quantity}\r")
+                    else:
+                        await bot.session.send("\r")
+                    pending_trade = True
 
             await asyncio.sleep(0.5)
             continue
@@ -503,7 +521,48 @@ async def execute_port_trade(
             or "price" in last_lines
             or "haggl" in last_lines
         ):
-            # Accept the default price (press Enter)
+            # Avoid getting stuck at "Your offer [X] ?" when credits are insufficient.
+            default_offer: int | None = None
+            m_offer = re.search(r"your offer\s*\[(\d+)\]", last_lines)
+            if m_offer:
+                try:
+                    default_offer = int(m_offer.group(1))
+                except Exception:
+                    default_offer = None
+
+            screen_insufficient = "you only have" in screen_lower
+            offer_too_high = (
+                credits_available is not None
+                and default_offer is not None
+                and default_offer > credits_available
+            )
+
+            if screen_insufficient or offer_too_high:
+                insufficient_haggle_loops += 1
+                if credits_available is not None and not offered_all_credits:
+                    offered_all_credits = True
+                    logger.info(
+                        "Haggle default too high (default=%s credits=%s); offering all credits",
+                        default_offer,
+                        credits_available,
+                    )
+                    await bot.session.send(f"{credits_available}\r")
+                    await asyncio.sleep(0.5)
+                    continue
+
+                # If offering all credits didn't resolve it quickly, bail out of port trading.
+                if insufficient_haggle_loops >= 2:
+                    logger.warning(
+                        "Haggle stuck (insufficient credits). Aborting port trade. default=%s credits=%s",
+                        default_offer,
+                        credits_available,
+                    )
+                    await bot.session.send("Q\r")
+                    pending_trade = False
+                    await asyncio.sleep(0.7)
+                    continue
+
+            # Default: accept the server's proposed offer/price.
             await bot.session.send("\r")
             await asyncio.sleep(0.5)
             continue

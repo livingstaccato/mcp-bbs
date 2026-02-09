@@ -159,11 +159,20 @@
         const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", blocked: "🟠", recovering: "🟡", stopped: "⚫", queued: "🟡", warning: "🟠", disconnected: "🔴"}[b.state] || "⚪";
         let stateHtml = `<span class="state ${b.state}" title="${b.state}" style="cursor:pointer" onclick="window._openErrorModal('${esc(b.bot_id)}')">${stateEmoji}</span>`;
 
-        // Hijack status
-        let hijackHtml = "-";
+        // Status: phase/prompt detail (Paused, Username/Password, Port Haggle, etc.)
+        // Hijack is additive; it shouldn't replace the bot's true activity.
+        let statusHtml = "";
         if (b.is_hijacked) {
           const hijackedTime = b.hijacked_at ? new Date(b.hijacked_at * 1000).toLocaleTimeString() : "now";
-          hijackHtml = `<span class="hijack-badge" title="Hijacked at ${hijackedTime} by ${b.hijacked_by}">🔒 HIJACKED</span>`;
+          statusHtml += `<span class="hijack-badge" title="Hijacked at ${hijackedTime} by ${esc(b.hijacked_by || '-')}" style="margin-right:6px;">🔒 HIJACKED</span>`;
+        }
+        const detail = (b.status_detail || "").trim();
+        if (detail) {
+          statusHtml += `<span class="status-detail">${esc(detail)}</span>`;
+        } else if (b.prompt_id) {
+          statusHtml += `<span class="status-detail" style="color: var(--fg2);" title="prompt_id">${esc(b.prompt_id)}</span>`;
+        } else if (!statusHtml) {
+          statusHtml = "-";
         }
 
         const turns_max = (b.turns_max !== undefined && b.turns_max !== null) ? b.turns_max : 0;
@@ -176,7 +185,7 @@
         <td>${esc(b.bot_id)}</td>
         <td>${stateHtml}</td>
         <td>${activityHtml}</td>
-        <td>${hijackHtml}</td>
+        <td>${statusHtml}</td>
         <td>${esc(b.username || "-")}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${creditsDisplay}</td>

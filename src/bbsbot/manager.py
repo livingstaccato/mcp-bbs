@@ -46,6 +46,8 @@ class BotStatus(BaseModel):
     last_action: str | None = None        # "TRADING", "EXPLORING", "BATTLING", etc
     last_action_time: float = 0           # timestamp of last action
     activity_context: str | None = None   # current game context
+    status_detail: str | None = None      # phase/prompt detail (e.g., USERNAME, PAUSED, PORT_HAGGLE)
+    prompt_id: str | None = None          # last detected prompt id (debugging/diagnostics)
     # Error tracking
     error_type: str | None = None         # Exception class name (e.g., "TimeoutError")
     error_timestamp: float | None = None  # When error occurred

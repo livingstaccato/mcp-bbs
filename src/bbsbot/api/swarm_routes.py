@@ -169,6 +169,10 @@ async def update_status(bot_id: str, update: dict):
         bot.last_action_time = update["last_action_time"]
     if "activity_context" in update:
         bot.activity_context = update["activity_context"]
+    if "status_detail" in update:
+        bot.status_detail = update["status_detail"]
+    if "prompt_id" in update:
+        bot.prompt_id = update["prompt_id"]
     if "error_message" in update:
         bot.error_message = update["error_message"]
     if "error_type" in update:

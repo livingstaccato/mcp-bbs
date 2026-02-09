@@ -167,6 +167,7 @@ class WorkerBot(TradingBot):
             activity = "INITIALIZING"
             current_screen = ""
             current_context = "unknown"
+            prompt_id: str | None = None
 
             # Get current screen from session
             if hasattr(self, 'session') and self.session:
@@ -174,6 +175,13 @@ class WorkerBot(TradingBot):
                     current_screen = self.session.get_screen()
                 except Exception:
                     current_screen = ""
+                try:
+                    snap = self.session.snapshot() or {}
+                    pd = snap.get("prompt_detected") or {}
+                    if isinstance(pd, dict):
+                        prompt_id = pd.get("prompt_id")
+                except Exception:
+                    prompt_id = None
 
             # Detect REAL-TIME context from current screen
             if current_screen.strip():
@@ -193,8 +201,6 @@ class WorkerBot(TradingBot):
                     activity = "CORPORATE_LISTINGS_MENU"
                 elif current_context in ("planet_command", "citadel_command"):
                     activity = "ON_PLANET"
-                elif current_context == "pause":
-                    activity = "PAUSED"
                 elif current_context == "menu":
                     # Check if it's game selection menu (sector is None means not in game yet)
                     if not self.current_sector or self.current_sector == 0:
@@ -215,7 +221,37 @@ class WorkerBot(TradingBot):
                 else:
                     activity = "DISCONNECTED"
 
-            # Orient progress tracking for debugging
+            # Prefer a concise "Status" field for phase/prompt detail, separate from activity.
+            status_detail: str | None = None
+            prompt_to_status = {
+                # Login flows
+                "prompt.character_name": "USERNAME",
+                "prompt.character_password": "PASSWORD",
+                "prompt.game_selection": "GAME_SELECTION",
+                "prompt.menu_selection": "MENU_SELECTION",
+                "prompt.ship_name": "SHIP_NAME",
+                "prompt.planet_name": "PLANET_NAME",
+                "prompt.corporate_listings": "CORPORATE_LISTINGS",
+                # In-game prompts
+                "prompt.sector_command": "SECTOR_COMMAND",
+                "prompt.port_menu": "PORT_MENU",
+                "prompt.hardware_buy": "PORT_QTY",
+                "prompt.port_haggle": "PORT_HAGGLE",
+                # Pause variants
+                "prompt.pause_simple": "PAUSED",
+                "prompt.pause_space_or_enter": "PAUSED",
+            }
+            if prompt_id:
+                status_detail = prompt_to_status.get(
+                    prompt_id,
+                    prompt_id.replace("prompt.", "").upper(),
+                )
+
+            # Pause screens should show as Status, not Activity.
+            if current_context == "pause":
+                status_detail = "PAUSED"
+
+            # Orient progress tracking for debugging (Status, not Activity).
             orient_step = getattr(self, '_orient_step', 0)
             orient_max = getattr(self, '_orient_max', 0)
             orient_phase = getattr(self, '_orient_phase', '')
@@ -224,19 +260,18 @@ class WorkerBot(TradingBot):
             # Only show ORIENTING if context is actually "unknown"
             in_game = self.current_sector and self.current_sector > 0
             if orient_phase and current_context == "unknown" and in_game:
-                # We're orienting AND don't know what screen we're on
                 if orient_step > 0 and orient_max > 0:
-                    activity = f"ORIENTING: Step {orient_step}/{orient_max}"
+                    status_detail = f"ORIENTING:{orient_step}/{orient_max}"
                 else:
                     phase_names = {
-                        "starting": "Initializing",
-                        "gather": "Gathering state",
-                        "safe_state": "Finding safe prompt",
-                        "blank_wake": "Waking connection",
-                        "failed": "Recovering",
+                        "starting": "INIT",
+                        "gather": "GATHER",
+                        "safe_state": "SAFE_STATE",
+                        "blank_wake": "WAKE",
+                        "failed": "FAILED",
                     }
-                    phase_display = phase_names.get(orient_phase, orient_phase.title())
-                    activity = f"ORIENTING: {phase_display}"
+                    phase_display = phase_names.get(orient_phase, orient_phase.upper())
+                    status_detail = f"ORIENTING:{phase_display}"
 
             # Extract character/ship info from game state
             username = None
@@ -264,18 +299,14 @@ class WorkerBot(TradingBot):
             if not connected and actual_state in ("running", "disconnected"):
                 activity = "DISCONNECTED"
 
-            # Check if AI strategy is thinking (waiting for LLM response)
+            # Check if AI strategy is thinking (waiting for LLM response).
             if self.strategy and hasattr(self.strategy, '_is_thinking') and self.strategy._is_thinking:
-                activity = "THINKING"
+                status_detail = "THINKING"
 
-            # Override with AI reasoning if available
+            # Override with AI reasoning if available (Status, not Activity).
             if self.ai_activity:
-                activity = self.ai_activity
+                status_detail = self.ai_activity
                 self.ai_activity = None  # Clear after reporting
-
-            # Hijack mode always takes priority
-            if self._hijacked:
-                activity = "HIJACKED"
 
             # Build status update dict
             status_data = {
@@ -286,9 +317,8 @@ class WorkerBot(TradingBot):
                 "last_action": self.current_action,
                 "last_action_time": self.current_action_time,
                 "activity_context": activity,
-                "orient_step": orient_step,
-                "orient_max": orient_max,
-                "orient_phase": orient_phase,
+                "status_detail": status_detail,
+                "prompt_id": prompt_id,
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
             }
 
