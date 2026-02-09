@@ -203,8 +203,7 @@ async def login_sequence(
             # Print screen on timeout for debugging
             print(f"⚠ Timeout in Phase 1, checking screen content...")
             try:
-                result = await bot.session.read(timeout_ms=500, max_bytes=8192)
-                timeout_screen = result.get("screen", "")
+                timeout_screen = bot.session.snapshot().get("screen", "")
                 lines = [l.strip() for l in timeout_screen.split('\n') if l.strip()]
                 print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
                 for line in lines[-10:]:
@@ -400,8 +399,7 @@ async def login_sequence(
         except TimeoutError as e:
             # Print screen on timeout for debugging
             try:
-                result = await bot.session.read(timeout_ms=500, max_bytes=8192)
-                timeout_screen = result.get("screen", "")
+                timeout_screen = bot.session.snapshot().get("screen", "")
                 lines = [l.strip() for l in timeout_screen.split('\n') if l.strip()]
                 print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
                 for line in lines[-10:]:

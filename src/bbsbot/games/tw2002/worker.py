@@ -42,11 +42,10 @@ class WorkerBot(TradingBot):
         self.current_action_time: float = 0
         self.recent_actions: list[dict] = []
         self.ai_activity: str | None = None  # AI reasoning for dashboard
-        # Hijack support (paused automation + read pump)
+        # Hijack support (paused automation only; Session reader pump always runs)
         self._hijacked: bool = False
         self._hijack_event: asyncio.Event = asyncio.Event()
         self._hijack_event.set()  # not hijacked by default
-        self._hijack_pump_task: asyncio.Task | None = None
         # "Step" support: allow a bounded number of hijack checkpoints to pass.
         # The trading loop calls await_if_hijacked() twice per turn (top-of-loop + pre-action),
         # so one user "Step" grants 2 checkpoint passes by default.
@@ -242,7 +241,7 @@ class WorkerBot(TradingBot):
         await self._hijack_event.wait()
 
     async def set_hijacked(self, enabled: bool) -> None:
-        """Enable/disable hijack mode (pause automation + run read pump)."""
+        """Enable/disable hijack mode (pause automation only)."""
         if enabled == self._hijacked:
             return
         self._hijacked = enabled
@@ -252,28 +251,8 @@ class WorkerBot(TradingBot):
 
         if enabled:
             self._hijack_event.clear()
-
-            async def _pump() -> None:
-                # Keep pulling from transport so terminal keeps updating while hijacked.
-                try:
-                    while self._hijacked and self.session and self.session.is_connected():
-                        await self.session.read(timeout_ms=250, max_bytes=8192)
-                        await asyncio.sleep(0.05)
-                except asyncio.CancelledError:
-                    return
-                except Exception:
-                    return
-
-            self._hijack_pump_task = asyncio.create_task(_pump())
         else:
             self._hijack_event.set()
-            if self._hijack_pump_task is not None:
-                self._hijack_pump_task.cancel()
-                try:
-                    await self._hijack_pump_task
-                except asyncio.CancelledError:
-                    pass
-                self._hijack_pump_task = None
 
     async def request_step(self, checkpoints: int = 2) -> None:
         """Allow automation to pass a limited number of hijack checkpoints.

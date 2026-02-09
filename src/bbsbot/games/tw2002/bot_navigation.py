@@ -84,8 +84,8 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
             # Extract semantic data for credits and other state
             # The session read already captured kv_data during where_am_i()
             try:
-                result = await bot.session.read(timeout_ms=10, max_bytes=1024)
-                kv_data = result.get("kv_data", {})
+                snap = bot.session.snapshot()
+                kv_data = (snap.get("prompt_detected") or {}).get("kv_data") or {}
             except Exception:
                 kv_data = {}
 
@@ -191,8 +191,8 @@ async def get_port_report(bot: TradingBot) -> str:
     await bot.session.send("R")
     await asyncio.sleep(1.0)
 
-    result = await bot.session.read(timeout_ms=2000, max_bytes=16384)
-    screen = result.get("screen", "")
+    await bot.session.wait_for_update(timeout_ms=2000)
+    screen = bot.session.snapshot().get("screen", "")
 
     # Return to safe state
     await orientation.recover_to_safe_state(bot)
@@ -221,8 +221,8 @@ async def plot_course(bot: TradingBot, destination: int) -> bool:
     await asyncio.sleep(1.0)
 
     # Read result
-    result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
-    screen = result.get("screen", "")
+    await bot.session.wait_for_update(timeout_ms=2000)
+    screen = bot.session.snapshot().get("screen", "")
 
     # Check if path was found
     success = "path" in screen.lower() or "route" in screen.lower()
@@ -292,8 +292,8 @@ async def ask_grimy_trader(bot: TradingBot, topic: str) -> str:
     await bot.session.send(f"{topic}\r")
     await asyncio.sleep(1.0)
 
-    result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
-    screen = result.get("screen", "")
+    await bot.session.wait_for_update(timeout_ms=2000)
+    screen = bot.session.snapshot().get("screen", "")
 
     # Return to safe state
     await orientation.recover_to_safe_state(bot)

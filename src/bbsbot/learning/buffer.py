@@ -94,10 +94,9 @@ class BufferManager:
         Returns:
             True if screen has been unchanged for >= threshold
         """
-        if not self._buffer:
+        if not self._last_change_time or not self._last_hash:
             return False
-        latest = self._buffer[-1]
-        return latest.time_since_last_change >= threshold_seconds
+        return (time.time() - self._last_change_time) >= threshold_seconds
 
     def clear(self) -> None:
         """Clear the buffer and reset state."""

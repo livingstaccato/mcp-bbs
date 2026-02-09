@@ -146,6 +146,9 @@ class SessionManager:
             self._sessions[session_id] = session
             self._emit_session_created(session)
 
+        # Start event-driven reader pump (end-state: no caller performs transport receives).
+        session.start_reader()
+
         # Send newline if requested (after registration)
         if send_newline:
             await session.send("\r\n")

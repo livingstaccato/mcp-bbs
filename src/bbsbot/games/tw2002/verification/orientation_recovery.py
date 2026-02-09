@@ -38,8 +38,8 @@ async def test_recovery_from_planet_menu():
             await asyncio.sleep(1)
 
             # Read screen to confirm we're on planet
-            result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
-            screen = result.get("screen", "")
+            await bot.session.wait_for_update(timeout_ms=2000)
+            screen = bot.session.snapshot().get("screen", "")
             print(f"    Screen shows: ...{screen[-200:]}")
 
             # Now try to orient - should recover to planet_command
@@ -66,8 +66,8 @@ async def test_recovery_from_planet_menu():
             await asyncio.sleep(1)
 
             # We're now in a port menu - should be "confused"
-            result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
-            screen = result.get("screen", "")
+            await bot.session.wait_for_update(timeout_ms=2000)
+            screen = bot.session.snapshot().get("screen", "")
             print(f"    At port: ...{screen[-200:]}")
 
             # Orient should recover (might exit port or recognize port_menu)
@@ -129,8 +129,8 @@ async def test_recovery_from_random_keys():
             await asyncio.sleep(0.3)
 
         # Now we might be in some random menu or info screen
-        result = await bot.session.read(timeout_ms=1000, max_bytes=8192)
-        screen = result.get("screen", "")
+        await bot.session.wait_for_update(timeout_ms=1000)
+        screen = bot.session.snapshot().get("screen", "")
         print(f"    Current screen: ...{screen[-300:]}")
 
         # Orient should recover

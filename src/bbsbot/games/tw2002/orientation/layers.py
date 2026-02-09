@@ -35,42 +35,19 @@ async def _wait_for_screen_stability(
     Returns:
         Stable screen content
     """
-    # REMOVED: The "fast path" optimization was returning stale buffer content.
-    # When the BBS sends new data (like a menu), calling get_screen() before read()
-    # returns old content. We must always do at least one read() to ensure fresh data.
+    start_mono = asyncio.get_running_loop().time()
+    stability_s = max(0.0, stability_ms / 1000.0)
+    max_wait_s = max(0.0, max_wait_ms / 1000.0)
 
-    last_screen = ""
-    last_change_time = time()
-    start_time = time()
-    read_count = 0
+    # Event-driven: wait for the screen hash to stop changing.
+    while (asyncio.get_running_loop().time() - start_mono) < max_wait_s:
+        screen = bot.session.snapshot().get("screen", "")
+        if screen.strip() and bot.session.is_idle(threshold_s=stability_s):
+            return screen
+        remaining_ms = int(max(1, (max_wait_s - (asyncio.get_running_loop().time() - start_mono)) * 1000))
+        await bot.session.wait_for_update(timeout_ms=min(read_interval_ms, remaining_ms))
 
-    while True:
-        elapsed_ms = (time() - start_time) * 1000
-        if elapsed_ms > max_wait_ms:
-            break
-
-        try:
-            result = await bot.session.read(timeout_ms=read_interval_ms, max_bytes=8192)
-            screen = result.get("screen", "")
-            read_count += 1
-        except Exception:
-            screen = last_screen
-
-        if screen != last_screen:
-            last_screen = screen
-            last_change_time = time()
-        else:
-            # Screen unchanged - check if stable long enough
-            stable_ms = (time() - last_change_time) * 1000
-            # Ensure we've done at least 2 reads to avoid returning stale data on first read
-            if stable_ms >= stability_ms and last_screen.strip() and read_count >= 2:
-                break
-
-        # Only sleep between polls if screen is still changing
-        # (avoid wasting 500ms when screen is already stable but empty)
-        await asyncio.sleep(0.05)
-
-    return last_screen
+    return bot.session.snapshot().get("screen", "")
 
 
 def _set_orient_progress(bot: TradingBot, step: int, max_steps: int, phase: str) -> None:
@@ -250,9 +227,8 @@ async def _gather_state(
     if kv_data is None:
         from bbsbot.games.tw2002.io import wait_and_respond
         try:
-            # Quick read to get semantic extraction without changing screen
-            result = await bot.session.read(timeout_ms=10, max_bytes=1024)
-            kv_data = result.get("kv_data", {})
+            snap = bot.session.snapshot()
+            kv_data = (snap.get("prompt_detected") or {}).get("kv_data") or {}
             if kv_data.get('credits'):
                 print(f"  [Orient] Extracted semantic data: credits={kv_data.get('credits')}")
             else:

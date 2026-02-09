@@ -20,15 +20,16 @@ async def test_command(desc: str, menu_command: str):
 
         # Login
         await asyncio.sleep(2.0)
-        await session.read(timeout_ms=1000, max_bytes=8192)
+        await session.wait_for_update(timeout_ms=1000)
         await session.send(f"Test{desc}\r")
         await asyncio.sleep(2.0)
-        await session.read(timeout_ms=2000, max_bytes=8192)
+        await session.wait_for_update(timeout_ms=2000)
 
         # Send the command at TWGS menu
         await session.send(menu_command)
         await asyncio.sleep(4.0)
-        snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
+        await session.wait_for_update(timeout_ms=2000)
+        snapshot = session.snapshot()
 
         screen = snapshot.get('screen', '')
         is_menu = 'Select game' in screen

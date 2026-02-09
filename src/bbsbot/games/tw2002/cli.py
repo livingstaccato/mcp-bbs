@@ -355,8 +355,8 @@ def run_health_check(host: str, port: int, timeout: int) -> None:
 
         print("\n[3/3] Reading initial screen...")
         try:
-            snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
-            screen = snapshot.get("screen", "")
+            await session.wait_for_update(timeout_ms=2000)
+            screen = session.snapshot().get("screen", "")
 
             if screen and screen.strip():
                 print("  ✓ Server is responding")

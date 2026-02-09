@@ -40,10 +40,19 @@ class Session(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    _lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
+    _send_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
     _awaiting_read: bool = PrivateAttr(default=False)
-    # Prompt detection caching now lives in LearningEngine; Session should not
-    # suppress prompt_detected output because PromptWaiter may require idle.
+
+    # Event-driven reader pump (end-state: one task blocks on network I/O).
+    _reader_task: asyncio.Task[None] | None = PrivateAttr(default=None)
+    _update_cond: asyncio.Condition = PrivateAttr(default_factory=asyncio.Condition)
+    _update_seq: int = PrivateAttr(default=0)
+    _screen_change_seq: int = PrivateAttr(default=0)
+    _disconnected: bool = PrivateAttr(default=False)
+    _last_screen_hash: str = PrivateAttr(default="")
+    _last_screen_change_mono: float = PrivateAttr(default=0.0)
+    _latest_prompt_detected: dict[str, Any] | None = PrivateAttr(default=None)
+
     @dataclass
     class _WatchEntry:
         callback: Callable[..., None]
@@ -69,6 +78,191 @@ class Session(BaseModel):
         # Start keepalive if connected
         if self.is_connected():
             self.keepalive.on_connect()
+
+    def start_reader(self, *, max_bytes: int = 8192, timeout_ms: int = 60000) -> None:
+        """Start background reader pump.
+
+        End-state: all transport reads happen here; callers await update events.
+        """
+        if self._reader_task is not None and not self._reader_task.done():
+            return
+        if not self.is_connected():
+            self._disconnected = True
+            return
+        self._disconnected = False
+        self._reader_task = asyncio.create_task(
+            self._reader_loop(max_bytes=max_bytes, timeout_ms=timeout_ms)
+        )
+
+    async def stop_reader(self) -> None:
+        task = self._reader_task
+        self._reader_task = None
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            return
+
+    async def _reader_loop(self, *, max_bytes: int, timeout_ms: int) -> None:
+        try:
+            while self.is_connected():
+                try:
+                    raw = await self.transport.receive(max_bytes=max_bytes, timeout_ms=timeout_ms)
+                except ConnectionError:
+                    self._disconnected = True
+                    async with self._update_cond:
+                        self._update_cond.notify_all()
+                    return
+                except asyncio.CancelledError:
+                    return
+                except Exception:
+                    # Avoid spinning on unexpected errors.
+                    await asyncio.sleep(0.1)
+                    continue
+
+                if not raw:
+                    continue
+
+                prev_hash = self._last_screen_hash
+
+                # Update emulator state and compute snapshot.
+                self.emulator.process(raw)
+                snapshot = self.emulator.get_snapshot()
+
+                screen_hash = snapshot.get("screen_hash", "") or ""
+                screen_changed = False
+                if screen_hash and screen_hash != prev_hash:
+                    self._last_screen_hash = screen_hash
+                    self._last_screen_change_mono = time.monotonic()
+                    screen_changed = True
+
+                # Prompt detection runs once per update.
+                prompt_detected: dict[str, Any] | None = None
+                if self.learning:
+                    try:
+                        prompt_detection = await self.learning.process_screen(snapshot)
+                    except Exception:
+                        prompt_detection = None
+                    if prompt_detection:
+                        prompt_detected = {
+                            "prompt_id": prompt_detection.prompt_id,
+                            "input_type": prompt_detection.input_type,
+                            "is_idle": prompt_detection.is_idle,
+                            "kv_data": prompt_detection.kv_data,
+                        }
+
+                if prompt_detected:
+                    snapshot["prompt_detected"] = prompt_detected
+                else:
+                    snapshot.pop("prompt_detected", None)
+                self._latest_prompt_detected = prompt_detected
+
+                # Clear send gate on actual receive.
+                self._awaiting_read = False
+
+                # Best-effort logging and addons.
+                if self.logger:
+                    try:
+                        await self.logger.log_screen(snapshot, raw)
+                    except Exception:
+                        pass
+                if self.addons and self.logger:
+                    try:
+                        for event in self.addons.process(snapshot):
+                            await self.logger.log_event(event.name, event.data)
+                    except Exception:
+                        pass
+
+                # Watchers must stay non-blocking (spawn tasks, push to queues, etc.).
+                self._emit_watch(snapshot, raw)
+
+                async with self._update_cond:
+                    self._update_seq += 1
+                    if screen_changed:
+                        self._screen_change_seq += 1
+                    self._update_cond.notify_all()
+        except asyncio.CancelledError:
+            return
+
+    def snapshot(self) -> dict[str, Any]:
+        """Return snapshot without performing any network I/O."""
+        if self._disconnected or not self.is_connected():
+            return {
+                "screen": "",
+                "screen_hash": "",
+                "cursor": {"x": 0, "y": 0},
+                "cols": self.emulator.cols,
+                "rows": self.emulator.rows,
+                "term": self.emulator.term,
+                "disconnected": True,
+            }
+        snap = self.emulator.get_snapshot()
+        if self._latest_prompt_detected:
+            snap["prompt_detected"] = dict(self._latest_prompt_detected)
+            snap["prompt_detected"]["is_idle"] = self.is_idle()
+        return snap
+
+    def is_idle(self, threshold_s: float = 2.0) -> bool:
+        if not self._last_screen_change_mono:
+            return False
+        return (time.monotonic() - self._last_screen_change_mono) >= threshold_s
+
+    def seconds_until_idle(self, threshold_s: float = 2.0) -> float:
+        """Return seconds until the screen is considered idle, based on last screen change."""
+        if not self._last_screen_change_mono:
+            return threshold_s
+        elapsed = time.monotonic() - self._last_screen_change_mono
+        return max(0.0, threshold_s - elapsed)
+
+    def update_seq(self) -> int:
+        return self._update_seq
+
+    def screen_change_seq(self) -> int:
+        return self._screen_change_seq
+
+    async def wait_for_update(self, *, timeout_ms: int, since: int | None = None) -> bool:
+        if self._disconnected or not self.is_connected():
+            return False
+        if since is None:
+            since = self._update_seq
+        timeout_s = max(0.0, timeout_ms / 1000.0)
+        try:
+            async with self._update_cond:
+                await asyncio.wait_for(
+                    self._update_cond.wait_for(lambda: self._update_seq > since or self._disconnected),
+                    timeout=timeout_s,
+                )
+            return not self._disconnected and self._update_seq > since
+        except TimeoutError:
+            return False
+
+    async def wait_for_screen_change(self, *, timeout_ms: int, since: int | None = None) -> bool:
+        if self._disconnected or not self.is_connected():
+            return False
+        if since is None:
+            since = self._screen_change_seq
+        timeout_s = max(0.0, timeout_ms / 1000.0)
+        try:
+            async with self._update_cond:
+                await asyncio.wait_for(
+                    self._update_cond.wait_for(lambda: self._screen_change_seq > since or self._disconnected),
+                    timeout=timeout_s,
+                )
+            return not self._disconnected and self._screen_change_seq > since
+        except TimeoutError:
+            return False
+
+    async def read(self, timeout_ms: int, max_bytes: int = 8192) -> dict[str, Any]:
+        """Event-driven read helper.
+
+        End-state behavior: does NOT perform transport I/O. It waits for the
+        reader pump to observe bytes (up to timeout) and returns `snapshot()`.
+        """
+        _ = max_bytes  # kept for call-site convenience; reader pump owns max_bytes.
+        await self.wait_for_update(timeout_ms=timeout_ms)
+        return self.snapshot()
 
     def set_watch(self, callback: Callable[..., None] | None, interval_s: float = 0.0) -> None:
         """Attach a screen watcher callback to every read (replaces existing watchers)."""
@@ -114,7 +308,7 @@ class Session(BaseModel):
             ConnectionError: If transport send fails
         """
         logger.debug("session_send", host=self.host, port=self.port, keys=repr(keys))
-        async with self._lock:
+        async with self._send_lock:
             payload = keys.encode(CP437, errors="replace")
             await self.transport.send(payload)
             if self.logger:
@@ -122,71 +316,6 @@ class Session(BaseModel):
             if mark_awaiting:
                 self._awaiting_read = True
             # No prompt-detection cache at Session layer.
-
-    async def read(self, timeout_ms: int, max_bytes: int) -> dict[str, Any]:
-        """Read from transport, update emulator, return snapshot with detection.
-
-        Args:
-            timeout_ms: Read timeout in milliseconds
-            max_bytes: Maximum bytes to read
-
-        Returns:
-            Screen snapshot dictionary with optional prompt_detected field
-
-        Raises:
-            ConnectionError: If transport is disconnected
-        """
-        logger.debug("session_read", host=self.host, port=self.port,
-                    timeout_ms=timeout_ms, max_bytes=max_bytes)
-        async with self._lock:
-            try:
-                raw = await self.transport.receive(max_bytes, timeout_ms)
-            except ConnectionError:
-                # Return disconnected snapshot
-                return {
-                    "screen": "",
-                    "screen_hash": "",
-                    "cursor": {"x": 0, "y": 0},
-                    "cols": self.emulator.cols,
-                    "rows": self.emulator.rows,
-                    "term": self.emulator.term,
-                    "disconnected": True,
-                }
-
-            # Process data through emulator
-            if raw:
-                self.emulator.process(raw)
-
-            snapshot = self.emulator.get_snapshot()
-
-            # Log
-            if self.logger:
-                await self.logger.log_screen(snapshot, raw)
-
-            # Learning with prompt detection
-            prompt_detection = None
-            if self.learning:
-                prompt_detection = await self.learning.process_screen(snapshot)
-
-            # Add detection metadata to snapshot
-            if prompt_detection:
-                snapshot["prompt_detected"] = {
-                    "prompt_id": prompt_detection.prompt_id,
-                    "input_type": prompt_detection.input_type,
-                    "is_idle": prompt_detection.is_idle,
-                    "kv_data": prompt_detection.kv_data,
-                }
-
-            if self.addons and self.logger:
-                for event in self.addons.process(snapshot):
-                    await self.logger.log_event(event.name, event.data)
-
-            # Clear send gate after any read attempt
-            self._awaiting_read = False
-
-            self._emit_watch(snapshot, raw)
-
-            return snapshot
 
     def _emit_watch(self, snapshot: dict[str, Any], raw: bytes) -> None:
         if not self._watchers:
@@ -206,7 +335,7 @@ class Session(BaseModel):
 
     def get_screen(self) -> str:
         """Return current emulator screen content without any I/O wait."""
-        return self.emulator.get_snapshot().get("screen", "")
+        return self.snapshot().get("screen", "")
 
     def is_awaiting_read(self) -> bool:
         """Return True if a send occurred without a subsequent read."""
@@ -222,23 +351,24 @@ class Session(BaseModel):
         Raises:
             ConnectionError: If transport operation fails
         """
-        async with self._lock:
-            self.emulator.resize(cols, rows)
-            # Update transport if it supports size changes (telnet does)
-            if hasattr(self.transport, "set_size"):
-                await self.transport.set_size(cols, rows)
-            if self.logger:
-                await self.logger.log_event("resize", {"cols": cols, "rows": rows})
+        self.emulator.resize(cols, rows)
+        if hasattr(self.transport, "set_size"):
+            await self.transport.set_size(cols, rows)
+        if self.logger:
+            await self.logger.log_event("resize", {"cols": cols, "rows": rows})
 
     async def disconnect(self) -> None:
         """Disconnect transport and cleanup resources."""
-        async with self._lock:
-            # Stop keepalive first
-            await self.keepalive.on_disconnect()
-            if self.logger:
-                await self.logger.log_event("disconnect", {"reason": "client_disconnect"})
-                await self.logger.stop()
-            await self.transport.disconnect()
+        await self.stop_reader()
+        self._disconnected = True
+        async with self._update_cond:
+            self._update_cond.notify_all()
+
+        await self.keepalive.on_disconnect()
+        if self.logger:
+            await self.logger.log_event("disconnect", {"reason": "client_disconnect"})
+            await self.logger.stop()
+        await self.transport.disconnect()
 
     def is_connected(self) -> bool:
         """Check if session is connected.

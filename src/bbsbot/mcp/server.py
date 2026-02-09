@@ -333,7 +333,8 @@ async def bbs_read(timeout_ms: int = 250, max_bytes: int = 8192) -> dict[str, An
     """Read output and return the current screen buffer."""
     _require_knowledge_root()
     _, session = await _get_session()
-    return cast(dict[str, Any], await session.read(timeout_ms, max_bytes))
+    await session.wait_for_update(timeout_ms=timeout_ms)
+    return cast(dict[str, Any], session.snapshot())
 
 
 @app.tool()
@@ -372,14 +373,15 @@ async def bbs_read_until_nonblank(
     last_snapshot: dict[str, Any] = {}
 
     while time.monotonic() < deadline:
-        last_snapshot = await session.read(interval_ms, max_bytes)
+        await session.wait_for_update(timeout_ms=interval_ms)
+        last_snapshot = session.snapshot()
         if last_snapshot.get("disconnected"):
             return last_snapshot
         screen = last_snapshot.get("screen", "")
         if screen and screen.strip():
             return last_snapshot
 
-    return last_snapshot or await session.read(interval_ms, max_bytes)
+    return last_snapshot or session.snapshot()
 
 
 @app.tool()
@@ -398,7 +400,8 @@ async def bbs_read_until_pattern(
     last_snapshot: dict[str, Any] = {}
 
     while time.monotonic() < deadline:
-        last_snapshot = await session.read(interval_ms, max_bytes)
+        await session.wait_for_update(timeout_ms=interval_ms)
+        last_snapshot = session.snapshot()
         if last_snapshot.get("disconnected"):
             last_snapshot["matched"] = False
             return last_snapshot
@@ -411,7 +414,8 @@ async def bbs_read_until_pattern(
         last_snapshot["matched"] = False
         return last_snapshot
 
-    result = cast(dict[str, Any], await session.read(interval_ms, max_bytes))
+    await session.wait_for_update(timeout_ms=interval_ms)
+    result = cast(dict[str, Any], session.snapshot())
     result["matched"] = False
     return result
 
@@ -448,7 +452,8 @@ async def bbs_wait_for_prompt(
     deadline = time.monotonic() + timeout_ms / 1000
 
     while time.monotonic() < deadline:
-        snapshot = await session.read(interval_ms, 8192)
+        await session.wait_for_update(timeout_ms=interval_ms)
+        snapshot = session.snapshot()
 
         # Check for disconnection
         if snapshot.get("disconnected"):
@@ -513,7 +518,7 @@ async def bbs_send(keys: str) -> str:
             return "error: newline must be the final character in a send"
 
     if session.is_awaiting_read():
-        return "error: send blocked until a read occurs (one prompt -> one input -> read)"
+        return "error: send blocked until remote output arrives (one prompt -> one input -> wait)"
 
     try:
         await session.send(decoded_keys)
@@ -1183,10 +1188,8 @@ async def bbs_discover_menu(screen_override: str = "") -> dict[str, Any]:
     if screen_override:
         screen = screen_override
     else:
-        # Read with minimal timeout to get current screen state
         _, session = await _get_session()
-        snapshot = await session.read(timeout_ms=10, max_bytes=0)
-        screen = snapshot.get("screen", "")
+        screen = session.snapshot().get("screen", "")
 
     return discover_menu(screen)
 
@@ -1203,32 +1206,25 @@ async def bbs_wake(
 
     sequence = [item for item in keys_sequence.split("|") if item]
 
-    last_snapshot = cast(dict[str, Any], await session.read(interval_ms, max_bytes))
+    await session.wait_for_update(timeout_ms=interval_ms)
+    last_snapshot = cast(dict[str, Any], session.snapshot())
     last_hash = last_snapshot.get("screen_hash", "")
+    last_change_seq = session.screen_change_seq()
 
     for keys in sequence:
         await session.send(keys)
 
-        # Inline read_until_nonblank logic
-        deadline = time.monotonic() + timeout_ms / 1000
-        snapshot: dict[str, Any] = {}
-
-        while time.monotonic() < deadline:
-            snapshot = await session.read(interval_ms, max_bytes)
-            if snapshot.get("disconnected"):
-                break
-            screen = snapshot.get("screen", "")
-            if screen and screen.strip():
-                break
-
-        if not snapshot:
-            snapshot = await session.read(interval_ms, max_bytes)
+        changed = await session.wait_for_screen_change(timeout_ms=timeout_ms, since=last_change_seq)
+        snapshot = session.snapshot()
+        if snapshot.get("disconnected"):
+            return snapshot
 
         screen_hash = snapshot.get("screen_hash", "")
-        if screen_hash and screen_hash != last_hash:
+        if changed and screen_hash and screen_hash != last_hash:
             return snapshot
         last_snapshot = snapshot
         last_hash = screen_hash
+        last_change_seq = session.screen_change_seq()
 
     return last_snapshot
 

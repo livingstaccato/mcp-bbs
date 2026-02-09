@@ -252,8 +252,8 @@ class SophisticatedTrader:
 
     async def _scan_current_sector(self):
         """Scan current sector for ports and record info."""
-        snapshot = await self.bot.session.read(timeout_ms=1000, max_bytes=8192)
-        screen = snapshot.get("screen", "")
+        await self.bot.session.wait_for_update(timeout_ms=1000)
+        screen = self.bot.session.snapshot().get("screen", "")
 
         # Check if there's a port here
         if self._has_port(screen):
@@ -391,8 +391,8 @@ class SophisticatedTrader:
 
         # Handle prompts during warp - FAST
         for _ in range(3):  # Fewer iterations
-            snapshot = await self.bot.session.read(timeout_ms=500, max_bytes=4096)
-            screen = snapshot.get("screen", "").lower()
+            await self.bot.session.wait_for_update(timeout_ms=500)
+            screen = self.bot.session.snapshot().get("screen", "").lower()
 
             if "command" in screen and "?" in screen:
                 self.current_sector = target_sector

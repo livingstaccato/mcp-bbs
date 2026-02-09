@@ -393,8 +393,8 @@ async def execute_port_trade(
     await bot.session.send("P")
     await asyncio.sleep(1.0)
 
-    result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
-    screen = result.get("screen", "").lower()
+    await bot.session.wait_for_update(timeout_ms=2000)
+    screen = bot.session.snapshot().get("screen", "").lower()
 
     if "no port" in screen:
         await bot.recover()
@@ -405,8 +405,8 @@ async def execute_port_trade(
     await asyncio.sleep(1.5)
 
     for step in range(30):
-        result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
-        screen = result.get("screen", "")
+        await bot.session.wait_for_update(timeout_ms=2000)
+        screen = bot.session.snapshot().get("screen", "")
         screen_lower = screen.lower()
 
         # Check for error loops (e.g., "not in corporation" repeated)
@@ -550,8 +550,8 @@ async def warp_to_sector(bot, target: int) -> bool:
 
     # Handle intermediate screens (autopilot, pause, etc.)
     for _ in range(5):
-        result = await bot.session.read(timeout_ms=1000, max_bytes=8192)
-        screen = result.get("screen", "").lower()
+        await bot.session.wait_for_update(timeout_ms=1000)
+        screen = bot.session.snapshot().get("screen", "").lower()
 
         # Already at command prompt with target sector
         if f"[{target}]" in screen and "command" in screen:

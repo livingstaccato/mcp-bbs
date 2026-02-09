@@ -246,34 +246,19 @@ async def where_am_i(bot: TradingBot, timeout_ms: int = 50) -> QuickState:
     Returns:
         QuickState with context and basic info
     """
-    try:
-        # Try instant screen buffer first (no I/O wait)
-        screen = ""
-        prompt_id = ""
-        if hasattr(bot.session, 'get_screen'):
-            screen = bot.session.get_screen()
-        if screen.strip():
-            # TCP health probe: verify connection is alive (not just stale buffer)
-            try:
-                result = await bot.session.read(timeout_ms=10, max_bytes=1024)
-                # If we got new data, use the updated screen
-                new_screen = result.get("screen", "")
-                if new_screen.strip():
-                    screen = new_screen
-                prompt_detected = result.get("prompt_detected", {})
-                prompt_id = prompt_detected.get("prompt_id", "")
-            except ConnectionError:
-                raise  # Dead connection
-            except Exception:
-                pass  # Timeout is fine - connection alive, buffer valid
-        else:
-            # Buffer empty - must do a blocking read
-            result = await bot.session.read(timeout_ms=timeout_ms, max_bytes=8192)
-            screen = result.get("screen", "")
-            prompt_detected = result.get("prompt_detected", {})
-            prompt_id = prompt_detected.get("prompt_id", "")
-    except Exception:
+    if not getattr(bot, "session", None) or not bot.session.is_connected():
         return QuickState(context="unknown", suggested_action="reconnect")
+
+    snap = bot.session.snapshot()
+    screen = snap.get("screen", "")
+    prompt_id = (snap.get("prompt_detected") or {}).get("prompt_id", "")
+
+    # If buffer is empty, block briefly for the next update to populate it.
+    if not screen.strip():
+        await bot.session.wait_for_update(timeout_ms=timeout_ms)
+        snap = bot.session.snapshot()
+        screen = snap.get("screen", "")
+        prompt_id = (snap.get("prompt_detected") or {}).get("prompt_id", "")
 
     # Detect context
     context = detect_context(screen)

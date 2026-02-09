@@ -158,8 +158,7 @@ async def login(
     except Exception as exc:
         # Provide a small amount of screen context to make debugging fast.
         try:
-            snap = await session.read(timeout_ms=250, max_bytes=8192)
-            screen_tail = _tail_lines(snap.get("screen", ""), n=14)
+            screen_tail = _tail_lines(session.snapshot().get("screen", ""), n=14)
         except Exception:
             screen_tail = []
 
@@ -188,4 +187,3 @@ async def login(
         "sector": getattr(bot, "current_sector", None),
         "credits": getattr(bot, "current_credits", None),
     }
-

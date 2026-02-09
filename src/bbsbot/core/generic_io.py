@@ -14,12 +14,12 @@ from typing import Any, Callable, Protocol
 class Session(Protocol):
     """Protocol for BBS session objects."""
 
-    async def read(self, timeout_ms: int, max_bytes: int) -> dict[str, Any]:
-        """Read from session.
+    async def wait_for_update(self, *, timeout_ms: int, since: int | None = None) -> bool:
+        """Wait until new bytes arrive from the remote (or until timeout)."""
+        ...
 
-        Returns:
-            Dictionary with 'screen' and optionally 'prompt_detected' keys
-        """
+    def snapshot(self) -> dict[str, Any]:
+        """Return latest snapshot without performing network I/O."""
         ...
 
     async def send(self, data: str) -> None:
@@ -49,7 +49,6 @@ class PromptWaiter:
         expected_prompt_id: str | None = None,
         timeout_ms: int = 10000,
         read_interval_ms: int = 250,
-        read_max_bytes: int = 8192,
         on_prompt_detected: Callable[[dict], bool] | None = None,
         require_idle: bool = True,
         idle_grace_ratio: float = 0.8,
@@ -77,15 +76,12 @@ class PromptWaiter:
         Raises:
             TimeoutError: If no matching prompt detected within timeout
         """
-        start_time = time.time()
+        start_mono = time.monotonic()
         timeout_sec = timeout_ms / 1000.0
-        read_interval_sec = read_interval_ms / 1000.0
+        read_interval_sec = read_interval_ms / 1000.0  # used only as a backstop timer
 
-        while time.time() - start_time < timeout_sec:
-            # Read screen
-            snapshot = await self.session.read(
-                timeout_ms=read_interval_ms, max_bytes=read_max_bytes
-            )
+        while time.monotonic() - start_mono < timeout_sec:
+            snapshot = self.session.snapshot()
             screen = snapshot.get("screen", "")
 
             # Call screen update callback if provided
@@ -99,23 +95,26 @@ class PromptWaiter:
                 is_idle = detected.get("is_idle", False)
 
                 # Wait for screen to stabilize if required
-                elapsed = time.time() - start_time
+                elapsed = time.monotonic() - start_mono
                 if require_idle and not is_idle:
                     # Accept non-idle after grace period
                     if elapsed < timeout_sec * idle_grace_ratio:
-                        await asyncio.sleep(read_interval_sec)
+                        # Wait until either: new bytes arrive (screen still changing), or idle timer elapses.
+                        remaining_idle = getattr(self.session, "seconds_until_idle", lambda _t=2.0: read_interval_sec)()
+                        wait_ms = int(max(1, min(remaining_idle, timeout_sec - elapsed) * 1000))
+                        await self.session.wait_for_update(timeout_ms=wait_ms)
                         continue
 
                 # Check if prompt matches expected pattern
                 if expected_prompt_id:
                     if expected_prompt_id not in prompt_id:
-                        await asyncio.sleep(read_interval_sec)
+                        await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
                         continue
 
                 # Call custom filter callback if provided
                 if on_prompt_detected:
                     if not on_prompt_detected(detected):
-                        await asyncio.sleep(read_interval_sec)
+                        await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
                         continue
 
                 # Return the detected prompt
@@ -127,7 +126,11 @@ class PromptWaiter:
                     "is_idle": is_idle,
                 }
 
-            await asyncio.sleep(read_interval_sec)
+            # No prompt yet; block until the next network update or timeout window.
+            remaining = timeout_sec - (time.monotonic() - start_mono)
+            if remaining <= 0:
+                break
+            await self.session.wait_for_update(timeout_ms=int(min(read_interval_sec, remaining) * 1000))
 
         raise TimeoutError(f"No prompt detected within {timeout_ms}ms")
 

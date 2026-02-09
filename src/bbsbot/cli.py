@@ -138,7 +138,8 @@ def watch(
 
         try:
             while True:
-                snapshot = await session.read(int(interval * 1000), max_bytes)
+                await session.wait_for_update(timeout_ms=int(interval * 1000))
+                snapshot = session.snapshot()
                 if clear:
                     click.echo("\x1b[2J\x1b[H", nl=False)
                 screen = snapshot.get("screen", "")
