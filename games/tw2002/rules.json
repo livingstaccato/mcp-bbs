@@ -71,14 +71,14 @@
       "kind": "login_pass",
       "input_type": "multi_key",
       "match": {
-        "pattern": "(?i)password:\\s*$",
+        "pattern": "(?i)password[?:]\\s*$",
         "match_mode": "regex"
       },
       "negative_match": {
         "pattern": "(?i)real\\s+name:",
         "match_mode": "regex"
       },
-      "notes": "TWGS character password prompt (after character creation confirmation)"
+      "notes": "TWGS character password prompt (matches 'Password?' or 'password:')"
     },
     {
       "id": "prompt.create_character",
@@ -166,10 +166,14 @@
         "pattern": "(?i)\\[pause\\]",
         "match_mode": "regex"
       },
+      "negative_match": {
+        "pattern": "(?i)password[?:]|selection\\s*\\(|enter\\s+your\\s+choice|trade\\s+wars\\s+2002",
+        "match_mode": "regex"
+      },
       "screen": {
         "expect_cursor_at_end": false
       },
-      "notes": "Simple [Pause] anywhere on screen",
+      "notes": "Simple [Pause] anywhere on screen - but not on login/menu screens with password prompts or game selection",
       "llm_hints": {
         "screen_buffer_warning": "[Pause] may appear in ANSI art at TOP of screen buffer (stale). Check if [Pause] is on the LAST LINE before treating as actual pause prompt.",
         "stuck_detection": "If seeing same pause repeatedly without progress, try sending Q or ESC to escape nested menus."
