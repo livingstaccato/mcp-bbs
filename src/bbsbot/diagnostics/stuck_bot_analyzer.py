@@ -81,10 +81,10 @@ Respond in JSON:
   }} OR null,
   "suggested_code_fix": "description of code change needed" OR null
 }}
-"""
+        """
 
         try:
-            from bbsbot.llm.interface import ChatRequest, ChatMessage
+            from bbsbot.llm import ChatMessage, ChatRequest
 
             request = ChatRequest(
                 messages=[ChatMessage(role="user", content=prompt)],

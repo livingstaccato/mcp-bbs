@@ -120,7 +120,11 @@ class TermBridge:
 
     async def _recv_loop(self, ws: Any) -> None:
         while self._running:
-            raw = await ws.recv()
+            try:
+                raw = await ws.recv()
+            except Exception:
+                # Normal shutdown/close should not bubble as an unhandled task exception.
+                return
             try:
                 msg = json.loads(raw)
             except Exception:

@@ -91,6 +91,12 @@ class PromptWaiter:
             # Check for prompt detection
             if "prompt_detected" in snapshot:
                 detected = snapshot["prompt_detected"]
+                # Enrich prompt metadata with the current screen for downstream logic
+                # (e.g. password error detection, loop diagnostics).
+                detected_full = dict(detected or {})
+                detected_full["screen"] = screen
+                detected_full["screen_hash"] = snapshot.get("screen_hash", "")
+                detected_full["captured_at"] = snapshot.get("captured_at")
                 prompt_id = detected.get("prompt_id")
                 is_idle = detected.get("is_idle", False)
 
@@ -113,7 +119,7 @@ class PromptWaiter:
 
                 # Call custom filter callback if provided
                 if on_prompt_detected:
-                    if not on_prompt_detected(detected):
+                    if not on_prompt_detected(detected_full):
                         await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
                         continue
 
@@ -122,7 +128,7 @@ class PromptWaiter:
                     "screen": screen,
                     "prompt_id": prompt_id,
                     "input_type": detected.get("input_type"),
-                    "kv_data": detected.get("kv_data"),
+                    "kv_data": detected_full.get("kv_data"),
                     "is_idle": is_idle,
                 }
 

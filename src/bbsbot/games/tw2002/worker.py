@@ -451,6 +451,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
     worker = WorkerBot(bot_id, config_obj, manager_url)
     term_bridge = None
+    completed_ok = False
 
     try:
         # Register with manager
@@ -486,13 +487,17 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
         # Login sequence
         logger.info("Starting login sequence")
+        username = config_obj.connection.username or bot_id
+        # If a config doesn't explicitly set a character password, default to username.
+        # This matches the common convention used elsewhere in this repo and avoids
+        # repeatedly failing at `prompt.character_password` for existing characters.
+        explicit_char_pw = (config_dict or {}).get("connection", {}).get("character_password")
+        explicit_char_cfg_pw = (config_dict or {}).get("character", {}).get("password")
+        character_password = explicit_char_pw or explicit_char_cfg_pw or username
         await worker.login_sequence(
             game_password=config_obj.connection.game_password,
-            character_password=(
-                config_obj.connection.character_password
-                or config_obj.character.password
-            ),
-            username=config_obj.connection.username or bot_id,
+            character_password=character_password,
+            username=username,
         )
         logger.info(
             f"Login successful - Sector {worker.current_sector}, "
@@ -516,6 +521,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
         from bbsbot.games.tw2002.cli_impl import run_trading_loop
 
         await run_trading_loop(worker, config_obj, char_state)
+        completed_ok = True
 
     except Exception as e:
         logger.error(f"Bot worker error: {e}", exc_info=True)
@@ -524,32 +530,30 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     finally:
         # Stop periodic reporter first (prevents stale updates during shutdown)
         await worker.stop_status_reporter()
-        # Report final completed state WITH ALL STATS before disconnecting
-        try:
-            final_status = {
-                "state": "completed",
-                "activity_context": "FINISHED",
-                "sector": worker.current_sector or 0,
-                "credits": worker.current_credits or 0,
-                "turns_executed": worker.turns_used,
-                "exit_reason": "target_reached",
-            }
-            # Include game state stats if available
-            if worker.game_state:
-                # Don't use turns_left (it's 0 at completion), keep existing turns_max
-                if hasattr(worker.game_state, "player_name") and worker.game_state.player_name:
-                    final_status["username"] = worker.game_state.player_name
-                if hasattr(worker.game_state, "ship_type") and worker.game_state.ship_type:
-                    final_status["ship_level"] = worker.game_state.ship_type
-                if hasattr(worker.game_state, "ship_name") and worker.game_state.ship_name:
-                    final_status["ship_name"] = worker.game_state.ship_name
-
-            await worker._http_client.post(
-                f"{worker.manager_url}/bot/{worker.bot_id}/status",
-                json=final_status,
-            )
-        except Exception:
-            pass
+        # Only mark completed if we actually completed; never overwrite error state with FINISHED.
+        if completed_ok:
+            try:
+                final_status = {
+                    "state": "completed",
+                    "activity_context": "COMPLETED",
+                    "sector": worker.current_sector or 0,
+                    "credits": worker.current_credits or 0,
+                    "turns_executed": worker.turns_used,
+                    "exit_reason": "completed",
+                }
+                if worker.game_state:
+                    if hasattr(worker.game_state, "player_name") and worker.game_state.player_name:
+                        final_status["username"] = worker.game_state.player_name
+                    if hasattr(worker.game_state, "ship_type") and worker.game_state.ship_type:
+                        final_status["ship_level"] = worker.game_state.ship_type
+                    if hasattr(worker.game_state, "ship_name") and worker.game_state.ship_name:
+                        final_status["ship_name"] = worker.game_state.ship_name
+                await worker._http_client.post(
+                    f"{worker.manager_url}/bot/{worker.bot_id}/status",
+                    json=final_status,
+                )
+            except Exception:
+                pass
         # Disconnect BBS session so the node is freed immediately
         try:
             await worker.disconnect()
