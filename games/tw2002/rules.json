@@ -4,10 +4,20 @@
   "metadata": {
     "description": "Trade Wars 2002 comprehensive prompt/menu rules - full gameplay coverage",
     "updated_at": "2026-02-05T04:20:00Z",
-    "prompt_count": 193,
+    "prompt_count": 194,
     "coverage": "login, navigation, trading, combat (retreat/surrender/capture/tow), banking, planets (citadel/colonists/build/shields), corporations, tavern, CIM, computer, underground, weapons (disruptor/limpets/beacons/probes/genesis/atomic), ships (catalog/equipment/yard), aliens (Ferrengi), sector hazards (nebula/blackhole/asteroid), towing, mail, rankings, T-warp, help, bounty, special locations (StarDock/Hardware/McPlasma), cloaking, scanning, avoid sectors, settings"
   },
   "prompts": [
+    {
+      "id": "prompt.corporate_listings",
+      "kind": "menu",
+      "input_type": "single_key",
+      "match": {
+        "pattern": "(?i)(TW2002\\s+Corporate\\s+Listings|Which\\s+Listing)",
+        "match_mode": "regex"
+      },
+      "notes": "TW2002 Corporate Listings menu - appears early in game, send Q to exit"
+    },
     {
       "id": "prompt.twgs_begin_adventure",
       "kind": "pause",
