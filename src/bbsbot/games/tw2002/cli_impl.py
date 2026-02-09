@@ -151,7 +151,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     if goal_status_display is None:
                         goal_status_display = GoalStatusDisplay()
                     # Use server-detected max_turns if available, else config value
-                    display_max = max_turns if max_turns < 999999 else max_turns_config or 500
+                    display_max = max_turns if max_turns < 999999 else max_turns_config or 0
                     status_line = goal_status_display.render_compact(
                         phase=phase,
                         current_turn=current_turn,

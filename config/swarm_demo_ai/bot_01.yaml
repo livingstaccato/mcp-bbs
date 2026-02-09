@@ -6,7 +6,7 @@ connection:
   host: localhost
   port: 2002
 session:
-  max_turns_per_session: 500
+  max_turns_per_session: 0
   target_credits: 500000
 trading:
   strategy: ai
@@ -17,8 +17,8 @@ trading:
       current: maximize_credits
       phases:
         maximize_credits:
-          description: "Maximize credits per turn through smart trading"
-          instructions: "Focus on high-value trade routes. Avoid unnecessary combat."
+          description: Maximize credits per turn through smart trading
+          instructions: Focus on high-value trade routes. Avoid unnecessary combat.
           target_credits: 500000
 llm:
   provider: ollama
