@@ -54,6 +54,71 @@ class WorkerBot(TradingBot):
         self._screen_change_event: asyncio.Event = asyncio.Event()
         self._screen_change_task: asyncio.Task | None = None
         self._last_seen_screen_hash: str = ""
+        # Watchdog: if no progress is observed for too long, force a reconnect.
+        self._watchdog_task: asyncio.Task | None = None
+        self._last_progress_mono: float = time.monotonic()
+        self._last_turns_seen: int = 0
+
+    def _note_progress(self) -> None:
+        self._last_progress_mono = time.monotonic()
+
+    def start_watchdog(self, *, stuck_timeout_s: float = 120.0, check_interval_s: float = 5.0) -> None:
+        """Start a watchdog that forces recovery if the bot stops making progress.
+
+        Progress signals:
+        - turns_used increases
+        - screen_hash changes
+
+        If we see neither for `stuck_timeout_s`, we disconnect the session. The outer
+        worker loop will reconnect + re-login + continue.
+        """
+        if self._watchdog_task is not None and not self._watchdog_task.done():
+            return
+
+        async def _loop() -> None:
+            while True:
+                await asyncio.sleep(max(0.5, float(check_interval_s)))
+                try:
+                    if self._hijacked:
+                        # If a human is driving, don't fight them.
+                        self._note_progress()
+                        continue
+
+                    # Turns progression is authoritative for "still alive".
+                    if self.turns_used != self._last_turns_seen:
+                        self._last_turns_seen = self.turns_used
+                        self._note_progress()
+
+                    idle_for = time.monotonic() - self._last_progress_mono
+                    if idle_for < float(stuck_timeout_s):
+                        continue
+
+                    # Stuck: report + force reconnect by disconnecting the session.
+                    try:
+                        self.ai_activity = f"WATCHDOG: STUCK ({int(idle_for)}s)"
+                        await self.report_error(
+                            RuntimeError(f"watchdog_stuck_{int(idle_for)}s"),
+                            exit_reason="watchdog_stuck",
+                            fatal=False,
+                            state="recovering",
+                        )
+                        await self.report_status()
+                    except Exception:
+                        pass
+
+                    try:
+                        await self.disconnect()
+                    except Exception:
+                        pass
+
+                    # Reset timer so we don't spam disconnect loops if reconnect is slow.
+                    self._note_progress()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    continue
+
+        self._watchdog_task = asyncio.create_task(_loop())
 
     async def register_with_manager(self) -> None:
         """Register this bot with the swarm manager."""
@@ -287,6 +352,7 @@ class WorkerBot(TradingBot):
                 if sh == self._last_seen_screen_hash:
                     return
                 self._last_seen_screen_hash = sh
+                self._note_progress()
                 self._screen_change_event.set()
             except Exception:
                 return
@@ -500,6 +566,9 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     try:
         while True:
             try:
+                # Ensure watchdog is running once per process.
+                worker.start_watchdog(stuck_timeout_s=120.0, check_interval_s=5.0)
+
                 # (Re)connect if needed.
                 if not getattr(worker, "session", None) or not worker.session.is_connected():
                     try:
