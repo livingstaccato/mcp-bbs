@@ -488,10 +488,17 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "password_prompt":
-            # Generic Password? prompt: in this login flow, treat it like a character password prompt.
-            # We still use split-send to avoid CR/LF masking issues.
-            print(f"      → Password prompt, sending character password")
-            await send_masked_password(bot, character_password)
+            # Generic Password? prompt can mean either:
+            # - game password (private game access) OR
+            # - character password (new/existing character)
+            #
+            # Prefer explicit prompt_id classification when available.
+            if prompt_id and ("game_password" in prompt_id or "private_game_password" in prompt_id):
+                print(f"      → Password prompt, sending game password")
+                await send_masked_password(bot, game_password)
+            else:
+                print(f"      → Password prompt, sending character password")
+                await send_masked_password(bot, character_password)
 
         elif actual_prompt == "private_game_password":
             print(f"      → Private game password prompt, sending game password")

@@ -75,7 +75,7 @@
         "match_mode": "regex"
       },
       "negative_match": {
-        "pattern": "(?i)(real\\s+name:|required\\s+to\\s+enter\\s+this\\s+game|private\\s+game)",
+        "pattern": "(?is)(real\\s+name:|(required\\s+to\\s+enter\\s+this\\s+game|private\\s+game)[\\s\\S]{0,400}password[?:]\\s*$)",
         "match_mode": "regex"
       },
       "notes": "TWGS character password prompt (matches 'Password?' or 'password:')"
@@ -260,10 +260,6 @@
       "input_type": "multi_key",
       "match": {
         "pattern": "(?i)^password\\?\\s*$",
-        "match_mode": "regex"
-      },
-      "negative_match": {
-        "pattern": "(?i)(required\\s+to\\s+enter\\s+this\\s+game|private\\s+game)",
         "match_mode": "regex"
       },
       "notes": "In-game password prompt"
