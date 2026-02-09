@@ -310,7 +310,7 @@ async def get_bot_status() -> dict[str, Any]:
 
 
 @registry.tool()
-async def debug(command: str, **kwargs: Any) -> dict[str, Any]:
+async def debug(command: str, limit: int | None = None) -> dict[str, Any]:
     """Debug proxy that delegates to BBS debugging tools.
 
     This is a convenience wrapper around bbs_debug_* tools that provides
@@ -322,7 +322,7 @@ async def debug(command: str, **kwargs: Any) -> dict[str, Any]:
             - 'learning_state': Get learning engine state
             - 'llm_stats': Get LLM usage statistics
             - 'session_events': Query recent session events
-        **kwargs: Additional arguments passed to underlying tool
+        limit: Optional limit parameter for session_events query (default: None)
 
     Returns:
         Result from underlying debug tool
@@ -340,13 +340,15 @@ async def debug(command: str, **kwargs: Any) -> dict[str, Any]:
 
     match command:
         case "bot_state":
-            return await bbs_debug_bot_state(**kwargs)
+            return await bbs_debug_bot_state()
         case "learning_state":
-            return await bbs_debug_learning_state(**kwargs)
+            return await bbs_debug_learning_state()
         case "llm_stats":
-            return await bbs_debug_llm_stats(**kwargs)
+            return await bbs_debug_llm_stats()
         case "session_events":
-            return await bbs_debug_session_events(**kwargs)
+            if limit is not None:
+                return await bbs_debug_session_events(limit=limit)
+            return await bbs_debug_session_events()
         case _:
             raise ValueError(
                 f"Unknown command: {command}. "
