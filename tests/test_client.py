@@ -15,7 +15,7 @@ async def test_bbs_connection(bbs_host: str, bbs_port: int) -> None:
         # Don't require an installed `bbsbot` console script; run from the
         # current interpreter.
         command=sys.executable,
-        args=["-m", "bbsbot.cli", "serve"],
+        args=["-m", "bbsbot.cli", "serve", "--tools", "bbs"],
     )
     async with Client(server.to_transport()) as client:
         await client.call_tool(

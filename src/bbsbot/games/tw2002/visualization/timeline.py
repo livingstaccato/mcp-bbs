@@ -43,6 +43,20 @@ class GoalTimeline:
         self.max_turns = max_turns
         self.width = width
 
+    def _calc_segment_width(self, duration: int) -> int:
+        """Calculate segment width safely, handling max_turns=0.
+
+        Args:
+            duration: Phase duration in turns
+
+        Returns:
+            Segment width in characters (at least 1)
+        """
+        if self.max_turns > 0:
+            return max(1, int((duration / self.max_turns) * self.width))
+        # When max_turns=0 (run to server max), distribute evenly
+        return max(1, self.width // len(self.phases)) if self.phases else 1
+
     def render_progress_bar(self) -> str:
         """Render horizontal progress bar with goal segments.
 
@@ -104,8 +118,7 @@ class GoalTimeline:
 
             # Calculate segment width
             phase_duration = end - start + 1
-            segment_width = int((phase_duration / self.max_turns) * self.width)
-            segment_width = max(1, segment_width)  # At least 1 char
+            segment_width = self._calc_segment_width(phase_duration)
 
             # Choose character based on status
             match phase.status:
@@ -125,7 +138,7 @@ class GoalTimeline:
 
         # Pad to width
         total_chars = sum(
-            int(((p.end_turn if p.end_turn else self.current_turn) - p.start_turn + 1) / self.max_turns * self.width)
+            self._calc_segment_width((p.end_turn if p.end_turn else self.current_turn) - p.start_turn + 1)
             for p in self.phases
         )
         total_chars = max(1, total_chars)
@@ -147,8 +160,7 @@ class GoalTimeline:
             start = phase.start_turn
             end = phase.end_turn if phase.end_turn is not None else self.current_turn
             phase_duration = end - start + 1
-            segment_width = int((phase_duration / self.max_turns) * self.width)
-            segment_width = max(1, segment_width)
+            segment_width = self._calc_segment_width(phase_duration)
 
             # Format label
             label = f"{phase.goal_id.upper()[:segment_width]}"
@@ -157,7 +169,7 @@ class GoalTimeline:
 
         # Pad
         total_chars = sum(
-            int(((p.end_turn if p.end_turn else self.current_turn) - p.start_turn + 1) / self.max_turns * self.width)
+            self._calc_segment_width((p.end_turn if p.end_turn else self.current_turn) - p.start_turn + 1)
             for p in self.phases
         )
         remaining = self.width - total_chars
@@ -177,8 +189,7 @@ class GoalTimeline:
             start = phase.start_turn
             end = phase.end_turn if phase.end_turn is not None else self.current_turn
             phase_duration = end - start + 1
-            segment_width = int((phase_duration / self.max_turns) * self.width)
-            segment_width = max(1, segment_width)
+            segment_width = self._calc_segment_width(phase_duration)
 
             # Format metric
             icon = STATUS_ICONS.get(phase.status, Icons.ACTIVE)
@@ -193,7 +204,7 @@ class GoalTimeline:
 
         # Pad
         total_chars = sum(
-            int(((p.end_turn if p.end_turn else self.current_turn) - p.start_turn + 1) / self.max_turns * self.width)
+            self._calc_segment_width((p.end_turn if p.end_turn else self.current_turn) - p.start_turn + 1)
             for p in self.phases
         )
         remaining = self.width - total_chars
@@ -208,7 +219,12 @@ class GoalTimeline:
         Returns:
             Marker line showing current turn position
         """
-        if self.current_turn <= 0 or self.current_turn > self.max_turns:
+        if self.current_turn <= 0:
+            return ""
+        # When max_turns=0, skip marker (we don't know total turns)
+        if self.max_turns == 0:
+            return ""
+        if self.current_turn > self.max_turns:
             return ""
 
         # Calculate marker position

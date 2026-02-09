@@ -16,9 +16,9 @@ from bbsbot.games.tw2002.orientation import (
     GameState,
     SectorInfo,
     SectorKnowledge,
-    _detect_context,
-    _parse_display_screen,
-    _parse_sector_display,
+    detect_context,
+    parse_display_screen,
+    parse_sector_display,
 )
 
 
@@ -132,12 +132,12 @@ class TestGameStateProperties:
 # =============================================================================
 
 class TestContextDetectionProperties:
-    """Property tests for _detect_context."""
+    """Property tests for detect_context."""
 
     @given(garbage=garbage_text)
-    def test_detect_context_never_raises_on_garbage(self, garbage: str) -> None:
-        """_detect_context should return a string for any input, never raise."""
-        result = _detect_context(garbage)
+    def testdetect_context_never_raises_on_garbage(self, garbage: str) -> None:
+        """detect_context should return a string for any input, never raise."""
+        result = detect_context(garbage)
         assert isinstance(result, str)
         assert result in VALID_CONTEXTS
 
@@ -155,7 +155,7 @@ class TestContextDetectionProperties:
 
         # If prompt is truly at the end (suffix is empty/whitespace), should detect
         if not suffix.strip():
-            result = _detect_context(screen)
+            result = detect_context(screen)
             assert result == "sector_command", f"Failed to detect command in: {screen[-100:]}"
 
     @given(
@@ -166,7 +166,7 @@ class TestContextDetectionProperties:
         prompt = "Planet Command [?=Help]?"
         screen = f"{prefix}\n{prompt}"
 
-        result = _detect_context(screen)
+        result = detect_context(screen)
         assert result == "planet_command"
 
     @given(
@@ -177,7 +177,7 @@ class TestContextDetectionProperties:
         prompt = "Citadel Command [?=Help]?"
         screen = f"{prefix}\n{prompt}"
 
-        result = _detect_context(screen)
+        result = detect_context(screen)
         assert result == "citadel_command"
 
     @given(
@@ -188,13 +188,13 @@ class TestContextDetectionProperties:
         # Both forms should work
         for prompt in ["[Pause]", "[Any Key]"]:
             screen = f"{prefix}\n{prompt}"
-            result = _detect_context(screen)
+            result = detect_context(screen)
             assert result == "pause", f"Failed to detect pause with {prompt}"
 
     def test_empty_screen_returns_unknown(self) -> None:
         """Empty screen should return unknown."""
-        assert _detect_context("") == "unknown"
-        assert _detect_context("   \n  \n  ") == "unknown"
+        assert detect_context("") == "unknown"
+        assert detect_context("   \n  \n  ") == "unknown"
 
 
 # =============================================================================
@@ -211,7 +211,7 @@ class TestParsingProperties:
         formatted = f"{credits:,}"
         screen = f"Credits          : {formatted}"
 
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result.get("credits") == credits
 
     @given(turns=st.integers(min_value=0, max_value=9999))
@@ -219,7 +219,7 @@ class TestParsingProperties:
         """Parsing should correctly extract turns left."""
         screen = f"Turns left       : {turns}"
 
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result.get("turns_left") == turns
 
     @given(sector=sector_numbers)
@@ -227,7 +227,7 @@ class TestParsingProperties:
         """Sector should be extracted from command prompt."""
         screen = f"Command [TL=00:00:00]:[{sector}] (?=Help)?"
 
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result.get("sector") == sector
 
     @given(warps=st.lists(sector_numbers, min_size=1, max_size=6, unique=True))
@@ -236,7 +236,7 @@ class TestParsingProperties:
         warp_str = " - ".join(str(w) for w in warps)
         screen = f"Warps to Sector(s) : {warp_str}"
 
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert set(result.get("warps", [])) == set(warps)
 
     @given(warps=st.lists(sector_numbers, min_size=1, max_size=6, unique=True))
@@ -245,7 +245,7 @@ class TestParsingProperties:
         warp_str = " - ".join(f"({w})" for w in warps)
         screen = f"Warps to Sector(s) :  {warp_str}"
 
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert set(result.get("warps", [])) == set(warps)
 
     @given(port_class=port_classes)
@@ -253,20 +253,20 @@ class TestParsingProperties:
         """Port class should be correctly extracted."""
         screen = f"Ports   : Trading Port ({port_class})"
 
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result.get("has_port") is True
         assert result.get("port_class") == port_class
 
     @given(garbage=garbage_text)
     def test_parse_display_never_raises(self, garbage: str) -> None:
-        """_parse_display_screen should never raise on any input."""
-        result = _parse_display_screen(garbage)
+        """parse_display_screen should never raise on any input."""
+        result = parse_display_screen(garbage)
         assert isinstance(result, dict)
 
     @given(garbage=garbage_text)
     def test_parse_sector_never_raises(self, garbage: str) -> None:
-        """_parse_sector_display should never raise on any input."""
-        result = _parse_sector_display(garbage)
+        """parse_sector_display should never raise on any input."""
+        result = parse_sector_display(garbage)
         assert isinstance(result, dict)
         assert "warps" in result
         assert isinstance(result["warps"], list)
@@ -385,7 +385,7 @@ Command [TL=00:00:00]:[1] (?=Help)?"""
         partial = full_screen[:prefix_len]
 
         # Should not raise, should return some context
-        result = _detect_context(partial)
+        result = detect_context(partial)
         assert result in VALID_CONTEXTS
 
         # Only detect sector_command if prompt is fully visible
@@ -404,7 +404,7 @@ Command [TL=00:00:00]:[1] (?=Help)?"""
         contexts_seen = []
         for i in range(1, len(full_prompt) + 1):
             partial = full_prompt[:i]
-            context = _detect_context(partial)
+            context = detect_context(partial)
             contexts_seen.append(context)
 
         # Should not detect as sector_command until "?" is visible
@@ -429,14 +429,14 @@ class TestEdgeCases:
         """ANSI escape codes in screen should not break detection."""
         # ANSI color codes
         screen = "\x1b[32mCommand\x1b[0m [TL=00:00:00]:[1] (?=Help)?"
-        result = _detect_context(screen)
+        result = detect_context(screen)
         # May or may not detect correctly with ANSI, but shouldn't raise
         assert result in VALID_CONTEXTS
 
     def test_unicode_in_screen(self) -> None:
         """Unicode characters should not break parsing."""
         screen = "Command [TL=00:00:00]:[1] (?=Help)?  \u2500\u2502\u256c"
-        result = _detect_context(screen)
+        result = detect_context(screen)
         assert result in VALID_CONTEXTS
 
     def test_very_long_screen(self) -> None:
@@ -445,7 +445,7 @@ class TestEdgeCases:
         prompt = "\nCommand [TL=00:00:00]:[1] (?=Help)?"
         screen = prefix + prompt
 
-        result = _detect_context(screen)
+        result = detect_context(screen)
         assert result == "sector_command"
 
     def test_multiple_prompts_in_screen(self) -> None:
@@ -454,17 +454,17 @@ class TestEdgeCases:
 Some intermediate text
 Planet Command [?=Help]?"""
 
-        result = _detect_context(screen)
+        result = detect_context(screen)
         assert result == "planet_command"
 
     def test_negative_alignment_parsing(self) -> None:
         """Negative alignment should parse correctly."""
         screen = "Alignment        : -500 (Evil)"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result.get("alignment") == -500
 
     def test_large_numbers_with_commas(self) -> None:
         """Large numbers with comma separators should parse."""
         screen = "Credits          : 99,999,999"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result.get("credits") == 99999999

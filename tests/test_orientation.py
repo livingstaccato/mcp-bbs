@@ -13,9 +13,9 @@ from bbsbot.games.tw2002.orientation import (
     GameState,
     SectorKnowledge,
     SectorInfo,
-    _detect_context,
-    _parse_display_screen,
-    _parse_sector_display,
+    detect_context,
+    parse_display_screen,
+    parse_sector_display,
 )
 
 
@@ -77,7 +77,7 @@ class TestGameState:
 
 
 class TestContextDetection:
-    """Tests for _detect_context function."""
+    """Tests for detect_context function."""
 
     def test_sector_command(self) -> None:
         """Test detection of sector command prompt."""
@@ -86,7 +86,7 @@ Sector  : 1
 Warps to Sector(s) : 2 - 3
 
 Command [TL=00:00:00]:[1] (?=Help)?"""
-        assert _detect_context(screen) == "sector_command"
+        assert detect_context(screen) == "sector_command"
 
     def test_planet_command(self) -> None:
         """Test detection of planet command prompt."""
@@ -95,7 +95,7 @@ Planet Terra
 Population: 1000
 
 Planet Command [?=Help]?"""
-        assert _detect_context(screen) == "planet_command"
+        assert detect_context(screen) == "planet_command"
 
     def test_citadel_command(self) -> None:
         """Test detection of citadel command prompt."""
@@ -103,7 +103,7 @@ Planet Command [?=Help]?"""
 Underground Citadel
 
 Citadel Command [?=Help]?"""
-        assert _detect_context(screen) == "citadel_command"
+        assert detect_context(screen) == "citadel_command"
 
     def test_port_menu(self) -> None:
         """Test detection of port menu."""
@@ -113,7 +113,7 @@ Trading Fuel Ore
 <T>rade, <L>eave
 
 Enter your choice [T] ?"""
-        assert _detect_context(screen) == "port_menu"
+        assert detect_context(screen) == "port_menu"
 
     def test_combat(self) -> None:
         """Test detection of combat."""
@@ -123,7 +123,7 @@ Your shields: 100
 Your fighters: 50
 
 Attack [Y/N]?"""
-        assert _detect_context(screen) == "combat"
+        assert detect_context(screen) == "combat"
 
     def test_menu(self) -> None:
         """Test detection of generic menu."""
@@ -133,7 +133,7 @@ A) Option A
 B) Option B
 
 Selection (? for menu):"""
-        assert _detect_context(screen) == "menu"
+        assert detect_context(screen) == "menu"
 
     def test_pause(self) -> None:
         """Test detection of pause screen."""
@@ -141,125 +141,125 @@ Selection (? for menu):"""
 Welcome to Trade Wars!
 
 [Pause] - [Press Space or Enter to continue]"""
-        assert _detect_context(screen) == "pause"
+        assert detect_context(screen) == "pause"
 
     def test_unknown(self) -> None:
         """Test unknown screen returns 'unknown'."""
         screen = "Random text that doesn't match anything"
-        assert _detect_context(screen) == "unknown"
+        assert detect_context(screen) == "unknown"
 
 
 class TestParseDisplayScreen:
-    """Tests for _parse_display_screen function."""
+    """Tests for parse_display_screen function."""
 
     def test_parse_credits(self) -> None:
         """Test parsing credits from display."""
         screen = "Credits          : 1,234,567"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["credits"] == 1234567
 
     def test_parse_turns(self) -> None:
         """Test parsing turns left from display."""
         screen = "Turns left       : 500"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["turns_left"] == 500
 
     def test_parse_fighters(self) -> None:
         """Test parsing fighters from display."""
         screen = "Fighters         : 100"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["fighters"] == 100
 
     def test_parse_shields(self) -> None:
         """Test parsing shields from display."""
         screen = "Shields          : 500"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["shields"] == 500
 
     def test_parse_holds(self) -> None:
         """Test parsing holds from display."""
         screen = """Total Holds      : 50
 Holds w/Goods    : 10"""
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["holds_total"] == 50
         assert result["holds_free"] == 40
 
     def test_parse_ship_type(self) -> None:
         """Test parsing ship type from display."""
         screen = "Ship type        : Merchant Cruiser"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["ship_type"] == "Merchant Cruiser"
 
     def test_parse_alignment(self) -> None:
         """Test parsing alignment from display."""
         screen = "Alignment        : 500 (Good)"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["alignment"] == 500
 
     def test_parse_negative_alignment(self) -> None:
         """Test parsing negative alignment from display."""
         screen = "Alignment        : -500 (Evil)"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["alignment"] == -500
 
     def test_parse_experience(self) -> None:
         """Test parsing experience from display."""
         screen = "Experience       : 1,000"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["experience"] == 1000
 
     def test_parse_sector(self) -> None:
         """Test parsing current sector from display."""
         screen = "Current Sector   : 123"
-        result = _parse_display_screen(screen)
+        result = parse_display_screen(screen)
         assert result["sector"] == 123
 
 
 class TestParseSectorDisplay:
-    """Tests for _parse_sector_display function."""
+    """Tests for parse_sector_display function."""
 
     def test_parse_sector_from_prompt(self) -> None:
         """Test parsing sector from command prompt."""
         screen = "Command [TL=00:00:00]:[123] (?=Help)?"
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result["sector"] == 123
 
     def test_parse_warps(self) -> None:
         """Test parsing warps from sector display."""
         screen = "Warps to Sector(s) : 1 - 2 - 3 - 4"
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result["warps"] == [1, 2, 3, 4]
 
     def test_parse_warps_with_parens(self) -> None:
         """Test parsing warps with parentheses (unexplored)."""
         screen = "Warps to Sector(s) :  (1) - (2) - 3"
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result["warps"] == [1, 2, 3]
 
     def test_parse_port(self) -> None:
         """Test parsing port from sector display."""
         screen = "Ports   : Trading Port (BBS)"
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result["has_port"] is True
         assert result["port_class"] == "BBS"
 
     def test_parse_no_port(self) -> None:
         """Test parsing when no port."""
         screen = "Ports   : None"
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result["has_port"] is False
 
     def test_parse_planet(self) -> None:
         """Test parsing planet from sector display."""
         screen = "Planets : Terra (Class M)"
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result["has_planet"] is True
         assert "Terra" in result["planet_names"]
 
     def test_parse_hostile_fighters(self) -> None:
         """Test parsing hostile fighters."""
         screen = "Fighters: 1,000 (hostile)"
-        result = _parse_sector_display(screen)
+        result = parse_sector_display(screen)
         assert result["hostile_fighters"] == 1000
 
 

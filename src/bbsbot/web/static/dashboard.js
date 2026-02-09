@@ -173,7 +173,6 @@
         <td>${esc(b.username || "-")}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${creditsDisplay}</td>
-        <td>${esc(b.ship_level || "-")}</td>
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td class="actions">
           <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
@@ -626,7 +625,6 @@
       `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
       `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
       `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
-      `<span class="stat"><span class="stat-label">Ship</span><span class="stat-value">${esc(bot.ship_level || "-")}</span></span>`,
       `<span class="stat"><span class="stat-label">User</span><span class="stat-value">${esc(bot.username || "-")}</span></span>`,
       `<span class="stat"><span class="stat-label">Activity</span><span class="stat-value">${esc(activity)}</span></span>`,
     ].join("");

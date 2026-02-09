@@ -35,24 +35,14 @@ async def _wait_for_screen_stability(
     Returns:
         Stable screen content
     """
-    # Fast check: if screen buffer already has content, do a quick TCP probe
-    # then return. The probe ensures dead connections are detected early instead
-    # of returning stale buffer data.
-    if hasattr(bot.session, 'get_screen'):
-        screen = bot.session.get_screen()
-        if screen.strip():
-            # TCP health probe: quick non-blocking read to verify connection is alive
-            try:
-                await bot.session.read(timeout_ms=10, max_bytes=1024)
-            except ConnectionError:
-                raise  # Dead connection - propagate immediately
-            except Exception:
-                pass  # Timeout is fine - connection is alive
-            return screen
+    # REMOVED: The "fast path" optimization was returning stale buffer content.
+    # When the BBS sends new data (like a menu), calling get_screen() before read()
+    # returns old content. We must always do at least one read() to ensure fresh data.
 
     last_screen = ""
     last_change_time = time()
     start_time = time()
+    read_count = 0
 
     while True:
         elapsed_ms = (time() - start_time) * 1000
@@ -62,6 +52,7 @@ async def _wait_for_screen_stability(
         try:
             result = await bot.session.read(timeout_ms=read_interval_ms, max_bytes=8192)
             screen = result.get("screen", "")
+            read_count += 1
         except Exception:
             screen = last_screen
 
@@ -71,7 +62,8 @@ async def _wait_for_screen_stability(
         else:
             # Screen unchanged - check if stable long enough
             stable_ms = (time() - last_change_time) * 1000
-            if stable_ms >= stability_ms and last_screen.strip():
+            # Ensure we've done at least 2 reads to avoid returning stale data on first read
+            if stable_ms >= stability_ms and last_screen.strip() and read_count >= 2:
                 break
 
         # Only sleep between polls if screen is still changing
