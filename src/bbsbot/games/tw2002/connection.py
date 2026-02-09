@@ -51,6 +51,17 @@ def _semantic_watch(bot, snapshot: dict, raw: bytes) -> None:
         return
     kv = " ".join(f"{k}={data[k]}" for k in sorted(data))
     print(f"semantic {kv}")
+    # Make semantic data available for status reporting even when we're not
+    # inside wait_and_respond() loops.
+    try:
+        if hasattr(bot, "last_semantic_data"):
+            bot.last_semantic_data.update(data)
+        if "credits" in data and hasattr(bot, "current_credits"):
+            bot.current_credits = int(data["credits"])
+        if "sector" in data and hasattr(bot, "current_sector"):
+            bot.current_sector = int(data["sector"])
+    except Exception:
+        pass
     _update_semantic_relationships(bot, data)
     _write_semantic_log(bot, data)
 
