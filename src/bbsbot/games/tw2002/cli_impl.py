@@ -577,6 +577,15 @@ async def execute_port_trade(
             await asyncio.sleep(0.3)
             continue
 
+        # StarDock hardware buy prompt (special ports sometimes route here).
+        # End-state behavior: do not get stuck in this UI when attempting a port trade.
+        if "which item do you wish to buy" in last_lines and "(a,b,c,q" in last_lines:
+            logger.info("Stardock buy menu encountered during port trade; exiting with Q")
+            await bot.session.send("Q\r")
+            pending_trade = False
+            await asyncio.sleep(0.5)
+            continue
+
         # Pause/press key (transaction complete messages, etc.)
         if "[pause]" in last_lines or "press" in last_lines:
             await bot.session.send(" ")
