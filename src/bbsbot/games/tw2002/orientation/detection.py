@@ -465,15 +465,24 @@ async def recover_to_safe_state(
             continue
 
         if state.context == "menu":
-            # Check if this is game selection menu - send game letter to re-enter
-            if hasattr(bot, 'last_game_letter') and bot.last_game_letter and state.sector is None:
+            # Check if this is ACTUALLY the game selection menu by looking for game titles
+            # Don't just rely on sector=None, as in-game menus can also have unparseable sectors
+            screen_lower = screen.lower() if screen else ""
+            is_game_selection = (
+                state.sector is None and
+                hasattr(bot, 'last_game_letter') and bot.last_game_letter and
+                ("trade wars" in screen_lower or "supports up to" in screen_lower or
+                 "- play" in screen_lower or "game selection" in screen_lower)
+            )
+
+            if is_game_selection:
                 print(f"  [Recovery] Game selection menu - sending {bot.last_game_letter} to enter game...")
                 await bot.session.send(bot.last_game_letter + "\r")
                 await asyncio.sleep(1.0)
                 attempt += 1
                 continue
-            # Generic in-game menu - try Enter to continue
-            print(f"  [Recovery] Menu - sending Enter to continue...")
+            # Generic in-game menu (or unknown menu) - try Enter to continue
+            print(f"  [Recovery] In-game menu - sending Enter to continue...")
             await bot.session.send("\r")
             await asyncio.sleep(0.5)
             attempt += 1
