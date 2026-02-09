@@ -1,6 +1,6 @@
 {
-  "timestamp": 1770605226.986999,
-  "bot_id": "persistent-14",
+  "timestamp": 1770602203.635267,
+  "bot_id": "ai-14",
   "error": "Stuck in loop: prompt.corporate_listings",
   "diagnosis": {
     "error": "Analysis failed: ModuleNotFoundError",

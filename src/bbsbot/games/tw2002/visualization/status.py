@@ -42,7 +42,10 @@ class GoalStatusDisplay:
         turn_str = colorize(f"[T{current_turn}/{max_turns}]", Colors.FG_GRAY)
 
         # Mini progress bar (20 chars)
-        progress = int((current_turn / max_turns) * 20)
+        if max_turns > 0:
+            progress = int((current_turn / max_turns) * 20)
+        else:
+            progress = min(10, current_turn // max(1, current_turn))  # Fallback: show partial bar
         bar = Icons.BLOCK_LIGHT * progress + Icons.BLOCK_PENDING * (20 - progress)
         bar_colored = colorize(bar, get_goal_color(phase.goal_id))
 

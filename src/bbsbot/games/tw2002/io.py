@@ -118,7 +118,7 @@ async def wait_and_respond(
                 raise RuntimeError(f"Error detected: {error_type}")
 
         # Check for loop (skip for prompts expected to repeat)
-        loop_ignore = {"prompt.pause_space_or_enter", "prompt.pause_simple"}
+        loop_ignore = {"prompt.pause_space_or_enter", "prompt.pause_simple", "prompt.corporate_listings"}
         if ignore_loop_for:
             loop_ignore = loop_ignore | set(ignore_loop_for)
         if prompt_id not in loop_ignore and _check_for_loop(bot, prompt_id):

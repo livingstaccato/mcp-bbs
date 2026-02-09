@@ -213,9 +213,17 @@ def status_impl(bot_id: str | None = None) -> None:
                         # Extract just the number from bot_id
                         bot_num = bot["bot_id"].split("-")[-1] if "-" in bot["bot_id"] else bot["bot_id"]
 
-                        # Format activity context
-                        activity = bot.get("activity_context", "").upper() if bot.get("activity_context") else "—"
-                        if activity == "—":
+                        # Format activity context (hide THINKING, truncate to single line, max 25 chars)
+                        activity_raw = bot.get("activity_context", "") or "—"
+                        if activity_raw != "—" and activity_raw:
+                            activity_upper = activity_raw.upper()
+                            # Hide THINKING (LLM processing), show other activities
+                            if activity_upper.startswith("THINKING"):
+                                activity = "—"  # Hide while thinking
+                            else:
+                                # Take first line, remove spaces, limit to 25 chars
+                                activity = activity_upper.split('\n')[0].replace(" ", "")[:25]
+                        else:
                             activity = "—"
 
                         # Format ship info (ship_name or ship_level)

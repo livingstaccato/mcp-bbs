@@ -204,9 +204,10 @@ def detect_context(screen: str) -> str:
         return "corporate_listings"
 
     # === GENERIC MENU ===
-    if "selection" in last_line or "enter your choice" in last_line:
+    if "selection" in last_line.lower() or "enter your choice" in last_line.lower():
         return "menu"
-    if "?" in last_line and ":" in last_line:
+    # Don't match normal sector command prompts (Command [TL=...]:)
+    if "command" not in last_line.lower() and "?" in last_line and ":" in last_line:
         return "menu"
 
     return "unknown"
@@ -446,9 +447,9 @@ async def recover_to_safe_state(
             continue
 
         if state.context == "menu":
-            # Generic menu - try Q to exit
-            print(f"  [Recovery] Menu - sending Q to exit...")
-            await bot.session.send("Q")
+            # Generic menu - try Enter to continue (don't quit game!)
+            print(f"  [Recovery] Menu - sending Enter to continue...")
+            await bot.session.send("\r")
             await asyncio.sleep(0.5)
             attempt += 1
             continue

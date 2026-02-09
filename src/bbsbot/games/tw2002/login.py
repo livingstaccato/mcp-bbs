@@ -376,7 +376,7 @@ async def login_sequence(
             # Increased to 90s to handle slow server response when 90 bots logging in
             # With 12s spawn intervals, ~5-7 concurrent logins max, server still slow
             # During character creation, ignore loop detection for menus and names
-            ignore_loop = {"prompt.ship_name", "prompt.planet_name", "prompt.menu_selection"}
+            ignore_loop = {"prompt.ship_name", "prompt.planet_name", "prompt.menu_selection", "prompt.corporate_listings"}
             input_type, prompt_id, screen, phase3_kv_data = await wait_and_respond(
                 bot, timeout_ms=90000, ignore_loop_for=ignore_loop
             )
@@ -482,8 +482,8 @@ async def login_sequence(
 
         elif actual_prompt == "new_character_prompt":
             print("      → New character prompt, answering Y to create character")
-            await bot.session.send("Y")
-            await asyncio.sleep(0.3)
+            await bot.session.send("Y\r")
+            await asyncio.sleep(2.0)  # Wait for server to process character creation
 
         elif actual_prompt == "show_log_prompt":
             print("      → Answering N to 'Show today's log?'")

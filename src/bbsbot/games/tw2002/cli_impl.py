@@ -93,20 +93,38 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     raise
 
         if state is None:
-            # Track consecutive orient failures for clean exit on dead connections
+            # Track consecutive orient failures - try reconnection instead of exiting
             consecutive_orient_failures += 1
             if consecutive_orient_failures >= 10:
                 if hasattr(bot, 'session') and hasattr(bot.session, 'is_connected') and not bot.session.is_connected():
-                    print(f"\n✗ Connection lost after {consecutive_orient_failures} consecutive orientation failures")
-                    break
+                    # Connection lost - attempt reconnection instead of exiting
+                    print(f"\n⚠️  Connection lost after {consecutive_orient_failures} failures, attempting reconnect...")
+                    try:
+                        # Reconnect to BBS
+                        bot.session = None  # Clear dead session
+                        await asyncio.sleep(2)  # Wait before reconnect
+                        from bbsbot.games.tw2002.connection import SessionConnection
+                        bot.session = SessionConnection(
+                            host=config.connection.host,
+                            port=config.connection.port,
+                            cols=80,
+                            rows=25
+                        )
+                        await bot.session.connect()
+                        print(f"✓ Reconnected! Resuming play...")
+                        consecutive_orient_failures = 0
+                        continue
+                    except Exception as e:
+                        print(f"✗ Reconnection failed: {e}")
+                        break
                 # Still connected but orient keeps failing - try full recovery
                 print(f"\n⚠️  {consecutive_orient_failures} consecutive failures, attempting full recovery...")
                 try:
                     await bot.recover()
                     consecutive_orient_failures = 0
                 except Exception:
-                    print(f"✗ Recovery failed after {consecutive_orient_failures} failures, exiting")
-                    break
+                    print(f"✗ Recovery failed, waiting before retry...")
+                    await asyncio.sleep(3)
             continue
 
         # Successful orient - reset failure counter
