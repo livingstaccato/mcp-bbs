@@ -150,7 +150,11 @@ async def get_bot_health() -> dict[str, Any]:
 
 
 @registry.tool()
-async def recover_bot(recovery_action: str, **kwargs: Any) -> dict[str, Any]:
+async def recover_bot(
+    recovery_action: str,
+    strategy_name: str | None = None,
+    command: str | None = None,
+) -> dict[str, Any]:
     """Emergency recovery actions for crashed or stuck bots.
 
     Performs recovery actions on crashed/stuck bots to restore operation
@@ -160,9 +164,10 @@ async def recover_bot(recovery_action: str, **kwargs: Any) -> dict[str, Any]:
         recovery_action: Recovery action to perform
             - 'restart_strategy': Re-initialize current strategy
             - 'reset_knowledge': Clear and rebuild knowledge base
-            - 'change_strategy': Switch strategy (requires strategy_name= kwarg)
-            - 'manual_command': Send game command (requires command= kwarg)
-        **kwargs: Action-specific parameters
+            - 'change_strategy': Switch strategy (requires strategy_name parameter)
+            - 'manual_command': Send game command (requires command parameter)
+        strategy_name: Strategy name for 'change_strategy' action
+        command: Game command for 'manual_command' action
 
     Returns:
         Recovery status and results
@@ -206,11 +211,10 @@ async def recover_bot(recovery_action: str, **kwargs: Any) -> dict[str, Any]:
 
             case "change_strategy":
                 # Switch to different strategy
-                strategy_name = kwargs.get("strategy_name")
                 if not strategy_name:
                     return {
                         "success": False,
-                        "error": "strategy_name required for change_strategy",
+                        "error": "strategy_name parameter required for change_strategy",
                     }
 
                 # Update config and reinitialize
@@ -228,11 +232,10 @@ async def recover_bot(recovery_action: str, **kwargs: Any) -> dict[str, Any]:
 
             case "manual_command":
                 # Send game command via session
-                command = kwargs.get("command")
                 if not command:
                     return {
                         "success": False,
-                        "error": "command required for manual_command",
+                        "error": "command parameter required for manual_command",
                     }
 
                 if not bot.session:
