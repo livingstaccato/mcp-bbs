@@ -144,6 +144,15 @@ class WorkerBot(TradingBot):
                 credits = self.game_state.credits
             elif self.current_credits:
                 credits = self.current_credits
+            else:
+                # Fallback: semantic extraction from live screens (updated by session watcher / wait_and_respond).
+                sem = getattr(self, "last_semantic_data", {}) or {}
+                try:
+                    sem_credits = sem.get("credits")
+                    if sem_credits is not None:
+                        credits = int(sem_credits)
+                except Exception:
+                    pass
 
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)

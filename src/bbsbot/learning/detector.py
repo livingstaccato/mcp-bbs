@@ -54,9 +54,10 @@ class PromptDetector:
         """
         self._patterns = patterns
         self._compiled_all = self._compile_patterns()
-        # Many patterns require cursor-at-end; skip them when the cursor is NOT at end.
-        # Patterns that set expect_cursor_at_end=false are allowed even if cursor_at_end is false.
-        self._compiled_cursor_any = [
+        # Optimization only: patterns that *don't* require cursor-at-end.
+        # IMPORTANT: do not treat cursor_at_end as authoritative; if the heuristic is wrong
+        # and we skip "expect_cursor_at_end=true" patterns entirely, prompt detection can fail.
+        self._compiled_no_cursor_end_req = [
             (regex, pattern)
             for (regex, pattern) in self._compiled_all
             if not bool(pattern.get("expect_cursor_at_end", True))
@@ -125,7 +126,7 @@ class PromptDetector:
     ) -> tuple[str, bool]:
         """Extract a bottom-of-content region likely to contain prompts.
 
-        Returns (region_text, cursor_is_above_region).
+        Returns (region_text, cursor_in_region).
 
         We anchor to the last non-empty line of the screen, not the bottom row,
         because many UIs leave blank rows below the last content.
@@ -149,10 +150,10 @@ class PromptDetector:
             cursor_y = int(cursor.get("y", 0) or 0)
         except Exception:
             cursor_y = 0
-        cursor_is_above_region = cursor_y < start_idx
+        cursor_in_region = start_idx <= cursor_y <= last_idx
 
         region_text = "\n".join(lines[start_idx : last_idx + 1])
-        return (region_text, cursor_is_above_region)
+        return (region_text, cursor_in_region)
 
     @staticmethod
     def normalize_prompt_region(region_text: str) -> str:
@@ -249,25 +250,25 @@ class PromptDetector:
         logger.debug(f"[PROMPT DETECTION] Checking {len(self._compiled_all)} patterns")
         logger.debug(f"[PROMPT DETECTION] Cursor at end: {cursor_at_end}, Has trailing space: {has_trailing_space}")
         if screen:
-            region_text, cursor_above_region = self.prompt_region(snapshot)
+            region_text, cursor_in_region = self.prompt_region(snapshot)
             logger.debug(
-                f"[PROMPT DETECTION] Region ({len(region_text)} chars, cursor_above={cursor_above_region}):\n"
+                f"[PROMPT DETECTION] Region ({len(region_text)} chars, cursor_in={cursor_in_region}):\n"
                 f"{region_text[-200:]}"
             )
 
-        # Choose candidate pattern set based on cursor state.
-        # If cursor is not at end, patterns that require cursor-at-end can be skipped entirely.
-        compiled = self._compiled_all if cursor_at_end else self._compiled_cursor_any
+        # Candidate pattern set: always allow all patterns; cursor constraints are checked per-pattern.
+        compiled_all = self._compiled_all
+        compiled_fast = self._compiled_no_cursor_end_req if not cursor_at_end else self._compiled_all
 
         # Two-pass scan: first scan the prompt region (bottom-of-content),
-        # then fall back to full-screen scan only if the cursor is above the region.
-        region_text, cursor_above_region = self.prompt_region(snapshot)
+        # then fall back to full-screen scan if the cursor isn't within that region.
+        region_text, cursor_in_region = self.prompt_region(snapshot)
         if region_text:
             match = self._detect_in_text(
                 text=region_text,
                 full_screen=screen,
                 cursor_at_end=bool(cursor_at_end),
-                compiled=compiled,
+                compiled=compiled_fast,
                 regex_matched_but_failed=regex_matched_but_failed,
             )
             if match:
@@ -277,12 +278,12 @@ class PromptDetector:
                 )
                 return match
 
-        if cursor_above_region:
+        if not cursor_in_region:
             match = self._detect_in_text(
                 text=screen,
                 full_screen=screen,
                 cursor_at_end=bool(cursor_at_end),
-                compiled=compiled,
+                compiled=compiled_all,
                 regex_matched_but_failed=regex_matched_but_failed,
             )
             if match:

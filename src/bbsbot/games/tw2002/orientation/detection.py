@@ -260,8 +260,28 @@ async def where_am_i(bot: TradingBot, timeout_ms: int = 50) -> QuickState:
         screen = snap.get("screen", "")
         prompt_id = (snap.get("prompt_detected") or {}).get("prompt_id", "")
 
-    # Detect context
+    # Detect context (screen heuristics first).
     context = detect_context(screen)
+
+    # If prompt detection has high-confidence IDs, prefer them over heuristics.
+    # This avoids "unknown" loops where recovery spams Enter/Space on an input prompt.
+    if prompt_id:
+        if prompt_id == "prompt.port_haggle":
+            context = "port_trading"
+        elif prompt_id.startswith("prompt.port_") or prompt_id.startswith("prompt.hardware_"):
+            # Port buy/sell flows can look like generic menus to the heuristic detector.
+            # Treat as port_trading so recovery exits with Q if needed.
+            context = "port_trading"
+        elif prompt_id in ("prompt.port_menu",):
+            context = "port_menu"
+        elif prompt_id in (
+            "prompt.sector_command",
+            "prompt.command_generic",
+            "prompt.planet_command",
+            "prompt.citadel_command",
+        ):
+            # Keep these stable prompts authoritative.
+            context = "sector_command" if "sector" in prompt_id or "command_generic" in prompt_id else context
 
     # Capture diagnostic data for stuck bot analysis
     if hasattr(bot, 'diagnostic_buffer'):
@@ -434,9 +454,32 @@ async def recover_to_safe_state(
             continue
 
         if state.context in ("port_menu", "port_trading"):
-            # Port menu - try Q then Enter to fully exit
-            print(f"  [Recovery] Port menu - sending Q+Enter to exit...")
-            await bot.session.send("Q\r")  # Q to quit menu, Enter to confirm
+            # Port flows:
+            # - If we're on a haggle screen and can't afford the default, submit an affordable offer.
+            # - Otherwise, try to exit back to a safe prompt.
+            if state.prompt_id == "prompt.port_haggle" and re.search(
+                r"(?i)you\\s+only\\s+have\\s+([\\d,]+)\\s+credits", state.screen or ""
+            ):
+                m = re.search(r"(?i)you\\s+only\\s+have\\s+([\\d,]+)\\s+credits", state.screen or "")
+                c = int(m.group(1).replace(",", "")) if m else 0
+                offer = max(0, c)
+                # If a bracket default exists, don't exceed it.
+                m2 = re.search(r"\\[(\\d{1,3}(?:,\\d{3})*|\\d+)\\]\\s*\\?", state.screen or "")
+                if m2:
+                    try:
+                        default_offer = int(m2.group(1).replace(",", ""))
+                        offer = min(offer, default_offer)
+                    except Exception:
+                        pass
+                print(f"  [Recovery] Port haggle with low credits - offering {offer}...")
+                await bot.session.send(str(offer) + "\r")
+                await asyncio.sleep(0.5)
+                attempt += 1
+                continue
+
+            # Generic exit: Q then Enter (some port screens require Enter to confirm exit).
+            print("  [Recovery] Port screen - sending Q+Enter to exit...")
+            await bot.session.send("Q\r")
             await asyncio.sleep(0.5)
             attempt += 1
             continue

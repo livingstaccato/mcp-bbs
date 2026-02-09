@@ -51,6 +51,8 @@ def extract_semantic_kv(screen: str) -> dict:
     # Credits
     credit_match = re.search(r"You have\s+([\d,]+)\s+credits", screen)
     if not credit_match:
+        credit_match = re.search(r"You only have\s+([\d,]+)\s+credits", screen, re.IGNORECASE)
+    if not credit_match:
         credit_match = re.search(r"Credits?\s*:?\s*([\d,]+)", screen)
     if credit_match:
         data["credits"] = int(credit_match.group(1).replace(",", ""))

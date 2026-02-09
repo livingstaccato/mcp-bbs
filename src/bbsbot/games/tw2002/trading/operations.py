@@ -109,13 +109,18 @@ async def dock_and_trade(
                 print("    Accepting offer...")
                 await send_input(bot, "1", input_type)
             elif prompt_id == "prompt.port_haggle":
-                # Haggle - accept default price, unless we clearly can't afford it.
-                # When TW2002 shows "You only have N credits!" on the haggle screen,
-                # repeatedly pressing Enter will loop forever. Bail out to the port menu.
-                if re.search(r"(?i)you\\s+only\\s+have\\s+[\\d,]+\\s+credits", screen or ""):
-                    print("    Insufficient credits at haggle; aborting trade (Q)...")
-                    await send_input(bot, "Q", input_type)
-                    # Let the outer loop observe the new prompt and proceed.
+                # Haggle:
+                # - If we can afford the default offer, send Enter to accept it.
+                # - If we cannot, submit an affordable offer (<= credits).
+                # This avoids the "You only have 300 credits! Your offer [471] ?" loop.
+                low_m = re.search(r"(?i)you\\s+only\\s+have\\s+([\\d,]+)\\s+credits", screen or "")
+                def_m = re.search(r"\\[(\\d{1,3}(?:,\\d{3})*|\\d+)\\]\\s*\\?", screen or "")
+                if low_m and def_m:
+                    credits = int(low_m.group(1).replace(",", ""))
+                    default_offer = int(def_m.group(1).replace(",", ""))
+                    offer = min(max(0, credits), default_offer)
+                    print(f"    Low credits at haggle; offering {offer}...")
+                    await send_input(bot, str(offer), input_type)
                     continue
                 print("    Accepting haggle price...")
                 await send_input(bot, "", input_type)
