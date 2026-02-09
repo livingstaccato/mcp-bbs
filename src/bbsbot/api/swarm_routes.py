@@ -173,6 +173,12 @@ async def update_status(bot_id: str, update: dict):
         bot.status_detail = update["status_detail"]
     if "prompt_id" in update:
         bot.prompt_id = update["prompt_id"]
+    if "cargo_fuel_ore" in update:
+        bot.cargo_fuel_ore = update["cargo_fuel_ore"]
+    if "cargo_organics" in update:
+        bot.cargo_organics = update["cargo_organics"]
+    if "cargo_equipment" in update:
+        bot.cargo_equipment = update["cargo_equipment"]
     if "error_message" in update:
         bot.error_message = update["error_message"]
     if "error_type" in update:

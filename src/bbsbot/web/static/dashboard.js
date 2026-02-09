@@ -178,8 +178,11 @@
         const turns_max = (b.turns_max !== undefined && b.turns_max !== null) ? b.turns_max : 0;
         const turnsDisplay = turns_max > 0 ? `${b.turns_executed} / ${turns_max}` : `${b.turns_executed} / Auto`;
 
-        // Display "-" for uninitialized credits
+        // Display "-" for uninitialized numeric fields
         const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
+        const fuelDisplay = (b.cargo_fuel_ore === null || b.cargo_fuel_ore === undefined) ? "-" : formatCredits(b.cargo_fuel_ore);
+        const orgDisplay = (b.cargo_organics === null || b.cargo_organics === undefined) ? "-" : formatCredits(b.cargo_organics);
+        const equipDisplay = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? "-" : formatCredits(b.cargo_equipment);
 
         return `<tr>
         <td>${esc(b.bot_id)}</td>
@@ -189,6 +192,9 @@
         <td>${esc(b.username || "-")}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${creditsDisplay}</td>
+        <td class="numeric">${fuelDisplay}</td>
+        <td class="numeric">${orgDisplay}</td>
+        <td class="numeric">${equipDisplay}</td>
         <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
         <td class="actions">
           <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>

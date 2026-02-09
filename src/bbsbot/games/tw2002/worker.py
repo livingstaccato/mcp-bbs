@@ -155,6 +155,19 @@ class WorkerBot(TradingBot):
                         credits = int(sem_credits)
                 except Exception:
                     pass
+            sem = getattr(self, "last_semantic_data", {}) or {}
+            try:
+                cargo_fuel_ore = int(sem.get("cargo_fuel_ore")) if sem.get("cargo_fuel_ore") is not None else None
+            except Exception:
+                cargo_fuel_ore = None
+            try:
+                cargo_organics = int(sem.get("cargo_organics")) if sem.get("cargo_organics") is not None else None
+            except Exception:
+                cargo_organics = None
+            try:
+                cargo_equipment = int(sem.get("cargo_equipment")) if sem.get("cargo_equipment") is not None else None
+            except Exception:
+                cargo_equipment = None
 
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)
@@ -257,6 +270,10 @@ class WorkerBot(TradingBot):
                     prompt_id.replace("prompt.", "").upper(),
                 )
 
+            # Override activity for specific prompts that are more precise than context detection.
+            if prompt_id == "prompt.stardock_buy":
+                activity = "SHOPPING"
+
             # Pause screens should show as Status, not Activity.
             if current_context == "pause":
                 status_detail = "PAUSED"
@@ -329,6 +346,9 @@ class WorkerBot(TradingBot):
                 "activity_context": activity,
                 "status_detail": status_detail,
                 "prompt_id": prompt_id,
+                "cargo_fuel_ore": cargo_fuel_ore,
+                "cargo_organics": cargo_organics,
+                "cargo_equipment": cargo_equipment,
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
             }
 

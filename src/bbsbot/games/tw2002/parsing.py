@@ -73,6 +73,28 @@ def extract_semantic_kv(screen: str) -> dict:
     if empty_holds_match:
         data["holds_free"] = int(empty_holds_match.group(1))
 
+    # Cargo onboard (port/commodity tables and status screens)
+    # Example table row:
+    # "Fuel Ore   Buying     820    100%       0"
+    # We take the last integer on the line as onboard qty.
+    for line in screen.splitlines():
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+        lower = line_stripped.lower()
+        if lower.startswith("fuel ore"):
+            nums = re.findall(r"\b\d+\b", line_stripped)
+            if nums:
+                data["cargo_fuel_ore"] = int(nums[-1])
+        elif lower.startswith("organics"):
+            nums = re.findall(r"\b\d+\b", line_stripped)
+            if nums:
+                data["cargo_organics"] = int(nums[-1])
+        elif lower.startswith("equipment"):
+            nums = re.findall(r"\b\d+\b", line_stripped)
+            if nums:
+                data["cargo_equipment"] = int(nums[-1])
+
     return data
 
 

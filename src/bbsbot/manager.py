@@ -48,6 +48,10 @@ class BotStatus(BaseModel):
     activity_context: str | None = None   # current game context
     status_detail: str | None = None      # phase/prompt detail (e.g., USERNAME, PAUSED, PORT_HAGGLE)
     prompt_id: str | None = None          # last detected prompt id (debugging/diagnostics)
+    # Cargo tracking (best-effort from semantic extraction)
+    cargo_fuel_ore: int | None = None
+    cargo_organics: int | None = None
+    cargo_equipment: int | None = None
     # Error tracking
     error_type: str | None = None         # Exception class name (e.g., "TimeoutError")
     error_timestamp: float | None = None  # When error occurred
