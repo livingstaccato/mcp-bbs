@@ -199,6 +199,12 @@ async def _reach_safe_state(
                         screen=screen,
                         attempts=attempt + 1,
                     )
+            elif context == "corporate_listings":
+                # Corporate Listings menu - send Q to quit
+                print(f"  [Orient] At Corporate Listings menu, sending Q to exit...")
+                await bot.session.send("Q")
+                await asyncio.sleep(0.3)
+                continue
             else:
                 # Generic menu, try Q to exit
                 print(f"  [Orient] In {context}, sending Q to back out...")
