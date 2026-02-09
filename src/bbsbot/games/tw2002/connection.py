@@ -1,6 +1,7 @@
 """Connection and session management for TW2002 Trading Bot."""
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -63,8 +64,24 @@ async def connect(bot, host="localhost", port=2002):
         port: BBS port (default: 2002)
     """
     print(f"\nConnecting to {host}:{port}...")
+    chaos = None
+    if os.getenv("BBSBOT_CHAOS", "").strip() in ("1", "true", "TRUE", "yes", "YES"):
+        def _get_int(name: str, default: int) -> int:
+            try:
+                return int(os.getenv(name, str(default)).strip())
+            except Exception:
+                return default
+
+        chaos = {
+            "seed": _get_int("BBSBOT_CHAOS_SEED", 1),
+            "disconnect_every_n_receives": _get_int("BBSBOT_CHAOS_DISCONNECT_EVERY", 0),
+            "timeout_every_n_receives": _get_int("BBSBOT_CHAOS_TIMEOUT_EVERY", 0),
+            "max_jitter_ms": _get_int("BBSBOT_CHAOS_JITTER_MS", 0),
+            "label": "tw2002",
+        }
+
     bot.session_id = await bot.session_manager.create_session(
-        host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0
+        host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0, chaos=chaos
     )
     bot.session = await bot.session_manager.get_session(bot.session_id)
     await bot.session_manager.enable_learning(

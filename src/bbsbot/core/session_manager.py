@@ -24,6 +24,7 @@ from bbsbot.addons.tedit import TeditAddon
 from bbsbot.logging.session_logger import SessionLogger
 from bbsbot.terminal.emulator import TerminalEmulator
 from bbsbot.transport.telnet import TelnetTransport
+from bbsbot.transport.chaos import ChaosTransport
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -111,7 +112,11 @@ class SessionManager:
         # This allows multiple bots to connect in parallel instead of serially
         # Validate transport type first (quick check)
         if transport_type == "telnet":
+            chaos = options.pop("chaos", None)
             transport = TelnetTransport()
+            if chaos:
+                # Deterministic fault injection for resilience testing.
+                transport = ChaosTransport(transport, **dict(chaos))
         else:
             raise ValueError(f"Unknown transport: {transport_type}")
 
