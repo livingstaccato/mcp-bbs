@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -405,16 +406,19 @@ class LearningEngine:
         is_idle = self._buffer_manager.detect_idle_state(self._idle_threshold_seconds)
 
         # Detect prompt (always try, but avoid re-scanning patterns on identical snapshots)
-        screen_hash = snapshot.get("screen_hash", "")
         # Fingerprint used to avoid expensive prompt regex scans on effectively-identical frames.
-        # Cursor x/y can change frequently during animations without changing prompt semantics,
-        # so we intentionally DO NOT include x/y here. We *do* include cursor_at_end and
-        # trailing-space, since those affect prompt readiness heuristics.
-        fingerprint = (
-            f"{screen_hash}:"
-            f"{int(bool(snapshot.get('cursor_at_end', True)))}:"
-            f"{int(bool(snapshot.get('has_trailing_space', False)))}"
-        )
+        # End-state: use a normalized prompt-region fingerprint, not full-screen hash, because
+        # volatile fields like `TL=00:00:01` can change every second without changing prompt semantics.
+        if self._prompt_detector is not None:
+            fingerprint = self._prompt_detector.prompt_fingerprint(snapshot)
+        else:
+            # Fallback (should be rare): keep prior behavior.
+            screen_hash = snapshot.get("screen_hash", "")
+            fingerprint = (
+                f"{screen_hash}:"
+                f"{int(bool(snapshot.get('cursor_at_end', True)))}:"
+                f"{int(bool(snapshot.get('has_trailing_space', False)))}"
+            )
 
         if fingerprint and fingerprint == self._last_prompt_fingerprint:
             prompt_match = self._last_prompt_match

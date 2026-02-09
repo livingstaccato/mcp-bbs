@@ -1,9 +1,15 @@
-"""Prompt detection with cursor-aware pattern matching."""
+"""Prompt detection with cursor-aware pattern matching.
+
+End-state goals:
+- Avoid full-screen regex scans on every frame (most prompts are near the bottom).
+- Reduce false positives from stale/header content by prioritizing the prompt region.
+"""
 
 from __future__ import annotations
 
 import re
 from typing import Any
+import hashlib
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,6 +17,8 @@ from bbsbot.learning.buffer import ScreenBuffer
 from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
+
+_DEFAULT_PROMPT_REGION_TAIL_LINES = 12
 
 
 class PromptMatch(BaseModel):
@@ -45,7 +53,14 @@ class PromptDetector:
             patterns: List of prompt pattern dictionaries from JSON
         """
         self._patterns = patterns
-        self._compiled = self._compile_patterns()
+        self._compiled_all = self._compile_patterns()
+        # Many patterns require cursor-at-end; skip them when the cursor is NOT at end.
+        # Patterns that set expect_cursor_at_end=false are allowed even if cursor_at_end is false.
+        self._compiled_cursor_any = [
+            (regex, pattern)
+            for (regex, pattern) in self._compiled_all
+            if not bool(pattern.get("expect_cursor_at_end", True))
+        ]
 
     def _compile_patterns(self) -> list[tuple[re.Pattern[str], dict[str, Any]]]:
         """Compile regex patterns for efficient matching.
@@ -102,6 +117,117 @@ class PromptDetector:
 
         return compiled
 
+    @staticmethod
+    def prompt_region(
+        snapshot: dict[str, Any],
+        *,
+        tail_lines: int = _DEFAULT_PROMPT_REGION_TAIL_LINES,
+    ) -> tuple[str, bool]:
+        """Extract a bottom-of-content region likely to contain prompts.
+
+        Returns (region_text, cursor_is_above_region).
+
+        We anchor to the last non-empty line of the screen, not the bottom row,
+        because many UIs leave blank rows below the last content.
+        """
+        screen = snapshot.get("screen", "") or ""
+        if not screen:
+            return ("", False)
+
+        # Preserve empty trailing lines if present.
+        lines = screen.split("\n")
+        # Find the last line with any non-whitespace content.
+        last_idx = 0
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].rstrip():
+                last_idx = i
+                break
+        start_idx = max(0, last_idx - max(1, int(tail_lines)) + 1)
+
+        cursor = snapshot.get("cursor") or {}
+        try:
+            cursor_y = int(cursor.get("y", 0) or 0)
+        except Exception:
+            cursor_y = 0
+        cursor_is_above_region = cursor_y < start_idx
+
+        region_text = "\n".join(lines[start_idx : last_idx + 1])
+        return (region_text, cursor_is_above_region)
+
+    @staticmethod
+    def normalize_prompt_region(region_text: str) -> str:
+        """Normalize volatile prompt-region fields for stable fingerprinting."""
+        if not region_text:
+            return ""
+        text = region_text
+        # Command prompt contains a timer field that changes every second.
+        text = re.sub(r"(?i)TL=\d\d:\d\d:\d\d", "TL=00:00:00", text)
+        # On TW2002 command prompts we often see `:[4]` changing; normalize only when
+        # it looks like the command prompt line, to avoid mangling other prompts.
+        if re.search(r"(?i)command\s*\[TL=", text):
+            text = re.sub(r":\[\d+\]", ":[#]", text)
+        return text
+
+    @staticmethod
+    def prompt_fingerprint(
+        snapshot: dict[str, Any],
+        *,
+        tail_lines: int = _DEFAULT_PROMPT_REGION_TAIL_LINES,
+    ) -> str:
+        """Compute a stable fingerprint for prompt-detection caching."""
+        region, _cursor_above = PromptDetector.prompt_region(snapshot, tail_lines=tail_lines)
+        norm = PromptDetector.normalize_prompt_region(region)
+        h = hashlib.blake2s(norm.encode("utf-8", errors="replace")).hexdigest()
+        cursor_at_end = int(bool(snapshot.get("cursor_at_end", True)))
+        trailing = int(bool(snapshot.get("has_trailing_space", False)))
+        return f"{h}:{cursor_at_end}:{trailing}"
+
+    def _detect_in_text(
+        self,
+        *,
+        text: str,
+        full_screen: str,
+        cursor_at_end: bool,
+        compiled: list[tuple[re.Pattern[str], dict[str, Any]]],
+        regex_matched_but_failed: list[dict[str, Any]],
+    ) -> PromptMatch | None:
+        for regex, pattern in compiled:
+            match = regex.search(text)
+            if not match:
+                continue
+
+            negative = pattern.get("negative_regex")
+            if negative and re.search(negative, full_screen, re.MULTILINE | re.IGNORECASE):
+                regex_matched_but_failed.append(
+                    {
+                        "pattern_id": pattern["id"],
+                        "reason": "negative_match",
+                        "negative_pattern": negative,
+                    }
+                )
+                continue
+
+            expect_cursor_at_end = pattern.get("expect_cursor_at_end", True)
+            if expect_cursor_at_end and not cursor_at_end:
+                regex_matched_but_failed.append(
+                    {
+                        "pattern_id": pattern["id"],
+                        "reason": "cursor_position",
+                        "expected_cursor_at_end": expect_cursor_at_end,
+                        "actual_cursor_at_end": cursor_at_end,
+                    }
+                )
+                continue
+
+            return PromptMatch(
+                prompt_id=pattern["id"],
+                pattern=pattern,
+                input_type=pattern.get("input_type", "multi_key"),
+                eol_pattern=pattern.get("eol_pattern", r"[\r\n]+"),
+                kv_extract=pattern.get("kv_extract"),
+            )
+        return None
+
     def detect_prompt(self, snapshot: dict[str, Any]) -> PromptMatch | None:
         """Detect if snapshot contains a prompt waiting for input.
 
@@ -111,7 +237,7 @@ class PromptDetector:
         Returns:
             PromptMatch if a prompt pattern matches, None otherwise
         """
-        screen = snapshot["screen"]
+        screen = snapshot.get("screen", "") or ""
         # Most callers supply cursor metadata; tests/legacy callers may not.
         # Defaulting to True keeps prompt detection working for minimal snapshots.
         cursor_at_end = snapshot.get("cursor_at_end", True)
@@ -120,61 +246,51 @@ class PromptDetector:
         # Track patterns that partially matched (for diagnostics)
         regex_matched_but_failed: list[dict[str, Any]] = []
 
-        logger.debug(f"[PROMPT DETECTION] Checking {len(self._compiled)} patterns")
+        logger.debug(f"[PROMPT DETECTION] Checking {len(self._compiled_all)} patterns")
         logger.debug(f"[PROMPT DETECTION] Cursor at end: {cursor_at_end}, Has trailing space: {has_trailing_space}")
-        logger.debug(f"[PROMPT DETECTION] Screen content ({len(screen)} chars):\n{screen[-200:]}")  # Last 200 chars
-
-        for regex, pattern in self._compiled:
-            match = regex.search(screen)
-            if not match:
-                continue
-
-            # Regex matched! Now check additional constraints
-            logger.debug(f"[PROMPT DETECTION] ✓ Regex MATCHED: {pattern['id']}")
-            logger.debug(f"[PROMPT DETECTION]   Pattern: {regex.pattern}")
-            logger.debug(f"[PROMPT DETECTION]   Matched text: {match.group()!r}")
-
-            negative = pattern.get("negative_regex")
-            if negative and re.search(negative, screen, re.MULTILINE | re.IGNORECASE):
-                logger.warning(
-                    f"[PROMPT DETECTION] ✗ REJECTED by negative_match: {pattern['id']}\n"
-                    f"  Negative pattern: {negative}\n"
-                    f"  Pattern would have matched but negative check excludes it"
-                )
-                regex_matched_but_failed.append({
-                    "pattern_id": pattern["id"],
-                    "reason": "negative_match",
-                    "negative_pattern": negative,
-                })
-                continue
-
-            # Check if cursor position matches expectations
-            expect_cursor_at_end = pattern.get("expect_cursor_at_end", True)
-            if expect_cursor_at_end and not cursor_at_end:
-                # Likely data display, not a prompt waiting for input
-                logger.warning(
-                    f"[PROMPT DETECTION] ✗ REJECTED by cursor position: {pattern['id']}\n"
-                    f"  Expected cursor at end: {expect_cursor_at_end}\n"
-                    f"  Actual cursor at end: {cursor_at_end}\n"
-                    f"  Pattern matched but cursor position doesn't indicate a prompt"
-                )
-                regex_matched_but_failed.append({
-                    "pattern_id": pattern["id"],
-                    "reason": "cursor_position",
-                    "expected_cursor_at_end": expect_cursor_at_end,
-                    "actual_cursor_at_end": cursor_at_end,
-                })
-                continue
-
-            # Matched!
-            logger.info(f"[PROMPT DETECTION] ✓✓✓ MATCHED: {pattern['id']} (input_type: {pattern.get('input_type', 'multi_key')})")
-            return PromptMatch(
-                prompt_id=pattern["id"],
-                pattern=pattern,
-                input_type=pattern.get("input_type", "multi_key"),
-                eol_pattern=pattern.get("eol_pattern", r"[\r\n]+"),
-                kv_extract=pattern.get("kv_extract"),
+        if screen:
+            region_text, cursor_above_region = self.prompt_region(snapshot)
+            logger.debug(
+                f"[PROMPT DETECTION] Region ({len(region_text)} chars, cursor_above={cursor_above_region}):\n"
+                f"{region_text[-200:]}"
             )
+
+        # Choose candidate pattern set based on cursor state.
+        # If cursor is not at end, patterns that require cursor-at-end can be skipped entirely.
+        compiled = self._compiled_all if cursor_at_end else self._compiled_cursor_any
+
+        # Two-pass scan: first scan the prompt region (bottom-of-content),
+        # then fall back to full-screen scan only if the cursor is above the region.
+        region_text, cursor_above_region = self.prompt_region(snapshot)
+        if region_text:
+            match = self._detect_in_text(
+                text=region_text,
+                full_screen=screen,
+                cursor_at_end=bool(cursor_at_end),
+                compiled=compiled,
+                regex_matched_but_failed=regex_matched_but_failed,
+            )
+            if match:
+                logger.info(
+                    f"[PROMPT DETECTION] ✓✓✓ MATCHED (region): {match.prompt_id} "
+                    f"(input_type: {match.input_type})"
+                )
+                return match
+
+        if cursor_above_region:
+            match = self._detect_in_text(
+                text=screen,
+                full_screen=screen,
+                cursor_at_end=bool(cursor_at_end),
+                compiled=compiled,
+                regex_matched_but_failed=regex_matched_but_failed,
+            )
+            if match:
+                logger.info(
+                    f"[PROMPT DETECTION] ✓✓✓ MATCHED (full): {match.prompt_id} "
+                    f"(input_type: {match.input_type})"
+                )
+                return match
 
         # NO PATTERNS MATCHED - Emit diagnostic
         if regex_matched_but_failed:
@@ -187,7 +303,7 @@ class PromptDetector:
             # No patterns matched at all - this might be okay (e.g., data display)
             logger.debug(
                 f"[PROMPT DETECTION] No patterns matched screen content\n"
-                f"  Total patterns: {len(self._compiled)}\n"
+                f"  Total patterns: {len(self._compiled_all)}\n"
                 f"  Screen preview: {screen[-150:]!r}"
             )
 
