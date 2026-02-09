@@ -1,5 +1,5 @@
 {
-  "timestamp": 1770605659.400765,
+  "timestamp": 1770605719.40348,
   "bots": {
     "persist-01": {
       "bot_id": "persist-01",
@@ -164,15 +164,15 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 98,
+      "turns_executed": 115,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605658.269866,
+      "last_update_time": 1770605718.496167,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
       "last_action_time": 1770605215.149933,
-      "activity_context": "ORIENTING: Recovering",
+      "activity_context": "ORIENTING: Step 9/10",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
@@ -200,15 +200,15 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 73,
+      "turns_executed": 87,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605657.586226,
+      "last_update_time": 1770605717.765731,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
       "last_action_time": 1770605214.202507,
-      "activity_context": "ORIENTING: Recovering",
+      "activity_context": "ORIENTING: Step 10/10",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
@@ -236,87 +236,87 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 85,
+      "turns_executed": 99,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605654.975498,
+      "last_update_time": 1770605715.1160169,
       "completed_at": 1770605229.437043,
       "error_message": "Stuck in loop: prompt.corporate_listings",
-      "last_action": "TRADE",
-      "last_action_time": 1770605653.2649431,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770605710.674067,
       "activity_context": "EXPLORING",
       "error_type": "RuntimeError",
       "error_timestamp": 1770605221.8500428,
       "exit_reason": "target_reached",
       "recent_actions": [
         {
-          "time": 1770605615.545006,
+          "time": 1770605671.422366,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605678.7057989,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "882",
+          "result": "failure"
+        },
+        {
+          "time": 1770605681.486254,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605684.7718232,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605692.047549,
           "action": "EXPLORE",
           "sector": 655,
           "details": "472",
           "result": "failure"
         },
         {
-          "time": 1770605618.321665,
+          "time": 1770605694.827733,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605621.098837,
+          "time": 1770605697.603113,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605628.377234,
+          "time": 1770605704.884745,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "472",
+          "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605631.152993,
+          "time": 1770605707.664138,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605633.929845,
+          "time": 1770605710.443955,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605641.206748,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "472",
-          "result": "failure"
-        },
-        {
-          "time": 1770605643.981667,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605646.757789,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605653.035039,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "472",
           "result": "failure"
         }
       ],
@@ -335,84 +335,84 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 72,
+      "turns_executed": 87,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605657.114642,
+      "last_update_time": 1770605717.346061,
       "completed_at": 1770605229.43753,
       "error_message": "Stuck in loop: prompt.corporate_listings",
       "last_action": "EXPLORE",
-      "last_action_time": 1770605653.501653,
+      "last_action_time": 1770605716.70694,
       "activity_context": "EXPLORING",
       "error_type": "RuntimeError",
       "error_timestamp": 1770605222.250239,
       "exit_reason": "target_reached",
       "recent_actions": [
         {
-          "time": 1770605615.7388039,
+          "time": 1770605678.955564,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605622.022007,
+          "time": 1770605686.2359822,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "686",
+          "result": "failure"
+        },
+        {
+          "time": 1770605689.018044,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605691.79868,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605699.0783622,
           "action": "EXPLORE",
           "sector": 655,
           "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605624.802557,
+          "time": 1770605701.859485,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605627.5818439,
+          "time": 1770605704.637933,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605634.864803,
+          "time": 1770605710.920745,
           "action": "EXPLORE",
           "sector": 655,
           "details": "882",
           "result": "failure"
         },
         {
-          "time": 1770605637.646662,
+          "time": 1770605713.700438,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605640.425386,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605647.70964,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "685",
-          "result": "failure"
-        },
-        {
-          "time": 1770605650.489913,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605653.2709398,
+          "time": 1770605716.4795399,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
@@ -434,10 +434,10 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 30,
+      "turns_executed": 33,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605658.993113,
+      "last_update_time": 1770605719.14735,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
@@ -533,15 +533,15 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 24,
+      "turns_executed": 27,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605656.5203168,
+      "last_update_time": 1770605716.899284,
       "completed_at": 1770605309.445751,
       "error_message": null,
       "last_action": "TRADE",
       "last_action_time": 1770605217.780985,
-      "activity_context": "ORIENTING: Step 5/10",
+      "activity_context": "ORIENTING: Step 1/10",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": "target_reached",
@@ -569,87 +569,87 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 86,
+      "turns_executed": 100,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605657.1119518,
+      "last_update_time": 1770605717.338463,
       "completed_at": null,
       "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770605655.6521118,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770605712.54319,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605617.911818,
+          "time": 1770605673.809077,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605681.090003,
           "action": "EXPLORE",
           "sector": 655,
           "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605620.695341,
+          "time": 1770605683.8734982,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605623.4734778,
+          "time": 1770605686.654597,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605630.74965,
+          "time": 1770605693.93285,
           "action": "EXPLORE",
           "sector": 655,
           "details": "686",
           "result": "failure"
         },
         {
-          "time": 1770605633.525897,
+          "time": 1770605696.711431,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605636.302766,
+          "time": 1770605699.4874518,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605643.581253,
+          "time": 1770605706.768526,
           "action": "EXPLORE",
           "sector": 655,
           "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605646.36483,
+          "time": 1770605709.5468001,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605649.144135,
+          "time": 1770605712.323352,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605655.42156,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "686",
           "result": "failure"
         }
       ],
@@ -668,87 +668,87 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 86,
+      "turns_executed": 100,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605657.400081,
+      "last_update_time": 1770605717.5682602,
       "completed_at": null,
       "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770605656.982649,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770605712.890306,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605618.2306628,
+          "time": 1770605675.150912,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605681.432267,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "882",
+          "result": "failure"
+        },
+        {
+          "time": 1770605684.214298,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605686.992328,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605694.2753222,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "882",
+          "result": "failure"
+        },
+        {
+          "time": 1770605697.0541172,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605699.831119,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605707.107339,
           "action": "EXPLORE",
           "sector": 655,
           "details": "472",
           "result": "failure"
         },
         {
-          "time": 1770605621.007948,
+          "time": 1770605709.884342,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605623.7889228,
+          "time": 1770605712.662215,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605631.068469,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "686",
-          "result": "failure"
-        },
-        {
-          "time": 1770605633.851752,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605636.62991,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605643.91025,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "686",
-          "result": "failure"
-        },
-        {
-          "time": 1770605646.692385,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605649.470207,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605656.752734,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "882",
           "result": "failure"
         }
       ],
@@ -767,87 +767,87 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 90,
+      "turns_executed": 104,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605658.9624379,
+      "last_update_time": 1770605719.1446002,
       "completed_at": null,
       "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770605657.983954,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770605713.9093142,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605619.238527,
+          "time": 1770605676.155227,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605682.433321,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "685",
+          "details": "472",
           "result": "failure"
         },
         {
-          "time": 1770605622.0223901,
+          "time": 1770605685.2161841,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605624.803582,
+          "time": 1770605687.995868,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605632.0798862,
+          "time": 1770605695.272738,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "882",
+          "details": "472",
           "result": "failure"
         },
         {
-          "time": 1770605634.855216,
+          "time": 1770605698.0486321,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605637.633301,
+          "time": 1770605700.823852,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605644.916317,
+          "time": 1770605708.1035678,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "685",
+          "details": "686",
           "result": "failure"
         },
         {
-          "time": 1770605647.700591,
+          "time": 1770605710.8878798,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605650.470737,
+          "time": 1770605713.6690528,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605657.7550662,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "882",
           "result": "failure"
         }
       ],
@@ -866,15 +866,15 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 80,
+      "turns_executed": 94,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605657.11345,
+      "last_update_time": 1770605717.3445241,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
       "last_action_time": 1770605218.638189,
-      "activity_context": "ORIENTING: Step 6/10",
+      "activity_context": "ORIENTING: Step 2/10",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
@@ -902,87 +902,87 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 88,
+      "turns_executed": 102,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605655.128621,
+      "last_update_time": 1770605715.372548,
       "completed_at": null,
       "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770605653.665507,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770605710.5812008,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605615.915914,
+          "time": 1770605671.822923,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605679.105609,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "686",
+          "details": "882",
           "result": "failure"
         },
         {
-          "time": 1770605618.698637,
+          "time": 1770605681.8890612,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605621.476632,
+          "time": 1770605684.669991,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605628.762178,
+          "time": 1770605691.9528692,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "686",
+          "details": "882",
           "result": "failure"
         },
         {
-          "time": 1770605631.543251,
+          "time": 1770605694.732349,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605634.320105,
+          "time": 1770605697.510967,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605641.599526,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "472",
-          "result": "failure"
-        },
-        {
-          "time": 1770605644.376329,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605647.154711,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605653.435665,
+          "time": 1770605704.7915351,
           "action": "EXPLORE",
           "sector": 655,
           "details": "685",
+          "result": "failure"
+        },
+        {
+          "time": 1770605707.5735471,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605710.353215,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
           "result": "failure"
         }
       ],
@@ -1001,10 +1001,10 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 21,
+      "turns_executed": 23,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605656.519008,
+      "last_update_time": 1770605716.900925,
       "completed_at": 1770605229.437957,
       "error_message": "Stuck in loop: prompt.corporate_listings",
       "last_action": "TRADE",
@@ -1037,84 +1037,84 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 96,
+      "turns_executed": 114,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605655.12747,
+      "last_update_time": 1770605715.376148,
       "completed_at": 1770605229.438405,
       "error_message": "Stuck in loop: prompt.corporate_listings",
       "last_action": "WAIT",
-      "last_action_time": 1770605651.729514,
+      "last_action_time": 1770605713.8061109,
       "activity_context": "ORIENTING: Gathering state",
       "error_type": "RuntimeError",
       "error_timestamp": 1770605225.397761,
       "exit_reason": "target_reached",
       "recent_actions": [
         {
-          "time": 1770605620.704627,
+          "time": 1770605682.784016,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605624.1541271,
+          "time": 1770605686.236015,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605627.6005929,
+          "time": 1770605689.682464,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605631.048803,
+          "time": 1770605693.1307058,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605634.492,
+          "time": 1770605696.574247,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605637.938567,
+          "time": 1770605700.0194712,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605641.3920121,
+          "time": 1770605703.468025,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605644.8404539,
+          "time": 1770605706.913936,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605648.282984,
+          "time": 1770605710.3610291,
           "action": "WAIT",
           "sector": 655,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770605651.7295208,
+          "time": 1770605713.8061178,
           "action": "WAIT",
           "sector": 655,
           "details": null,
@@ -1136,87 +1136,87 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 295,
+      "turns_executed": 309,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605655.7575822,
+      "last_update_time": 1770605715.8729758,
       "completed_at": 1770605229.438796,
       "error_message": "Stuck in loop: prompt.corporate_listings",
-      "last_action": "TRADE",
-      "last_action_time": 1770605653.9166348,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770605710.855365,
       "activity_context": "EXPLORING",
       "error_type": "RuntimeError",
       "error_timestamp": 1770605226.974535,
       "exit_reason": "target_reached",
       "recent_actions": [
         {
-          "time": 1770605616.16254,
+          "time": 1770605672.098182,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605679.379752,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "686",
+          "result": "failure"
+        },
+        {
+          "time": 1770605682.162343,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605684.943805,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605692.225311,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "472",
+          "result": "failure"
+        },
+        {
+          "time": 1770605695.006569,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605697.783355,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605705.0673332,
           "action": "EXPLORE",
           "sector": 655,
           "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605618.945483,
+          "time": 1770605707.849599,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605621.724462,
+          "time": 1770605710.628504,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605628.997683,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "882",
-          "result": "failure"
-        },
-        {
-          "time": 1770605631.781895,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605634.558642,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605641.8403149,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "882",
-          "result": "failure"
-        },
-        {
-          "time": 1770605644.6218188,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605647.401401,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605653.686272,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "882",
           "result": "failure"
         }
       ],
@@ -1235,84 +1235,84 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 105,
+      "turns_executed": 119,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605658.8013408,
+      "last_update_time": 1770605718.959161,
       "completed_at": null,
       "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770605656.579422,
+      "last_action": "TRADE",
+      "last_action_time": 1770605718.016195,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605618.823343,
+          "time": 1770605679.2564852,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605626.110507,
+          "time": 1770605682.038155,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605689.323642,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "472",
+          "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605628.893628,
+          "time": 1770605692.1057432,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605631.673692,
+          "time": 1770605694.8838952,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605638.954377,
+          "time": 1770605702.16222,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "685",
+          "result": "failure"
+        },
+        {
+          "time": 1770605704.9427688,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605707.722116,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605715.003523,
           "action": "EXPLORE",
           "sector": 655,
           "details": "686",
           "result": "failure"
         },
         {
-          "time": 1770605641.7371619,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605644.513312,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605650.7929192,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "882",
-          "result": "failure"
-        },
-        {
-          "time": 1770605653.57292,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605656.3507059,
+          "time": 1770605717.786388,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
@@ -1334,84 +1334,84 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 104,
+      "turns_executed": 117,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605656.5215218,
+      "last_update_time": 1770605716.897805,
       "completed_at": null,
       "error_message": null,
       "last_action": "EXPLORE",
-      "last_action_time": 1770605650.669183,
+      "last_action_time": 1770605713.868466,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605611.9477792,
+          "time": 1770605675.121472,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605619.222686,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "472",
-          "result": "failure"
-        },
-        {
-          "time": 1770605621.999892,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605624.778944,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605632.055032,
+          "time": 1770605682.4018261,
           "action": "EXPLORE",
           "sector": 655,
           "details": "882",
           "result": "failure"
         },
         {
-          "time": 1770605634.8323772,
+          "time": 1770605685.184684,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605637.609578,
+          "time": 1770605687.966741,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605644.885813,
+          "time": 1770605695.24318,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "472",
+          "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605647.66282,
+          "time": 1770605698.0233212,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605650.440015,
+          "time": 1770605700.800716,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605708.082734,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "882",
+          "result": "failure"
+        },
+        {
+          "time": 1770605710.862831,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605713.635786,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
@@ -1433,84 +1433,84 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 87,
+      "turns_executed": 102,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605658.273176,
+      "last_update_time": 1770605718.497699,
       "completed_at": null,
       "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770605657.305363,
+      "last_action": "TRADE",
+      "last_action_time": 1770605717.7210932,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605619.550678,
+          "time": 1770605679.985791,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605626.83155,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "882",
-          "result": "failure"
-        },
-        {
-          "time": 1770605629.612156,
+          "time": 1770605682.7637398,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605632.3909812,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605639.671154,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "685",
-          "result": "failure"
-        },
-        {
-          "time": 1770605642.4517188,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605645.232975,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605651.514996,
+          "time": 1770605690.0398211,
           "action": "EXPLORE",
           "sector": 655,
           "details": "686",
           "result": "failure"
         },
         {
-          "time": 1770605654.2976298,
+          "time": 1770605692.815356,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605657.0770218,
+          "time": 1770605695.593313,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605702.8725219,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "685",
+          "result": "failure"
+        },
+        {
+          "time": 1770605705.6543841,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605708.431631,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605714.711447,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "685",
+          "result": "failure"
+        },
+        {
+          "time": 1770605717.49185,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
@@ -1532,84 +1532,84 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 88,
+      "turns_executed": 102,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605658.3912818,
+      "last_update_time": 1770605718.526925,
       "completed_at": null,
       "error_message": null,
-      "last_action": "EXPLORE",
-      "last_action_time": 1770605656.1853251,
+      "last_action": "TRADE",
+      "last_action_time": 1770605716.588812,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770605618.441799,
+          "time": 1770605678.844366,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605624.7206001,
+          "time": 1770605681.6252291,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605687.904254,
           "action": "EXPLORE",
           "sector": 655,
-          "details": "882",
+          "details": "472",
           "result": "failure"
         },
         {
-          "time": 1770605627.500268,
+          "time": 1770605690.684292,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605630.27906,
+          "time": 1770605693.463671,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605637.557028,
+          "time": 1770605700.7416,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "472",
+          "result": "failure"
+        },
+        {
+          "time": 1770605703.518389,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605706.295978,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605713.5789492,
           "action": "EXPLORE",
           "sector": 655,
           "details": "686",
           "result": "failure"
         },
         {
-          "time": 1770605640.3386838,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605643.1170628,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605650.39884,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "686",
-          "result": "failure"
-        },
-        {
-          "time": 1770605653.178905,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605655.9574442,
+          "time": 1770605716.359781,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
@@ -1631,10 +1631,10 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 20,
+      "turns_executed": 23,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605659.2032661,
+      "last_update_time": 1770605719.350943,
       "completed_at": 1770605229.439091,
       "error_message": "Stuck in loop: prompt.corporate_listings",
       "last_action": "TRADE",
@@ -1667,87 +1667,87 @@
       "state": "running",
       "sector": 655,
       "credits": 0,
-      "turns_executed": 88,
+      "turns_executed": 102,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770605655.628238,
+      "last_update_time": 1770605715.7494872,
       "completed_at": 1770605229.439382,
       "error_message": "Stuck in loop: prompt.corporate_listings",
-      "last_action": "TRADE",
-      "last_action_time": 1770605654.759354,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770605712.188024,
       "activity_context": "EXPLORING",
       "error_type": "RuntimeError",
       "error_timestamp": 1770605228.647709,
       "exit_reason": "target_reached",
       "recent_actions": [
         {
-          "time": 1770605617.025861,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "472",
-          "result": "failure"
-        },
-        {
-          "time": 1770605619.8000221,
+          "time": 1770605673.434026,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605622.575787,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605628.8546932,
+          "time": 1770605680.714829,
           "action": "EXPLORE",
           "sector": 655,
           "details": "685",
           "result": "failure"
         },
         {
-          "time": 1770605631.638017,
+          "time": 1770605683.4976902,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605634.415689,
+          "time": 1770605686.277459,
           "action": "TRADE",
           "sector": 655,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770605641.697197,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "686",
-          "result": "failure"
-        },
-        {
-          "time": 1770605644.477601,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605647.2553658,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770605654.53153,
+          "time": 1770605693.558254,
           "action": "EXPLORE",
           "sector": 655,
           "details": "472",
+          "result": "failure"
+        },
+        {
+          "time": 1770605696.3410292,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605699.118122,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605706.3976572,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "685",
+          "result": "failure"
+        },
+        {
+          "time": 1770605709.180371,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770605711.9593742,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
           "result": "failure"
         }
       ],

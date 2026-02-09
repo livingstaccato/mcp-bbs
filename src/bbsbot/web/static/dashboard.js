@@ -5,6 +5,7 @@
   let sortKey = "bot_id";
   let sortReverse = false;
   let lastData = null;
+  let updateTimer = null;  // Debounce timer for table updates
 
   const $ = (sel) => document.querySelector(sel);
   const dot = $("#dot");
@@ -87,6 +88,7 @@
   // --- Bot table rendering ---
   function update(data) {
     lastData = data;
+    // Update stats immediately (lightweight)
     $("#running").textContent = data.running;
     $("#total").textContent = data.total_bots;
     $("#completed").textContent = data.completed;
@@ -95,6 +97,14 @@
     $("#turns").textContent = formatCredits(data.total_turns);
     $("#uptime").textContent = " | " + formatUptime(data.uptime_seconds);
 
+    // Debounce table re-render to prevent button destruction during clicks
+    clearTimeout(updateTimer);
+    updateTimer = setTimeout(() => {
+      renderBotTable(data);
+    }, 300);  // 300ms debounce
+  }
+
+  function renderBotTable(data) {
     const bots = (data.bots || []).slice().sort((a, b) => {
       let va = a[sortKey] ?? "";
       let vb = b[sortKey] ?? "";
@@ -182,7 +192,11 @@
         sortKey = key;
         sortReverse = false;
       }
-      if (lastData) update(lastData);
+      // Immediate re-render on sort (cancel debounced update)
+      if (lastData) {
+        clearTimeout(updateTimer);
+        renderBotTable(lastData);
+      }
     });
   });
 
