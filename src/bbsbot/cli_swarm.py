@@ -189,10 +189,13 @@ def status_impl(bot_id: str | None = None) -> None:
                 )
 
                 if data["bots"]:
-                    table = Table(title="Bot Details")
-                    table.add_column("Bot ID", style="cyan")
+                    table = Table(title="Bot Details", show_header=True, show_footer=False)
+                    table.add_column("ID", style="cyan")
+                    table.add_column("User")
                     table.add_column("State")
-                    table.add_column("Sector", justify="right")
+                    table.add_column("Activity")
+                    table.add_column("Ship")
+                    table.add_column("Sec", justify="right")
                     table.add_column("Credits", justify="right")
                     table.add_column("Turns", justify="right")
 
@@ -207,9 +210,26 @@ def status_impl(bot_id: str | None = None) -> None:
                             "error": "red",
                         }.get(bot["state"], "white")
 
+                        # Extract just the number from bot_id
+                        bot_num = bot["bot_id"].split("-")[-1] if "-" in bot["bot_id"] else bot["bot_id"]
+
+                        # Format activity context
+                        activity = bot.get("activity_context", "").upper() if bot.get("activity_context") else "—"
+                        if activity == "—":
+                            activity = "—"
+
+                        # Format ship info (ship_name or ship_level)
+                        ship = bot.get("ship_name") or bot.get("ship_level") or "—"
+
+                        # Format username
+                        username = bot.get("username") or "—"
+
                         table.add_row(
-                            bot["bot_id"],
+                            bot_num,
+                            username,
                             f"[{state_color}]{bot['state']}[/{state_color}]",
+                            activity,
+                            ship,
                             str(bot["sector"]),
                             format_credits(bot["credits"]),
                             str(bot["turns_executed"]),

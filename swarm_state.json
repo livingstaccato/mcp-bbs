@@ -1,502 +1,1789 @@
 {
-  "timestamp": 1770601325.6213188,
+  "timestamp": 1770601625.6323898,
   "bots": {
     "persistent-1": {
       "bot_id": "persistent-1",
-      "pid": 52802,
+      "pid": 53439,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 301,
+      "credits": 2312,
+      "turns_executed": 53,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601306.229964,
-      "completed_at": 1770601316.237233,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601306.223989,
+      "last_update_time": 1770601621.462763,
+      "completed_at": 1770601356.245535,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601619.767831,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601355.526602,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601587.192856,
+          "action": "EXPLORE",
+          "sector": 441,
+          "details": "216",
+          "result": "success"
+        },
+        {
+          "time": 1770601590.4834309,
+          "action": "TRADE",
+          "sector": 216,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601593.770319,
+          "action": "TRADE",
+          "sector": 216,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601595.5338922,
+          "action": "EXPLORE",
+          "sector": 216,
+          "details": "441",
+          "result": "success"
+        },
+        {
+          "time": 1770601597.30025,
+          "action": "EXPLORE",
+          "sector": 441,
+          "details": "301",
+          "result": "success"
+        },
+        {
+          "time": 1770601604.283473,
+          "action": "TRADE",
+          "sector": 216,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601606.689928,
+          "action": "WAIT",
+          "sector": 301,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601609.474672,
+          "action": "TRADE",
+          "sector": 301,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601616.756362,
+          "action": "EXPLORE",
+          "sector": 301,
+          "details": "280",
+          "result": "failure"
+        },
+        {
+          "time": 1770601619.539119,
+          "action": "TRADE",
+          "sector": 301,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-1",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-2": {
       "bot_id": "persistent-2",
-      "pid": 52807,
+      "pid": 53446,
       "config": "persistent_bot.yaml",
       "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "sector": 549,
+      "credits": 119,
+      "turns_executed": 32,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601306.528637,
-      "completed_at": 1770601316.2378528,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
+      "last_update_time": 1770601620.5449421,
+      "completed_at": 1770601356.2459981,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601517.1086369,
       "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601306.522717,
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601355.84407,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601475.835519,
+          "action": "EXPLORE",
+          "sector": 728,
+          "details": "790",
+          "result": "success"
+        },
+        {
+          "time": 1770601486.967999,
+          "action": "EXPLORE",
+          "sector": 728,
+          "details": "70",
+          "result": "failure"
+        },
+        {
+          "time": 1770601497.4283872,
+          "action": "MOVE",
+          "sector": 70,
+          "details": "549",
+          "result": "failure"
+        },
+        {
+          "time": 1770601499.1903539,
+          "action": "EXPLORE",
+          "sector": 70,
+          "details": "454",
+          "result": "success"
+        },
+        {
+          "time": 1770601505.614644,
+          "action": "MOVE",
+          "sector": 70,
+          "details": "549",
+          "result": "success"
+        },
+        {
+          "time": 1770601508.3959732,
+          "action": "TRADE",
+          "sector": 549,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601511.17942,
+          "action": "TRADE",
+          "sector": 549,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601512.939908,
+          "action": "EXPLORE",
+          "sector": 549,
+          "details": "728",
+          "result": "success"
+        },
+        {
+          "time": 1770601514.703561,
+          "action": "EXPLORE",
+          "sector": 728,
+          "details": "552",
+          "result": "success"
+        },
+        {
+          "time": 1770601546.564202,
+          "action": "TRADE",
+          "sector": 549,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-2",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-3": {
       "bot_id": "persistent-3",
-      "pid": 52812,
+      "pid": 53452,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 472,
+      "credits": 10785,
+      "turns_executed": 61,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601306.868075,
-      "completed_at": 1770601316.238106,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601306.862155,
+      "last_update_time": 1770601625.2942321,
+      "completed_at": 1770601356.246409,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601625.071313,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601356.169745,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601594.2895439,
+          "action": "EXPLORE",
+          "sector": 778,
+          "details": "472",
+          "result": "success"
+        },
+        {
+          "time": 1770601599.100241,
+          "action": "TRADE",
+          "sector": 472,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601601.8828511,
+          "action": "TRADE",
+          "sector": 472,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601603.646694,
+          "action": "EXPLORE",
+          "sector": 472,
+          "details": "655",
+          "result": "success"
+        },
+        {
+          "time": 1770601608.614017,
+          "action": "TRADE",
+          "sector": 472,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601613.572335,
+          "action": "TRADE",
+          "sector": 655,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601615.339068,
+          "action": "EXPLORE",
+          "sector": 655,
+          "details": "472",
+          "result": "success"
+        },
+        {
+          "time": 1770601618.1231732,
+          "action": "TRADE",
+          "sector": 472,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601620.904154,
+          "action": "TRADE",
+          "sector": 472,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601622.6659222,
+          "action": "EXPLORE",
+          "sector": 472,
+          "details": "572",
+          "result": "success"
+        }
+      ],
+      "username": "persistent-3",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-4": {
       "bot_id": "persistent-4",
-      "pid": 52817,
+      "pid": 53461,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 486,
+      "credits": 2,
+      "turns_executed": 58,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601307.173307,
-      "completed_at": 1770601316.23832,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601307.166938,
+      "last_update_time": 1770601625.327586,
+      "completed_at": 1770601366.247649,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601624.040691,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601356.4741492,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601595.6049001,
+          "action": "EXPLORE",
+          "sector": 486,
+          "details": "614",
+          "result": "success"
+        },
+        {
+          "time": 1770601598.898252,
+          "action": "TRADE",
+          "sector": 614,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601602.185409,
+          "action": "TRADE",
+          "sector": 614,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601603.947555,
+          "action": "EXPLORE",
+          "sector": 614,
+          "details": "723",
+          "result": "success"
+        },
+        {
+          "time": 1770601607.8939378,
+          "action": "EXPLORE",
+          "sector": 614,
+          "details": "614",
+          "result": "success"
+        },
+        {
+          "time": 1770601611.181539,
+          "action": "TRADE",
+          "sector": 614,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601614.466491,
+          "action": "TRADE",
+          "sector": 614,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601616.228642,
+          "action": "EXPLORE",
+          "sector": 614,
+          "details": "486",
+          "result": "success"
+        },
+        {
+          "time": 1770601620.021013,
+          "action": "TRADE",
+          "sector": 486,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601623.812495,
+          "action": "TRADE",
+          "sector": 486,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-4",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-5": {
       "bot_id": "persistent-5",
-      "pid": 52824,
+      "pid": 53466,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 635,
+      "credits": 1099,
+      "turns_executed": 58,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601307.77988,
-      "completed_at": 1770601316.238546,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601307.773417,
+      "last_update_time": 1770601620.9387488,
+      "completed_at": 1770601366.248087,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601619.953571,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601356.799932,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601598.9943411,
+          "action": "TRADE",
+          "sector": 635,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601601.403399,
+          "action": "WAIT",
+          "sector": 741,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601604.18606,
+          "action": "TRADE",
+          "sector": 741,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601605.948284,
+          "action": "EXPLORE",
+          "sector": 741,
+          "details": "476",
+          "result": "success"
+        },
+        {
+          "time": 1770601609.892021,
+          "action": "EXPLORE",
+          "sector": 741,
+          "details": "741",
+          "result": "success"
+        },
+        {
+          "time": 1770601612.674099,
+          "action": "TRADE",
+          "sector": 741,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601615.454977,
+          "action": "TRADE",
+          "sector": 741,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601617.222877,
+          "action": "EXPLORE",
+          "sector": 741,
+          "details": "635",
+          "result": "success"
+        },
+        {
+          "time": 1770601618.471915,
+          "action": "TRADE",
+          "sector": 635,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601619.7226539,
+          "action": "TRADE",
+          "sector": 635,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-5",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-6": {
       "bot_id": "persistent-6",
-      "pid": 52834,
+      "pid": 53471,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 169,
+      "credits": 310,
+      "turns_executed": 60,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601307.784383,
-      "completed_at": 1770601316.238742,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601307.779066,
+      "last_update_time": 1770601620.7313468,
+      "completed_at": 1770601366.248341,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601618.0180428,
+      "activity_context": "ORIENTING: Gathering state",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601357.100841,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601589.5212212,
+          "action": "EXPLORE",
+          "sector": 102,
+          "details": "847",
+          "result": "success"
+        },
+        {
+          "time": 1770601596.50864,
+          "action": "TRADE",
+          "sector": 102,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601598.926257,
+          "action": "WAIT",
+          "sector": 847,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601601.710068,
+          "action": "TRADE",
+          "sector": 847,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601603.471636,
+          "action": "EXPLORE",
+          "sector": 847,
+          "details": "851",
+          "result": "success"
+        },
+        {
+          "time": 1770601608.448531,
+          "action": "TRADE",
+          "sector": 847,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601611.062211,
+          "action": "WAIT",
+          "sector": 851,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601613.843771,
+          "action": "TRADE",
+          "sector": 851,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601615.606931,
+          "action": "EXPLORE",
+          "sector": 851,
+          "details": "433",
+          "result": "success"
+        },
+        {
+          "time": 1770601619.552735,
+          "action": "EXPLORE",
+          "sector": 851,
+          "details": "169",
+          "result": "success"
+        }
+      ],
+      "username": "persistent-6",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-7": {
       "bot_id": "persistent-7",
-      "pid": 52839,
+      "pid": 53476,
       "config": "persistent_bot.yaml",
       "state": "completed",
-      "sector": 0,
+      "sector": 60,
       "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "turns_executed": 12,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601308.095317,
-      "completed_at": 1770601316.238962,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
+      "last_update_time": 1770601534.364439,
+      "completed_at": 1770601536.260942,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601432.903692,
       "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601308.089395,
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601357.403459,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601430.495557,
+          "action": "MOVE",
+          "sector": 60,
+          "details": "392",
+          "result": "success"
+        },
+        {
+          "time": 1770601460.3408551,
+          "action": "TRADE",
+          "sector": 60,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-7",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-8": {
       "bot_id": "persistent-8",
-      "pid": 52844,
+      "pid": 53481,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 235,
+      "credits": 2972,
+      "turns_executed": 50,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601308.8357592,
-      "completed_at": 1770601316.239156,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601308.830027,
+      "last_update_time": 1770601621.81902,
+      "completed_at": 1770601366.248816,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601620.110083,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601357.708958,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601574.901946,
+          "action": "TRADE",
+          "sector": 456,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601576.66324,
+          "action": "EXPLORE",
+          "sector": 456,
+          "details": "673",
+          "result": "success"
+        },
+        {
+          "time": 1770601580.60254,
+          "action": "EXPLORE",
+          "sector": 456,
+          "details": "211",
+          "result": "success"
+        },
+        {
+          "time": 1770601591.73924,
+          "action": "EXPLORE",
+          "sector": 673,
+          "details": "107",
+          "result": "failure"
+        },
+        {
+          "time": 1770601601.9998221,
+          "action": "TRADE",
+          "sector": 107,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601604.782294,
+          "action": "TRADE",
+          "sector": 107,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601606.5440938,
+          "action": "EXPLORE",
+          "sector": 107,
+          "details": "581",
+          "result": "success"
+        },
+        {
+          "time": 1770601610.48832,
+          "action": "EXPLORE",
+          "sector": 107,
+          "details": "235",
+          "result": "success"
+        },
+        {
+          "time": 1770601617.474262,
+          "action": "TRADE",
+          "sector": 581,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601619.880509,
+          "action": "WAIT",
+          "sector": 235,
+          "details": null,
+          "result": "success"
+        }
+      ],
+      "username": "persistent-8",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-9": {
       "bot_id": "persistent-9",
-      "pid": 52849,
+      "pid": 53487,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 555,
+      "credits": 490,
+      "turns_executed": 55,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601308.951947,
-      "completed_at": 1770601316.239349,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601308.9461162,
+      "last_update_time": 1770601621.9270358,
+      "completed_at": 1770601366.249064,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601620.4195662,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601358.0132291,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601595.377106,
+          "action": "EXPLORE",
+          "sector": 515,
+          "details": "555",
+          "result": "success"
+        },
+        {
+          "time": 1770601600.343533,
+          "action": "TRADE",
+          "sector": 515,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601602.751171,
+          "action": "WAIT",
+          "sector": 555,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601605.534507,
+          "action": "TRADE",
+          "sector": 555,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601607.2988071,
+          "action": "EXPLORE",
+          "sector": 555,
+          "details": "515",
+          "result": "success"
+        },
+        {
+          "time": 1770601610.084202,
+          "action": "TRADE",
+          "sector": 515,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601612.866803,
+          "action": "TRADE",
+          "sector": 515,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601614.629958,
+          "action": "EXPLORE",
+          "sector": 515,
+          "details": "555",
+          "result": "success"
+        },
+        {
+          "time": 1770601617.407563,
+          "action": "TRADE",
+          "sector": 555,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601620.190409,
+          "action": "TRADE",
+          "sector": 555,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-9",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-10": {
       "bot_id": "persistent-10",
-      "pid": 52859,
+      "pid": 53492,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 125,
+      "credits": 3978,
+      "turns_executed": 51,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601309.010299,
-      "completed_at": 1770601316.239584,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601309.0043252,
+      "last_update_time": 1770601622.170657,
+      "completed_at": 1770601366.249266,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601621.381768,
+      "activity_context": "ORIENTING: Failed",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601358.3234901,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601577.837445,
+          "action": "EXPLORE",
+          "sector": 537,
+          "details": "125",
+          "result": "success"
+        },
+        {
+          "time": 1770601579.6022022,
+          "action": "EXPLORE",
+          "sector": 125,
+          "details": "967",
+          "result": "success"
+        },
+        {
+          "time": 1770601590.7297401,
+          "action": "MOVE",
+          "sector": 537,
+          "details": "240",
+          "result": "failure"
+        },
+        {
+          "time": 1770601601.182389,
+          "action": "EXPLORE",
+          "sector": 497,
+          "details": "390",
+          "result": "failure"
+        },
+        {
+          "time": 1770601602.945921,
+          "action": "EXPLORE",
+          "sector": 497,
+          "details": "390",
+          "result": "success"
+        },
+        {
+          "time": 1770601612.0710962,
+          "action": "EXPLORE",
+          "sector": 497,
+          "details": "240",
+          "result": "failure"
+        },
+        {
+          "time": 1770601614.844026,
+          "action": "TRADE",
+          "sector": 240,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601617.625422,
+          "action": "TRADE",
+          "sector": 240,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601619.387032,
+          "action": "EXPLORE",
+          "sector": 240,
+          "details": "497",
+          "result": "success"
+        },
+        {
+          "time": 1770601621.15131,
+          "action": "EXPLORE",
+          "sector": 497,
+          "details": "125",
+          "result": "success"
+        }
+      ],
+      "username": "persistent-10",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-11": {
       "bot_id": "persistent-11",
-      "pid": 52864,
+      "pid": 53497,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 515,
+      "credits": 511,
+      "turns_executed": 67,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601309.295522,
-      "completed_at": 1770601316.239778,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601309.289412,
+      "last_update_time": 1770601622.511147,
+      "completed_at": 1770601366.249464,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601619.7922502,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601358.631253,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601597.6550882,
+          "action": "EXPLORE",
+          "sector": 325,
+          "details": "28",
+          "result": "success"
+        },
+        {
+          "time": 1770601599.421041,
+          "action": "MOVE",
+          "sector": 28,
+          "details": "325",
+          "result": "success"
+        },
+        {
+          "time": 1770601600.6720629,
+          "action": "TRADE",
+          "sector": 325,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601601.922484,
+          "action": "TRADE",
+          "sector": 325,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601603.6875231,
+          "action": "EXPLORE",
+          "sector": 325,
+          "details": "555",
+          "result": "success"
+        },
+        {
+          "time": 1770601610.428538,
+          "action": "TRADE",
+          "sector": 325,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601612.8382,
+          "action": "WAIT",
+          "sector": 555,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601615.619935,
+          "action": "TRADE",
+          "sector": 555,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601617.38199,
+          "action": "EXPLORE",
+          "sector": 555,
+          "details": "515",
+          "result": "success"
+        },
+        {
+          "time": 1770601622.345716,
+          "action": "TRADE",
+          "sector": 555,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-11",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-12": {
       "bot_id": "persistent-12",
-      "pid": 52869,
+      "pid": 53502,
       "config": "persistent_bot.yaml",
       "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "sector": 993,
+      "credits": 73,
+      "turns_executed": 15,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601309.902327,
-      "completed_at": 1770601316.239975,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
+      "last_update_time": 1770601546.285287,
+      "completed_at": 1770601556.265451,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601444.8729432,
       "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601309.8944068,
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601358.930841,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601433.9841092,
+          "action": "TRADE",
+          "sector": 993,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601436.766242,
+          "action": "TRADE",
+          "sector": 993,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601438.527081,
+          "action": "EXPLORE",
+          "sector": 993,
+          "details": "574",
+          "result": "success"
+        },
+        {
+          "time": 1770601442.465193,
+          "action": "EXPLORE",
+          "sector": 993,
+          "details": "477",
+          "result": "success"
+        },
+        {
+          "time": 1770601472.362266,
+          "action": "TRADE",
+          "sector": 993,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-12",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-13": {
       "bot_id": "persistent-13",
-      "pid": 52874,
+      "pid": 53507,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 3,
+      "credits": 6530,
+      "turns_executed": 51,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601309.936146,
-      "completed_at": 1770601316.240195,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601309.929631,
+      "last_update_time": 1770601623.161333,
+      "completed_at": 1770601366.249896,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601622.5024168,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601359.2566211,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601592.448854,
+          "action": "TRADE",
+          "sector": 461,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601594.2111602,
+          "action": "EXPLORE",
+          "sector": 461,
+          "details": "8",
+          "result": "success"
+        },
+        {
+          "time": 1770601598.159555,
+          "action": "EXPLORE",
+          "sector": 461,
+          "details": "2",
+          "result": "success"
+        },
+        {
+          "time": 1770601605.160825,
+          "action": "TRADE",
+          "sector": 461,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601607.571171,
+          "action": "WAIT",
+          "sector": 2,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601610.354078,
+          "action": "TRADE",
+          "sector": 2,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601612.119175,
+          "action": "EXPLORE",
+          "sector": 2,
+          "details": "3",
+          "result": "success"
+        },
+        {
+          "time": 1770601617.0816362,
+          "action": "TRADE",
+          "sector": 2,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601619.489815,
+          "action": "WAIT",
+          "sector": 3,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601622.272864,
+          "action": "TRADE",
+          "sector": 3,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-13",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-14": {
       "bot_id": "persistent-14",
-      "pid": 52879,
+      "pid": 53515,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 312,
+      "credits": 12168,
+      "turns_executed": 59,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601310.5025191,
-      "completed_at": 1770601316.240386,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601310.496237,
+      "last_update_time": 1770601623.4063191,
+      "completed_at": 1770601366.2501278,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601616.871882,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601359.5762382,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601589.296684,
+          "action": "WAIT",
+          "sector": 154,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770601592.079448,
+          "action": "TRADE",
+          "sector": 154,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601593.843094,
+          "action": "EXPLORE",
+          "sector": 154,
+          "details": "506",
+          "result": "success"
+        },
+        {
+          "time": 1770601597.638674,
+          "action": "TRADE",
+          "sector": 506,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601600.41773,
+          "action": "TRADE",
+          "sector": 506,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601602.182015,
+          "action": "EXPLORE",
+          "sector": 506,
+          "details": "158",
+          "result": "success"
+        },
+        {
+          "time": 1770601605.974587,
+          "action": "TRADE",
+          "sector": 158,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601608.758154,
+          "action": "TRADE",
+          "sector": 158,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601610.520735,
+          "action": "EXPLORE",
+          "sector": 158,
+          "details": "312",
+          "result": "success"
+        },
+        {
+          "time": 1770601614.465939,
+          "action": "EXPLORE",
+          "sector": 158,
+          "details": "755",
+          "result": "success"
+        }
+      ],
+      "username": "persistent-14",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-15": {
       "bot_id": "persistent-15",
-      "pid": 52884,
+      "pid": 53520,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 449,
+      "credits": 1815,
+      "turns_executed": 68,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601310.5147488,
-      "completed_at": 1770601316.240602,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601310.5078568,
+      "last_update_time": 1770601623.739966,
+      "completed_at": 1770601366.2503302,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601622.939648,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601359.868926,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601599.301238,
+          "action": "TRADE",
+          "sector": 868,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601602.08251,
+          "action": "TRADE",
+          "sector": 868,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601603.844168,
+          "action": "EXPLORE",
+          "sector": 868,
+          "details": "909",
+          "result": "success"
+        },
+        {
+          "time": 1770601605.095005,
+          "action": "TRADE",
+          "sector": 909,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601606.3439622,
+          "action": "TRADE",
+          "sector": 909,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601608.1084118,
+          "action": "EXPLORE",
+          "sector": 909,
+          "details": "449",
+          "result": "success"
+        },
+        {
+          "time": 1770601609.867152,
+          "action": "TRADE",
+          "sector": 449,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601612.648598,
+          "action": "TRADE",
+          "sector": 449,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601619.9305332,
+          "action": "EXPLORE",
+          "sector": 449,
+          "details": "909",
+          "result": "failure"
+        },
+        {
+          "time": 1770601622.710647,
+          "action": "TRADE",
+          "sector": 449,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-15",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-16": {
       "bot_id": "persistent-16",
-      "pid": 52889,
+      "pid": 53525,
       "config": "persistent_bot.yaml",
       "state": "completed",
-      "sector": 0,
+      "sector": 93,
       "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "turns_executed": 14,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601311.1324532,
-      "completed_at": 1770601316.240821,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
+      "last_update_time": 1770601544.873495,
+      "completed_at": 1770601546.263277,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601443.4968069,
       "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601311.1264691,
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601360.175904,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601433.210363,
+          "action": "EXPLORE",
+          "sector": 142,
+          "details": "93",
+          "result": "success"
+        },
+        {
+          "time": 1770601437.148133,
+          "action": "MOVE",
+          "sector": 142,
+          "details": "93",
+          "result": "success"
+        },
+        {
+          "time": 1770601441.089309,
+          "action": "EXPLORE",
+          "sector": 142,
+          "details": "324",
+          "result": "success"
+        },
+        {
+          "time": 1770601470.9518101,
+          "action": "TRADE",
+          "sector": 93,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-16",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-17": {
       "bot_id": "persistent-17",
-      "pid": 52896,
+      "pid": 53539,
       "config": "persistent_bot.yaml",
       "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "sector": 895,
+      "credits": 89,
+      "turns_executed": 30,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601311.40175,
-      "completed_at": 1770601316.241011,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
+      "last_update_time": 1770601598.1249542,
+      "completed_at": 1770601606.2693398,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601496.708093,
       "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601311.3956668,
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601360.487843,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601473.299883,
+          "action": "EXPLORE",
+          "sector": 895,
+          "details": "318",
+          "result": "failure"
+        },
+        {
+          "time": 1770601478.904041,
+          "action": "TRADE",
+          "sector": 318,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601481.685054,
+          "action": "TRADE",
+          "sector": 318,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601483.449034,
+          "action": "EXPLORE",
+          "sector": 318,
+          "details": "895",
+          "result": "success"
+        },
+        {
+          "time": 1770601485.210755,
+          "action": "MOVE",
+          "sector": 895,
+          "details": "318",
+          "result": "success"
+        },
+        {
+          "time": 1770601487.9935338,
+          "action": "TRADE",
+          "sector": 318,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601490.777063,
+          "action": "TRADE",
+          "sector": 318,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601492.540555,
+          "action": "EXPLORE",
+          "sector": 318,
+          "details": "895",
+          "result": "success"
+        },
+        {
+          "time": 1770601494.304358,
+          "action": "EXPLORE",
+          "sector": 895,
+          "details": "229",
+          "result": "success"
+        },
+        {
+          "time": 1770601524.146755,
+          "action": "TRADE",
+          "sector": 895,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "persistent-17",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-18": {
       "bot_id": "persistent-18",
-      "pid": 52900,
+      "pid": 53542,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 146,
+      "credits": 2901,
+      "turns_executed": 68,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601311.710161,
-      "completed_at": 1770601316.241267,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601311.7034152,
+      "last_update_time": 1770601624.656584,
+      "completed_at": 1770601366.250958,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "TRADE",
+      "last_action_time": 1770601623.139647,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601360.806921,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601602.968588,
+          "action": "EXPLORE",
+          "sector": 279,
+          "details": "630",
+          "result": "success"
+        },
+        {
+          "time": 1770601606.758752,
+          "action": "TRADE",
+          "sector": 630,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601609.541919,
+          "action": "TRADE",
+          "sector": 630,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601611.3128672,
+          "action": "EXPLORE",
+          "sector": 630,
+          "details": "279",
+          "result": "success"
+        },
+        {
+          "time": 1770601612.563937,
+          "action": "TRADE",
+          "sector": 279,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601613.814563,
+          "action": "TRADE",
+          "sector": 279,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601615.577474,
+          "action": "EXPLORE",
+          "sector": 279,
+          "details": "630",
+          "result": "success"
+        },
+        {
+          "time": 1770601618.358349,
+          "action": "TRADE",
+          "sector": 630,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601621.1410618,
+          "action": "TRADE",
+          "sector": 630,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601622.902577,
+          "action": "EXPLORE",
+          "sector": 630,
+          "details": "146",
+          "result": "success"
+        }
+      ],
+      "username": "persistent-18",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-19": {
       "bot_id": "persistent-19",
-      "pid": 52903,
+      "pid": 53545,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 108,
+      "credits": 187,
+      "turns_executed": 60,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601312.1792681,
-      "completed_at": 1770601316.241476,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601312.1728399,
+      "last_update_time": 1770601624.964352,
+      "completed_at": 1770601366.251151,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601619.426389,
+      "activity_context": "ORIENTING: Gathering state",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601361.114441,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601598.597615,
+          "action": "TRADE",
+          "sector": 108,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601600.362974,
+          "action": "EXPLORE",
+          "sector": 108,
+          "details": "890",
+          "result": "success"
+        },
+        {
+          "time": 1770601603.662646,
+          "action": "MOVE",
+          "sector": 890,
+          "details": "491",
+          "result": "success"
+        },
+        {
+          "time": 1770601606.4471161,
+          "action": "TRADE",
+          "sector": 491,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601609.2314339,
+          "action": "TRADE",
+          "sector": 491,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601610.9950001,
+          "action": "EXPLORE",
+          "sector": 491,
+          "details": "108",
+          "result": "success"
+        },
+        {
+          "time": 1770601612.2444,
+          "action": "TRADE",
+          "sector": 108,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601613.494567,
+          "action": "TRADE",
+          "sector": 108,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770601615.253931,
+          "action": "EXPLORE",
+          "sector": 108,
+          "details": "519",
+          "result": "success"
+        },
+        {
+          "time": 1770601617.018927,
+          "action": "EXPLORE",
+          "sector": 519,
+          "details": "936",
+          "result": "success"
+        }
+      ],
+      "username": "persistent-19",
       "ship_name": null,
       "ship_level": null,
       "port_location": null
     },
     "persistent-20": {
       "bot_id": "persistent-20",
-      "pid": 52905,
+      "pid": 53552,
       "config": "persistent_bot.yaml",
-      "state": "completed",
-      "sector": 0,
-      "credits": 0,
-      "turns_executed": 0,
-      "turns_max": 500,
+      "state": "running",
+      "sector": 908,
+      "credits": 9,
+      "turns_executed": 52,
+      "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770601312.3395681,
-      "completed_at": 1770601316.241697,
-      "error_message": "Stuck in loop: prompt.menu_selection",
-      "last_action": null,
-      "last_action_time": 0,
-      "activity_context": "FINISHED",
-      "error_type": "RuntimeError",
-      "error_timestamp": 1770601312.333353,
+      "last_update_time": 1770601624.992179,
+      "completed_at": 1770601366.251371,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770601621.9961119,
+      "activity_context": "EXPLORING",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770601361.435153,
       "exit_reason": "target_reached",
-      "recent_actions": [],
-      "username": null,
+      "recent_actions": [
+        {
+          "time": 1770601603.719632,
+          "action": "EXPLORE",
+          "sector": 908,
+          "details": "726",
+          "result": "success"
+        },
+        {
+          "time": 1770601605.482838,
+          "action": "EXPLORE",
+          "sector": 726,
+          "details": "908",
+          "result": "success"
+        },
+        {
+          "time": 1770601607.2454941,
+          "action": "EXPLORE",
+          "sector": 908,
+          "details": "726",
+          "result": "success"
+        },
+        {
+          "time": 1770601609.007927,
+          "action": "EXPLORE",
+          "sector": 726,
+          "details": "908",
+          "result": "success"
+        },
+        {
+          "time": 1770601610.769614,
+          "action": "EXPLORE",
+          "sector": 908,
+          "details": "726",
+          "result": "success"
+        },
+        {
+          "time": 1770601612.531727,
+          "action": "EXPLORE",
+          "sector": 726,
+          "details": "908",
+          "result": "success"
+        },
+        {
+          "time": 1770601614.297141,
+          "action": "EXPLORE",
+          "sector": 908,
+          "details": "726",
+          "result": "success"
+        },
+        {
+          "time": 1770601616.060864,
+          "action": "EXPLORE",
+          "sector": 726,
+          "details": "908",
+          "result": "success"
+        },
+        {
+          "time": 1770601617.8247712,
+          "action": "EXPLORE",
+          "sector": 908,
+          "details": "499",
+          "result": "success"
+        },
+        {
+          "time": 1770601619.5859892,
+          "action": "EXPLORE",
+          "sector": 499,
+          "details": "503",
+          "result": "success"
+        }
+      ],
+      "username": "persistent-20",
       "ship_name": null,
       "ship_level": null,
       "port_location": null

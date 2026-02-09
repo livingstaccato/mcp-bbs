@@ -332,7 +332,7 @@ class SessionConfig(BaseModel):
     """Session goals and limits."""
 
     target_credits: int = 5_000_000
-    max_turns_per_session: int = 500  # 0 = run until server maximum
+    max_turns_per_session: int = 0  # 0 = run until server maximum (auto-detect)
 
     model_config = ConfigDict(extra="ignore")
 
