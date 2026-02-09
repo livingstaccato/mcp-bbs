@@ -279,16 +279,13 @@ async def login_sequence(
             await send_input(bot, username, input_type)
 
         elif "login_name" in prompt_id:
-            # Check if we got "Player not found" - need to create character
-            # For new characters, we always send "new" first to create the account
-            # The server will prompt for password if character already exists
-            if "player not found" in screen_lower or step == 1:
-                # First attempt or explicit "player not found" - try "new" first to create character
-                print(f"      → Creating new character")
-                await send_input(bot, "new", input_type, wait_after=0.5)
-            else:
-                print(f"      → Sending username")
-                await send_input(bot, username, input_type, wait_after=0.5)
+            # Send the desired username. Sending literal "new" here can accidentally log
+            # in as user "new" (and then fail at Password? with invalid_password).
+            #
+            # If the system has a special "NEW" workflow, it should be triggered by
+            # an explicit on-screen instruction, not by default heuristics.
+            print(f"      → Sending username")
+            await send_input(bot, username, input_type, wait_after=0.5)
             # Give server extra time to process login and prepare next prompt
             await asyncio.sleep(0.3)
 
