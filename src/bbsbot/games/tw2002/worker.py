@@ -75,8 +75,13 @@ class WorkerBot(TradingBot):
                 turns_max = 0  # Default: auto-detect server max
 
             # Map game context to human-readable activity
+            # CRITICAL: Only use game_state.context if we're actually IN THE GAME (sector > 0)
+            # Otherwise we show stale activities like "EXPLORING" when stuck at login
             activity = "INITIALIZING"
-            if self.game_state:
+            in_game = self.current_sector and self.current_sector > 0
+
+            if self.game_state and in_game:
+                # Bot is IN the game - use context for activity
                 context = getattr(self.game_state, "context", None)
                 if context:
                     if context == "combat":
@@ -86,17 +91,22 @@ class WorkerBot(TradingBot):
                     elif context in ("navigation", "warp", "sector_command", "planet_command", "citadel_command"):
                         activity = "EXPLORING"
                     elif "menu" in context.lower() or "selection" in context.lower():
-                        # Generic menu/selection context (game picker, character select, etc)
-                        activity = "SELECTING"
+                        activity = "IN_GAME_MENU"
                     else:
                         activity = context.upper()
                 else:
-                    # game_state exists but context is None - likely during login
-                    activity = "CONNECTING"
+                    activity = "IN_GAME"
             else:
-                # No game_state yet - check if we have a session
+                # Bot NOT in game yet - must be in login/connection phase
                 if hasattr(self, 'session') and self.session:
-                    activity = "LOGGING_IN"
+                    # Check orientation phase for more specific status
+                    orient_phase = getattr(self, '_orient_phase', '')
+                    if orient_phase:
+                        activity = f"LOGIN_{orient_phase.upper()}"
+                    else:
+                        activity = "LOGGING_IN"
+                else:
+                    activity = "CONNECTING"
 
             # Override with AI reasoning if available
             if self.ai_activity:

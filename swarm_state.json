@@ -1,98 +1,27 @@
 {
-  "timestamp": 1770607696.425951,
+  "timestamp": 1770608067.618594,
   "bots": {
     "test-bot-1": {
       "bot_id": "test-bot-1",
-      "pid": 6413,
+      "pid": 9701,
       "config": "persistent_bot.yaml",
-      "state": "running",
-      "sector": 198,
+      "state": "completed",
+      "sector": 0,
       "credits": 0,
-      "turns_executed": 41,
-      "turns_max": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770607696.152962,
-      "completed_at": null,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770607585.117978,
-      "activity_context": "ORIENTING: Recovering",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
-      "recent_actions": [
-        {
-          "time": 1770607568.601896,
-          "action": "MOVE",
-          "sector": 198,
-          "details": "451",
-          "result": "success"
-        },
-        {
-          "time": 1770607570.365977,
-          "action": "MOVE",
-          "sector": 451,
-          "details": "198",
-          "result": "success"
-        },
-        {
-          "time": 1770607572.128232,
-          "action": "MOVE",
-          "sector": 198,
-          "details": "451",
-          "result": "success"
-        },
-        {
-          "time": 1770607573.890213,
-          "action": "MOVE",
-          "sector": 451,
-          "details": "416",
-          "result": "success"
-        },
-        {
-          "time": 1770607575.654401,
-          "action": "MOVE",
-          "sector": 416,
-          "details": "451",
-          "result": "success"
-        },
-        {
-          "time": 1770607577.417366,
-          "action": "MOVE",
-          "sector": 451,
-          "details": "198",
-          "result": "success"
-        },
-        {
-          "time": 1770607579.180251,
-          "action": "MOVE",
-          "sector": 198,
-          "details": "451",
-          "result": "success"
-        },
-        {
-          "time": 1770607580.944514,
-          "action": "MOVE",
-          "sector": 451,
-          "details": "416",
-          "result": "success"
-        },
-        {
-          "time": 1770607582.706717,
-          "action": "EXPLORE",
-          "sector": 416,
-          "details": "181",
-          "result": "success"
-        },
-        {
-          "time": 1770607614.5706549,
-          "action": "TRADE",
-          "sector": 198,
-          "details": "all_commodities",
-          "result": "failure"
-        }
-      ],
-      "username": "test-bot-1",
+      "last_update_time": 1770607836.938348,
+      "completed_at": 1770607837.614769,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "FINISHED",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770607836.935329,
+      "exit_reason": "target_reached",
+      "recent_actions": [],
+      "username": null,
       "ship_name": null,
       "ship_level": null,
       "port_location": null,
@@ -102,25 +31,25 @@
     },
     "test-bot-2": {
       "bot_id": "test-bot-2",
-      "pid": 7088,
+      "pid": 9788,
       "config": "persistent_bot.yaml",
-      "state": "running",
-      "sector": 181,
+      "state": "completed",
+      "sector": 0,
       "credits": 0,
-      "turns_executed": 1,
-      "turns_max": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
       "uptime_seconds": 0,
-      "last_update_time": 1770607695.8225338,
-      "completed_at": null,
-      "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770607614.101307,
-      "activity_context": "EXPLORING",
-      "error_type": null,
-      "error_timestamp": null,
-      "exit_reason": null,
+      "last_update_time": 1770607839.506019,
+      "completed_at": 1770607847.6153479,
+      "error_message": "Failed to connect to localhost:2002: Failed to connect to localhost:2002",
+      "last_action": null,
+      "last_action_time": 0,
+      "activity_context": "FINISHED",
+      "error_type": "ConnectionError",
+      "error_timestamp": 1770607839.502945,
+      "exit_reason": "target_reached",
       "recent_actions": [],
-      "username": "test-bot-2",
+      "username": null,
       "ship_name": null,
       "ship_level": null,
       "port_location": null,
@@ -130,72 +59,30 @@
     },
     "test-bot-3": {
       "bot_id": "test-bot-3",
-      "pid": 7106,
+      "pid": 9819,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 181,
+      "sector": 533,
       "credits": 0,
-      "turns_executed": 8,
+      "turns_executed": 13,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607695.92177,
+      "last_update_time": 1770608066.8030488,
       "completed_at": null,
-      "error_message": "No heartbeat in 60s - bot process may have crashed or is stuck",
-      "last_action": "WAIT",
-      "last_action_time": 1770607694.7865531,
-      "activity_context": "ORIENTING: Step 6/10",
-      "error_type": "HeartbeatTimeout",
-      "error_timestamp": 1770607656.434995,
-      "exit_reason": "heartbeat_timeout",
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770607864.4941518,
+      "activity_context": "ORIENTING: Recovering",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770607674.101174,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607677.54979,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607680.998722,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607684.442079,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607687.8905668,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607691.343325,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607694.786558,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
+          "time": 1770607948.5039518,
+          "action": "TRADE",
+          "sector": 533,
+          "details": "all_commodities",
+          "result": "failure"
         }
       ],
       "username": "test-bot-3",
@@ -208,70 +95,28 @@
     },
     "test-bot-4": {
       "bot_id": "test-bot-4",
-      "pid": 7119,
+      "pid": 9840,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 655,
-      "credits": 611,
-      "turns_executed": 8,
+      "sector": 533,
+      "credits": 0,
+      "turns_executed": 13,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607691.838275,
+      "last_update_time": 1770608065.483518,
       "completed_at": null,
-      "error_message": "No heartbeat in 60s - bot process may have crashed or is stuck",
-      "last_action": "EXPLORE",
-      "last_action_time": 1770607689.591143,
-      "activity_context": "EXPLORING",
-      "error_type": "HeartbeatTimeout",
-      "error_timestamp": 1770607656.43503,
-      "exit_reason": "heartbeat_timeout",
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770607865.266824,
+      "activity_context": "ORIENTING: Step 8/10",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770607660.514972,
+          "time": 1770607945.28373,
           "action": "TRADE",
-          "sector": 376,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770607664.310571,
-          "action": "TRADE",
-          "sector": 376,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770607671.595838,
-          "action": "EXPLORE",
-          "sector": 376,
-          "details": "984",
-          "result": "failure"
-        },
-        {
-          "time": 1770607679.0425222,
-          "action": "EXPLORE",
-          "sector": 376,
-          "details": "376",
-          "result": "failure"
-        },
-        {
-          "time": 1770607681.984333,
-          "action": "TRADE",
-          "sector": 685,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770607684.395422,
-          "action": "WAIT",
-          "sector": 655,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607687.180555,
-          "action": "TRADE",
-          "sector": 655,
+          "sector": 533,
           "details": "all_commodities",
           "result": "failure"
         }
@@ -286,93 +131,30 @@
     },
     "test-bot-5": {
       "bot_id": "test-bot-5",
-      "pid": 7134,
+      "pid": 9871,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 181,
+      "sector": 533,
       "credits": 0,
-      "turns_executed": 11,
+      "turns_executed": 12,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607694.792564,
+      "last_update_time": 1770608062.6848252,
       "completed_at": null,
       "error_message": null,
-      "last_action": "WAIT",
-      "last_action_time": 1770607693.9571571,
-      "activity_context": "ORIENTING: Step 4/10",
+      "last_action": "TRADE",
+      "last_action_time": 1770607867.458518,
+      "activity_context": "ORIENTING: Recovering",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770607662.928512,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607666.373277,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607669.820392,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607673.267333,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607676.71588,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607680.162573,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607683.6124291,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607687.060533,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607690.50803,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607693.957163,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
+          "time": 1770607949.4685,
+          "action": "TRADE",
+          "sector": 533,
+          "details": "all_commodities",
+          "result": "failure"
         }
       ],
       "username": "test-bot-5",
@@ -385,79 +167,30 @@
     },
     "test-bot-6": {
       "bot_id": "test-bot-6",
-      "pid": 7156,
+      "pid": 9895,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 181,
+      "sector": 533,
       "credits": 0,
-      "turns_executed": 9,
+      "turns_executed": 12,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607695.959739,
+      "last_update_time": 1770608066.299756,
       "completed_at": null,
       "error_message": null,
-      "last_action": "WAIT",
-      "last_action_time": 1770607693.290915,
-      "activity_context": "ORIENTING: Gathering state",
+      "last_action": "TRADE",
+      "last_action_time": 1770607871.107434,
+      "activity_context": "ORIENTING: Recovering",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770607669.146188,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607672.594004,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607676.0431738,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607679.4917529,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607682.947419,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607686.393298,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607689.843562,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770607693.290922,
-          "action": "WAIT",
-          "sector": 181,
-          "details": null,
-          "result": "success"
+          "time": 1770607953.1149702,
+          "action": "TRADE",
+          "sector": 533,
+          "details": "all_commodities",
+          "result": "failure"
         }
       ],
       "username": "test-bot-6",
@@ -470,24 +203,32 @@
     },
     "test-bot-7": {
       "bot_id": "test-bot-7",
-      "pid": 7173,
+      "pid": 9926,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 181,
+      "sector": 533,
       "credits": 0,
-      "turns_executed": 1,
+      "turns_executed": 12,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607692.566506,
+      "last_update_time": 1770608067.546648,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770607622.6024199,
-      "activity_context": "EXPLORING",
+      "last_action_time": 1770607875.236377,
+      "activity_context": "ORIENTING: Recovering",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
-      "recent_actions": [],
+      "recent_actions": [
+        {
+          "time": 1770607959.248874,
+          "action": "TRADE",
+          "sector": 533,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
       "username": "test-bot-7",
       "ship_name": null,
       "ship_level": null,
@@ -498,28 +239,28 @@
     },
     "test-bot-8": {
       "bot_id": "test-bot-8",
-      "pid": 7196,
+      "pid": 9951,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 181,
+      "sector": 533,
       "credits": 0,
-      "turns_executed": 2,
+      "turns_executed": 12,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607691.456067,
+      "last_update_time": 1770608066.1205041,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770607645.353454,
-      "activity_context": "EXPLORING",
+      "last_action_time": 1770607879.730196,
+      "activity_context": "ORIENTING: Step 9/10",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770607645.124788,
+          "time": 1770607963.738035,
           "action": "TRADE",
-          "sector": 181,
+          "sector": 533,
           "details": "all_commodities",
           "result": "failure"
         }
@@ -534,24 +275,32 @@
     },
     "test-bot-9": {
       "bot_id": "test-bot-9",
-      "pid": 7213,
+      "pid": 9983,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 181,
+      "sector": 533,
       "credits": 0,
-      "turns_executed": 1,
+      "turns_executed": 12,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607692.110071,
+      "last_update_time": 1770608067.6055229,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770607629.191094,
-      "activity_context": "EXPLORING",
+      "last_action_time": 1770607880.736223,
+      "activity_context": "ORIENTING: Recovering",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
-      "recent_actions": [],
+      "recent_actions": [
+        {
+          "time": 1770607964.747901,
+          "action": "TRADE",
+          "sector": 533,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
       "username": "test-bot-9",
       "ship_name": null,
       "ship_level": null,
@@ -562,28 +311,91 @@
     },
     "test-bot-10": {
       "bot_id": "test-bot-10",
-      "pid": 7237,
+      "pid": 10015,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 181,
-      "credits": 0,
-      "turns_executed": 2,
+      "sector": 245,
+      "credits": 4168,
+      "turns_executed": 57,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607693.5080352,
+      "last_update_time": 1770608066.640521,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770607655.564675,
+      "last_action_time": 1770608066.587018,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770607653.193581,
+          "time": 1770608029.6531641,
+          "action": "EXPLORE",
+          "sector": 32,
+          "details": "245",
+          "result": "failure"
+        },
+        {
+          "time": 1770608035.7095969,
+          "action": "EXPLORE",
+          "sector": 245,
+          "details": "32",
+          "result": "failure"
+        },
+        {
+          "time": 1770608037.4704928,
+          "action": "EXPLORE",
+          "sector": 32,
+          "details": "411",
+          "result": "success"
+        },
+        {
+          "time": 1770608048.615094,
+          "action": "EXPLORE",
+          "sector": 245,
+          "details": "245",
+          "result": "failure"
+        },
+        {
+          "time": 1770608053.193884,
+          "action": "EXPLORE",
+          "sector": 245,
+          "details": "447",
+          "result": "success"
+        },
+        {
+          "time": 1770608058.154635,
           "action": "TRADE",
-          "sector": 181,
+          "sector": 245,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770608060.5626829,
+          "action": "WAIT",
+          "sector": 447,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770608063.345983,
+          "action": "TRADE",
+          "sector": 447,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770608065.108568,
+          "action": "EXPLORE",
+          "sector": 447,
+          "details": "245",
+          "result": "success"
+        },
+        {
+          "time": 1770608066.356849,
+          "action": "TRADE",
+          "sector": 245,
           "details": "all_commodities",
           "result": "failure"
         }
@@ -598,92 +410,92 @@
     },
     "test-bot-11": {
       "bot_id": "test-bot-11",
-      "pid": 7259,
+      "pid": 10044,
       "config": "persistent_bot.yaml",
       "state": "running",
-      "sector": 655,
-      "credits": 611,
-      "turns_executed": 18,
+      "sector": 447,
+      "credits": 0,
+      "turns_executed": 51,
       "turns_max": 0,
       "uptime_seconds": 0,
-      "last_update_time": 1770607692.862924,
+      "last_update_time": 1770608062.999274,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770607690.244378,
+      "last_action_time": 1770608062.806355,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770607666.255139,
-          "action": "TRADE",
-          "sector": 685,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770607667.506391,
-          "action": "TRADE",
-          "sector": 685,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770607669.2726421,
-          "action": "EXPLORE",
-          "sector": 685,
-          "details": "655",
-          "result": "success"
-        },
-        {
-          "time": 1770607676.2602618,
-          "action": "TRADE",
-          "sector": 685,
-          "details": "all_commodities",
-          "result": "failure"
-        },
-        {
-          "time": 1770607678.670209,
+          "time": 1770608027.7767,
           "action": "WAIT",
-          "sector": 655,
+          "sector": 533,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770607681.4631119,
+          "time": 1770608031.221314,
+          "action": "WAIT",
+          "sector": 533,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770608034.667316,
+          "action": "WAIT",
+          "sector": 533,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770608038.1153789,
+          "action": "WAIT",
+          "sector": 533,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770608041.556324,
+          "action": "WAIT",
+          "sector": 533,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770608044.982368,
+          "action": "WAIT",
+          "sector": 533,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770608047.765056,
           "action": "TRADE",
-          "sector": 655,
+          "sector": 533,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770607683.225719,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "686",
-          "result": "success"
-        },
-        {
-          "time": 1770607687.231509,
-          "action": "EXPLORE",
-          "sector": 655,
-          "details": "655",
-          "result": "success"
-        },
-        {
-          "time": 1770607690.015424,
+          "time": 1770608051.194734,
           "action": "TRADE",
-          "sector": 655,
+          "sector": 533,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770607692.7992132,
-          "action": "TRADE",
-          "sector": 655,
-          "details": "all_commodities",
+          "time": 1770608058.6350532,
+          "action": "EXPLORE",
+          "sector": 411,
+          "details": "32",
+          "result": "failure"
+        },
+        {
+          "time": 1770608062.5763369,
+          "action": "EXPLORE",
+          "sector": 245,
+          "details": "447",
           "result": "failure"
         }
       ],
