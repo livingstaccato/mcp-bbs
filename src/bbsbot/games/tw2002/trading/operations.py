@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Literal
 
 from bbsbot.games.tw2002.io import send_input, wait_and_respond
@@ -108,7 +109,14 @@ async def dock_and_trade(
                 print("    Accepting offer...")
                 await send_input(bot, "1", input_type)
             elif prompt_id == "prompt.port_haggle":
-                # Haggle - accept default price
+                # Haggle - accept default price, unless we clearly can't afford it.
+                # When TW2002 shows "You only have N credits!" on the haggle screen,
+                # repeatedly pressing Enter will loop forever. Bail out to the port menu.
+                if re.search(r"(?i)you\\s+only\\s+have\\s+[\\d,]+\\s+credits", screen or ""):
+                    print("    Insufficient credits at haggle; aborting trade (Q)...")
+                    await send_input(bot, "Q", input_type)
+                    # Let the outer loop observe the new prompt and proceed.
+                    continue
                 print("    Accepting haggle price...")
                 await send_input(bot, "", input_type)
             elif input_type == "any_key":
