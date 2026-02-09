@@ -104,23 +104,29 @@ async def dock_and_trade(
                 # How many units?
                 print(f"    {action.capitalize()}ing {quantity} units...")
                 await send_input(bot, str(quantity), input_type)
+            elif prompt_id == "prompt.hardware_buy":
+                # TW2002 port transactions use this prompt for commodity quantity (buy/sell).
+                # If credits are tiny, skip rather than selecting a default quantity and ending up
+                # in an un-winnable haggle loop.
+                low = re.search(r"(?i)you\\s+have\\s+([\\d,]+)\\s+credits", screen or "")
+                credits = int(low.group(1).replace(",", "")) if low else None
+                if credits is not None and credits < 1000 and action == "buy":
+                    print("    Low credits at quantity prompt; skipping (0)...")
+                    await send_input(bot, "0", input_type)
+                else:
+                    print(f"    {action.capitalize()}ing {quantity} units...")
+                    await send_input(bot, str(quantity), input_type)
             elif "port_price" in prompt_id:
                 # Price confirmation - accept market price (1)
                 print("    Accepting offer...")
                 await send_input(bot, "1", input_type)
             elif prompt_id == "prompt.port_haggle":
                 # Haggle:
-                # - If we can afford the default offer, send Enter to accept it.
-                # - If we cannot, submit an affordable offer (<= credits).
-                # This avoids the "You only have 300 credits! Your offer [471] ?" loop.
-                low_m = re.search(r"(?i)you\\s+only\\s+have\\s+([\\d,]+)\\s+credits", screen or "")
-                def_m = re.search(r"\\[(\\d{1,3}(?:,\\d{3})*|\\d+)\\]\\s*\\?", screen or "")
-                if low_m and def_m:
-                    credits = int(low_m.group(1).replace(",", ""))
-                    default_offer = int(def_m.group(1).replace(",", ""))
-                    offer = min(max(0, credits), default_offer)
-                    print(f"    Low credits at haggle; offering {offer}...")
-                    await send_input(bot, str(offer), input_type)
+                # If the game is telling us we can't afford the transaction, stop trying to haggle.
+                # In practice, offering <= credits still loops because you still can't buy the goods.
+                if re.search(r"(?i)you\\s+only\\s+have\\s+[\\d,]+\\s+credits", screen or ""):
+                    print("    Low credits at haggle; aborting trade (Q)...")
+                    await send_input(bot, "Q", input_type)
                     continue
                 print("    Accepting haggle price...")
                 await send_input(bot, "", input_type)

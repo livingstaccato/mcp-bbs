@@ -120,6 +120,9 @@ def detect_context(screen: str) -> str:
         return "port_trading"
     if "offer" in last_line and "price" in last_line:
         return "port_trading"
+    # Haggle prompt: "Your offer [471] ?"
+    if "your offer" in last_line or "counter" in last_line or "final price" in last_line:
+        return "port_trading"
     if "fuel ore" in last_lines or "organics" in last_lines or "equipment" in last_lines:
         if "buy" in last_lines or "sell" in last_lines:
             return "port_trading"
@@ -455,24 +458,13 @@ async def recover_to_safe_state(
 
         if state.context in ("port_menu", "port_trading"):
             # Port flows:
-            # - If we're on a haggle screen and can't afford the default, submit an affordable offer.
+            # - If we're on a haggle screen and can't afford the transaction, abort out of the trade.
             # - Otherwise, try to exit back to a safe prompt.
             if state.prompt_id == "prompt.port_haggle" and re.search(
                 r"(?i)you\\s+only\\s+have\\s+([\\d,]+)\\s+credits", state.screen or ""
             ):
-                m = re.search(r"(?i)you\\s+only\\s+have\\s+([\\d,]+)\\s+credits", state.screen or "")
-                c = int(m.group(1).replace(",", "")) if m else 0
-                offer = max(0, c)
-                # If a bracket default exists, don't exceed it.
-                m2 = re.search(r"\\[(\\d{1,3}(?:,\\d{3})*|\\d+)\\]\\s*\\?", state.screen or "")
-                if m2:
-                    try:
-                        default_offer = int(m2.group(1).replace(",", ""))
-                        offer = min(offer, default_offer)
-                    except Exception:
-                        pass
-                print(f"  [Recovery] Port haggle with low credits - offering {offer}...")
-                await bot.session.send(str(offer) + "\r")
+                print("  [Recovery] Port haggle with low credits - exiting trade (Q+Enter)...")
+                await bot.session.send("Q\r")
                 await asyncio.sleep(0.5)
                 attempt += 1
                 continue
