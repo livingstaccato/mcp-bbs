@@ -380,6 +380,7 @@ async def login_sequence(
     print("\nWaiting for game to load...")
     description_mode_exits = 0  # Track how many times we exit description mode
     menu_reentries = 0  # Track re-entering game selection (indicates wrong password)
+    capacity_retries = 0  # Track "Failed to start game session" (server capacity / node allocation)
 
     # Initialize kv_data for Phase 3 (may have been set to None in Phase 1 fallback)
     kv_data = {}
@@ -500,7 +501,27 @@ async def login_sequence(
             #
             # Prefer explicit prompt_id classification when available.
             kind: str | None = None
-            screen_lower = screen.lower()
+        screen_lower = screen.lower()
+
+        # Server capacity/backpressure case:
+        # Some servers print "Failed to start game session [NNN]..." when no nodes are available.
+        # This is not an auth error; hammering the menu just makes it worse. Back off and retry.
+        if "failed to start game session" in screen_lower:
+            capacity_retries += 1
+            # Quick ramp to a stable retry cadence; keep it bounded.
+            sleep_s = min(30.0, 1.5 + 2.5 * capacity_retries)
+            logger.info(
+                "Game session allocation failed (capacity). Backing off %.1fs (retry #%d)",
+                sleep_s,
+                capacity_retries,
+            )
+            await asyncio.sleep(sleep_s)
+            try:
+                # Re-try selecting the configured game letter.
+                await bot.session.send(game_letter)
+            except Exception:
+                pass
+            continue
             if prompt_id and ("game_password" in prompt_id or "private_game_password" in prompt_id):
                 kind = "game"
             elif prompt_id and "character_password" in prompt_id:
