@@ -83,8 +83,20 @@ thead th, tbody td {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Keep Actions visible when horizontally scrolling */
+table thead th:last-child,
+table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+}
+table thead th:last-child {
+  background: var(--bg3);
+}
 /* Fixed column widths to avoid jitter as data changes */
-table thead th:nth-child(1), table tbody td:nth-child(1) { width: 140px; } /* Bot ID */
+table thead th:nth-child(1), table tbody td:nth-child(1) { width: 110px; } /* Bot ID */
 table thead th:nth-child(2), table tbody td:nth-child(2) { width: 60px; }  /* State */
 table thead th:nth-child(3), table tbody td:nth-child(3) { width: 150px; } /* Activity */
 table thead th:nth-child(4), table tbody td:nth-child(4) { width: 170px; } /* Status */

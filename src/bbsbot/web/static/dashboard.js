@@ -53,6 +53,12 @@
     return d.innerHTML;
   }
 
+  function shortBotId(botId) {
+    const s = String(botId || "");
+    if (s.length <= 14) return s;
+    return s.slice(0, 6) + "…" + s.slice(-6);
+  }
+
   function getActivityBadge(context) {
     if (!context) return "IDLE";
     const lower = context.toLowerCase();
@@ -184,7 +190,7 @@
         const equipDisplay = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? "-" : formatCredits(b.cargo_equipment);
 
         return `<tr>
-        <td>${esc(b.bot_id)}</td>
+        <td title="${esc(b.bot_id)}">${esc(shortBotId(b.bot_id))}</td>
         <td>${stateHtml}</td>
         <td>${activityHtml}</td>
         <td>${statusHtml}</td>
