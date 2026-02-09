@@ -406,10 +406,14 @@ class LearningEngine:
 
         # Detect prompt (always try, but avoid re-scanning patterns on identical snapshots)
         screen_hash = snapshot.get("screen_hash", "")
-        cursor = snapshot.get("cursor") or {"x": 0, "y": 0}
+        # Fingerprint used to avoid expensive prompt regex scans on effectively-identical frames.
+        # Cursor x/y can change frequently during animations without changing prompt semantics,
+        # so we intentionally DO NOT include x/y here. We *do* include cursor_at_end and
+        # trailing-space, since those affect prompt readiness heuristics.
         fingerprint = (
-            f"{screen_hash}:{cursor.get('x', 0)}:{cursor.get('y', 0)}:"
-            f"{int(bool(snapshot.get('cursor_at_end', True)))}:{int(bool(snapshot.get('has_trailing_space', False)))}"
+            f"{screen_hash}:"
+            f"{int(bool(snapshot.get('cursor_at_end', True)))}:"
+            f"{int(bool(snapshot.get('has_trailing_space', False)))}"
         )
 
         if fingerprint and fingerprint == self._last_prompt_fingerprint:

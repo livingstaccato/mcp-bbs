@@ -234,3 +234,18 @@ class TradingBot:
             return
 
         self.sector_knowledge.mark_scanned(sector)
+
+    async def disconnect(self) -> None:
+        """Disconnect the underlying BBS session (if any) and release resources.
+
+        This is used by swarm workers to perform clean reconnects during recovery.
+        """
+        sid = self.session_id
+        self.session_id = None
+        self.session = None
+        if not sid:
+            return
+        try:
+            await self.session_manager.close_session(sid)
+        except Exception:
+            return

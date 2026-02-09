@@ -347,14 +347,28 @@ class WorkerBot(TradingBot):
         if len(self.recent_actions) > 10:
             self.recent_actions = self.recent_actions[-10:]
 
-    async def report_error(self, error: Exception, exit_reason: str = "exception") -> None:
-        """Report detailed error information to manager."""
+    async def report_error(
+        self,
+        error: Exception,
+        exit_reason: str = "exception",
+        *,
+        fatal: bool = False,
+        state: str | None = None,
+    ) -> None:
+        """Report detailed error information to manager.
+
+        End-state: workers should be resilient and self-heal. Most exceptions are
+        reported as `recovering` (not terminal) and the worker keeps running.
+        """
         import time
         try:
+            report_state = state
+            if report_state is None:
+                report_state = "error" if fatal else "recovering"
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",
                 json={
-                    "state": "error",
+                    "state": report_state,
                     "error_message": str(error),
                     "error_type": type(error).__name__,
                     "error_timestamp": time.time(),
@@ -451,113 +465,133 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
     worker = WorkerBot(bot_id, config_obj, manager_url)
     term_bridge = None
-    completed_ok = False
+
+    # Resolve credentials once from config; retries use the same.
+    username = config_obj.connection.username or bot_id
+    explicit_char_pw = (config_dict or {}).get("connection", {}).get("character_password")
+    explicit_char_cfg_pw = (config_dict or {}).get("character", {}).get("password")
+    character_password = explicit_char_pw or explicit_char_cfg_pw or username
+    game_password = config_obj.connection.game_password
+
+    # Register with manager (best-effort; don't crash the worker if manager is down).
+    try:
+        await worker.register_with_manager()
+    except Exception:
+        pass
+
+    # Start reporting immediately so the manager doesn't mark "no heartbeat".
+    await worker.report_status()
+    await worker.start_status_reporter(interval=5.0)
+
+    # Optional: connect terminal bridge (best-effort).
+    try:
+        from bbsbot.swarm.term_bridge import TermBridge
+
+        term_bridge = TermBridge(worker, bot_id=bot_id, manager_url=manager_url)
+        term_bridge.attach_session()
+        await term_bridge.start()
+    except Exception as e:
+        logger.warning(f"Terminal bridge disabled: {e}")
+
+    # Resilience loop: never exit on recoverable errors.
+    backoff_s = 1.0
+    failures = 0
 
     try:
-        # Register with manager
-        await worker.register_with_manager()
-
-        # Connect to game server
-        logger.info(
-            f"Connecting to {config_obj.connection.host}:"
-            f"{config_obj.connection.port}"
-        )
-        await worker.connect(
-            host=config_obj.connection.host,
-            port=config_obj.connection.port,
-        )
-
-        # Start reporting immediately so the manager doesn't mark "no heartbeat"
-        # during long login/menu sequences.
-        await worker.report_status()
-        await worker.start_status_reporter(interval=5.0)
-
-        # Optional: connect terminal bridge (best-effort).
-        try:
-            from bbsbot.swarm.term_bridge import TermBridge
-
-            term_bridge = TermBridge(worker, bot_id=bot_id, manager_url=manager_url)
-            term_bridge.attach_session()
-            await term_bridge.start()
-        except Exception as e:
-            logger.warning(f"Terminal bridge disabled: {e}")
-
-        # Push status updates on screen changes (throttled).
-        worker.attach_screen_change_reporter(min_interval_s=0.8)
-
-        # Login sequence
-        logger.info("Starting login sequence")
-        username = config_obj.connection.username or bot_id
-        # If a config doesn't explicitly set a character password, default to username.
-        # This matches the common convention used elsewhere in this repo and avoids
-        # repeatedly failing at `prompt.character_password` for existing characters.
-        explicit_char_pw = (config_dict or {}).get("connection", {}).get("character_password")
-        explicit_char_cfg_pw = (config_dict or {}).get("character", {}).get("password")
-        character_password = explicit_char_pw or explicit_char_cfg_pw or username
-        await worker.login_sequence(
-            game_password=config_obj.connection.game_password,
-            character_password=character_password,
-            username=username,
-        )
-        logger.info(
-            f"Login successful - Sector {worker.current_sector}, "
-            f"Credits {worker.current_credits}"
-        )
-
-        # Initialize knowledge and strategy (must happen after login)
-        game_letter = config_obj.connection.game_letter or worker.last_game_letter
-        worker.init_knowledge(
-            config_obj.connection.host, config_obj.connection.port, game_letter
-        )
-        worker.init_strategy()
-
-        # Report post-login status (reporter already running)
-        await worker.report_status()
-
-        # Create character state for trading loop
-        char_state = CharacterState(name=bot_id)
-
-        # Run trading loop using cli_impl (handles orient→strategy cycle)
-        from bbsbot.games.tw2002.cli_impl import run_trading_loop
-
-        await run_trading_loop(worker, config_obj, char_state)
-        completed_ok = True
-
-    except Exception as e:
-        logger.error(f"Bot worker error: {e}", exc_info=True)
-        # Report detailed error to manager
-        await worker.report_error(e, exit_reason="exception")
-        # Propagate so the process exits non-zero. Otherwise the manager may
-        # misclassify crashes as "completed" based on exit code alone.
-        raise
-    finally:
-        # Stop periodic reporter first (prevents stale updates during shutdown)
-        await worker.stop_status_reporter()
-        # Only mark completed if we actually completed; never overwrite error state with FINISHED.
-        if completed_ok:
+        while True:
             try:
-                final_status = {
-                    "state": "completed",
-                    "activity_context": "COMPLETED",
-                    "sector": worker.current_sector or 0,
-                    "credits": worker.current_credits or 0,
-                    "turns_executed": worker.turns_used,
-                    "exit_reason": "completed",
-                }
-                if worker.game_state:
-                    if hasattr(worker.game_state, "player_name") and worker.game_state.player_name:
-                        final_status["username"] = worker.game_state.player_name
-                    if hasattr(worker.game_state, "ship_type") and worker.game_state.ship_type:
-                        final_status["ship_level"] = worker.game_state.ship_type
-                    if hasattr(worker.game_state, "ship_name") and worker.game_state.ship_name:
-                        final_status["ship_name"] = worker.game_state.ship_name
-                await worker._http_client.post(
-                    f"{worker.manager_url}/bot/{worker.bot_id}/status",
-                    json=final_status,
+                # (Re)connect if needed.
+                if not getattr(worker, "session", None) or not worker.session.is_connected():
+                    try:
+                        await worker.disconnect()
+                    except Exception:
+                        pass
+                    logger.info(
+                        f"Connecting to {config_obj.connection.host}:"
+                        f"{config_obj.connection.port}"
+                    )
+                    worker.ai_activity = "CONNECTING"
+                    await worker.connect(
+                        host=config_obj.connection.host,
+                        port=config_obj.connection.port,
+                    )
+                    # Push status updates on screen changes (throttled) once session exists.
+                    worker.attach_screen_change_reporter(min_interval_s=0.8)
+
+                # Login (idempotent-ish; may early-return if already in game).
+                worker.ai_activity = "LOGGING_IN"
+                await worker.login_sequence(
+                    game_password=game_password,
+                    character_password=character_password,
+                    username=username,
                 )
-            except Exception:
-                pass
-        # Disconnect BBS session so the node is freed immediately
+
+                # Initialize knowledge and strategy (safe to re-init across reconnects).
+                game_letter = config_obj.connection.game_letter or worker.last_game_letter
+                worker.init_knowledge(
+                    config_obj.connection.host, config_obj.connection.port, game_letter
+                )
+                worker.init_strategy()
+                await worker.report_status()
+
+                # Run trading loop; end-state: loop returns only on internal soft-stops,
+                # and we immediately restart rather than exiting the worker.
+                from bbsbot.games.tw2002.character import CharacterState
+                from bbsbot.games.tw2002.cli_impl import run_trading_loop
+
+                char_state = CharacterState(name=bot_id)
+                worker.ai_activity = "RUNNING"
+                await run_trading_loop(worker, config_obj, char_state)
+
+                # If the trading loop returns, treat it as a soft-stop and restart.
+                worker.ai_activity = "RESTARTING (soft-stop)"
+                await worker.report_status()
+                await asyncio.sleep(2.0)
+
+                # Reset backoff after any successful run segment.
+                backoff_s = 1.0
+                failures = 0
+
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                failures += 1
+                logger.error(f"Worker cycle error: {e}", exc_info=True)
+                # Report as recovering (non-terminal).
+                await worker.report_error(e, exit_reason="recovering", fatal=False)
+
+                # Try in-session recovery first (escape menus, get back to safe prompt).
+                recovered = False
+                try:
+                    worker.ai_activity = f"RECOVERING ({type(e).__name__})"
+                    await worker.report_status()
+                    await worker.recover(max_attempts=20)
+                    recovered = True
+                except Exception:
+                    recovered = False
+
+                # If recovery didn't help, force reconnect.
+                if not recovered:
+                    try:
+                        await worker.disconnect()
+                    except Exception:
+                        pass
+
+                # Exponential backoff to avoid thrashing the server on persistent failures.
+                sleep_s = min(60.0, backoff_s)
+                worker.ai_activity = f"BACKOFF {sleep_s:.0f}s (failures={failures})"
+                try:
+                    await worker.report_status()
+                except Exception:
+                    pass
+                await asyncio.sleep(sleep_s)
+                backoff_s = min(60.0, backoff_s * 2.0)
+                continue
+    finally:
+        try:
+            await worker.stop_status_reporter()
+        except Exception:
+            pass
         try:
             await worker.disconnect()
         except Exception:

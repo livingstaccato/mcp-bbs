@@ -47,6 +47,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     consecutive_orient_failures = 0
     goal_status_display: GoalStatusDisplay | None = None
 
+    # End-state swarm behavior: never "finish" the process just because we hit a goal.
+    # Goals become milestones; the bot keeps playing and self-heals if it gets knocked out.
+    milestone_hits = 0
+
     while turns_used < max_turns:
         # Allow the Swarm Dashboard to pause automation while hijacked.
         await_if_hijacked = getattr(bot, "await_if_hijacked", None)
@@ -192,15 +196,31 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     if callable(emit_viz):
                         emit_viz("compact", status_line, turn=current_turn)
 
-        # Check target
+        # Goal becomes a milestone; keep going.
         if credits >= target_credits:
-            print(f"\nTarget reached: {credits:,} credits!")
-            break
+            milestone_hits += 1
+            print(f"\nMilestone reached: {credits:,} credits (target={target_credits:,})!")
+            # Increase target so we don't spam this every loop.
+            try:
+                target_credits = max(target_credits + 100_000, int(target_credits * 1.5))
+            except Exception:
+                target_credits = target_credits + 100_000
+            ai_activity = getattr(bot, "ai_activity", None)
+            if ai_activity is not None:
+                bot.ai_activity = f"MILESTONE {milestone_hits}: {credits:,} credits (next {target_credits:,})"
+            await asyncio.sleep(0.5)
 
         # Check turns
         if state.turns_left is not None and state.turns_left <= 0:
-            print("\nOut of turns!")
-            break
+            print("\nOut of turns. Entering idle backoff (will retry).")
+            try:
+                bot.ai_activity = "OUT_OF_TURNS (idle/backoff)"
+                await bot.report_status()
+            except Exception:
+                pass
+            # Turns replenish out-of-band; keep the worker alive and retry periodically.
+            await asyncio.sleep(60.0)
+            continue
 
         # Get next action from strategy (handle async strategies)
         if hasattr(strategy, '_get_next_action_async'):
