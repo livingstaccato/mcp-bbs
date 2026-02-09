@@ -176,7 +176,18 @@
         if (detail) {
           statusHtml += `<span class="status-detail">${esc(detail)}</span>`;
         } else if (b.prompt_id) {
-          statusHtml += `<span class="status-detail" style="color: var(--fg2);" title="prompt_id">${esc(b.prompt_id)}</span>`;
+          // Avoid showing "prompt.sector_command" etc. as status; Status is for meaningful blocking phases.
+          const safePrompts = new Set([
+            "prompt.sector_command",
+            "prompt.planet_command",
+            "prompt.port_menu",
+            "prompt.corporate_listings",
+          ]);
+          const isInteresting = !safePrompts.has(b.prompt_id);
+          const isBadState = ["error", "blocked", "recovering", "disconnected"].includes(b.state);
+          if (isBadState && isInteresting) {
+            statusHtml += `<span class="status-detail" style="color: var(--fg2);" title="prompt_id">${esc(b.prompt_id)}</span>`;
+          }
         } else if (!statusHtml) {
           statusHtml = "-";
         }
@@ -646,16 +657,15 @@
   const termAnalysis = $("#term-analysis");
   const termAnalysisDetails = $("#term-analysis-details");
 
-  function updateTermStats() {
-    if (!termBotId || !lastData || !lastData.bots || !termStats) return;
-    const bot = lastData.bots.find(b => b.bot_id === termBotId);
-    if (!bot) return;
-    const turnsMax = (bot.turns_max !== undefined && bot.turns_max !== null) ? bot.turns_max : 0;
-    const turnsDisplay = turnsMax > 0 ? `${bot.turns_executed || 0}/${turnsMax}` : `${bot.turns_executed || 0} / Auto`;
-    const activity = bot.activity_context || bot.state || "-";
-    const promptId = (lastTermSnapshot && lastTermSnapshot.prompt_detected && lastTermSnapshot.prompt_detected.prompt_id)
-      ? lastTermSnapshot.prompt_detected.prompt_id
-      : "-";
+	  function updateTermStats() {
+	    if (!termBotId || !lastData || !lastData.bots || !termStats) return;
+	    const bot = lastData.bots.find(b => b.bot_id === termBotId);
+	    if (!bot) return;
+	    const turnsDisplay = `${bot.turns_executed || 0}`;
+	    const activity = bot.activity_context || bot.state || "-";
+	    const promptId = (lastTermSnapshot && lastTermSnapshot.prompt_detected && lastTermSnapshot.prompt_detected.prompt_id)
+	      ? lastTermSnapshot.prompt_detected.prompt_id
+	      : "-";
     termStats.innerHTML = [
       `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
       `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
