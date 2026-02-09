@@ -3,7 +3,7 @@ connection:
   port: 2002
   game_letter: B
 session:
-  max_turns_per_session: 500
+  max_turns_per_session: 0
   target_credits: 500000
 trading:
   strategy: ai_strategy

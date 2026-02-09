@@ -1,7 +1,7 @@
 {
-  "timestamp": 1770601311.7092211,
+  "timestamp": 1770601748.250539,
   "bot_id": "persistent-18",
-  "error": "Stuck in loop: prompt.menu_selection",
+  "error": "Stuck in loop: prompt.corporate_listings",
   "diagnosis": {
     "error": "Analysis failed: ModuleNotFoundError",
     "message": "No module named 'bbsbot.llm.interface'"

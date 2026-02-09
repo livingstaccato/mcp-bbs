@@ -8,7 +8,7 @@ trading:
     explore_chance: 0.6
     max_wander_without_trade: 5
 session:
-  max_turns_per_session: 500
+  max_turns_per_session: 0
   target_credits: 500000
 banking:
   enabled: true
