@@ -154,6 +154,42 @@ async def get_trade_opportunities(
 
 
 @registry.tool()
+async def debug_screen() -> dict[str, Any]:
+    """Analyze current screen for prompt detection debugging.
+
+    Shows comprehensive diagnostics about:
+    - What the bot sees on screen
+    - Which prompt rule matched (if any)
+    - What data was extracted
+    - Why other patterns didn't match
+    - What the bot should do next
+
+    Returns:
+        Screen analysis with detection details
+
+    Example:
+        analysis = await tw2002_debug_screen()
+        # Returns: {screen_text: "...", prompt_id: "prompt.sector_command", ...}
+    """
+    from bbsbot.games.tw2002.debug_screens import analyze_screen, format_screen_analysis
+
+    bot = _get_active_bot()
+    if not bot:
+        return {"error": "No active bot session"}
+
+    try:
+        analysis = await analyze_screen(bot)
+        # Return formatted text for easy reading
+        return {
+            "formatted": format_screen_analysis(analysis),
+            "raw": analysis.model_dump(),
+        }
+    except Exception as e:
+        logger.error(f"debug_screen_error: {e}", exc_info=True)
+        return {"error": str(e)}
+
+
+@registry.tool()
 async def analyze_combat_readiness() -> dict[str, Any]:
     """Assess combat capability and recommend upgrades.
 

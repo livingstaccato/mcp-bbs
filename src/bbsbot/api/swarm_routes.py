@@ -152,8 +152,13 @@ async def update_status(bot_id: str, update: dict):
         if update["credits"] >= 0:
             bot.credits = update["credits"]
     if "turns_executed" in update:
-        # Turns should only increase (high-water mark)
-        bot.turns_executed = max(bot.turns_executed, update["turns_executed"])
+        # Update turns directly - worker knows the correct value
+        new_turns = update["turns_executed"]
+        if new_turns != bot.turns_executed:
+            from bbsbot.logging import get_logger
+            logger = get_logger(__name__)
+            logger.debug(f"Bot {bot_id} turns: {bot.turns_executed} → {new_turns}")
+        bot.turns_executed = new_turns
     if "turns_max" in update:
         bot.turns_max = update["turns_max"]
     if "state" in update:
