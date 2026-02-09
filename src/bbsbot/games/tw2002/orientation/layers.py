@@ -166,47 +166,42 @@ async def _reach_safe_state(
         if context == "pause":
             print(f"  [Orient] Dismissing pause screen...")
             await bot.session.send(" ")
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.8)  # Longer wait for screen to update (was 0.15s)
             continue
 
         if context in ("menu", "port_menu"):
-            # Check if this is game selection menu specifically
-            screen_text = screen.lower()
-
-            if "game" in screen_text and "select" in screen_text:
-                # This is game selection menu - increment tracking
+            # CRITICAL FIX: If we have a stored game letter, ALWAYS try to re-enter game first
+            # This handles the case where screen buffer doesn't show full menu text
+            if hasattr(bot, 'last_game_letter') and bot.last_game_letter:
+                # Track menu re-entries to detect if bot is being ejected
                 bot.menu_reentry_count += 1
                 bot.last_menu_reentry_time = time()
 
                 if bot.menu_reentry_count > bot.max_menu_reentries:
                     raise OrientationError(
-                        f"Returned to game menu {bot.menu_reentry_count} times - "
+                        f"Returned to menu {bot.menu_reentry_count} times - "
                         f"bot appears to be ejected from game. Requires restart.",
                         screen=screen,
                         attempts=attempt + 1,
                     )
 
-                # Try to re-enter the game
-                if hasattr(bot, 'last_game_letter') and bot.last_game_letter:
-                    print(f"  [Orient] At game menu (re-entry #{bot.menu_reentry_count}), "
-                          f"selecting game {bot.last_game_letter}")
-                    await bot.session.send(bot.last_game_letter + "\r")
-                    await asyncio.sleep(1.0)
-                    continue
-                else:
-                    raise OrientationError(
-                        "At game menu but no game letter stored",
-                        screen=screen,
-                        attempts=attempt + 1,
-                    )
+                # Try to re-enter the game using stored game letter
+                print(f"  [Orient] At menu (re-entry #{bot.menu_reentry_count}), "
+                      f"selecting game {bot.last_game_letter}")
+                await bot.session.send(bot.last_game_letter + "\r")
+                await asyncio.sleep(1.0)
+                continue
+
+            # No game letter stored - check if this is corporate listings
             elif context == "corporate_listings":
                 # Corporate Listings menu - send Q to quit
                 print(f"  [Orient] At Corporate Listings menu, sending Q to exit...")
                 await bot.session.send("Q")
                 await asyncio.sleep(0.3)
                 continue
+
+            # Generic menu without game letter - try Q to exit
             else:
-                # Generic menu, try Q to exit
                 print(f"  [Orient] In {context}, sending Q to back out...")
                 await bot.session.send("Q")
                 await asyncio.sleep(0.2)

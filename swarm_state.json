@@ -1,30 +1,30 @@
 {
-  "timestamp": 1770608336.934568,
+  "timestamp": 1770655592.259583,
   "bots": {
     "test-bot-1": {
       "bot_id": "test-bot-1",
-      "pid": 14026,
+      "pid": 31916,
       "config": "persistent_bot.yaml",
-      "state": "running",
-      "sector": 447,
+      "state": "stopped",
+      "sector": 318,
       "credits": 0,
-      "turns_executed": 2,
+      "turns_executed": 24,
       "turns_max": 0,
-      "uptime_seconds": 0,
-      "last_update_time": 1770608335.640198,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770610392.220763,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770608243.506608,
-      "activity_context": "ORIENTING: Step 4/10",
+      "last_action_time": 1770610085.715351,
+      "activity_context": "AT_MENU",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770608327.513574,
+          "time": 1770610178.671078,
           "action": "TRADE",
-          "sector": 447,
+          "sector": 318,
           "details": "all_commodities",
           "result": "failure"
         }
@@ -39,28 +39,28 @@
     },
     "test-bot-2": {
       "bot_id": "test-bot-2",
-      "pid": 14052,
+      "pid": 31940,
       "config": "persistent_bot.yaml",
-      "state": "running",
-      "sector": 447,
+      "state": "stopped",
+      "sector": 318,
       "credits": 0,
-      "turns_executed": 2,
+      "turns_executed": 66,
       "turns_max": 0,
-      "uptime_seconds": 0,
-      "last_update_time": 1770608334.30599,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770610394.589984,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770608246.880301,
-      "activity_context": "ORIENTING: Step 9/10",
+      "last_action_time": 1770610084.135189,
+      "activity_context": "AT_MENU",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770608330.8944361,
+          "time": 1770610174.5870929,
           "action": "TRADE",
-          "sector": 447,
+          "sector": 318,
           "details": "all_commodities",
           "result": "failure"
         }
@@ -75,24 +75,95 @@
     },
     "test-bot-3": {
       "bot_id": "test-bot-3",
-      "pid": 14087,
+      "pid": 31958,
       "config": "persistent_bot.yaml",
-      "state": "running",
-      "sector": 447,
-      "credits": 0,
-      "turns_executed": 1,
+      "state": "stopped",
+      "sector": 830,
+      "credits": 16485,
+      "turns_executed": 80,
       "turns_max": 0,
-      "uptime_seconds": 0,
-      "last_update_time": 1770608332.693962,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770610392.982522,
       "completed_at": null,
       "error_message": null,
-      "last_action": "TRADE",
-      "last_action_time": 1770608250.266544,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770610389.4326,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
-      "recent_actions": [],
+      "recent_actions": [
+        {
+          "time": 1770610351.7360268,
+          "action": "EXPLORE",
+          "sector": 44,
+          "details": "991",
+          "result": "success"
+        },
+        {
+          "time": 1770610362.850989,
+          "action": "EXPLORE",
+          "sector": 76,
+          "details": "670",
+          "result": "failure"
+        },
+        {
+          "time": 1770610369.316053,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "success"
+        },
+        {
+          "time": 1770610372.099827,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610374.879696,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610377.287431,
+          "action": "WAIT",
+          "sector": 636,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770610381.231848,
+          "action": "EXPLORE",
+          "sector": 546,
+          "details": "636",
+          "result": "failure"
+        },
+        {
+          "time": 1770610384.014835,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610386.7962098,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610389.2034078,
+          "action": "WAIT",
+          "sector": 636,
+          "details": null,
+          "result": "success"
+        }
+      ],
       "username": "test-bot-3",
       "ship_name": null,
       "ship_level": null,
@@ -103,93 +174,93 @@
     },
     "test-bot-4": {
       "bot_id": "test-bot-4",
-      "pid": 14117,
+      "pid": 31978,
       "config": "persistent_bot.yaml",
-      "state": "running",
-      "sector": 447,
-      "credits": 4168,
-      "turns_executed": 25,
+      "state": "stopped",
+      "sector": 636,
+      "credits": 16485,
+      "turns_executed": 87,
       "turns_max": 0,
-      "uptime_seconds": 0,
-      "last_update_time": 1770608336.0101728,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770610393.8077881,
       "completed_at": null,
       "error_message": null,
       "last_action": "TRADE",
-      "last_action_time": 1770608335.186614,
+      "last_action_time": 1770610393.14657,
       "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770608308.5554528,
+          "time": 1770610362.291692,
           "action": "EXPLORE",
-          "sector": 613,
-          "details": "799",
+          "sector": 991,
+          "details": "636",
           "result": "success"
         },
         {
-          "time": 1770608312.4956422,
-          "action": "EXPLORE",
-          "sector": 613,
-          "details": "799",
-          "result": "success"
-        },
-        {
-          "time": 1770608316.436954,
-          "action": "EXPLORE",
-          "sector": 799,
-          "details": "679",
-          "result": "success"
-        },
-        {
-          "time": 1770608321.326138,
-          "action": "EXPLORE",
-          "sector": 799,
-          "details": "613",
-          "result": "success"
-        },
-        {
-          "time": 1770608323.088876,
-          "action": "EXPLORE",
-          "sector": 613,
-          "details": "447",
-          "result": "success"
-        },
-        {
-          "time": 1770608325.871588,
+          "time": 1770610368.266423,
           "action": "TRADE",
-          "sector": 447,
+          "sector": 636,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770608328.65204,
+          "time": 1770610371.041398,
           "action": "TRADE",
-          "sector": 447,
+          "sector": 636,
           "details": "all_commodities",
           "result": "failure"
         },
         {
-          "time": 1770608330.413352,
+          "time": 1770610372.804058,
           "action": "EXPLORE",
-          "sector": 447,
-          "details": "613",
+          "sector": 636,
+          "details": "546",
           "result": "success"
         },
         {
-          "time": 1770608332.175089,
+          "time": 1770610376.748203,
           "action": "EXPLORE",
-          "sector": 613,
-          "details": "447",
+          "sector": 636,
+          "details": "636",
           "result": "success"
         },
         {
-          "time": 1770608334.957054,
+          "time": 1770610379.528744,
           "action": "TRADE",
-          "sector": 447,
+          "sector": 636,
           "details": "all_commodities",
           "result": "failure"
+        },
+        {
+          "time": 1770610382.3091269,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610384.070608,
+          "action": "EXPLORE",
+          "sector": 636,
+          "details": "830",
+          "result": "success"
+        },
+        {
+          "time": 1770610388.014327,
+          "action": "EXPLORE",
+          "sector": 636,
+          "details": "317",
+          "result": "success"
+        },
+        {
+          "time": 1770610392.912472,
+          "action": "EXPLORE",
+          "sector": 830,
+          "details": "636",
+          "result": "success"
         }
       ],
       "username": "test-bot-4",
@@ -202,96 +273,1347 @@
     },
     "test-bot-5": {
       "bot_id": "test-bot-5",
-      "pid": 14157,
+      "pid": 32006,
       "config": "persistent_bot.yaml",
-      "state": "running",
-      "sector": 447,
-      "credits": 0,
-      "turns_executed": 23,
+      "state": "stopped",
+      "sector": 830,
+      "credits": 16485,
+      "turns_executed": 74,
       "turns_max": 0,
-      "uptime_seconds": 0,
-      "last_update_time": 1770608333.632925,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770610390.826914,
       "completed_at": null,
       "error_message": null,
-      "last_action": "WAIT",
-      "last_action_time": 1770608333.098063,
-      "activity_context": "ORIENTING: Step 2/10",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770610388.039883,
+      "activity_context": "EXPLORING",
       "error_type": null,
       "error_timestamp": null,
       "exit_reason": null,
       "recent_actions": [
         {
-          "time": 1770608302.1072671,
+          "time": 1770610349.9696739,
+          "action": "TRADE",
+          "sector": 44,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610359.466583,
+          "action": "EXPLORE",
+          "sector": 44,
+          "details": "919",
+          "result": "failure"
+        },
+        {
+          "time": 1770610361.4004219,
+          "action": "EXPLORE",
+          "sector": 991,
+          "details": "636",
+          "result": "success"
+        },
+        {
+          "time": 1770610367.3706298,
+          "action": "TRADE",
+          "sector": 991,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610369.7796748,
           "action": "WAIT",
-          "sector": 447,
+          "sector": 636,
           "details": null,
           "result": "success"
         },
         {
-          "time": 1770608305.5501802,
-          "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
+          "time": 1770610372.561304,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
         },
         {
-          "time": 1770608308.9902442,
-          "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
+          "time": 1770610379.840967,
+          "action": "EXPLORE",
+          "sector": 636,
+          "details": "991",
+          "result": "failure"
         },
         {
-          "time": 1770608312.433986,
-          "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
+          "time": 1770610382.621792,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
         },
         {
-          "time": 1770608315.876544,
-          "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
+          "time": 1770610385.401885,
+          "action": "TRADE",
+          "sector": 636,
+          "details": "all_commodities",
+          "result": "failure"
         },
         {
-          "time": 1770608319.322142,
+          "time": 1770610387.809432,
           "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770608322.7693608,
-          "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770608326.213228,
-          "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770608329.656744,
-          "action": "WAIT",
-          "sector": 447,
-          "details": null,
-          "result": "success"
-        },
-        {
-          "time": 1770608333.098068,
-          "action": "WAIT",
-          "sector": 447,
+          "sector": 636,
           "details": null,
           "result": "success"
         }
       ],
       "username": "test-bot-5",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "test-bot-6": {
+      "bot_id": "test-bot-6",
+      "pid": 17322,
+      "config": "persistent_bot.yaml",
+      "state": "stopped",
+      "sector": 245,
+      "credits": 0,
+      "turns_executed": 12,
+      "turns_max": 0,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770608744.2043688,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770608631.287503,
+      "activity_context": "ORIENTING: Recovering",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770608642.631426,
+          "action": "EXPLORE",
+          "sector": 245,
+          "details": "447",
+          "result": "failure"
+        }
+      ],
+      "username": "test-bot-6",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "test-bot-7": {
+      "bot_id": "test-bot-7",
+      "pid": 17354,
+      "config": "persistent_bot.yaml",
+      "state": "stopped",
+      "sector": 245,
+      "credits": 0,
+      "turns_executed": 13,
+      "turns_max": 0,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770608748.107351,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770608615.163551,
+      "activity_context": "ORIENTING: Step 9/10",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770608625.695282,
+          "action": "EXPLORE",
+          "sector": 245,
+          "details": "447",
+          "result": "failure"
+        }
+      ],
+      "username": "test-bot-7",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "test-bot-8": {
+      "bot_id": "test-bot-8",
+      "pid": 17385,
+      "config": "persistent_bot.yaml",
+      "state": "stopped",
+      "sector": 487,
+      "credits": 4168,
+      "turns_executed": 34,
+      "turns_max": 0,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770608745.43417,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770608739.431565,
+      "activity_context": "ORIENTING: Gathering state",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770608715.3744261,
+          "action": "TRADE",
+          "sector": 957,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770608717.136703,
+          "action": "EXPLORE",
+          "sector": 957,
+          "details": "566",
+          "result": "success"
+        },
+        {
+          "time": 1770608720.563475,
+          "action": "TRADE",
+          "sector": 957,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770608721.8126001,
+          "action": "TRADE",
+          "sector": 566,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770608725.755806,
+          "action": "EXPLORE",
+          "sector": 566,
+          "details": "957",
+          "result": "success"
+        },
+        {
+          "time": 1770608728.539093,
+          "action": "TRADE",
+          "sector": 957,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770608731.320647,
+          "action": "TRADE",
+          "sector": 957,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770608733.08273,
+          "action": "EXPLORE",
+          "sector": 957,
+          "details": "560",
+          "result": "success"
+        },
+        {
+          "time": 1770608737.024946,
+          "action": "EXPLORE",
+          "sector": 957,
+          "details": "487",
+          "result": "success"
+        },
+        {
+          "time": 1770608744.0101178,
+          "action": "TRADE",
+          "sector": 957,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "test-bot-8",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "test-bot-9": {
+      "bot_id": "test-bot-9",
+      "pid": 17423,
+      "config": "persistent_bot.yaml",
+      "state": "stopped",
+      "sector": 245,
+      "credits": 0,
+      "turns_executed": 12,
+      "turns_max": 0,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770608744.319741,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770608619.213418,
+      "activity_context": "ORIENTING: Recovering",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770608630.564464,
+          "action": "EXPLORE",
+          "sector": 245,
+          "details": "447",
+          "result": "failure"
+        }
+      ],
+      "username": "test-bot-9",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "test-bot-10": {
+      "bot_id": "test-bot-10",
+      "pid": 17473,
+      "config": "persistent_bot.yaml",
+      "state": "completed",
+      "sector": 0,
+      "credits": 0,
+      "turns_executed": 0,
+      "turns_max": 500,
+      "uptime_seconds": 0.0,
+      "last_update_time": 1770608706.882189,
+      "completed_at": 1770608708.9188092,
+      "error_message": "No prompt detected within 90000ms",
+      "last_action": null,
+      "last_action_time": 0.0,
+      "activity_context": "FINISHED",
+      "error_type": "TimeoutError",
+      "error_timestamp": 1770608706.8783932,
+      "exit_reason": "target_reached",
+      "recent_actions": [],
+      "username": null,
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "verify-bot": {
+      "bot_id": "verify-bot",
+      "pid": 35092,
+      "config": "persistent_bot.yaml",
+      "state": "stopped",
+      "sector": 688,
+      "credits": 18840,
+      "turns_executed": 58,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770610622.326136,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770610618.228658,
+      "activity_context": "IN_GAME",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770610573.779296,
+          "action": "EXPLORE",
+          "sector": 300,
+          "details": "830",
+          "result": "success"
+        },
+        {
+          "time": 1770610575.540838,
+          "action": "EXPLORE",
+          "sector": 830,
+          "details": "328",
+          "result": "success"
+        },
+        {
+          "time": 1770610582.201235,
+          "action": "MOVE",
+          "sector": 300,
+          "details": "875",
+          "result": "success"
+        },
+        {
+          "time": 1770610593.346539,
+          "action": "MOVE",
+          "sector": 875,
+          "details": "317",
+          "result": "failure"
+        },
+        {
+          "time": 1770610597.927995,
+          "action": "EXPLORE",
+          "sector": 317,
+          "details": "226",
+          "result": "success"
+        },
+        {
+          "time": 1770610604.922615,
+          "action": "TRADE",
+          "sector": 317,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610607.3313842,
+          "action": "WAIT",
+          "sector": 226,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770610610.1137211,
+          "action": "TRADE",
+          "sector": 226,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610611.87667,
+          "action": "EXPLORE",
+          "sector": 226,
+          "details": "688",
+          "result": "success"
+        },
+        {
+          "time": 1770610615.817879,
+          "action": "EXPLORE",
+          "sector": 226,
+          "details": "678",
+          "result": "success"
+        }
+      ],
+      "username": "verify-bot",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "test-pause-fix": {
+      "bot_id": "test-pause-fix",
+      "pid": 37200,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 795,
+      "credits": 20971,
+      "turns_executed": 105,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770610991.308026,
+      "completed_at": null,
+      "error_message": "Process exited with code 143",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770610929.493254,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_143",
+      "recent_actions": [
+        {
+          "time": 1770610892.5175219,
+          "action": "TRADE",
+          "sector": 399,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610894.282042,
+          "action": "EXPLORE",
+          "sector": 399,
+          "details": "967",
+          "result": "success"
+        },
+        {
+          "time": 1770610896.044308,
+          "action": "EXPLORE",
+          "sector": 967,
+          "details": "125",
+          "result": "success"
+        },
+        {
+          "time": 1770610907.385563,
+          "action": "EXPLORE",
+          "sector": 399,
+          "details": "399",
+          "result": "failure"
+        },
+        {
+          "time": 1770610917.64383,
+          "action": "TRADE",
+          "sector": 399,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610920.423935,
+          "action": "TRADE",
+          "sector": 399,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610922.185312,
+          "action": "EXPLORE",
+          "sector": 399,
+          "details": "795",
+          "result": "success"
+        },
+        {
+          "time": 1770610926.484407,
+          "action": "TRADE",
+          "sector": 795,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610929.264672,
+          "action": "TRADE",
+          "sector": 795,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770610940.720263,
+          "action": "EXPLORE",
+          "sector": 795,
+          "details": "270",
+          "result": "failure"
+        }
+      ],
+      "username": "test-pause-fix",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_012": {
+      "bot_id": "bot_012",
+      "pid": 1597,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 42547,
+      "turns_executed": 72,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655027.795342,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654560.661643,
+      "activity_context": "PAUSED",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654533.81744,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654536.599515,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654538.3603141,
+          "action": "EXPLORE",
+          "sector": 342,
+          "details": "762",
+          "result": "success"
+        },
+        {
+          "time": 1770654539.60951,
+          "action": "TRADE",
+          "sector": 762,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654540.858617,
+          "action": "TRADE",
+          "sector": 762,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654542.622218,
+          "action": "EXPLORE",
+          "sector": 762,
+          "details": "509",
+          "result": "success"
+        },
+        {
+          "time": 1770654544.384036,
+          "action": "EXPLORE",
+          "sector": 509,
+          "details": "34",
+          "result": "success"
+        },
+        {
+          "time": 1770654555.528664,
+          "action": "EXPLORE",
+          "sector": 762,
+          "details": "342",
+          "result": "failure"
+        },
+        {
+          "time": 1770654560.4335139,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654644.6169758,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_012",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_013": {
+      "bot_id": "bot_013",
+      "pid": 3077,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 0,
+      "turns_executed": 14,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655029.992011,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654566.5446668,
+      "activity_context": "PAUSED",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654648.492913,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_013",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_014": {
+      "bot_id": "bot_014",
+      "pid": 3144,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 0,
+      "turns_executed": 14,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655027.0697842,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654573.648313,
+      "activity_context": "PAUSED",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654655.6068192,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_014",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_015": {
+      "bot_id": "bot_015",
+      "pid": 3446,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 0,
+      "turns_executed": 14,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655029.187229,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654580.76723,
+      "activity_context": "PAUSED",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654662.713865,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_015",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_016": {
+      "bot_id": "bot_016",
+      "pid": 3502,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 42214,
+      "turns_executed": 76,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655026.5056472,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654764.523953,
+      "activity_context": "PAUSED",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654745.103311,
+          "action": "EXPLORE",
+          "sector": 342,
+          "details": "570",
+          "result": "success"
+        },
+        {
+          "time": 1770654747.8840718,
+          "action": "TRADE",
+          "sector": 570,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654750.664112,
+          "action": "TRADE",
+          "sector": 570,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654752.4257321,
+          "action": "EXPLORE",
+          "sector": 570,
+          "details": "621",
+          "result": "success"
+        },
+        {
+          "time": 1770654754.187168,
+          "action": "EXPLORE",
+          "sector": 621,
+          "details": "570",
+          "result": "success"
+        },
+        {
+          "time": 1770654756.968124,
+          "action": "TRADE",
+          "sector": 570,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654759.750253,
+          "action": "TRADE",
+          "sector": 570,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654761.512976,
+          "action": "EXPLORE",
+          "sector": 570,
+          "details": "342",
+          "result": "success"
+        },
+        {
+          "time": 1770654764.294782,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654846.483945,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_016",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_017": {
+      "bot_id": "bot_017",
+      "pid": 4840,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 0,
+      "turns_executed": 17,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655029.886034,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654771.731528,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654859.693866,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_017",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_018": {
+      "bot_id": "bot_018",
+      "pid": 4883,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 0,
+      "turns_executed": 16,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655030.9649339,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654777.812686,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654865.764729,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_018",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_019": {
+      "bot_id": "bot_019",
+      "pid": 4925,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 342,
+      "credits": 0,
+      "turns_executed": 16,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655027.2843468,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "TRADE",
+      "last_action_time": 1770654784.118878,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654875.070169,
+          "action": "TRADE",
+          "sector": 342,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_019",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_020": {
+      "bot_id": "bot_020",
+      "pid": 4969,
+      "config": "persistent_bot.yaml",
+      "state": "error",
+      "sector": 687,
+      "credits": 42214,
+      "turns_executed": 77,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655028.023411,
+      "completed_at": null,
+      "error_message": "Process exited with code -9",
+      "last_action": "EXPLORE",
+      "last_action_time": 1770655025.398411,
+      "activity_context": "IN_GAME",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": "exit_code_-9",
+      "recent_actions": [
+        {
+          "time": 1770654994.020753,
+          "action": "TRADE",
+          "sector": 921,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770654996.427134,
+          "action": "WAIT",
+          "sector": 515,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770654999.2072792,
+          "action": "TRADE",
+          "sector": 515,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655000.969822,
+          "action": "EXPLORE",
+          "sector": 515,
+          "details": "555",
+          "result": "success"
+        },
+        {
+          "time": 1770655005.932617,
+          "action": "TRADE",
+          "sector": 515,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655009.605908,
+          "action": "WAIT",
+          "sector": 555,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770655012.388036,
+          "action": "TRADE",
+          "sector": 555,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655014.1498728,
+          "action": "EXPLORE",
+          "sector": 555,
+          "details": "325",
+          "result": "success"
+        },
+        {
+          "time": 1770655018.094429,
+          "action": "EXPLORE",
+          "sector": 555,
+          "details": "885",
+          "result": "success"
+        },
+        {
+          "time": 1770655022.986499,
+          "action": "EXPLORE",
+          "sector": 325,
+          "details": "687",
+          "result": "success"
+        }
+      ],
+      "username": "bot_020",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_021": {
+      "bot_id": "bot_021",
+      "pid": 7238,
+      "config": "persistent_bot.yaml",
+      "state": "running",
+      "sector": 687,
+      "credits": 0,
+      "turns_executed": 31,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655587.415405,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770655078.2525609,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770655075.405356,
+          "action": "EXPLORE",
+          "sector": 687,
+          "details": "153",
+          "result": "success"
+        },
+        {
+          "time": 1770655090.481625,
+          "action": "EXPLORE",
+          "sector": 687,
+          "details": "325",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_021",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_022": {
+      "bot_id": "bot_022",
+      "pid": 7280,
+      "config": "persistent_bot.yaml",
+      "state": "running",
+      "sector": 153,
+      "credits": 0,
+      "turns_executed": 30,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655589.710046,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "EXPLORE",
+      "last_action_time": 1770655081.158728,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770655094.082786,
+          "action": "EXPLORE",
+          "sector": 153,
+          "details": "308",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_022",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_023": {
+      "bot_id": "bot_023",
+      "pid": 7322,
+      "config": "persistent_bot.yaml",
+      "state": "running",
+      "sector": 660,
+      "credits": 44365,
+      "turns_executed": 157,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655590.439996,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770655493.5664582,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770655472.703135,
+          "action": "EXPLORE",
+          "sector": 660,
+          "details": "513",
+          "result": "success"
+        },
+        {
+          "time": 1770655474.4663522,
+          "action": "EXPLORE",
+          "sector": 513,
+          "details": "629",
+          "result": "success"
+        },
+        {
+          "time": 1770655475.715025,
+          "action": "TRADE",
+          "sector": 629,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655476.9649642,
+          "action": "TRADE",
+          "sector": 629,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655478.7281091,
+          "action": "EXPLORE",
+          "sector": 629,
+          "details": "513",
+          "result": "success"
+        },
+        {
+          "time": 1770655480.491263,
+          "action": "EXPLORE",
+          "sector": 513,
+          "details": "660",
+          "result": "success"
+        },
+        {
+          "time": 1770655483.2734752,
+          "action": "TRADE",
+          "sector": 660,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655486.057111,
+          "action": "TRADE",
+          "sector": 660,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655493.3371809,
+          "action": "EXPLORE",
+          "sector": 660,
+          "details": "513",
+          "result": "failure"
+        },
+        {
+          "time": 1770655582.015611,
+          "action": "TRADE",
+          "sector": 660,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_023",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_024": {
+      "bot_id": "bot_024",
+      "pid": 10000,
+      "config": "persistent_bot.yaml",
+      "state": "running",
+      "sector": 660,
+      "credits": 0,
+      "turns_executed": 1,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655587.9876611,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770655501.0875819,
+      "activity_context": "IN_GAME_MENU",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [],
+      "username": "bot_024",
+      "ship_name": null,
+      "ship_level": null,
+      "port_location": null,
+      "is_hijacked": false,
+      "hijacked_at": null,
+      "hijacked_by": null
+    },
+    "bot_025": {
+      "bot_id": "bot_025",
+      "pid": 10038,
+      "config": "persistent_bot.yaml",
+      "state": "running",
+      "sector": 138,
+      "credits": 44143,
+      "turns_executed": 26,
+      "turns_max": 0,
+      "uptime_seconds": 0,
+      "last_update_time": 1770655591.9953222,
+      "completed_at": null,
+      "error_message": null,
+      "last_action": "TRADE",
+      "last_action_time": 1770655591.48947,
+      "activity_context": "EXPLORING",
+      "error_type": null,
+      "error_timestamp": null,
+      "exit_reason": null,
+      "recent_actions": [
+        {
+          "time": 1770655563.64122,
+          "action": "TRADE",
+          "sector": 248,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655566.0508292,
+          "action": "WAIT",
+          "sector": 130,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770655568.8323772,
+          "action": "TRADE",
+          "sector": 130,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655570.597007,
+          "action": "EXPLORE",
+          "sector": 130,
+          "details": "138",
+          "result": "success"
+        },
+        {
+          "time": 1770655577.587501,
+          "action": "TRADE",
+          "sector": 130,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655579.994045,
+          "action": "WAIT",
+          "sector": 138,
+          "details": null,
+          "result": "success"
+        },
+        {
+          "time": 1770655582.7748978,
+          "action": "TRADE",
+          "sector": 138,
+          "details": "all_commodities",
+          "result": "failure"
+        },
+        {
+          "time": 1770655584.5380008,
+          "action": "EXPLORE",
+          "sector": 138,
+          "details": "889",
+          "result": "success"
+        },
+        {
+          "time": 1770655588.480104,
+          "action": "EXPLORE",
+          "sector": 138,
+          "details": "138",
+          "result": "success"
+        },
+        {
+          "time": 1770655591.2611358,
+          "action": "TRADE",
+          "sector": 138,
+          "details": "all_commodities",
+          "result": "failure"
+        }
+      ],
+      "username": "bot_025",
       "ship_name": null,
       "ship_level": null,
       "port_location": null,

@@ -68,6 +68,12 @@ def _get_actual_prompt(screen: str) -> str:
 
     # Check prompts in priority order (most specific first)
 
+    # Corporate listings - NOT a command prompt, must exit this first!
+    if "corporate" in last_lines and "listing" in last_lines:
+        return "corporate_listings"
+    if "which listing" in last_line:
+        return "corporate_listings"
+
     # Command prompt - we've reached the game!
     if "command" in last_line and "?" in last_line:
         return "command_prompt"
@@ -421,6 +427,12 @@ async def login_sequence(
             # Reached game! (either sector command or planet command for new chars)
             print(f"      ✓ Reached game!", flush=True)
             break
+
+        elif actual_prompt == "corporate_listings":
+            # Corporate listings menu during login - exit with Q
+            print(f"      → Corporate listings detected, sending Q to exit...")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.5)
 
         elif actual_prompt == "description_mode" or _is_description_mode(screen):
             description_mode_exits += 1

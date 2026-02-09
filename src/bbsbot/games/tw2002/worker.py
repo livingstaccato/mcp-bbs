@@ -61,10 +61,13 @@ class WorkerBot(TradingBot):
     async def report_status(self) -> None:
         """Report current status to manager."""
         try:
-            # Use game_state credits if current_credits not updated
-            credits = self.current_credits
-            if credits == 0 and self.game_state and self.game_state.credits:
+            # Always prefer game_state credits (source of truth) over cached current_credits
+            # Fallback to current_credits only if game_state unavailable
+            credits = 0
+            if self.game_state and self.game_state.credits:
                 credits = self.game_state.credits
+            elif self.current_credits:
+                credits = self.current_credits
 
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)
@@ -74,64 +77,92 @@ class WorkerBot(TradingBot):
             else:
                 turns_max = 0  # Default: auto-detect server max
 
-            # Map game context to human-readable activity
-            # CRITICAL: Only use game_state.context if we're actually IN THE GAME (sector > 0)
-            # Otherwise we show stale activities like "EXPLORING" when stuck at login
+            # CRITICAL FIX: Use CURRENT screen for activity detection, not stale game_state
+            # This ensures activity always matches what's actually on screen
             activity = "INITIALIZING"
-            in_game = self.current_sector and self.current_sector > 0
+            current_screen = ""
+            current_context = "unknown"
 
-            if self.game_state and in_game:
-                # Bot is IN the game - use context for activity
-                context = getattr(self.game_state, "context", None)
-                if context:
-                    if context == "combat":
-                        activity = "BATTLING"
-                    elif context in ("port_trading", "bank", "ship_shop", "port_menu"):
-                        activity = "TRADING"
-                    elif context in ("navigation", "warp", "sector_command", "planet_command", "citadel_command"):
-                        activity = "EXPLORING"
-                    elif "menu" in context.lower() or "selection" in context.lower():
+            # Get current screen from session
+            if hasattr(self, 'session') and self.session:
+                try:
+                    current_screen = self.session.get_screen()
+                except Exception:
+                    current_screen = ""
+
+            # Detect REAL-TIME context from current screen
+            if current_screen.strip():
+                from bbsbot.games.tw2002.orientation.detection import detect_context
+                current_context = detect_context(current_screen)
+
+                # Map detected context to human-readable activity
+                if current_context == "sector_command":
+                    activity = "EXPLORING"
+                elif current_context in ("port_menu", "port_trading"):
+                    activity = "TRADING"
+                elif current_context in ("bank", "ship_shop", "hardware_shop"):
+                    activity = "SHOPPING"
+                elif current_context == "combat":
+                    activity = "BATTLING"
+                elif current_context == "corporate_listings":
+                    activity = "CORPORATE_LISTINGS_MENU"
+                elif current_context in ("planet_command", "citadel_command"):
+                    activity = "ON_PLANET"
+                elif current_context == "pause":
+                    activity = "PAUSED"
+                elif current_context == "menu":
+                    # Check if it's game selection menu (sector is None means not in game yet)
+                    if not self.current_sector or self.current_sector == 0:
+                        activity = "GAME_SELECTION_MENU"
+                    else:
                         activity = "IN_GAME_MENU"
-                    else:
-                        activity = context.upper()
+                elif current_context == "unknown":
+                    # Fallback: check if in game
+                    in_game = self.current_sector and self.current_sector > 0
+                    activity = "IN_GAME" if in_game else "LOGGING_IN"
                 else:
-                    activity = "IN_GAME"
+                    # Any other context, show it verbatim
+                    activity = current_context.upper()
             else:
-                # Bot NOT in game yet - must be in login/connection phase
-                if hasattr(self, 'session') and self.session:
-                    # Check orientation phase for more specific status
-                    orient_phase = getattr(self, '_orient_phase', '')
-                    if orient_phase:
-                        activity = f"LOGIN_{orient_phase.upper()}"
-                    else:
-                        activity = "LOGGING_IN"
-                else:
+                # No screen content - must be connecting/disconnected
+                if hasattr(self, 'session') and self.session and self.session.is_connected():
                     activity = "CONNECTING"
+                else:
+                    activity = "DISCONNECTED"
 
-            # Override with AI reasoning if available
-            if self.ai_activity:
-                activity = self.ai_activity
-                self.ai_activity = None  # Clear after reporting
+            # Orient progress tracking for debugging
+            orient_step = getattr(self, '_orient_step', 0)
+            orient_max = getattr(self, '_orient_max', 0)
+            orient_phase = getattr(self, '_orient_phase', '')
 
-            if self._hijacked:
-                activity = "HIJACKED"
+            # CRITICAL: Do NOT override activity with "ORIENTING" if we know the context
+            # Only show ORIENTING if context is actually "unknown"
+            in_game = self.current_sector and self.current_sector > 0
+            if orient_phase and current_context == "unknown" and in_game:
+                # We're orienting AND don't know what screen we're on
+                if orient_step > 0 and orient_max > 0:
+                    activity = f"ORIENTING: Step {orient_step}/{orient_max}"
+                else:
+                    phase_names = {
+                        "starting": "Initializing",
+                        "gather": "Gathering state",
+                        "safe_state": "Finding safe prompt",
+                        "blank_wake": "Waking connection",
+                        "failed": "Recovering",
+                    }
+                    phase_display = phase_names.get(orient_phase, orient_phase.title())
+                    activity = f"ORIENTING: {phase_display}"
 
             # Extract character/ship info from game state
-            # Always include username, ship_level, ship_name even if None
-            # This helps the dashboard track character progression
             username = None
             ship_level = None
             ship_name = None
 
             if self.game_state:
-                # Get player name from game state, fall back to character name
                 username = getattr(self.game_state, "player_name", None) or self.character_name
-                # Get ship type (e.g., "Merchant Cruiser", "Scout Ship")
                 ship_level = getattr(self.game_state, "ship_type", None)
-                # Get custom ship name (e.g., "SS Enterprise", "The Swift Venture")
                 ship_name = getattr(self.game_state, "ship_name", None)
             else:
-                # If no game_state yet, still use character_name as fallback username
                 username = self.character_name
 
             # Determine actual state from session connectivity
@@ -145,33 +176,18 @@ class WorkerBot(TradingBot):
             if not connected:
                 activity = "DISCONNECTED"
 
-            # Orient progress (set by orientation.py _set_orient_progress)
-            # ONLY show "ORIENTING" if actually in game (sector > 0)
-            orient_step = getattr(self, '_orient_step', 0)
-            orient_max = getattr(self, '_orient_max', 0)
-            orient_phase = getattr(self, '_orient_phase', '')
-            if orient_phase and in_game:
-                # Bot is in game AND orienting - show orient status
-                if orient_step > 0 and orient_max > 0:
-                    activity = f"ORIENTING: Step {orient_step}/{orient_max}"
-                else:
-                    # Map phase names to readable strings
-                    phase_names = {
-                        "starting": "Initializing",
-                        "gather": "Gathering state",
-                        "safe_state": "Finding safe prompt",
-                        "blank_wake": "Waking connection",
-                        "failed": "Recovering",  # Transient issue, bot recovers
-                    }
-                    phase_display = phase_names.get(orient_phase, orient_phase.title())
-                    activity = f"ORIENTING: {phase_display}"
-            elif orient_phase and not in_game:
-                # Bot orienting during login - show LOGIN status, not ORIENTING
-                activity = "LOGGING_IN"
-
             # Check if AI strategy is thinking (waiting for LLM response)
             if self.strategy and hasattr(self.strategy, '_is_thinking') and self.strategy._is_thinking:
                 activity = "THINKING"
+
+            # Override with AI reasoning if available
+            if self.ai_activity:
+                activity = self.ai_activity
+                self.ai_activity = None  # Clear after reporting
+
+            # Hijack mode always takes priority
+            if self._hijacked:
+                activity = "HIJACKED"
 
             # Build status update dict
             status_data = {

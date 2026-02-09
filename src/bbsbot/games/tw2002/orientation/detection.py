@@ -178,9 +178,27 @@ def detect_context(screen: str) -> str:
         return "autopilot"
 
     # === TRANSITION STATES ===
-    # Pause screens
-    if "[pause]" in last_line or "[any key]" in last_line:
-        return "pause"
+    # Pause screens - only match ACTUAL pause prompts, not decorative [Pause] banners
+    # CRITICAL: Must come BEFORE menu detection to avoid misidentifying pauses as menus
+    # Real pause prompts have [Pause] near bottom with minimal other text
+    # Game menus have [Pause] at top with lots of menu text below
+    lines_lower = [l.lower() for l in lines if l.strip()]
+    if len(lines_lower) > 0:
+        # Check last 3 lines for pause prompt (not in first 5 lines which could be banners)
+        last_3_lines = '\n'.join(lines_lower[-3:])
+        if "[pause]" in last_3_lines or "[any key]" in last_3_lines:
+            # Make sure it's not a game selection menu with [Pause] banner art
+            # Game menus have: "trade wars", "selection", "supports up to", menu options
+            is_game_menu = (
+                "enter your choice" in last_line or
+                "==--" in full_screen or
+                "trade wars" in full_screen or
+                "supports up to" in full_screen or
+                "selection (" in last_line or
+                ("t - play" in full_screen and "x - exit" in full_screen)
+            )
+            if not is_game_menu:
+                return "pause"
     if "press" in last_line and ("key" in last_line or "enter" in last_line):
         return "pause"
 
@@ -447,7 +465,14 @@ async def recover_to_safe_state(
             continue
 
         if state.context == "menu":
-            # Generic menu - try Enter to continue (don't quit game!)
+            # Check if this is game selection menu - send game letter to re-enter
+            if hasattr(bot, 'last_game_letter') and bot.last_game_letter and state.sector is None:
+                print(f"  [Recovery] Game selection menu - sending {bot.last_game_letter} to enter game...")
+                await bot.session.send(bot.last_game_letter + "\r")
+                await asyncio.sleep(1.0)
+                attempt += 1
+                continue
+            # Generic in-game menu - try Enter to continue
             print(f"  [Recovery] Menu - sending Enter to continue...")
             await bot.session.send("\r")
             await asyncio.sleep(0.5)

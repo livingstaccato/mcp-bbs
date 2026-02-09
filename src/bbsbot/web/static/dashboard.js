@@ -123,20 +123,28 @@
         const isDead = ["completed", "error", "stopped", "disconnected"].includes(b.state);
         const isQueued = b.state === "queued";
 
-        // For completed/stopped bots, show final state
+        // For all bots, preserve last known activity context
+        // Show exit_reason separately, not as main activity
         let activity;
+        let exitInfo = "";
+
         if (b.state === "completed") {
           activity = b.completed_at ? "FINISHED" : "COMPLETED";
-        } else if (b.state === "error") {
-          activity = b.exit_reason ? b.exit_reason.toUpperCase() : "ERROR";
         } else if (b.state === "stopped") {
-          activity = "STOPPED";
+          activity = b.activity_context ? getActivityBadge(b.activity_context) : "STOPPED";
+        } else if (b.state === "error") {
+          // CRITICAL FIX: Show last activity, not exit_reason
+          activity = b.activity_context ? getActivityBadge(b.activity_context) : "ERROR";
+          // Show exit_reason as secondary info if not generic exit code
+          if (b.exit_reason && !b.exit_reason.toLowerCase().includes("exit_code")) {
+            exitInfo = ` (${b.exit_reason})`;
+          }
         } else {
           activity = getActivityBadge(b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state : "IDLE"));
         }
 
         const activityClass = getActivityClass(activity);
-        let activityHtml = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
+        let activityHtml = `<span class="activity-badge ${activityClass}">${esc(activity)}${exitInfo ? `<span style="color: var(--fg2); font-size: 11px;">${esc(exitInfo)}</span>` : ""}</span>`;
         if (b.last_action_time && isRunning) {
           activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
         }
