@@ -175,8 +175,7 @@
           statusHtml = "-";
         }
 
-        const turns_max = (b.turns_max !== undefined && b.turns_max !== null) ? b.turns_max : 0;
-        const turnsDisplay = turns_max > 0 ? `${b.turns_executed} / ${turns_max}` : `${b.turns_executed} / Auto`;
+        const turnsDisplay = `${b.turns_executed}`;
 
         // Display "-" for uninitialized numeric fields
         const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
@@ -195,7 +194,7 @@
         <td class="numeric">${fuelDisplay}</td>
         <td class="numeric">${orgDisplay}</td>
         <td class="numeric">${equipDisplay}</td>
-        <td class="numeric" title="${b.turns_executed} of ${turns_max} turns">${turnsDisplay}</td>
+        <td class="numeric">${turnsDisplay}</td>
         <td class="actions">
           <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
           <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')" title="Activity">📊</button>
