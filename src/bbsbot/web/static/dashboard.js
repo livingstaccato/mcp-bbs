@@ -79,6 +79,8 @@
     if (lower.includes("orient")) return "orienting";
     if (lower.includes("select")) return "selecting";
     if (lower.includes("log") || lower.includes("connect")) return "connecting";
+    if (lower.includes("block")) return "blocked";
+    if (lower.includes("recover")) return "recovering";
     if (lower.includes("disconnect")) return "dead";
     if (lower.includes("queue")) return "queued";
     if (lower.includes("completed") || lower.includes("error") || lower.includes("stopped")) return "dead";
@@ -120,7 +122,7 @@
     tbody.innerHTML = bots
       .map((b) => {
         const isRunning = b.state === "running";
-        const isDead = ["completed", "error", "stopped", "disconnected"].includes(b.state);
+        const isDead = ["completed", "error", "stopped", "disconnected", "blocked"].includes(b.state);
         const isQueued = b.state === "queued";
 
         // For all bots, preserve last known activity context
@@ -139,6 +141,11 @@
           if (b.exit_reason && !b.exit_reason.toLowerCase().includes("exit_code")) {
             exitInfo = ` (${b.exit_reason})`;
           }
+        } else if (b.state === "blocked") {
+          activity = b.activity_context ? getActivityBadge(b.activity_context) : "BLOCKED";
+          if (b.exit_reason) {
+            exitInfo = ` (${b.exit_reason})`;
+          }
         } else {
           activity = getActivityBadge(b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state : "IDLE"));
         }
@@ -149,7 +156,7 @@
           activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
         }
 
-        const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", stopped: "⚫", queued: "🟡", warning: "🟠", disconnected: "🔴"}[b.state] || "⚪";
+        const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", blocked: "🟠", recovering: "🟡", stopped: "⚫", queued: "🟡", warning: "🟠", disconnected: "🔴"}[b.state] || "⚪";
         let stateHtml = `<span class="state ${b.state}" title="${b.state}" style="cursor:pointer" onclick="window._openErrorModal('${esc(b.bot_id)}')">${stateEmoji}</span>`;
 
         // Hijack status

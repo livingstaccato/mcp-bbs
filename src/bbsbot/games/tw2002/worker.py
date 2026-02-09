@@ -12,6 +12,7 @@ import click
 import httpx
 from pathlib import Path
 import time
+from collections import deque
 
 from bbsbot.games.tw2002.bot import TradingBot
 from bbsbot.games.tw2002.config import BotConfig
@@ -58,6 +59,8 @@ class WorkerBot(TradingBot):
         self._watchdog_task: asyncio.Task | None = None
         self._last_progress_mono: float = time.monotonic()
         self._last_turns_seen: int = 0
+        # Lifecycle state reported to manager (do not overwrite with "running" just because connected).
+        self.lifecycle_state: str = "running"
 
     def _note_progress(self) -> None:
         self._last_progress_mono = time.monotonic()
@@ -245,8 +248,11 @@ class WorkerBot(TradingBot):
                 and hasattr(self.session, 'is_connected')
                 and self.session.is_connected()
             )
-            actual_state = "running" if connected else "disconnected"
-            if not connected:
+            # Preserve lifecycle state (recovering/blocked) across periodic status reports.
+            actual_state = getattr(self, "lifecycle_state", "running") or "running"
+            if actual_state == "running" and not connected:
+                actual_state = "disconnected"
+            if not connected and actual_state in ("running", "disconnected"):
                 activity = "DISCONNECTED"
 
             # Check if AI strategy is thinking (waiting for LLM response)
@@ -431,6 +437,8 @@ class WorkerBot(TradingBot):
             report_state = state
             if report_state is None:
                 report_state = "error" if fatal else "recovering"
+            # Ensure the next report_status() preserves this state.
+            self.lifecycle_state = report_state
             await self._http_client.post(
                 f"{self.manager_url}/bot/{self.bot_id}/status",
                 json={
@@ -563,6 +571,58 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     backoff_s = 1.0
     failures = 0
 
+    class _RecoveryBudget:
+        def __init__(self, *, window_s: float = 600.0) -> None:
+            self.window_s = float(window_s)
+            self._events: dict[str, deque[float]] = {
+                "auth": deque(),
+                "network": deque(),
+                "logic": deque(),
+                "watchdog": deque(),
+            }
+            self._limits: dict[str, int] = {
+                "auth": 1,        # unrecoverable; block immediately
+                "network": 5,     # 5 in 10m => blocked
+                "logic": 5,       # 5 in 10m => blocked
+                "watchdog": 3,    # 3 in 10m => blocked
+            }
+
+        def note(self, cls: str) -> int:
+            now = time.monotonic()
+            dq = self._events.setdefault(cls, deque())
+            dq.append(now)
+            cutoff = now - self.window_s
+            while dq and dq[0] < cutoff:
+                dq.popleft()
+            return len(dq)
+
+        def exceeded(self, cls: str) -> bool:
+            limit = int(self._limits.get(cls, 5))
+            dq = self._events.get(cls) or deque()
+            return len(dq) >= limit
+
+        def reset(self) -> None:
+            for dq in self._events.values():
+                dq.clear()
+
+    def _classify_exception(e: Exception) -> str:
+        msg = str(e).lower()
+        et = type(e).__name__.lower()
+        if "watchdog_stuck" in msg or "watchdog" in msg:
+            return "watchdog"
+        if "invalid_password" in msg or "prompt.character_password" in msg:
+            return "auth"
+        if "connection" in msg or "not connected" in msg or "timeout" in msg:
+            return "network"
+        if "connectionerror" in et or "timeout" in et:
+            return "network"
+        return "logic"
+
+    budget = _RecoveryBudget(window_s=600.0)
+    blocked_level: dict[str, int] = {"auth": 0, "network": 0, "logic": 0, "watchdog": 0}
+    blocked_schedule_s = [300.0, 900.0, 1800.0]  # 5m, 15m, 30m
+    rng = __import__("random").Random(1)
+
     try:
         while True:
             try:
@@ -580,6 +640,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                         f"{config_obj.connection.port}"
                     )
                     worker.ai_activity = "CONNECTING"
+                    worker.lifecycle_state = "recovering"
                     await worker.connect(
                         host=config_obj.connection.host,
                         port=config_obj.connection.port,
@@ -589,6 +650,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
                 # Login (idempotent-ish; may early-return if already in game).
                 worker.ai_activity = "LOGGING_IN"
+                worker.lifecycle_state = "recovering"
                 await worker.login_sequence(
                     game_password=game_password,
                     character_password=character_password,
@@ -601,6 +663,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                     config_obj.connection.host, config_obj.connection.port, game_letter
                 )
                 worker.init_strategy()
+                worker.lifecycle_state = "running"
                 await worker.report_status()
 
                 # Run trading loop; end-state: loop returns only on internal soft-stops,
@@ -610,6 +673,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
                 char_state = CharacterState(name=bot_id)
                 worker.ai_activity = "RUNNING"
+                worker.lifecycle_state = "running"
                 await run_trading_loop(worker, config_obj, char_state)
 
                 # If the trading loop returns, treat it as a soft-stop and restart.
@@ -620,14 +684,45 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 # Reset backoff after any successful run segment.
                 backoff_s = 1.0
                 failures = 0
+                budget.reset()
+                for k in blocked_level:
+                    blocked_level[k] = 0
 
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 failures += 1
                 logger.error(f"Worker cycle error: {e}", exc_info=True)
+                cls = _classify_exception(e)
+                budget.note(cls)
+
+                # Escalation: stop thrashing; enter blocked with long backoff.
+                if cls == "auth" or budget.exceeded(cls):
+                    lvl = int(blocked_level.get(cls, 0))
+                    blocked_level[cls] = min(lvl + 1, len(blocked_schedule_s) - 1)
+                    base_sleep = blocked_schedule_s[min(lvl, len(blocked_schedule_s) - 1)]
+                    # Add small deterministic jitter to avoid a herd on the minute.
+                    sleep_s = float(base_sleep) * (0.85 + 0.3 * rng.random())
+                    worker.ai_activity = f"BLOCKED {int(sleep_s // 60)}m ({cls})"
+                    worker.lifecycle_state = "blocked"
+                    await worker.report_error(
+                        e,
+                        exit_reason=f"blocked_{cls}",
+                        fatal=False,
+                        state="blocked",
+                    )
+                    try:
+                        await worker.report_status()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(sleep_s)
+                    # After blocked sleep, keep the process alive and try again.
+                    backoff_s = 1.0
+                    continue
+
                 # Report as recovering (non-terminal).
-                await worker.report_error(e, exit_reason="recovering", fatal=False)
+                worker.lifecycle_state = "recovering"
+                await worker.report_error(e, exit_reason="recovering", fatal=False, state="recovering")
 
                 # Try in-session recovery first (escape menus, get back to safe prompt).
                 recovered = False
@@ -649,6 +744,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 # Exponential backoff to avoid thrashing the server on persistent failures.
                 sleep_s = min(60.0, backoff_s)
                 worker.ai_activity = f"BACKOFF {sleep_s:.0f}s (failures={failures})"
+                worker.lifecycle_state = "recovering"
                 try:
                     await worker.report_status()
                 except Exception:

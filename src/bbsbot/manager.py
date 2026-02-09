@@ -278,7 +278,9 @@ class SwarmManager:
             total_bots=len(bots),
             running=sum(1 for b in bots if b.state == "running"),
             completed=sum(1 for b in bots if b.state == "completed"),
-            errors=sum(1 for b in bots if b.state in ("error", "disconnected")),
+            # "blocked" is an intentional non-terminal state (backoff + retry) but should
+            # still be counted as an "error" metric for dashboard visibility.
+            errors=sum(1 for b in bots if b.state in ("error", "disconnected", "blocked")),
             stopped=sum(1 for b in bots if b.state == "stopped"),
             total_credits=sum(b.credits for b in bots),
             total_turns=sum(b.turns_executed for b in bots),
