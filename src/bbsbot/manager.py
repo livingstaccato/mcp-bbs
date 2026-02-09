@@ -60,7 +60,14 @@ class BotStatus(BaseModel):
     recent_actions: list[dict] = Field(default_factory=list)
     # Character/game info for dashboard display
     username: str | None = None          # Character name
-    strategy: str | None = None          # Current strategy name (e.g., profitable_pairs)
+    # Strategy reporting is separate from on-screen context/prompt ids.
+    # strategy_id: stable identifier (profitable_pairs/opportunistic/ai_strategy/...)
+    # strategy_mode: conservative|balanced|aggressive (static or dynamic)
+    # strategy_intent: short live "what I'm trying to do" string
+    strategy: str | None = None          # Back-compat: UI display (usually "id(mode)")
+    strategy_id: str | None = None
+    strategy_mode: str | None = None
+    strategy_intent: str | None = None
     ship_name: str | None = None         # Current ship name
     ship_level: str | None = None        # Ship class/level (Fighter, Trader, etc)
     port_location: int | None = None     # Current port sector
@@ -399,13 +406,16 @@ class SwarmManager:
                             error_type=bot_data.get("error_type"),
                             error_timestamp=bot_data.get("error_timestamp"),
                             exit_reason=bot_data.get("exit_reason"),
-                            recent_actions=bot_data.get("recent_actions", []),
-                            username=bot_data.get("username"),
-                            strategy=bot_data.get("strategy"),
-                            ship_name=bot_data.get("ship_name"),
-                            ship_level=bot_data.get("ship_level"),
-                            port_location=bot_data.get("port_location"),
-                        )
+	                            recent_actions=bot_data.get("recent_actions", []),
+	                            username=bot_data.get("username"),
+	                            strategy=bot_data.get("strategy"),
+	                            strategy_id=bot_data.get("strategy_id"),
+	                            strategy_mode=bot_data.get("strategy_mode"),
+	                            strategy_intent=bot_data.get("strategy_intent"),
+	                            ship_name=bot_data.get("ship_name"),
+	                            ship_level=bot_data.get("ship_level"),
+	                            port_location=bot_data.get("port_location"),
+	                        )
                 logger.info(f"Loaded {len(state.get('bots', {}))} bots from {self.state_file}")
         except Exception as e:
             logger.error(f"Failed to load state: {e}")

@@ -340,6 +340,25 @@ class WorkerBot(TradingBot):
                 except Exception:
                     strategy_name = None
 
+            # Strategy policy/mode and intent are maintained by the trading loop.
+            strategy_mode = getattr(self, "strategy_mode", None)
+            strategy_intent = getattr(self, "strategy_intent", None)
+            try:
+                if not strategy_mode and self.strategy and hasattr(self.strategy, "policy"):
+                    strategy_mode = getattr(self.strategy, "policy", None)
+            except Exception:
+                pass
+            try:
+                if not strategy_intent and self.strategy and hasattr(self.strategy, "intent"):
+                    strategy_intent = getattr(self.strategy, "intent", None)
+            except Exception:
+                pass
+
+            # Back-compat display string used by older dashboard rendering.
+            strategy_display = strategy_name
+            if strategy_name and strategy_mode in ("conservative", "balanced", "aggressive"):
+                strategy_display = f"{strategy_name}({strategy_mode})"
+
             # Determine actual state from session connectivity
             connected = (
                 hasattr(self, 'session')
@@ -374,7 +393,10 @@ class WorkerBot(TradingBot):
                 "activity_context": activity,
                 "status_detail": status_detail,
                 "prompt_id": prompt_id,
-                "strategy": strategy_name,
+                "strategy": strategy_display,
+                "strategy_id": strategy_name,
+                "strategy_mode": strategy_mode,
+                "strategy_intent": strategy_intent,
                 "cargo_fuel_ore": cargo_fuel_ore,
                 "cargo_organics": cargo_organics,
                 "cargo_equipment": cargo_equipment,

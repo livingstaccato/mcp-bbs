@@ -316,7 +316,14 @@ class OpportunisticStrategy(TradingStrategy):
 
     def _should_explore(self) -> bool:
         """Decide whether to explore unknown sectors."""
-        return random.random() < self._settings.explore_chance
+        chance = float(self._settings.explore_chance)
+        # Policy tweaks: conservative explores less, aggressive explores more.
+        if self.policy == "conservative":
+            chance *= 0.5
+        elif self.policy == "aggressive":
+            chance *= 1.5
+        chance = max(0.0, min(1.0, chance))
+        return random.random() < chance
 
     def _pick_exploration_direction(self, state: GameState) -> int | None:
         """Pick an unexplored warp direction.

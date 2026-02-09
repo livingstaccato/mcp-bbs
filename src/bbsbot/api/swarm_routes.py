@@ -193,6 +193,12 @@ async def update_status(bot_id: str, update: dict):
         bot.username = update["username"]
     if "strategy" in update:
         bot.strategy = update["strategy"]
+    if "strategy_id" in update:
+        bot.strategy_id = update["strategy_id"]
+    if "strategy_mode" in update:
+        bot.strategy_mode = update["strategy_mode"]
+    if "strategy_intent" in update:
+        bot.strategy_intent = update["strategy_intent"]
     if "ship_name" in update:
         bot.ship_name = update["ship_name"]
     if "ship_level" in update:

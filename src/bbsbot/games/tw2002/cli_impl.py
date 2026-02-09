@@ -236,6 +236,36 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             await asyncio.sleep(60.0)
             continue
 
+        # Policy: per-bot selectable and can auto-switch dynamically based on bankroll.
+        def _compute_policy(credits_now: int | None) -> str:
+            policy = getattr(config.trading, "policy", "dynamic")
+            if policy and policy != "dynamic":
+                return policy
+            credits_val = int(credits_now or 0)
+            dyn = getattr(config.trading, "dynamic_policy", None)
+            try:
+                conservative_under = int(getattr(dyn, "conservative_under_credits", 5000)) if dyn else 5000
+                aggressive_over = int(getattr(dyn, "aggressive_over_credits", 50000)) if dyn else 50000
+            except Exception:
+                conservative_under = 5000
+                aggressive_over = 50000
+            if credits_val < conservative_under:
+                return "conservative"
+            if credits_val >= aggressive_over:
+                return "aggressive"
+            return "balanced"
+
+        effective_policy = _compute_policy(getattr(state, "credits", None))
+        try:
+            if hasattr(strategy, "set_policy"):
+                strategy.set_policy(effective_policy)
+        except Exception:
+            pass
+        try:
+            bot.strategy_mode = effective_policy
+        except Exception:
+            pass
+
         # Get next action from strategy (handle async strategies)
         if hasattr(strategy, '_get_next_action_async'):
             # AIStrategy has async implementation
@@ -245,6 +275,48 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             action, params = strategy.get_next_action(state)
 
         print(f"  Strategy: {action.name}")
+
+        # Emit a short intent string (separate from prompt_id/UI state).
+        intent = None
+        try:
+            if action == TradeAction.TRADE:
+                opp = params.get("opportunity")
+                trade_action = params.get("action")
+                if opp and getattr(opp, "commodity", None):
+                    buy_sector = getattr(opp, "buy_sector", None)
+                    sell_sector = getattr(opp, "sell_sector", None)
+                    if trade_action in ("buy", "sell") and buy_sector and sell_sector:
+                        intent = f"{trade_action.upper()} {opp.commodity} {buy_sector}->{sell_sector}"
+                    else:
+                        intent = f"TRADE {opp.commodity}"
+            elif action == TradeAction.MOVE:
+                target = params.get("target_sector")
+                intent = f"MOVE {target}" if target else "MOVE"
+            elif action == TradeAction.EXPLORE:
+                direction = params.get("direction")
+                intent = f"EXPLORE {direction}" if direction else "EXPLORE"
+            elif action == TradeAction.BANK:
+                intent = "BANK"
+            elif action == TradeAction.UPGRADE:
+                upgrade_type = params.get("upgrade_type")
+                intent = f"UPGRADE {upgrade_type}" if upgrade_type else "UPGRADE"
+            elif action == TradeAction.RETREAT:
+                safe_sector = params.get("safe_sector")
+                intent = f"RETREAT {safe_sector}" if safe_sector else "RETREAT"
+            elif action == TradeAction.WAIT:
+                intent = "WAIT"
+        except Exception:
+            intent = None
+
+        try:
+            if hasattr(strategy, "set_intent"):
+                strategy.set_intent(intent)
+        except Exception:
+            pass
+        try:
+            bot.strategy_intent = intent
+        except Exception:
+            pass
 
         # Log AI reasoning to bot action feed and dashboard activity
         ai_reasoning = None

@@ -59,6 +59,16 @@ class ProfitablePairsStrategy(TradingStrategy):
     def name(self) -> str:
         return "profitable_pairs"
 
+    def _effective_limits(self) -> tuple[int, int]:
+        """Return (max_hops, min_profit_per_turn) adjusted by policy."""
+        max_hops = int(getattr(self._settings, "max_hop_distance", 2))
+        min_ppt = int(getattr(self._settings, "min_profit_per_turn", 100))
+        if self.policy == "conservative":
+            return max(1, min(max_hops, 1)), max(min_ppt, 250)
+        if self.policy == "aggressive":
+            return max(max_hops, 3), max(50, min_ppt // 2)
+        return max_hops, min_ppt
+
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
         """Determine next action for profitable pairs trading.
 
@@ -88,7 +98,8 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # Refresh pairs if needed
         if self._pairs_dirty:
-            self._discover_pairs()
+            max_hops, _ = self._effective_limits()
+            self._discover_pairs(max_hops=max_hops)
 
         # If no pairs found, explore to find more ports
         if not self._pairs:
@@ -170,7 +181,8 @@ class ProfitablePairsStrategy(TradingStrategy):
     def find_opportunities(self, state: GameState) -> list[TradeOpportunity]:
         """Find trading opportunities from profitable pairs."""
         if self._pairs_dirty:
-            self._discover_pairs()
+            max_hops, _ = self._effective_limits()
+            self._discover_pairs(max_hops=max_hops)
 
         opportunities = []
         current = state.sector
@@ -197,7 +209,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         opportunities.sort(key=lambda o: o.profit_per_turn, reverse=True)
         return opportunities
 
-    def _discover_pairs(self) -> None:
+    def _discover_pairs(self, *, max_hops: int) -> None:
         """Discover profitable port pairs from known sectors."""
         logger.info("Discovering profitable port pairs...")
 
@@ -228,7 +240,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         # Find pairs where one sells and another buys.
         # We keep structural pairs even when we don't yet know prices (common after server reset).
         pairs = []
-        max_hops = self._settings.max_hop_distance
+        max_hops = int(max_hops)
 
         for commodity in commodities:
             buy_ports = sells[commodity]  # We buy where port sells
@@ -317,6 +329,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         best_pair = None
         best_score = 0
 
+        _, min_ppt = self._effective_limits()
         for pair in self._pairs[:20]:  # Check top 20
             path = self.knowledge.find_path(current, pair.buy_sector)
             if not path:
@@ -326,6 +339,10 @@ class ProfitablePairsStrategy(TradingStrategy):
             turns = total_distance + 2  # +2 for buy/sell actions
 
             price_profit = self._estimate_profit_for_pair(state, pair)
+            if price_profit > 0:
+                ppt = float(price_profit) / float(max(turns, 1))
+                if ppt < float(min_ppt):
+                    continue
             score = (price_profit / max(turns, 1)) if price_profit > 0 else (1.0 / max(turns, 1))
             if score > best_score:
                 best_score = score

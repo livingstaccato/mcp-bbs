@@ -256,6 +256,20 @@ class TradingConfig(BaseModel):
     """Trading strategy configuration."""
 
     strategy: Literal["profitable_pairs", "opportunistic", "twerk_optimized", "ai_strategy"] = "opportunistic"
+    # Policy controls how "risky" the strategy behaves (how far it roams, what margins it accepts, etc).
+    # Per-bot selectable: set to a concrete value for static behavior, or "dynamic" to auto-switch by bankroll.
+    policy: Literal["conservative", "balanced", "aggressive", "dynamic"] = "dynamic"
+
+    class DynamicPolicyConfig(BaseModel):
+        """Thresholds for dynamic policy switching."""
+
+        conservative_under_credits: int = 5_000
+        aggressive_over_credits: int = 50_000
+
+        model_config = ConfigDict(extra="ignore")
+
+    dynamic_policy: DynamicPolicyConfig = Field(default_factory=DynamicPolicyConfig)
+
     profitable_pairs: ProfitablePairsConfig = Field(default_factory=ProfitablePairsConfig)
     opportunistic: OpportunisticConfig = Field(default_factory=OpportunisticConfig)
     twerk_optimized: TwerkOptimizedConfig = Field(default_factory=TwerkOptimizedConfig)

@@ -200,20 +200,31 @@
         const orgDisplay = (b.cargo_organics === null || b.cargo_organics === undefined) ? "-" : formatCredits(b.cargo_organics);
         const equipDisplay = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? "-" : formatCredits(b.cargo_equipment);
 
+        const strategyMain =
+          (b.strategy && String(b.strategy).trim()) ||
+          ((b.strategy_id ? String(b.strategy_id).trim() : "") +
+            (b.strategy_mode ? `(${String(b.strategy_mode).trim()})` : "")) ||
+          "-";
+        const strategyIntent = (b.strategy_intent || "").trim();
+        const strategyHtml =
+          `<div class="strategy-cell"><div class="strategy-main">${esc(strategyMain)}</div>` +
+          (strategyIntent ? `<div class="strategy-intent" title="${esc(strategyIntent)}">${esc(strategyIntent)}</div>` : "") +
+          `</div>`;
+
         return `<tr>
-        <td title="${esc(b.bot_id)}">${esc(shortBotId(b.bot_id))}</td>
-        <td>${stateHtml}</td>
-        <td>${activityHtml}</td>
-        <td>${statusHtml}</td>
-        <td>${esc(b.strategy || "-")}</td>
-        <td class="numeric">${b.sector}</td>
-        <td class="numeric">${creditsDisplay}</td>
-        <td class="numeric">${fuelDisplay}</td>
-        <td class="numeric">${orgDisplay}</td>
-        <td class="numeric">${equipDisplay}</td>
-        <td class="numeric">${turnsDisplay}</td>
-        <td class="actions">
-          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
+	        <td title="${esc(b.bot_id)}">${esc(shortBotId(b.bot_id))}</td>
+	        <td>${stateHtml}</td>
+	        <td>${activityHtml}</td>
+	        <td>${statusHtml}</td>
+	        <td>${strategyHtml}</td>
+	        <td class="numeric">${b.sector}</td>
+	        <td class="numeric">${creditsDisplay}</td>
+	        <td class="numeric">${fuelDisplay}</td>
+	        <td class="numeric">${orgDisplay}</td>
+	        <td class="numeric">${equipDisplay}</td>
+	        <td class="numeric">${turnsDisplay}</td>
+	        <td class="actions">
+	          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
           <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')" title="Activity">📊</button>
           <button class="btn" onclick="window._openLogs('${esc(b.bot_id)}')" style="border-color:var(--fg2);color:var(--fg2);" title="Logs">📝</button>
           <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"} title="Restart">🔄</button>
@@ -666,15 +677,16 @@
 	    const promptId = (lastTermSnapshot && lastTermSnapshot.prompt_detected && lastTermSnapshot.prompt_detected.prompt_id)
 	      ? lastTermSnapshot.prompt_detected.prompt_id
 	      : "-";
-    termStats.innerHTML = [
-      `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
-      `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
-      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
-      `<span class="stat"><span class="stat-label">Prompt</span><span class="stat-value">${esc(promptId)}</span></span>`,
-      `<span class="stat"><span class="stat-label">Strategy</span><span class="stat-value">${esc(bot.strategy || "-")}</span></span>`,
-      `<span class="stat"><span class="stat-label">Activity</span><span class="stat-value">${esc(activity)}</span></span>`,
-    ].join("");
-  }
+	    termStats.innerHTML = [
+	      `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
+	      `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
+	      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
+	      `<span class="stat"><span class="stat-label">Prompt</span><span class="stat-value">${esc(promptId)}</span></span>`,
+	      `<span class="stat"><span class="stat-label">Strategy</span><span class="stat-value">${esc((bot.strategy || "").trim() || (bot.strategy_id ? (String(bot.strategy_id).trim() + (bot.strategy_mode ? "(" + String(bot.strategy_mode).trim() + ")" : "")) : "-"))}</span></span>`,
+	      `<span class="stat"><span class="stat-label">Intent</span><span class="stat-value">${esc((bot.strategy_intent || "-").trim() || "-")}</span></span>`,
+	      `<span class="stat"><span class="stat-label">Activity</span><span class="stat-value">${esc(activity)}</span></span>`,
+	    ].join("");
+	  }
 
   function ensureTerm() {
     if (term) return term;

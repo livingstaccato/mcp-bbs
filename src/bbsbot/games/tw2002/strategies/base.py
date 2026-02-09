@@ -87,12 +87,32 @@ class TradingStrategy(ABC):
         self._trades_executed = 0
         self._total_profit = 0
         self._turns_used = 0
+        self._policy: str = "balanced"
+        self._intent: str | None = None
 
     @property
     @abstractmethod
     def name(self) -> str:
         """Human-readable name of this strategy."""
         ...
+
+    @property
+    def policy(self) -> str:
+        """Current risk policy (conservative|balanced|aggressive)."""
+        return self._policy
+
+    def set_policy(self, policy: str) -> None:
+        """Set the current risk policy (best-effort; strategies should consult this)."""
+        if policy in ("conservative", "balanced", "aggressive"):
+            self._policy = policy
+
+    @property
+    def intent(self) -> str | None:
+        """Short operator-facing description of what the strategy is trying to do next."""
+        return self._intent
+
+    def set_intent(self, intent: str | None) -> None:
+        self._intent = intent
 
     @abstractmethod
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
