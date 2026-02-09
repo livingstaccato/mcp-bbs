@@ -153,6 +153,10 @@
         "pattern": "(?i)\\[pause\\].*press\\s+space\\s+or\\s+enter",
         "match_mode": "regex"
       },
+      "negative_match": {
+        "pattern": "(?i)password[?:]",
+        "match_mode": "regex"
+      },
       "screen": {
         "expect_cursor_at_end": false
       },

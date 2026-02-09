@@ -24,7 +24,9 @@ class KeepaliveController:
     ) -> None:
         self._send_cb = send_cb
         self._is_connected = is_connected
-        self._interval_s: float | None = 30.0
+        # Disabled by default. Sending keystrokes during login/password prompts can
+        # submit empty passwords and cause "Invalid password" loops.
+        self._interval_s: float | None = None
         self._keys = "\r"
         self._task: asyncio.Task[None] | None = None
 
