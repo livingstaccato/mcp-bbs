@@ -143,6 +143,25 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         credits = state.credits or 0
         print(f"\n[Turn {turns_used}] Sector {state.sector}, Credits: {credits:,}")
 
+        # CRITICAL: Handle game selection menu - bot should auto-enter game
+        if state.context == "menu" and state.sector is None:
+            # Check if this is the game selection menu by looking at screen content
+            screen = bot.session.get_screen() if hasattr(bot, 'session') and bot.session else ""
+            screen_lower = screen.lower() if screen else ""
+            is_game_selection = (
+                "trade wars" in screen_lower or
+                "supports up to" in screen_lower or
+                "- play" in screen_lower or
+                "game selection" in screen_lower
+            )
+
+            if is_game_selection and hasattr(bot, 'last_game_letter') and bot.last_game_letter:
+                print(f"  ⚠️  At game selection menu - entering game with '{bot.last_game_letter}'...")
+                await bot.session.send(bot.last_game_letter + "\r")
+                await asyncio.sleep(2.0)
+                # Skip to next turn to re-orient inside the game
+                continue
+
         # Show compact goal status every N turns (AI strategy only).
         try:
             show_viz = (
