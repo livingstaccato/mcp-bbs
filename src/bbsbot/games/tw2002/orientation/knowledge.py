@@ -61,6 +61,7 @@ class SectorKnowledge:
                     port_prices=info.get("port_prices", {}) or {},
                     port_prices_ts=info.get("port_prices_ts", {}) or {},
                     port_status=info.get("port_status", {}) or {},
+                    port_trading_units=info.get("port_trading_units", {}) or {},
                     port_pct_max=info.get("port_pct_max", {}) or {},
                     port_market_ts=info.get("port_market_ts", {}) or {},
                     has_planet=info.get("has_planet", False),
@@ -88,6 +89,7 @@ class SectorKnowledge:
                     "port_prices": info.port_prices,
                     "port_prices_ts": info.port_prices_ts,
                     "port_status": info.port_status,
+                    "port_trading_units": info.port_trading_units,
                     "port_pct_max": info.port_pct_max,
                     "port_market_ts": info.port_market_ts,
                     "has_planet": info.has_planet,
@@ -222,6 +224,7 @@ class SectorKnowledge:
         commodity: str,
         *,
         status: str | None = None,
+        trading_units: int | None = None,
         pct_max: int | None = None,
         ts: float | None = None,
     ) -> None:
@@ -238,6 +241,11 @@ class SectorKnowledge:
 
         if status:
             info.port_status[commodity] = str(status).lower()
+        if trading_units is not None:
+            try:
+                info.port_trading_units[commodity] = max(0, int(trading_units))
+            except Exception:
+                pass
         if pct_max is not None:
             try:
                 info.port_pct_max[commodity] = max(0, min(100, int(pct_max)))

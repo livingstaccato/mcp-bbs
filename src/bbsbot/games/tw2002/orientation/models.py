@@ -94,6 +94,7 @@ class SectorInfo(BaseModel):
     # These are not exact quantities, but they are useful for route scoring and
     # for detecting dead/low-liquidity ports after a server reset.
     port_status: dict[str, str] = Field(default_factory=dict)  # commodity -> "buying"|"selling"
+    port_trading_units: dict[str, int] = Field(default_factory=dict)  # commodity -> units listed under "Trading"
     port_pct_max: dict[str, int] = Field(default_factory=dict)  # commodity -> 0..100
     port_market_ts: dict[str, float] = Field(default_factory=dict)  # commodity -> last observed
     has_planet: bool = False

@@ -14,17 +14,16 @@ You have 300 credits and 20 empty cargo holds.
     data = extract_semantic_kv(screen)
 
     assert data["port_fuel_ore_status"] == "buying"
-    assert data["port_fuel_ore_price"] == 820
+    assert data["port_fuel_ore_trading_units"] == 820
     assert data["port_fuel_ore_pct_max"] == 100
     assert data["cargo_fuel_ore"] == 0
 
     assert data["port_organics_status"] == "buying"
-    assert data["port_organics_price"] == 970
+    assert data["port_organics_trading_units"] == 970
     assert data["port_organics_pct_max"] == 100
     assert data["cargo_organics"] == 0
 
     assert data["port_equipment_status"] == "selling"
-    assert data["port_equipment_price"] == 1160
+    assert data["port_equipment_trading_units"] == 1160
     assert data["port_equipment_pct_max"] == 100
     assert data["cargo_equipment"] == 0
-

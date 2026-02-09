@@ -42,31 +42,17 @@ def _update_semantic_relationships(bot, data: dict) -> None:
     # Port market table: persist status/% and also treat "Trading" as an observed per-unit quote.
     for commodity in ("fuel_ore", "organics", "equipment"):
         status = data.get(f"port_{commodity}_status")
-        price = data.get(f"port_{commodity}_price")
+        trading_units = data.get(f"port_{commodity}_trading_units")
         pct = data.get(f"port_{commodity}_pct_max")
 
         if status in ("buying", "selling"):
             try:
                 info.port_status[commodity] = str(status)
+                if trading_units is not None:
+                    info.port_trading_units[commodity] = max(0, int(trading_units))
                 if pct is not None:
                     info.port_pct_max[commodity] = max(0, min(100, int(pct)))
                 info.port_market_ts[commodity] = float(time.time())
-            except Exception:
-                pass
-
-        # Also feed port_prices so strategies can become price-aware even before any haggle completes.
-        if price is not None:
-            try:
-                p = int(price)
-                if p > 0:
-                    info.port_prices.setdefault(commodity, {})
-                    info.port_prices_ts.setdefault(commodity, {})
-                    if status == "buying":
-                        info.port_prices[commodity]["buy"] = p
-                        info.port_prices_ts[commodity]["buy"] = float(time.time())
-                    elif status == "selling":
-                        info.port_prices[commodity]["sell"] = p
-                        info.port_prices_ts[commodity]["sell"] = float(time.time())
             except Exception:
                 pass
 

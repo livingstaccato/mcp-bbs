@@ -126,7 +126,7 @@ def extract_semantic_kv(screen: str) -> dict:
                 continue
             item = m.group(1).lower().strip()
             status = m.group(2).lower().strip()  # buying|selling
-            price = int(m.group(3).replace(",", ""))
+            units = int(m.group(3).replace(",", ""))
             pct = int(m.group(4))
             # onboard already handled, but keep parsing consistent
             onboard = int(m.group(5).replace(",", ""))
@@ -134,7 +134,7 @@ def extract_semantic_kv(screen: str) -> dict:
             if not commodity:
                 continue
             data[f"port_{commodity}_status"] = status
-            data[f"port_{commodity}_price"] = price
+            data[f"port_{commodity}_trading_units"] = units
             data[f"port_{commodity}_pct_max"] = pct
             # Ensure cargo is also present if we saw this row.
             data[f"cargo_{commodity}"] = onboard
