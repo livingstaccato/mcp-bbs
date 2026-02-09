@@ -58,10 +58,13 @@ class OpportunisticStrategy(TradingStrategy):
         1. Escape after repeated trade failures (stuck detection)
         2. Check for danger/retreat
         3. Check for banking opportunity
-        4. Check for upgrade opportunity
-        5. Trade if at a port with cargo or profit opportunity
+        4. Sell existing cargo (don't keep buying and bleeding credits)
+        5. Check for upgrade opportunity
+        6. Trade if at a port with a reachable buy->sell path
         6. Explore or wander
         """
+        cargo = self._get_cargo(state)
+
         # If we've failed trades multiple times at this sector, move away
         if self._exploration.consecutive_trade_failures >= 2 and state.warps:
             self._exploration.consecutive_trade_failures = 0
@@ -81,6 +84,32 @@ class OpportunisticStrategy(TradingStrategy):
         if self.should_bank(state):
             return TradeAction.BANK, {}
 
+        # If we already have cargo, prioritize selling it before buying more.
+        # This is the main fix for "rapid credit drain": repeatedly buying with no sell leg.
+        if any(v > 0 for v in cargo.values()):
+            # If current sector has a port, attempt to sell immediately if it buys any cargo we have.
+            if state.has_port and state.context == "sector_command" and state.port_class:
+                sell_here = self._choose_sell_commodity_here(state, cargo)
+                if sell_here:
+                    opp = TradeOpportunity(
+                        buy_sector=0,
+                        sell_sector=state.sector or 0,
+                        commodity=sell_here,
+                        expected_profit=500,  # unknown; positive if sale occurs
+                        distance=0,
+                        confidence=0.8,
+                    )
+                    return TradeAction.TRADE, {"opportunity": opp}
+
+            # Otherwise, move toward the closest known port that buys one of our cargo commodities.
+            target = self._find_best_sell_target(state, cargo)
+            if target and target.get("path") and len(target["path"]) > 1:
+                return TradeAction.MOVE, {"target_sector": target["sector"], "path": target["path"]}
+
+            # No known buyer yet; explore to discover ports (keep cargo, don't buy more).
+            if state.warps:
+                return TradeAction.EXPLORE, {"direction": random.choice(state.warps)}
+
         # Check upgrades
         should_upgrade, upgrade_type = self.should_upgrade(state)
         if should_upgrade:
@@ -88,11 +117,15 @@ class OpportunisticStrategy(TradingStrategy):
 
         # At a port? Consider trading
         if state.has_port and state.context == "sector_command":
+            # Prefer immediate trade when it has a known reachable sell leg.
             opportunities = self.find_opportunities(state)
             if opportunities:
-                # Take the best local opportunity
                 best = opportunities[0]
-                return TradeAction.TRADE, {"opportunity": best}
+                if best.buy_sector == (state.sector or best.buy_sector):
+                    return TradeAction.TRADE, {"opportunity": best}
+                # Otherwise move toward the opportunity sector.
+                if best.buy_sector and state.sector and best.buy_sector in (state.warps or []):
+                    return TradeAction.MOVE, {"target_sector": best.buy_sector, "path": [state.sector, best.buy_sector]}
 
         # Should we explore or wander?
         if self._should_explore():
@@ -132,9 +165,11 @@ class OpportunisticStrategy(TradingStrategy):
         if current is None:
             return opportunities
 
-        # Current sector opportunity
+        cargo = self._get_cargo(state)
+
+        # Current sector opportunity: only buy if we already know a reachable buyer exists.
         if state.has_port and state.port_class:
-            opp = self._evaluate_port(current, state.port_class, 0)
+            opp = self._evaluate_port(current, state.port_class, 0, cargo)
             if opp:
                 opportunities.append(opp)
 
@@ -143,7 +178,7 @@ class OpportunisticStrategy(TradingStrategy):
         for adjacent in warps:
             info = self.knowledge.get_sector_info(adjacent)
             if info and info.has_port and info.port_class:
-                opp = self._evaluate_port(adjacent, info.port_class, 1)
+                opp = self._evaluate_port(adjacent, info.port_class, 1, cargo)
                 if opp:
                     opportunities.append(opp)
 
@@ -156,6 +191,7 @@ class OpportunisticStrategy(TradingStrategy):
         sector: int,
         port_class: str,
         distance: int,
+        cargo: dict[str, int],
     ) -> TradeOpportunity | None:
         """Evaluate a port for trading opportunity.
 
@@ -182,31 +218,103 @@ class OpportunisticStrategy(TradingStrategy):
 
         commodities = ["fuel_ore", "organics", "equipment"]
 
-        # Prefer "S" (buy) opportunities - these always work regardless of cargo
+        # If we have cargo, prefer selling it (port_class "B" means port buys -> we sell).
         for i, char in enumerate(port_class):
-            if char == "S":  # Port sells = we buy
-                return TradeOpportunity(
-                    buy_sector=sector,
-                    sell_sector=0,
-                    commodity=commodities[i],
-                    expected_profit=500,
-                    distance=distance,
-                    confidence=0.7,
-                )
-
-        # Fall back to "B" (sell) - requires player to have cargo
-        for i, char in enumerate(port_class):
-            if char == "B":  # Port buys = we sell
+            commodity = commodities[i]
+            if cargo.get(commodity, 0) > 0 and char == "B":
                 return TradeOpportunity(
                     buy_sector=0,
                     sell_sector=sector,
-                    commodity=commodities[i],
+                    commodity=commodity,
                     expected_profit=500,
                     distance=distance,
-                    confidence=0.4,  # Lower confidence - may not have cargo
+                    confidence=0.8,
+                )
+
+        # If we have no cargo, only buy when we already know a reachable buyer exists.
+        if not any(v > 0 for v in cargo.values()):
+            for i, char in enumerate(port_class):
+                commodity = commodities[i]
+                if char != "S":
+                    continue
+                if not self._has_known_buyer_for(state_sector=sector, commodity=commodity):
+                    continue
+                return TradeOpportunity(
+                    buy_sector=sector,
+                    sell_sector=0,
+                    commodity=commodity,
+                    expected_profit=500,
+                    distance=distance,
+                    confidence=0.6,
                 )
 
         return None
+
+    def _get_cargo(self, state: GameState) -> dict[str, int]:
+        return {
+            "fuel_ore": int(state.cargo_fuel_ore or 0),
+            "organics": int(state.cargo_organics or 0),
+            "equipment": int(state.cargo_equipment or 0),
+        }
+
+    def _choose_sell_commodity_here(self, state: GameState, cargo: dict[str, int]) -> str | None:
+        """If the current port buys something we have onboard, sell that first."""
+        if not state.port_class or len(state.port_class) != 3:
+            return None
+        mapping = [("fuel_ore", 0), ("organics", 1), ("equipment", 2)]
+        for commodity, idx in mapping:
+            if cargo.get(commodity, 0) > 0 and state.port_class[idx] == "B":
+                return commodity
+        return None
+
+    def _has_known_buyer_for(self, state_sector: int, commodity: str, max_hops: int = 8) -> bool:
+        """Return True if we know at least one reachable port that buys commodity.
+
+        If we have observed pricing, prefer ports where we have a buy quote (port buys from us),
+        since that enables profit-aware routing.
+        """
+        idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
+        if idx is None:
+            return False
+        for sector in range(1, 1001):
+            info = self.knowledge.get_sector_info(sector)
+            if not info or not info.has_port or not info.port_class or len(info.port_class) != 3:
+                continue
+            if info.port_class[idx] != "B":
+                continue
+            # If we have price knowledge, require the buyer quote to be present.
+            if (info.port_prices or {}).get(commodity) and ((info.port_prices.get(commodity) or {}).get("buy") is None):
+                continue
+            path = self.knowledge.find_path(state_sector, sector, max_hops=max_hops)
+            if path:
+                return True
+        return False
+
+    def _find_best_sell_target(self, state: GameState, cargo: dict[str, int], max_hops: int = 12) -> dict | None:
+        """Pick the closest known port that buys any onboard cargo commodity."""
+        if not state.sector:
+            return None
+        want = [c for c, qty in cargo.items() if qty > 0]
+        if not want:
+            return None
+        idx_map = {"fuel_ore": 0, "organics": 1, "equipment": 2}
+
+        best: dict | None = None
+        for sector in range(1, 1001):
+            info = self.knowledge.get_sector_info(sector)
+            if not info or not info.has_port or not info.port_class or len(info.port_class) != 3:
+                continue
+            for commodity in want:
+                idx = idx_map[commodity]
+                if info.port_class[idx] != "B":
+                    continue
+                path = self.knowledge.find_path(state.sector, sector, max_hops=max_hops)
+                if not path:
+                    continue
+                cand = {"sector": sector, "commodity": commodity, "path": path, "distance": len(path) - 1}
+                if best is None or cand["distance"] < best["distance"]:
+                    best = cand
+        return best
 
     def _should_explore(self) -> bool:
         """Decide whether to explore unknown sectors."""

@@ -19,6 +19,11 @@ class GameState(BaseModel):
     credits: int | None = None
     turns_left: int | None = None
 
+    # Cargo (per-commodity, as best-effort from semantic extraction / port tables)
+    cargo_fuel_ore: int | None = None
+    cargo_organics: int | None = None
+    cargo_equipment: int | None = None
+
     # Ship status
     holds_total: int | None = None
     holds_free: int | None = None
@@ -78,6 +83,13 @@ class SectorInfo(BaseModel):
     warps: list[int] = Field(default_factory=list)
     has_port: bool = False
     port_class: str | None = None
+    # Observed prices from actual transactions at this port.
+    # Keys:
+    # - commodity: fuel_ore|organics|equipment
+    # - side: "buy" (port buys -> we sell), "sell" (port sells -> we buy)
+    # Values are per-unit credits, best-effort derived from "We'll buy/sell them for X credits."
+    port_prices: dict[str, dict[str, int]] = Field(default_factory=dict)
+    port_prices_ts: dict[str, dict[str, float]] = Field(default_factory=dict)
     has_planet: bool = False
     planet_names: list[str] = Field(default_factory=list)
     last_visited: float | None = None

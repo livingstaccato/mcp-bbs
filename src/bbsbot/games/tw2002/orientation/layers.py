@@ -223,6 +223,17 @@ async def _gather_state(
         prompt_id=prompt_id,
     )
 
+    # Best-effort cargo snapshot (this is primarily populated when we pass through
+    # port/transaction screens; keep it in GameState so strategies can sell cargo).
+    bot_semantic_initial = getattr(bot, "last_semantic_data", {}) or {}
+    try:
+        state.cargo_fuel_ore = int(bot_semantic_initial.get("cargo_fuel_ore") or 0)
+        state.cargo_organics = int(bot_semantic_initial.get("cargo_organics") or 0)
+        state.cargo_equipment = int(bot_semantic_initial.get("cargo_equipment") or 0)
+    except Exception:
+        # Keep as None/0-ish if parsing fails; strategies should treat missing as 0.
+        pass
+
     # If no kv_data provided, try to get fresh semantic data from current screen
     if kv_data is None:
         from bbsbot.games.tw2002.io import wait_and_respond
@@ -299,6 +310,24 @@ async def _gather_state(
 
         state.turns_left = get_with_fallback('turns_left')
 
+        # Cargo: prefer bot.last_semantic_data (port tables) and fall back to any
+        # current-screen semantic data if present.
+        bot_semantic = getattr(bot, "last_semantic_data", {}) or {}
+        def _cargo_from(*sources: dict, key: str) -> int | None:
+            for src in sources:
+                if not src:
+                    continue
+                if key in src and src.get(key) is not None:
+                    try:
+                        return int(src.get(key) or 0)
+                    except Exception:
+                        continue
+            return None
+
+        state.cargo_fuel_ore = _cargo_from(bot_semantic, display_kv or {}, kv_data or {}, key="cargo_fuel_ore")
+        state.cargo_organics = _cargo_from(bot_semantic, display_kv or {}, kv_data or {}, key="cargo_organics")
+        state.cargo_equipment = _cargo_from(bot_semantic, display_kv or {}, kv_data or {}, key="cargo_equipment")
+
         state.fighters = get_with_fallback('fighters')
         if (state.fighters is None or state.fighters == 0) and kv_data and kv_data.get('fighters'):
             state.fighters = kv_data.get('fighters')
@@ -338,6 +367,13 @@ async def _gather_state(
             state.turns_left = kv_data.get('turns_left')
             state.fighters = kv_data.get('fighters')
             state.shields = kv_data.get('shields')
+            # Cargo best-effort from semantic snapshot (often only present after port tables).
+            try:
+                state.cargo_fuel_ore = int((kv_data.get("cargo_fuel_ore") if kv_data else None) or (getattr(bot, "last_semantic_data", {}) or {}).get("cargo_fuel_ore") or 0)
+                state.cargo_organics = int((kv_data.get("cargo_organics") if kv_data else None) or (getattr(bot, "last_semantic_data", {}) or {}).get("cargo_organics") or 0)
+                state.cargo_equipment = int((kv_data.get("cargo_equipment") if kv_data else None) or (getattr(bot, "last_semantic_data", {}) or {}).get("cargo_equipment") or 0)
+            except Exception:
+                pass
             if state.credits is not None:
                 print(f"  [Orient] Using fallback semantic credits: {state.credits}")
 

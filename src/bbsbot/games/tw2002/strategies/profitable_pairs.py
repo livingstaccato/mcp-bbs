@@ -225,7 +225,8 @@ class ProfitablePairsStrategy(TradingStrategy):
                 elif char == "S":
                     sells[commodity].append((sector, info))
 
-        # Find pairs where one sells and another buys
+        # Find pairs where one sells and another buys.
+        # We keep structural pairs even when we don't yet know prices (common after server reset).
         pairs = []
         max_hops = self._settings.max_hop_distance
 
@@ -247,59 +248,50 @@ class ProfitablePairsStrategy(TradingStrategy):
 
                     distance = len(path) - 1
 
-                    # Estimate profit (conservative)
-                    # Real profit depends on quantities and prices
-                    estimated_profit = self._estimate_profit(commodity, distance)
+                    pair = PortPair(
+                        buy_sector=buy_sector,
+                        sell_sector=sell_sector,
+                        commodity=commodity,
+                        distance=distance,
+                        path=path,
+                        estimated_profit=0,
+                    )
+                    pairs.append(pair)
 
-                    if estimated_profit >= self._settings.min_profit_per_turn:
-                        pair = PortPair(
-                            buy_sector=buy_sector,
-                            sell_sector=sell_sector,
-                            commodity=commodity,
-                            distance=distance,
-                            path=path,
-                            estimated_profit=estimated_profit,
-                        )
-                        pairs.append(pair)
-
-        # Sort by profit per turn
-        pairs.sort(
-            key=lambda p: p.estimated_profit / max(p.distance + 2, 1),
-            reverse=True,
-        )
+        # Keep nearby pairs earlier; price-aware ranking happens at selection time.
+        pairs.sort(key=lambda p: p.distance)
 
         self._pairs = pairs
         self._pairs_dirty = False
-        logger.info(f"Found {len(pairs)} profitable port pairs")
+        logger.info("Found %d profitable port pairs", len(pairs))
 
-    def _estimate_profit(self, commodity: str, distance: int) -> int:
-        """Estimate profit for a commodity trade.
+    def _estimate_profit_for_pair(self, state: GameState, pair: PortPair) -> int:
+        """Estimate profit using observed per-unit prices when available."""
+        credits = state.credits or 0
+        holds_free = state.holds_free or 0
+        if credits <= 0 or holds_free <= 0:
+            return 0
 
-        This is a rough estimate. Real profit depends on:
-        - Port quantities
-        - Current prices
-        - Holds available
-        - Experience level
+        buy_info = self.knowledge.get_sector_info(pair.buy_sector)
+        sell_info = self.knowledge.get_sector_info(pair.sell_sector)
+        if not buy_info or not sell_info:
+            return 0
 
-        Args:
-            commodity: Commodity type
-            distance: Hops between ports
+        buy_unit = ((buy_info.port_prices or {}).get(pair.commodity) or {}).get("sell")
+        sell_unit = ((sell_info.port_prices or {}).get(pair.commodity) or {}).get("buy")
+        if not buy_unit or not sell_unit:
+            return 0
 
-        Returns:
-            Estimated profit per trade cycle
-        """
-        # Base profit estimates (conservative)
-        base_profits = {
-            "fuel_ore": 300,
-            "organics": 400,
-            "equipment": 500,
-        }
+        profit_per_unit = int(sell_unit) - int(buy_unit)
+        if profit_per_unit <= 0:
+            return 0
 
-        base = base_profits.get(commodity, 300)
+        max_affordable = max(0, int(credits // int(buy_unit)))
+        qty = min(holds_free, max_affordable)
+        if qty <= 0:
+            return 0
 
-        # Closer pairs are more profitable per turn
-        # But this is just the raw profit, not per turn
-        return base
+        return profit_per_unit * qty
 
     def _select_best_pair(self, state: GameState) -> PortPair | None:
         """Select the best pair to trade from current position."""
@@ -310,7 +302,8 @@ class ProfitablePairsStrategy(TradingStrategy):
         if current is None:
             return self._pairs[0] if self._pairs else None
 
-        # Find pair with best profit/distance ratio from current position
+        # Find pair with best profit/turn ratio from current position when priced,
+        # else bias toward closer pairs to discover pricing quickly.
         best_pair = None
         best_score = 0
 
@@ -322,7 +315,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             total_distance = len(path) - 1 + pair.distance
             turns = total_distance + 2  # +2 for buy/sell actions
 
-            score = pair.estimated_profit / max(turns, 1)
+            price_profit = self._estimate_profit_for_pair(state, pair)
+            score = (price_profit / max(turns, 1)) if price_profit > 0 else (1.0 / max(turns, 1))
             if score > best_score:
                 best_score = score
                 best_pair = pair

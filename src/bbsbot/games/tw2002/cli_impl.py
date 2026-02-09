@@ -409,6 +409,9 @@ async def execute_port_trade(
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
     target_seen = False  # Track if we ever saw the target commodity prompt
     credits_available: int | None = None
+    last_trade_commodity: str | None = None
+    last_trade_is_buy: bool | None = None  # True when we are buying from port (port sells)
+    last_trade_qty: int | None = None
 
     # Guardrails for haggle loops when the bot doesn't have enough credits.
     offered_all_credits: bool = False
@@ -474,6 +477,18 @@ async def execute_port_trade(
             prompt_line = how_many_lines[-1].lower() if how_many_lines else last_lines
             is_buy = " buy" in prompt_line or prompt_line.strip().startswith("how many") and " buy" in prompt_line
             is_sell = " sell" in prompt_line
+            last_trade_is_buy = True if is_buy else (False if is_sell else None)
+            last_trade_qty = None
+
+            # Identify commodity from the prompt line (best-effort).
+            if "fuel" in prompt_line:
+                last_trade_commodity = "fuel_ore"
+            elif "organic" in prompt_line:
+                last_trade_commodity = "organics"
+            elif "equip" in prompt_line:
+                last_trade_commodity = "equipment"
+            else:
+                last_trade_commodity = commodity
 
             if target_re:
                 # Targeted trading: only trade the target commodity
@@ -506,6 +521,14 @@ async def execute_port_trade(
 
             await asyncio.sleep(0.5)
             continue
+
+        # Capture "Agreed, N units." to compute per-unit pricing when the total appears.
+        m_agreed = re.search(r"(?i)\bagreed,\s*([\d,]+)\s+units\b", last_lines)
+        if m_agreed:
+            try:
+                last_trade_qty = int(m_agreed.group(1).replace(",", ""))
+            except Exception:
+                pass
 
         # Price/offer negotiation - only respond if we have a pending trade
         if pending_trade and (
@@ -558,6 +581,40 @@ async def execute_port_trade(
             await bot.session.send("\r")
             await asyncio.sleep(0.5)
             continue
+
+        # Record a per-unit price observation when the port states the total.
+        # Examples:
+        # - "We'll sell them for 377 credits."
+        # - "We'll buy them for 377 credits."
+        if pending_trade:
+            m_total = re.search(r"(?i)we'll\s+(sell|buy)\s+them\s+for\s+([\d,]+)\s+credits", screen)
+            if m_total:
+                side = m_total.group(1).lower()
+                try:
+                    total = int(m_total.group(2).replace(",", ""))
+                except Exception:
+                    total = 0
+
+                qty = last_trade_qty or 0
+                if qty > 0 and total > 0 and last_trade_commodity:
+                    unit = max(1, int(round(total / qty)))
+                    # "sell" here means port sells to us -> we bought -> store as port_sells_price.
+                    try:
+                        if hasattr(bot, "sector_knowledge") and bot.sector_knowledge and bot.current_sector:
+                            if side == "sell":
+                                bot.sector_knowledge.record_port_price(
+                                    bot.current_sector,
+                                    last_trade_commodity,
+                                    port_sells_price=unit,
+                                )
+                            elif side == "buy":
+                                bot.sector_knowledge.record_port_price(
+                                    bot.current_sector,
+                                    last_trade_commodity,
+                                    port_buys_price=unit,
+                                )
+                    except Exception:
+                        pass
 
         # Y/N acceptability check during trade
         if "(y/n)" in last_lines or "[y/n]" in last_lines:

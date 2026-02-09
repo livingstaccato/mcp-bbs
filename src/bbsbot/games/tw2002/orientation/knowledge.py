@@ -58,6 +58,8 @@ class SectorKnowledge:
                     warps=info.get("warps", []),
                     has_port=info.get("has_port", False),
                     port_class=info.get("port_class"),
+                    port_prices=info.get("port_prices", {}) or {},
+                    port_prices_ts=info.get("port_prices_ts", {}) or {},
                     has_planet=info.get("has_planet", False),
                     planet_names=info.get("planet_names", []),
                     last_visited=info.get("last_visited"),
@@ -80,6 +82,8 @@ class SectorKnowledge:
                     "warps": info.warps,
                     "has_port": info.has_port,
                     "port_class": info.port_class,
+                    "port_prices": info.port_prices,
+                    "port_prices_ts": info.port_prices_ts,
                     "has_planet": info.has_planet,
                     "planet_names": info.planet_names,
                     "last_visited": info.last_visited,
@@ -159,6 +163,51 @@ class SectorKnowledge:
         info.last_visited = time()
 
         # Persist to disk
+        self._save_cache()
+
+    def record_port_price(
+        self,
+        sector: int,
+        commodity: str,
+        *,
+        port_buys_price: int | None = None,
+        port_sells_price: int | None = None,
+        ts: float | None = None,
+    ) -> None:
+        """Record observed per-unit prices from a completed transaction.
+
+        - port_buys_price: when the port buys from us (we sold), per-unit credits
+        - port_sells_price: when the port sells to us (we bought), per-unit credits
+        """
+        if sector <= 0:
+            return
+        if commodity not in ("fuel_ore", "organics", "equipment"):
+            return
+
+        if sector not in self._sectors:
+            self._sectors[sector] = SectorInfo()
+        info = self._sectors[sector]
+        if info.port_prices is None:
+            info.port_prices = {}
+        if info.port_prices_ts is None:
+            info.port_prices_ts = {}
+
+        c_prices = info.port_prices.get(commodity) or {}
+        c_ts = info.port_prices_ts.get(commodity) or {}
+        now = ts if ts is not None else time()
+
+        if port_buys_price is not None and port_buys_price > 0:
+            c_prices["buy"] = int(port_buys_price)
+            c_ts["buy"] = float(now)
+        if port_sells_price is not None and port_sells_price > 0:
+            c_prices["sell"] = int(port_sells_price)
+            c_ts["sell"] = float(now)
+
+        if c_prices:
+            info.port_prices[commodity] = c_prices
+        if c_ts:
+            info.port_prices_ts[commodity] = c_ts
+
         self._save_cache()
 
     def find_path(self, start: int, end: int, max_hops: int = 100) -> list[int] | None:
