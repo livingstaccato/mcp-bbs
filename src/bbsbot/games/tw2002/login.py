@@ -532,6 +532,12 @@ async def login_sequence(
             print(f"      → Sending game password (pattern)")
             await send_input(bot, game_password, input_type)
 
+        elif "corporate_listings" in prompt_id:
+            # Corporate listings menu - send Q to quit
+            print("      → Corporate Listings menu, sending Q to exit")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.3)
+
         elif input_type == "any_key":
             print("      → Pressing space (any_key input_type)")
             await send_input(bot, "", input_type)
