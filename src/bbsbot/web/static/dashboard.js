@@ -603,6 +603,7 @@
   let termBotId = null;
   let hijacked = false;
   let hijackedByMe = false;
+  let lastTermSnapshot = null;
 
   const termModal = $("#term-modal");
   const termTitle = $("#term-title");
@@ -610,9 +611,13 @@
   const termStatus = $("#term-status");
   const termEl = $("#term");
   const btnTermHijack = $("#term-hijack");
+  const btnTermStep = $("#term-step");
   const btnTermRelease = $("#term-release");
   const btnTermResync = $("#term-resync");
+  const btnTermAnalyze = $("#term-analyze");
   const btnTermClose = $("#term-close");
+  const termAnalysis = $("#term-analysis");
+  const termAnalysisDetails = $("#term-analysis-details");
 
   function updateTermStats() {
     if (!termBotId || !lastData || !lastData.bots || !termStats) return;
@@ -621,10 +626,14 @@
     const turnsMax = (bot.turns_max !== undefined && bot.turns_max !== null) ? bot.turns_max : 0;
     const turnsDisplay = turnsMax > 0 ? `${bot.turns_executed || 0}/${turnsMax}` : `${bot.turns_executed || 0} / Auto`;
     const activity = bot.activity_context || bot.state || "-";
+    const promptId = (lastTermSnapshot && lastTermSnapshot.prompt_detected && lastTermSnapshot.prompt_detected.prompt_id)
+      ? lastTermSnapshot.prompt_detected.prompt_id
+      : "-";
     termStats.innerHTML = [
       `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
       `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
       `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
+      `<span class="stat"><span class="stat-label">Prompt</span><span class="stat-value">${esc(promptId)}</span></span>`,
       `<span class="stat"><span class="stat-label">User</span><span class="stat-value">${esc(bot.username || "-")}</span></span>`,
       `<span class="stat"><span class="stat-label">Activity</span><span class="stat-value">${esc(activity)}</span></span>`,
     ].join("");
@@ -660,16 +669,22 @@
   function setTermUiState() {
     if (!termWs || termWs.readyState !== WebSocket.OPEN) {
       btnTermHijack.disabled = true;
+      if (btnTermStep) btnTermStep.disabled = true;
       btnTermRelease.disabled = true;
+      if (btnTermAnalyze) btnTermAnalyze.disabled = true;
       return;
     }
     if (!hijacked) {
       btnTermHijack.disabled = false;
+      if (btnTermStep) btnTermStep.disabled = true;
       btnTermRelease.disabled = true;
+      if (btnTermAnalyze) btnTermAnalyze.disabled = false;
       return;
     }
     btnTermHijack.disabled = true;
+    if (btnTermStep) btnTermStep.disabled = !hijackedByMe;
     btnTermRelease.disabled = !hijackedByMe;
+    if (btnTermAnalyze) btnTermAnalyze.disabled = false;
   }
 
   function connectTerm(botId) {
@@ -698,6 +713,8 @@
       if (msg.type === "term" && msg.data) {
         try { ensureTerm().write(msg.data); } catch (_) {}
       } else if (msg.type === "snapshot") {
+        lastTermSnapshot = msg;
+        updateTermStats();
         try {
           const t = ensureTerm();
           t.reset();
@@ -706,6 +723,10 @@
           const screen = (msg.screen || "").replace(/\n/g, "\r\n");
           t.write(screen);
         } catch (_) {}
+      } else if (msg.type === "analysis") {
+        const formatted = msg.formatted || "";
+        if (termAnalysis) termAnalysis.textContent = formatted || "(no analysis)";
+        if (termAnalysisDetails) termAnalysisDetails.open = true;
       } else if (msg.type === "hello") {
         hijacked = !!msg.hijacked;
         hijackedByMe = !!msg.hijacked_by_me;
@@ -745,6 +766,9 @@
     termStatus.textContent = "Connecting...";
     hijacked = false;
     hijackedByMe = false;
+    lastTermSnapshot = null;
+    if (termAnalysis) termAnalysis.textContent = "";
+    if (termAnalysisDetails) termAnalysisDetails.open = false;
     updateTermStats();
     termModal.classList.add("open");
     try {
@@ -761,6 +785,9 @@
     termBotId = null;
     hijacked = false;
     hijackedByMe = false;
+    lastTermSnapshot = null;
+    if (termAnalysis) termAnalysis.textContent = "";
+    if (termAnalysisDetails) termAnalysisDetails.open = false;
     if (termWs) {
       try { termWs.close(); } catch (_) {}
       termWs = null;
@@ -775,9 +802,31 @@
       termWs.send(JSON.stringify({ type: "snapshot_req" }));
     }
   });
+  if (btnTermAnalyze) btnTermAnalyze.addEventListener("click", () => {
+    if (!termWs || termWs.readyState !== WebSocket.OPEN) return;
+    termWs.send(JSON.stringify({ type: "analyze_req" }));
+  });
   if (btnTermHijack) btnTermHijack.addEventListener("click", () => {
     if (!termWs || termWs.readyState !== WebSocket.OPEN) return;
     termWs.send(JSON.stringify({ type: "hijack_request" }));
+  });
+  if (btnTermStep) btnTermStep.addEventListener("click", () => {
+    if (!termWs || termWs.readyState !== WebSocket.OPEN) return;
+    if (!hijackedByMe) return;
+    termWs.send(JSON.stringify({ type: "hijack_step" }));
+    // Best-effort refresh: request snapshot/analysis shortly after the worker acts.
+    setTimeout(() => {
+      if (termWs && termWs.readyState === WebSocket.OPEN) termWs.send(JSON.stringify({ type: "snapshot_req" }));
+    }, 250);
+    setTimeout(() => {
+      if (termWs && termWs.readyState === WebSocket.OPEN) termWs.send(JSON.stringify({ type: "analyze_req" }));
+    }, 450);
+    setTimeout(() => {
+      if (termWs && termWs.readyState === WebSocket.OPEN) termWs.send(JSON.stringify({ type: "snapshot_req" }));
+    }, 1000);
+    setTimeout(() => {
+      if (termWs && termWs.readyState === WebSocket.OPEN) termWs.send(JSON.stringify({ type: "analyze_req" }));
+    }, 1200);
   });
   if (btnTermRelease) btnTermRelease.addEventListener("click", () => {
     if (!termWs || termWs.readyState !== WebSocket.OPEN) return;

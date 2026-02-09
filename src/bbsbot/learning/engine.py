@@ -97,6 +97,10 @@ class LearningEngine:
         self._buffer_manager = BufferManager(max_size=50)
         self._prompt_detector: PromptDetector | None = None
         self._idle_threshold_seconds = 2.0
+        # Cache last prompt match for the current screen fingerprint.
+        # PromptWaiter may read the same stable screen repeatedly while waiting for idle.
+        self._last_prompt_fingerprint: str = ""
+        self._last_prompt_match: PromptMatch | None = None
 
         # NEW: Screen saving to disk
         self._screen_saver = ScreenSaver(
@@ -400,8 +404,20 @@ class LearningEngine:
         # Detect idle state
         is_idle = self._buffer_manager.detect_idle_state(self._idle_threshold_seconds)
 
-        # Detect prompt (always try)
-        prompt_match = self._prompt_detector.detect_prompt(snapshot) if self._prompt_detector else None
+        # Detect prompt (always try, but avoid re-scanning patterns on identical snapshots)
+        screen_hash = snapshot.get("screen_hash", "")
+        cursor = snapshot.get("cursor") or {"x": 0, "y": 0}
+        fingerprint = (
+            f"{screen_hash}:{cursor.get('x', 0)}:{cursor.get('y', 0)}:"
+            f"{int(bool(snapshot.get('cursor_at_end', True)))}:{int(bool(snapshot.get('has_trailing_space', False)))}"
+        )
+
+        if fingerprint and fingerprint == self._last_prompt_fingerprint:
+            prompt_match = self._last_prompt_match
+        else:
+            prompt_match = self._prompt_detector.detect_prompt(snapshot) if self._prompt_detector else None
+            self._last_prompt_fingerprint = fingerprint
+            self._last_prompt_match = prompt_match
         if prompt_match:
             buffer.matched_prompt_id = prompt_match.prompt_id
 

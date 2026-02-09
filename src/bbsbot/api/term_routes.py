@@ -132,6 +132,12 @@ class TermHub:
             {"type": "snapshot_req", "req_id": str(uuid.uuid4()), "ts": time.time()},
         )
 
+    async def _request_analysis(self, bot_id: str) -> None:
+        await self._send_worker(
+            bot_id,
+            {"type": "analyze_req", "req_id": str(uuid.uuid4()), "ts": time.time()},
+        )
+
     def create_router(self) -> APIRouter:
         router = APIRouter()
 
@@ -170,6 +176,10 @@ class TermHub:
                             "cursor": msg.get("cursor", {"x": 0, "y": 0}),
                             "cols": int(msg.get("cols", 80) or 80),
                             "rows": int(msg.get("rows", 25) or 25),
+                            "screen_hash": msg.get("screen_hash", ""),
+                            "cursor_at_end": bool(msg.get("cursor_at_end", True)),
+                            "has_trailing_space": bool(msg.get("has_trailing_space", False)),
+                            "prompt_detected": msg.get("prompt_detected"),
                             "ts": msg.get("ts", time.time()),
                         }
                         async with self._lock:
@@ -177,6 +187,16 @@ class TermHub:
                             if st3 is not None:
                                 st3.last_snapshot = snapshot
                         await self._broadcast(bot_id, snapshot)
+                    elif mtype == "analysis":
+                        await self._broadcast(
+                            bot_id,
+                            {
+                                "type": "analysis",
+                                "formatted": msg.get("formatted", ""),
+                                "raw": msg.get("raw"),
+                                "ts": msg.get("ts", time.time()),
+                            },
+                        )
                     elif mtype == "status":
                         await self._broadcast(bot_id, msg)
             except WebSocketDisconnect:
@@ -232,6 +252,8 @@ class TermHub:
                     mtype = msg.get("type")
                     if mtype == "snapshot_req":
                         await self._request_snapshot(bot_id)
+                    elif mtype == "analyze_req":
+                        await self._request_analysis(bot_id)
                     elif mtype == "hijack_request":
                         st_now = await self._get(bot_id)
                         if st_now.hijack_owner is None:
@@ -244,6 +266,11 @@ class TermHub:
                         else:
                             await websocket.send_text(json.dumps({"type": "error", "message": "Already hijacked by another client."}, ensure_ascii=True))
                             await websocket.send_text(json.dumps(await self._hijack_state_msg_for(bot_id, websocket), ensure_ascii=True))
+                    elif mtype == "hijack_step":
+                        if await self._is_owner(bot_id, websocket):
+                            ok = await self._send_worker(bot_id, {"type": "control", "action": "step", "owner": "dashboard", "lease_s": 0, "ts": time.time()})
+                            if not ok:
+                                await websocket.send_text(json.dumps({"type": "error", "message": "No worker connected for this bot."}, ensure_ascii=True))
                     elif mtype == "hijack_release":
                         if await self._is_owner(bot_id, websocket):
                             await self._set_hijack_owner(bot_id, None)

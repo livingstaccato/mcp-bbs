@@ -128,12 +128,16 @@ class TermBridge:
             mtype = msg.get("type")
             if mtype == "snapshot_req":
                 await self._send_snapshot(ws)
+            elif mtype == "analyze_req":
+                await self._send_analysis(ws)
             elif mtype == "control":
                 action = msg.get("action")
                 if action == "pause":
                     await self._set_hijacked(True)
                 elif action == "resume":
                     await self._set_hijacked(False)
+                elif action == "step":
+                    await self._request_step()
             elif mtype == "input":
                 data = msg.get("data", "")
                 if data:
@@ -155,9 +159,36 @@ class TermBridge:
                 "cursor": snapshot.get("cursor", {"x": 0, "y": 0}),
                 "cols": int(snapshot.get("cols", 80) or 80),
                 "rows": int(snapshot.get("rows", 25) or 25),
+                "screen_hash": snapshot.get("screen_hash", ""),
+                "cursor_at_end": bool(snapshot.get("cursor_at_end", True)),
+                "has_trailing_space": bool(snapshot.get("has_trailing_space", False)),
+                "prompt_detected": snapshot.get("prompt_detected"),
                 "ts": time.time(),
             }
             await ws.send(json.dumps(msg, ensure_ascii=True))
+        except Exception:
+            return
+
+    async def _send_analysis(self, ws: Any) -> None:
+        # Best-effort: analysis is optional and should never crash the bridge.
+        try:
+            from bbsbot.games.tw2002.debug_screens import analyze_screen, format_screen_analysis
+        except Exception:
+            return
+
+        try:
+            analysis = await analyze_screen(self._bot)
+            await ws.send(
+                json.dumps(
+                    {
+                        "type": "analysis",
+                        "formatted": format_screen_analysis(analysis),
+                        "raw": analysis.model_dump(),
+                        "ts": time.time(),
+                    },
+                    ensure_ascii=True,
+                )
+            )
         except Exception:
             return
 
@@ -169,6 +200,14 @@ class TermBridge:
             await session.send(data, mark_awaiting=False)
         except Exception:
             return
+
+    async def _request_step(self) -> None:
+        fn = getattr(self._bot, "request_step", None)
+        if callable(fn):
+            try:
+                await fn()
+            except Exception:
+                return
 
     async def _set_size(self, cols: int, rows: int) -> None:
         session = getattr(self._bot, "session", None)
@@ -187,4 +226,3 @@ class TermBridge:
                 self._send_q.put_nowait({"type": "status", "hijacked": enabled, "ts": time.time()})
             except asyncio.QueueFull:
                 pass
-

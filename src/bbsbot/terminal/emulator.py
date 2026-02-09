@@ -30,6 +30,8 @@ class TerminalEmulator:
         self.term = term
         self._screen = pyte.Screen(cols, rows)
         self._stream = pyte.Stream(self._screen)
+        self._dirty = True
+        self._last_snapshot: dict[str, Any] | None = None
 
     def process(self, data: bytes) -> None:
         """Process raw bytes through terminal emulator.
@@ -40,6 +42,7 @@ class TerminalEmulator:
         # Decode from CP437 and feed to pyte
         text = data.decode(CP437, errors="replace")
         self._stream.feed(text)
+        self._dirty = True
 
     def _is_cursor_at_end(self) -> bool:
         """Check if cursor is at the end of visible content.
@@ -81,24 +84,33 @@ class TerminalEmulator:
                 - cursor_at_end: True if cursor is at end of visible content
                 - has_trailing_space: True if screen ends with space or colon
         """
-        screen_text = parse_screen_text(self._screen)
-        screen_hash = hashlib.sha256(screen_text.encode("utf-8")).hexdigest()
+        if self._last_snapshot is None or self._dirty:
+            screen_text = parse_screen_text(self._screen)
+            screen_hash = hashlib.sha256(screen_text.encode("utf-8")).hexdigest()
+            self._last_snapshot = {
+                "screen": screen_text,
+                "screen_hash": screen_hash,
+                "cursor": {"x": self._screen.cursor.x, "y": self._screen.cursor.y},
+                "cols": self.cols,
+                "rows": self.rows,
+                "term": self.term,
+                "cursor_at_end": self._is_cursor_at_end(),
+                "has_trailing_space": screen_text.rstrip() != screen_text.rstrip(" :"),
+            }
+            self._dirty = False
 
-        return {
-            "screen": screen_text,
-            "screen_hash": screen_hash,
-            "cursor": {"x": self._screen.cursor.x, "y": self._screen.cursor.y},
-            "cols": self.cols,
-            "rows": self.rows,
-            "term": self.term,
-            "captured_at": time.time(),
-            "cursor_at_end": self._is_cursor_at_end(),
-            "has_trailing_space": screen_text.rstrip() != screen_text.rstrip(" :"),
-        }
+        # Return a shallow copy so callers can add fields (e.g. prompt_detected) safely.
+        snap = dict(self._last_snapshot)
+        snap["cursor"] = dict(snap.get("cursor") or {"x": 0, "y": 0})
+        # captured_at is when the snapshot is observed; BufferManager uses this
+        # to compute time since last screen change.
+        snap["captured_at"] = time.time()
+        return snap
 
     def reset(self) -> None:
         """Reset terminal to initial state."""
         self._screen.reset()
+        self._dirty = True
 
     def resize(self, cols: int, rows: int) -> None:
         """Resize terminal.
@@ -110,3 +122,4 @@ class TerminalEmulator:
         self.cols = cols
         self.rows = rows
         self._screen.resize(cols, rows)
+        self._dirty = True

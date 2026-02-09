@@ -11,6 +11,7 @@ import os
 import click
 import httpx
 from pathlib import Path
+import time
 
 from bbsbot.games.tw2002.bot import TradingBot
 from bbsbot.games.tw2002.config import BotConfig
@@ -46,6 +47,14 @@ class WorkerBot(TradingBot):
         self._hijack_event: asyncio.Event = asyncio.Event()
         self._hijack_event.set()  # not hijacked by default
         self._hijack_pump_task: asyncio.Task | None = None
+        # "Step" support: allow a bounded number of hijack checkpoints to pass.
+        # The trading loop calls await_if_hijacked() twice per turn (top-of-loop + pre-action),
+        # so one user "Step" grants 2 checkpoint passes by default.
+        self._hijack_step_tokens: int = 0
+        # Notify manager on screen changes so dashboard activity tracks screens.
+        self._screen_change_event: asyncio.Event = asyncio.Event()
+        self._screen_change_task: asyncio.Task | None = None
+        self._last_seen_screen_hash: str = ""
 
     async def register_with_manager(self) -> None:
         """Register this bot with the swarm manager."""
@@ -225,6 +234,11 @@ class WorkerBot(TradingBot):
 
     async def await_if_hijacked(self) -> None:
         """Block automation while the dashboard is hijacking this bot."""
+        if not self._hijacked:
+            return
+        if self._hijack_step_tokens > 0:
+            self._hijack_step_tokens -= 1
+            return
         await self._hijack_event.wait()
 
     async def set_hijacked(self, enabled: bool) -> None:
@@ -232,6 +246,9 @@ class WorkerBot(TradingBot):
         if enabled == self._hijacked:
             return
         self._hijacked = enabled
+        if enabled:
+            # Clear any queued steps when entering hijack mode.
+            self._hijack_step_tokens = 0
 
         if enabled:
             self._hijack_event.clear()
@@ -257,6 +274,63 @@ class WorkerBot(TradingBot):
                 except asyncio.CancelledError:
                     pass
                 self._hijack_pump_task = None
+
+    async def request_step(self, checkpoints: int = 2) -> None:
+        """Allow automation to pass a limited number of hijack checkpoints.
+
+        This is designed to be used while hijacked. If not hijacked, it's a no-op.
+
+        Args:
+            checkpoints: Number of await_if_hijacked() calls to allow without blocking.
+                         The default (2) permits one loop iteration to plan + act.
+        """
+        if not self._hijacked:
+            return
+        # Cap to avoid unbounded growth if a client misbehaves.
+        self._hijack_step_tokens = min(self._hijack_step_tokens + max(0, int(checkpoints)), 100)
+
+    def attach_screen_change_reporter(self, min_interval_s: float = 0.8) -> None:
+        """Report status when the visible screen changes (throttled).
+
+        This keeps `activity_context` in the swarm dashboard aligned with what the bot
+        is actually seeing, without relying solely on periodic polling.
+        """
+        if self._screen_change_task is not None:
+            return
+        if not getattr(self, "session", None):
+            return
+
+        def _watch(snapshot: dict, raw: bytes) -> None:
+            try:
+                sh = snapshot.get("screen_hash") or ""
+                if not sh:
+                    return
+                if sh == self._last_seen_screen_hash:
+                    return
+                self._last_seen_screen_hash = sh
+                self._screen_change_event.set()
+            except Exception:
+                return
+
+        # Only report on real updates; raw may be empty in timeout reads.
+        self.session.add_watch(_watch, interval_s=0.0)
+
+        async def _loop() -> None:
+            last_sent = 0.0
+            while True:
+                await self._screen_change_event.wait()
+                self._screen_change_event.clear()
+                now = time.monotonic()
+                delay = (last_sent + float(min_interval_s)) - now
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                try:
+                    await self.report_status()
+                except Exception:
+                    pass
+                last_sent = time.monotonic()
+
+        self._screen_change_task = asyncio.create_task(_loop())
 
     async def start_status_reporter(self, interval: float = 5.0) -> None:
         """Start background task to report status periodically."""
@@ -366,6 +440,13 @@ class WorkerBot(TradingBot):
         """Clean up resources."""
         await self.stop_status_reporter()
         await self.set_hijacked(False)
+        if self._screen_change_task is not None:
+            self._screen_change_task.cancel()
+            try:
+                await self._screen_change_task
+            except asyncio.CancelledError:
+                pass
+            self._screen_change_task = None
         await self._http_client.aclose()
 
 
@@ -406,6 +487,11 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
             port=config_obj.connection.port,
         )
 
+        # Start reporting immediately so the manager doesn't mark "no heartbeat"
+        # during long login/menu sequences.
+        await worker.report_status()
+        await worker.start_status_reporter(interval=5.0)
+
         # Optional: connect terminal bridge (best-effort).
         try:
             from bbsbot.swarm.term_bridge import TermBridge
@@ -415,6 +501,9 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
             await term_bridge.start()
         except Exception as e:
             logger.warning(f"Terminal bridge disabled: {e}")
+
+        # Push status updates on screen changes (throttled).
+        worker.attach_screen_change_reporter(min_interval_s=0.8)
 
         # Login sequence
         logger.info("Starting login sequence")
@@ -438,9 +527,8 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
         )
         worker.init_strategy()
 
-        # Report post-login status and start periodic reporting
+        # Report post-login status (reporter already running)
         await worker.report_status()
-        await worker.start_status_reporter(interval=5.0)
 
         # Create character state for trading loop
         char_state = CharacterState(name=bot_id)

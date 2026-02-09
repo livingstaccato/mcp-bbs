@@ -83,7 +83,8 @@ class SwarmManager:
     def __init__(
         self,
         max_bots: int = 200,
-        state_file: str = "swarm_state.json",
+        # Keep swarm state out of the repo root by default; sessions/ is gitignored.
+        state_file: str = "sessions/swarm_state.json",
         health_check_interval: int = 10,
     ):
         self.max_bots = max_bots

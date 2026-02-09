@@ -278,37 +278,41 @@ print(analysis["raw"])        # Machine-readable dict
 - [x] All tests pass
 - [x] Code follows MEMORY.md standards
 - [x] No breaking changes
-- [ ] Part 3: Step-through interface (not yet implemented)
-- [ ] Part 4: Screen coverage audit (not yet implemented)
+- [x] Part 3: Step-through interface
+- [x] Part 4: Screen coverage audit
 
-## What Was NOT Implemented
+## Part 3: Step-Through Interface (COMPLETE ✓)
 
-### Part 3: Step-Through Interface (Future Work)
+**Implemented Features**:
+- "Step" button in dashboard terminal modal (next to Hijack/Release)
+- Execute one automation step while hijacked, then pause again
+- "Analyze" button + auto-analysis after each Step
+- Snapshot now includes `screen_hash` and `prompt_detected` (when available)
 
-**Planned Features**:
-- "Step" button in dashboard (next to Hijack/Release)
-- Execute one action, then pause
-- Show screen analysis after each step
-- Continue on next "Step" click
+**Files Modified**:
+- `src/bbsbot/web/dashboard.html` (Step/Analyze UI + analysis panel)
+- `src/bbsbot/web/static/dashboard.js` (Step/Analyze WebSocket messages + UI state + render analysis)
+- `src/bbsbot/api/term_routes.py` (support `hijack_step` + `analyze_req` + forward analysis)
+- `src/bbsbot/swarm/term_bridge.py` (handle `control:step` + `analyze_req` + richer snapshots)
+- `src/bbsbot/games/tw2002/worker.py` (step tokens + `request_step()`)
 
-**Why Not Done**:
-- Requires dashboard frontend changes
-- Needs worker integration for step mode
-- Can be implemented in follow-up session
+**How It Works**:
+- Hijack pauses automation by blocking at `await_if_hijacked()` checkpoints.
+- Step grants 2 checkpoint passes (top-of-turn + pre-action) so one turn can plan + act, then it pauses again.
 
-### Part 4: Screen Coverage Audit (Future Work)
+## Part 4: Screen Coverage Audit (COMPLETE ✓)
 
-**Planned Process**:
-1. Hijack bot in dashboard
-2. Manually step through common flows
-3. Document which screens matched which prompts
-4. Identify gaps in rules.json
-5. Create SCREEN_AUDIT.md
+**What Was Built**:
+- Offline audit tool: `src/bbsbot/games/tw2002/verification/screen_audit.py`
+- Generated report: `SCREEN_AUDIT.md` (from `games/tw2002/session.jsonl`)
 
-**Why Not Done**:
-- Requires manual testing session
-- Needs live bot connection
-- Can be done as operational task
+**Usage**:
+```bash
+uv run python -m bbsbot.games.tw2002.verification.screen_audit \
+  --log games/tw2002/session.jsonl \
+  --rules games/tw2002/rules.json \
+  --out SCREEN_AUDIT.md
+```
 
 ## Known Issues / Limitations
 
@@ -344,9 +348,9 @@ print(analysis["raw"])        # Machine-readable dict
 3. Check dashboard turns accuracy
 
 ### Short Term (Follow-up Session)
-1. Implement step-through interface (Part 3)
-2. Conduct screen coverage audit (Part 4)
-3. Create SCREEN_AUDIT.md documentation
+1. Use Step + Analyze to walk high-value flows and capture unmatched screens
+2. Add missing/adjusted patterns in `games/tw2002/rules.json`
+3. Rerun `screen_audit.py` on full logs to confirm coverage improved
 
 ### Medium Term (Operational)
 1. Clean up stale swarm_state.json entries

@@ -257,6 +257,11 @@ async def login_sequence(
             print(f"      → Real name prompt, sending: {username}")
             await send_input(bot, username, input_type)
 
+        elif "what_is_your_name" in prompt_id:
+            # Some systems ask this prior to the normal login_name prompt.
+            print(f"      → What is your name? entering: {username}")
+            await send_input(bot, username, input_type, wait_after=0.5)
+
         elif "character_password" in prompt_id:
             # Character password for new character
             print(f"      → Character password prompt, sending password")
@@ -539,6 +544,10 @@ async def login_sequence(
             print(f"      → Begin adventure prompt, pressing Enter")
             await bot.session.send("\r")
             await asyncio.sleep(0.3)
+
+        elif "what_is_your_name" in prompt_id:
+            print(f"      → Entering character name (pattern): {username}")
+            await send_input(bot, username, "multi_key")
 
         elif "private_game_password" in prompt_id:
             print(f"      → Sending game password (pattern)")

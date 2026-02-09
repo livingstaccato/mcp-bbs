@@ -42,7 +42,8 @@ class Session(BaseModel):
 
     _lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
     _awaiting_read: bool = PrivateAttr(default=False)
-    _last_processed_hash: str | None = PrivateAttr(default=None)
+    # Prompt detection caching now lives in LearningEngine; Session should not
+    # suppress prompt_detected output because PromptWaiter may require idle.
     @dataclass
     class _WatchEntry:
         callback: Callable[..., None]
@@ -120,8 +121,7 @@ class Session(BaseModel):
                 await self.logger.log_send(keys)
             if mark_awaiting:
                 self._awaiting_read = True
-            # Clear processed hash - expect new screen after input
-            self._last_processed_hash = None
+            # No prompt-detection cache at Session layer.
 
     async def read(self, timeout_ms: int, max_bytes: int) -> dict[str, Any]:
         """Read from transport, update emulator, return snapshot with detection.
@@ -158,23 +158,15 @@ class Session(BaseModel):
                 self.emulator.process(raw)
 
             snapshot = self.emulator.get_snapshot()
-            current_hash = snapshot.get("screen_hash", "")
 
             # Log
             if self.logger:
                 await self.logger.log_screen(snapshot, raw)
 
             # Learning with prompt detection
-            # Skip detection if we already processed this exact screen
             prompt_detection = None
             if self.learning:
-                if current_hash and current_hash == self._last_processed_hash:
-                    logger.debug("Screen unchanged (hash match), skipping detection")
-                else:
-                    prompt_detection = await self.learning.process_screen(snapshot)
-                    # Mark this screen as processed after detection
-                    if prompt_detection:
-                        self._last_processed_hash = current_hash
+                prompt_detection = await self.learning.process_screen(snapshot)
 
             # Add detection metadata to snapshot
             if prompt_detection:

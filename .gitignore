@@ -58,6 +58,12 @@ dmypy.json
 *.log
 *.jsonl
 
+# Runtime state artifacts
+swarm_state.json
+
+# Bot diagnostics artifacts
+logs/diagnostics/*.json
+
 # Session logs and debug artifacts
 sessions/
 *.jsonl

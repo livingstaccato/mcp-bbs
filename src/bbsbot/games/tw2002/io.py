@@ -79,9 +79,14 @@ async def wait_and_respond(
     """
     bot.step_count += 1
     start_time = time.time()
+    last_screen_seen: str | None = None
 
     # TW2002-specific: Callback for semantic extraction on each screen update
     def on_screen_update(screen: str) -> None:
+        nonlocal last_screen_seen
+        if screen == last_screen_seen:
+            return
+        last_screen_seen = screen
         elapsed_ms = int((time.time() - start_time) * 1000)
         print(f"status action=read step={bot.step_count} elapsed_ms={elapsed_ms}")
 
