@@ -146,11 +146,12 @@ class WorkerBot(TradingBot):
                 activity = "DISCONNECTED"
 
             # Orient progress (set by orientation.py _set_orient_progress)
+            # ONLY show "ORIENTING" if actually in game (sector > 0)
             orient_step = getattr(self, '_orient_step', 0)
             orient_max = getattr(self, '_orient_max', 0)
             orient_phase = getattr(self, '_orient_phase', '')
-            if orient_phase:
-                # Show meaningful phase instead of confusing (0/0)
+            if orient_phase and in_game:
+                # Bot is in game AND orienting - show orient status
                 if orient_step > 0 and orient_max > 0:
                     activity = f"ORIENTING: Step {orient_step}/{orient_max}"
                 else:
@@ -164,6 +165,9 @@ class WorkerBot(TradingBot):
                     }
                     phase_display = phase_names.get(orient_phase, orient_phase.title())
                     activity = f"ORIENTING: {phase_display}"
+            elif orient_phase and not in_game:
+                # Bot orienting during login - show LOGIN status, not ORIENTING
+                activity = "LOGGING_IN"
 
             # Check if AI strategy is thinking (waiting for LLM response)
             if self.strategy and hasattr(self.strategy, '_is_thinking') and self.strategy._is_thinking:
