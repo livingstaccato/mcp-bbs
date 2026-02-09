@@ -392,8 +392,17 @@ async def login_sequence(
             # Game loading takes 11+ seconds, need longer timeout
             # Increased to 90s to handle slow server response when 90 bots logging in
             # With 12s spawn intervals, ~5-7 concurrent logins max, server still slow
-            # During character creation, ignore loop detection for menus and names
-            ignore_loop = {"prompt.ship_name", "prompt.planet_name", "prompt.menu_selection", "prompt.corporate_listings"}
+            # During character creation, some prompts legitimately repeat.
+            ignore_loop = {
+                "prompt.ship_name",
+                "prompt.planet_name",
+                "prompt.menu_selection",
+                "prompt.corporate_listings",
+                # Password prompts can repeat (set + verify, or retries on invalid).
+                "prompt.character_password",
+                "prompt.game_password",
+                "prompt.private_game_password",
+            }
             input_type, prompt_id, screen, phase3_kv_data = await wait_and_respond(
                 bot, timeout_ms=90000, ignore_loop_for=ignore_loop
             )
@@ -432,6 +441,28 @@ async def login_sequence(
 
         # Handle prompts based on ACTUAL PROMPT (last-line analysis), not pattern ID
         # This prevents confusion from stale buffer content
+
+        screen_lower = screen.lower()
+
+        # Server capacity/backpressure case:
+        # Some servers print "Failed to start game session [NNN]..." when no nodes are available.
+        # This is not an auth error; hammering the menu just makes it worse. Back off and retry.
+        if "failed to start game session" in screen_lower:
+            capacity_retries += 1
+            # Quick ramp to a stable retry cadence; keep it bounded.
+            sleep_s = min(30.0, 1.5 + 2.5 * capacity_retries)
+            logger.info(
+                "Game session allocation failed (capacity). Backing off %.1fs (retry #%d)",
+                sleep_s,
+                capacity_retries,
+            )
+            await asyncio.sleep(sleep_s)
+            try:
+                # Re-try selecting the configured game letter.
+                await bot.session.send(game_letter)
+            except Exception:
+                pass
+            continue
 
         if actual_prompt == "command_prompt" or actual_prompt == "planet_prompt":
             # Reached game! (either sector command or planet command for new chars)
@@ -501,55 +532,39 @@ async def login_sequence(
             #
             # Prefer explicit prompt_id classification when available.
             kind: str | None = None
-        screen_lower = screen.lower()
-
-        # Server capacity/backpressure case:
-        # Some servers print "Failed to start game session [NNN]..." when no nodes are available.
-        # This is not an auth error; hammering the menu just makes it worse. Back off and retry.
-        if "failed to start game session" in screen_lower:
-            capacity_retries += 1
-            # Quick ramp to a stable retry cadence; keep it bounded.
-            sleep_s = min(30.0, 1.5 + 2.5 * capacity_retries)
-            logger.info(
-                "Game session allocation failed (capacity). Backing off %.1fs (retry #%d)",
-                sleep_s,
-                capacity_retries,
-            )
-            await asyncio.sleep(sleep_s)
-            try:
-                # Re-try selecting the configured game letter.
-                await bot.session.send(game_letter)
-            except Exception:
-                pass
-            continue
             if prompt_id and ("game_password" in prompt_id or "private_game_password" in prompt_id):
                 kind = "game"
             elif prompt_id and "character_password" in prompt_id:
                 kind = "character"
             else:
                 # Heuristics for ambiguous servers that only emit "Password?".
-                # If we haven't sent a username yet, this is overwhelmingly likely to be
-                # a game-access password rather than a character password.
-                if not sent_username:
+                # Prefer explicit on-screen banners.
+                if "required to enter this game" in screen_lower or "private game" in screen_lower:
                     kind = "game"
-                elif "private" in screen_lower or "game password" in screen_lower or "enter password for" in screen_lower:
+                elif "repeat password to verify" in screen_lower or "please enter a password for this game account" in screen_lower:
+                    kind = "character"
+                elif not sent_username:
                     kind = "game"
                 else:
                     kind = "character"
 
-                # If the screen says "invalid password" and the prompt is ambiguous,
-                # flip once to the other password to avoid getting stuck due to misclassification.
-                if "invalid password" in screen_lower:
-                    ambiguous_password_attempts += 1
-                    if ambiguous_password_attempts <= 2 and last_password_kind in ("game", "character"):
-                        kind = "character" if last_password_kind == "game" else "game"
+            # If this is a verify prompt, it's always the character/account password.
+            if "repeat password to verify" in screen_lower:
+                kind = "character"
+
+            # If the screen says "invalid password" and the prompt is ambiguous,
+            # flip once to the other password to avoid getting stuck due to misclassification.
+            if "invalid password" in screen_lower:
+                ambiguous_password_attempts += 1
+                if ambiguous_password_attempts <= 2 and last_password_kind in ("game", "character"):
+                    kind = "character" if last_password_kind == "game" else "game"
 
             if kind == "game":
-                print(f"      → Password prompt, sending game password")
+                print("      → Password prompt, sending game password")
                 await send_masked_password(bot, game_password)
                 last_password_kind = "game"
             else:
-                print(f"      → Password prompt, sending character password")
+                print("      → Password prompt, sending character password")
                 await send_masked_password(bot, character_password)
                 last_password_kind = "character"
 
