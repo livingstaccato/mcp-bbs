@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from bbsbot.mcp.server import _normalize_tool_prefixes
 from bbsbot.mcp.server import _register_game_tools
 from bbsbot.mcp.registry import get_manager
 from fastmcp import FastMCP
@@ -32,12 +33,12 @@ async def test_register_no_tools_without_prefixes() -> None:
 
 @pytest.mark.asyncio
 async def test_register_filtered_tools_tw2002() -> None:
-    """Test that only tw2002 tools are registered when tool_prefixes='tw2002_'."""
+    """Test that only tw2002 tools are registered when tool_prefixes='tw2002'."""
     # Create a fresh app
     mcp = FastMCP("test-tw2002")
 
     # Register only tw2002 tools
-    _register_game_tools(mcp, tool_prefixes="tw2002_")
+    _register_game_tools(mcp, tool_prefixes="tw2002")
 
     # Get the tools
     tools = await mcp.get_tools()
@@ -46,7 +47,7 @@ async def test_register_filtered_tools_tw2002() -> None:
     # Check that we have tw2002 tools
     has_tw2002 = any(name.startswith("tw2002_") for name in tool_names)
 
-    assert has_tw2002, "Should have tw2002_* tools when prefixes='tw2002_'"
+    assert has_tw2002, "Should have tw2002_* tools when prefixes='tw2002'"
 
     # No other game tools should be present
     for name in tool_names:
@@ -74,3 +75,11 @@ def test_registry_manager_has_tw2002() -> None:
     expected_tools = ["tw2002_get_bot_status", "tw2002_analyze_combat_readiness", "tw2002_debug"]
     for expected in expected_tools:
         assert expected in tool_names, f"Expected {expected} in tw2002 tools, got {tool_names}"
+
+
+def test_tools_option_rejects_trailing_underscore() -> None:
+    with pytest.raises(ValueError):
+        _normalize_tool_prefixes("tw2002_")
+
+    with pytest.raises(ValueError):
+        _normalize_tool_prefixes("bbs,tw2002_")

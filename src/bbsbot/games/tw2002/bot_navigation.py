@@ -18,7 +18,7 @@ def _init_navigation_mixin(bot: TradingBot) -> None:
     # These are added dynamically via bot.py
 
 
-async def init_knowledge(
+def init_knowledge(
     bot: TradingBot,
     host: str = "localhost",
     port: int = 2002,

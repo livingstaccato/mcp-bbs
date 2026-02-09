@@ -39,7 +39,9 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         print(f"\n[Trading] Starting {strategy.name} strategy...")
 
     target_credits = config.session.target_credits
-    max_turns = config.session.max_turns_per_session
+    max_turns_config = config.session.max_turns_per_session
+    max_turns = max_turns_config if max_turns_config > 0 else 999999  # Temporary, will be set from state
+    server_max_turns: int | None = None  # Detected from server
 
     turns_used = 0
     consecutive_orient_failures = 0
@@ -110,6 +112,13 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         # Successful orient - reset failure counter
         consecutive_orient_failures = 0
 
+        # Detect server maximum turns on first orient (if configured to use server max)
+        if turns_used == 1 and max_turns_config == 0 and state.turns_left is not None:
+            server_max_turns = turns_used + state.turns_left
+            max_turns = server_max_turns
+            logger.info(f"Detected server maximum turns: {server_max_turns}")
+            print(f"  📊 Server max turns: {server_max_turns}")
+
         # After first successful orient, push full state to dashboard immediately
         if turns_used == 1 and hasattr(bot, 'report_status'):
             await bot.report_status()
@@ -141,10 +150,12 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 if current_turn % interval == 0:
                     if goal_status_display is None:
                         goal_status_display = GoalStatusDisplay()
+                    # Use server-detected max_turns if available, else config value
+                    display_max = max_turns if max_turns < 999999 else max_turns_config or 500
                     status_line = goal_status_display.render_compact(
                         phase=phase,
                         current_turn=current_turn,
-                        max_turns=max_turns,
+                        max_turns=display_max,
                     )
                     print(f"  {status_line}")
                     emit_viz = getattr(bot, "emit_viz", None)

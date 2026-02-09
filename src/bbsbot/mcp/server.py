@@ -24,6 +24,31 @@ configure_logging()
 log = get_logger(__name__)
 
 
+def _normalize_tool_prefixes(tool_prefixes: str | None) -> set[str] | None:
+    """Normalize the user-facing `--tools` option into real tool-name prefixes.
+
+    Users should pass a comma-separated list like: "bbs,tw2002".
+    Internal tool names are prefixed with an underscore, e.g. "bbs_connect", "tw2002_debug".
+    """
+    if not tool_prefixes:
+        return None
+
+    parts = [p.strip() for p in tool_prefixes.split(",")]
+    parts = [p for p in parts if p]
+    if not parts:
+        return None
+
+    invalid = [p for p in parts if p.endswith("_")]
+    if invalid:
+        bad = ", ".join(repr(p) for p in invalid)
+        raise ValueError(
+            f"Invalid --tools value(s): {bad}. Tool namespaces must not end with '_' "
+            "(use e.g. 'bbs,tw2002')."
+        )
+
+    return {f"{p}_" for p in parts}
+
+
 def _register_bbs_tools(mcp_app: FastMCP, allowed_prefixes: set[str] | None = None) -> None:
     """Conditionally register BBS tools based on allowed prefixes.
 
@@ -64,9 +89,13 @@ def _register_game_tools(mcp_app: FastMCP, tool_prefixes: str | None = None) -> 
 
     Args:
         mcp_app: FastMCP application to register tools with
-        tool_prefixes: Comma-separated tool prefixes to include (e.g., 'tw2002_' or 'bbs_,tw2002_')
+        tool_prefixes: Comma-separated tool prefixes to include (e.g., 'tw2002' or 'bbs,tw2002')
                       If not provided, no game tools are registered
     """
+    allowed_prefixes = _normalize_tool_prefixes(tool_prefixes)
+    if not allowed_prefixes:
+        return
+
     try:
         from fastmcp.tools.tool import FunctionTool
 
@@ -78,21 +107,12 @@ def _register_game_tools(mcp_app: FastMCP, tool_prefixes: str | None = None) -> 
         manager = get_manager()
         all_tools = manager.get_all_tools()
 
-        # Parse prefixes (if provided)
-        allowed_prefixes = set()
-        if tool_prefixes:
-            allowed_prefixes = {p.strip() for p in tool_prefixes.split(",")}
-
         # Add each tool to the MCP app, filtering by prefix
         added_count = 0
         for tool_name, tool_func in all_tools.items():
             # If prefixes specified, only include matching tools
-            if allowed_prefixes:
-                if not any(tool_name.startswith(prefix) for prefix in allowed_prefixes):
-                    continue  # Skip tools that don't match any prefix
-            else:
-                # No prefixes specified, skip all game tools
-                continue
+            if not any(tool_name.startswith(prefix) for prefix in allowed_prefixes):
+                continue  # Skip tools that don't match any prefix
 
             # Convert raw function from registry to FunctionTool
             # so FastMCP can work with it
@@ -162,7 +182,7 @@ def create_app(settings: Settings, tool_prefixes: str | None = None) -> FastMCP:
 
     Args:
         settings: Application settings
-        tool_prefixes: Comma-separated tool prefixes to include (e.g., 'tw2002_' or 'bbs_,tw2002_')
+        tool_prefixes: Comma-separated tool prefixes to include (e.g., 'tw2002' or 'bbs,tw2002')
                       If not provided, no tools are exposed.
     """
     global KNOWLEDGE_ROOT
@@ -171,10 +191,8 @@ def create_app(settings: Settings, tool_prefixes: str | None = None) -> FastMCP:
     # Create a new app instance for this server
     mcp = FastMCP("bbsbot")
 
-    # Parse prefixes (None means no tools, empty string after split also means no tools)
-    allowed_prefixes = None
-    if tool_prefixes:
-        allowed_prefixes = {p.strip() for p in tool_prefixes.split(",")}
+    # Parse prefixes (None means no tools, empty string also means no tools)
+    allowed_prefixes = _normalize_tool_prefixes(tool_prefixes)
 
     # Conditionally register BBS tools based on prefix filter
     _register_bbs_tools(mcp, allowed_prefixes=allowed_prefixes)

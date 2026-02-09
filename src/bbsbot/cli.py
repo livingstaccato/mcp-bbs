@@ -25,7 +25,12 @@ def cli() -> None:
 @click.option("--watch-clear/--no-watch-clear", default=False, show_default=True)
 @click.option("--watch-metadata/--no-watch-metadata", default=False, show_default=True)
 @click.option("--watch-include-text/--no-watch-include-text", default=False, show_default=True)
-@click.option("--tools", type=str, default=None, help="Comma-separated tool prefixes to expose (e.g., 'bbs_' or 'bbs_,tw2002_'). If not provided, no game tools are exposed.")
+@click.option(
+    "--tools",
+    type=str,
+    default=None,
+    help="Comma-separated tool namespaces to expose (e.g., 'bbs' or 'bbs,tw2002'). If not provided, no tools are exposed.",
+)
 def serve(
     watch_socket: bool,
     watch_host: str,
@@ -38,13 +43,12 @@ def serve(
 ) -> None:
     """Run the FastMCP server (stdio transport).
 
-    Specify which tool prefixes to expose with --tools. By default, only BBS tools are available.
+    Specify which tool namespaces to expose with --tools.
 
     Examples:
-        bbsbot serve                              # BBS tools only
-        bbsbot serve --tools bbs_                 # BBS tools only (explicit)
-        bbsbot serve --tools tw2002_              # TW2002 tools only
-        bbsbot serve --tools bbs_,tw2002_         # BBS tools + TW2002 tools
+        bbsbot serve --tools bbs                 # BBS tools only
+        bbsbot serve --tools tw2002              # TW2002 tools only
+        bbsbot serve --tools bbs,tw2002          # BBS tools + TW2002 tools
     """
     if watch_socket:
         from bbsbot.watch import watch_settings
@@ -57,7 +61,10 @@ def serve(
         watch_settings.metadata = watch_metadata
         watch_settings.include_snapshot_text = watch_include_text
 
-    app = create_app(Settings(), tool_prefixes=tools)
+    try:
+        app = create_app(Settings(), tool_prefixes=tools)
+    except ValueError as e:
+        raise click.BadParameter(str(e), param_hint="--tools") from e
     app.run()
 
 

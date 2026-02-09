@@ -41,16 +41,12 @@ def _add_methods() -> None:
 
     # Orientation methods
     def init_knowledge(self, host: str = "localhost", port: int = 2002, game_letter: str | None = None) -> None:
-        """Initialize sector knowledge for this character/server/game."""
-        # Make it sync by wrapping - the caller will handle async
-        import asyncio
-        try:
-            loop = asyncio.get_running_loop()
-            # Already in async context, schedule as task
-            loop.create_task(bot_navigation.init_knowledge(self, host, port, game_letter))
-        except RuntimeError:
-            # Not in async context, just call directly (blocking)
-            pass
+        """Initialize sector knowledge for this character/server/game.
+
+        This must complete before init_strategy(); it only sets up local paths/caches
+        and does not perform network I/O, so it is intentionally synchronous.
+        """
+        bot_navigation.init_knowledge(self, host, port, game_letter)
 
     async def orient(self, force_scan: bool = False) -> GameState:
         """Run full orientation sequence."""

@@ -25,7 +25,9 @@
       "Bash(bbsbot tw2002 check:*)",
       "Bash(bbsbot tw2002 bot:*)",
       "Bash(git stash:*)",
-      "Bash(test -f:*)"
+      "Bash(test -f:*)",
+      "Bash(bbsbot swarm spawn:*)",
+      "Bash(bbsbot swarm status:*)"
     ]
   }
 }

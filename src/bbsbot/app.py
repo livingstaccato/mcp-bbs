@@ -11,7 +11,7 @@ def create_app(settings: Settings | None = None, tool_prefixes: str | None = Non
 
     Args:
         settings: Application settings (defaults to Settings())
-        tool_prefixes: Comma-separated tool prefixes to include (e.g., 'bbs_' or 'bbs_,tw2002_')
+        tool_prefixes: Comma-separated tool namespaces to include (e.g., 'bbs' or 'bbs,tw2002')
     """
     return create_mcp_app(settings or Settings(), tool_prefixes=tool_prefixes)
 

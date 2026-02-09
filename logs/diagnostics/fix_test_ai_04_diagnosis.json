@@ -1,0 +1,9 @@
+{
+  "timestamp": 1770596871.909483,
+  "bot_id": "fix_test_ai_04",
+  "error": "Stuck in loop: prompt.corporate_listings",
+  "diagnosis": {
+    "error": "Analysis failed: ModuleNotFoundError",
+    "message": "No module named 'bbsbot.llm.interface'"
+  }
+}

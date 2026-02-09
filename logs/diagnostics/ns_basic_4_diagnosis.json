@@ -1,0 +1,9 @@
+{
+  "timestamp": 1770598237.750092,
+  "bot_id": "ns_basic_4",
+  "error": "Stuck in loop: prompt.yes_no",
+  "diagnosis": {
+    "error": "Analysis failed: ModuleNotFoundError",
+    "message": "No module named 'bbsbot.llm.interface'"
+  }
+}

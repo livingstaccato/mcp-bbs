@@ -22,6 +22,7 @@ from bbsbot.games.tw2002 import (  # noqa: E402, F401
     mcp_tools_control,
     mcp_tools_goals,
     mcp_tools_intervention,
+    mcp_tools_session,
 )
 
 
