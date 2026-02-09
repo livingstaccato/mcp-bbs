@@ -77,20 +77,21 @@ def extract_semantic_kv(screen: str) -> dict:
     # Example table row:
     # "Fuel Ore   Buying     820    100%       0"
     # We take the last integer on the line as onboard qty.
-    for line in screen.splitlines():
+    # Use cleaned display text to avoid ANSI artifacts.
+    plain_screen = clean_screen_for_display(screen)
+    for line in plain_screen.splitlines():
         line_stripped = line.strip()
         if not line_stripped:
             continue
-        lower = line_stripped.lower()
-        if lower.startswith("fuel ore"):
+        if re.search(r"\bfuel\s+ore\b", line_stripped, re.IGNORECASE):
             nums = re.findall(r"\b\d+\b", line_stripped)
             if nums:
                 data["cargo_fuel_ore"] = int(nums[-1])
-        elif lower.startswith("organics"):
+        elif re.search(r"\borganics\b", line_stripped, re.IGNORECASE):
             nums = re.findall(r"\b\d+\b", line_stripped)
             if nums:
                 data["cargo_organics"] = int(nums[-1])
-        elif lower.startswith("equipment"):
+        elif re.search(r"\bequipment\b", line_stripped, re.IGNORECASE):
             nums = re.findall(r"\b\d+\b", line_stripped)
             if nums:
                 data["cargo_equipment"] = int(nums[-1])

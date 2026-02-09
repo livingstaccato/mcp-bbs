@@ -72,11 +72,30 @@ body {
 table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
+thead th, tbody td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Fixed column widths to avoid jitter as data changes */
+table thead th:nth-child(1), table tbody td:nth-child(1) { width: 140px; } /* Bot ID */
+table thead th:nth-child(2), table tbody td:nth-child(2) { width: 60px; }  /* State */
+table thead th:nth-child(3), table tbody td:nth-child(3) { width: 150px; } /* Activity */
+table thead th:nth-child(4), table tbody td:nth-child(4) { width: 170px; } /* Status */
+table thead th:nth-child(5), table tbody td:nth-child(5) { width: 120px; } /* Username */
+table thead th:nth-child(6), table tbody td:nth-child(6) { width: 70px; }  /* Sector */
+table thead th:nth-child(7), table tbody td:nth-child(7) { width: 90px; }  /* Credits */
+table thead th:nth-child(8), table tbody td:nth-child(8) { width: 60px; }  /* Fuel */
+table thead th:nth-child(9), table tbody td:nth-child(9) { width: 60px; }  /* Org */
+table thead th:nth-child(10), table tbody td:nth-child(10) { width: 70px; } /* Equip */
+table thead th:nth-child(11), table tbody td:nth-child(11) { width: 100px; } /* Turns */
+table thead th:nth-child(12), table tbody td:nth-child(12) { width: 140px; } /* Actions */
 thead th {
   text-align: left;
   padding: 10px 14px;
