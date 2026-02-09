@@ -480,19 +480,14 @@ async def execute_port_trade(
                 is_target = bool(target_re.search(prompt_line))
                 if is_target:
                     target_seen = True
-                    if is_buy and credits_available is not None and credits_available < 1000 and max_quantity <= 0:
-                        # Low-credit safety: don't start a buy flow that will haggle-loop.
-                        await bot.session.send("0\r")
-                        pending_trade = False
-                        logger.info("Skipping buy (low credits=%s): %s", credits_available, commodity)
+                    if max_quantity > 0:
+                        qty_str = str(max_quantity)
                     else:
-                        if max_quantity > 0:
-                            qty_str = str(max_quantity)
-                        else:
-                            qty_str = ""  # Empty = accept default (max)
-                        await bot.session.send(f"{qty_str}\r")
-                        pending_trade = True
-                        logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
+                        # If we have low credits, don't accept the default (often too large).
+                        qty_str = "1" if (is_buy and credits_available is not None and credits_available < 1000) else ""
+                    await bot.session.send(f"{qty_str}\r")
+                    pending_trade = True
+                    logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
                 else:
                     # Strict targeted trade: skip anything that's not the target to avoid
                     # buying/selling unintended commodities (and getting stuck haggling).
@@ -501,16 +496,13 @@ async def execute_port_trade(
                     logger.debug("Skipping non-target commodity (target=%s)", commodity)
             else:
                 # Trade all: avoid buys when credits are very low; still allow sells.
-                if is_buy and credits_available is not None and credits_available < 1000 and max_quantity <= 0:
-                    await bot.session.send("0\r")
-                    pending_trade = False
-                    logger.info("Skipping buy (low credits=%s)", credits_available)
+                if max_quantity > 0:
+                    await bot.session.send(f"{max_quantity}\r")
                 else:
-                    if max_quantity > 0:
-                        await bot.session.send(f"{max_quantity}\r")
-                    else:
-                        await bot.session.send("\r")
-                    pending_trade = True
+                    # If we have low credits, don't accept the default (often too large).
+                    qty_str = "1" if (is_buy and credits_available is not None and credits_available < 1000) else ""
+                    await bot.session.send(f"{qty_str}\r")
+                pending_trade = True
 
             await asyncio.sleep(0.5)
             continue
