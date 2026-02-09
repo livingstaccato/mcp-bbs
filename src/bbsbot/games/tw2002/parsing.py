@@ -101,6 +101,44 @@ def extract_semantic_kv(screen: str) -> dict:
             if nums:
                 data["cargo_equipment"] = int(nums[-1])
 
+    # Port report market table (supply/demand + indicative price)
+    # Header:
+    # "Items     Status  Trading % of max OnBoard"
+    # Rows:
+    # "Fuel Ore   Buying     820    100%       0"
+    port_header_seen = any(
+        re.search(r"(?i)\bitems\b.*\bstatus\b.*\btrading\b.*%\s*of\s*max\b.*\bonboard\b", l)
+        for l in iter_lines
+    )
+    if port_header_seen:
+        row_re = re.compile(
+            r"^(Fuel\s+Ore|Organics|Equipment)\s+(Buying|Selling)\s+([\d,]+)\s+(\d+)%\s+([\d,]+)\s*$",
+            re.IGNORECASE,
+        )
+        item_map = {
+            "fuel ore": "fuel_ore",
+            "organics": "organics",
+            "equipment": "equipment",
+        }
+        for line in iter_lines:
+            m = row_re.match(line.strip())
+            if not m:
+                continue
+            item = m.group(1).lower().strip()
+            status = m.group(2).lower().strip()  # buying|selling
+            price = int(m.group(3).replace(",", ""))
+            pct = int(m.group(4))
+            # onboard already handled, but keep parsing consistent
+            onboard = int(m.group(5).replace(",", ""))
+            commodity = item_map.get(item)
+            if not commodity:
+                continue
+            data[f"port_{commodity}_status"] = status
+            data[f"port_{commodity}_price"] = price
+            data[f"port_{commodity}_pct_max"] = pct
+            # Ensure cargo is also present if we saw this row.
+            data[f"cargo_{commodity}"] = onboard
+
     return data
 
 

@@ -90,6 +90,12 @@ class SectorInfo(BaseModel):
     # Values are per-unit credits, best-effort derived from "We'll buy/sell them for X credits."
     port_prices: dict[str, dict[str, int]] = Field(default_factory=dict)
     port_prices_ts: dict[str, dict[str, float]] = Field(default_factory=dict)
+    # Demand/supply indicator from the port report table ("Trading % of max").
+    # These are not exact quantities, but they are useful for route scoring and
+    # for detecting dead/low-liquidity ports after a server reset.
+    port_status: dict[str, str] = Field(default_factory=dict)  # commodity -> "buying"|"selling"
+    port_pct_max: dict[str, int] = Field(default_factory=dict)  # commodity -> 0..100
+    port_market_ts: dict[str, float] = Field(default_factory=dict)  # commodity -> last observed
     has_planet: bool = False
     planet_names: list[str] = Field(default_factory=list)
     last_visited: float | None = None

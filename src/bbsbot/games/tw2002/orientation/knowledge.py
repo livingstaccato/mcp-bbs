@@ -60,6 +60,9 @@ class SectorKnowledge:
                     port_class=info.get("port_class"),
                     port_prices=info.get("port_prices", {}) or {},
                     port_prices_ts=info.get("port_prices_ts", {}) or {},
+                    port_status=info.get("port_status", {}) or {},
+                    port_pct_max=info.get("port_pct_max", {}) or {},
+                    port_market_ts=info.get("port_market_ts", {}) or {},
                     has_planet=info.get("has_planet", False),
                     planet_names=info.get("planet_names", []),
                     last_visited=info.get("last_visited"),
@@ -84,6 +87,9 @@ class SectorKnowledge:
                     "port_class": info.port_class,
                     "port_prices": info.port_prices,
                     "port_prices_ts": info.port_prices_ts,
+                    "port_status": info.port_status,
+                    "port_pct_max": info.port_pct_max,
+                    "port_market_ts": info.port_market_ts,
                     "has_planet": info.has_planet,
                     "planet_names": info.planet_names,
                     "last_visited": info.last_visited,
@@ -208,6 +214,36 @@ class SectorKnowledge:
         if c_ts:
             info.port_prices_ts[commodity] = c_ts
 
+        self._save_cache()
+
+    def record_port_market(
+        self,
+        sector: int,
+        commodity: str,
+        *,
+        status: str | None = None,
+        pct_max: int | None = None,
+        ts: float | None = None,
+    ) -> None:
+        """Record supply/demand indicators from the port report table."""
+        if sector <= 0:
+            return
+        if commodity not in ("fuel_ore", "organics", "equipment"):
+            return
+        now = ts if ts is not None else time()
+
+        if sector not in self._sectors:
+            self._sectors[sector] = SectorInfo()
+        info = self._sectors[sector]
+
+        if status:
+            info.port_status[commodity] = str(status).lower()
+        if pct_max is not None:
+            try:
+                info.port_pct_max[commodity] = max(0, min(100, int(pct_max)))
+            except Exception:
+                pass
+        info.port_market_ts[commodity] = float(now)
         self._save_cache()
 
     def find_path(self, start: int, end: int, max_hops: int = 100) -> list[int] | None:

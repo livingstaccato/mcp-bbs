@@ -38,6 +38,38 @@ def _update_semantic_relationships(bot, data: dict) -> None:
         info.has_planet = True
         info.planet_names = data.get("planet_names", [])
     info.last_visited = time.time()
+
+    # Port market table: persist status/% and also treat "Trading" as an observed per-unit quote.
+    for commodity in ("fuel_ore", "organics", "equipment"):
+        status = data.get(f"port_{commodity}_status")
+        price = data.get(f"port_{commodity}_price")
+        pct = data.get(f"port_{commodity}_pct_max")
+
+        if status in ("buying", "selling"):
+            try:
+                info.port_status[commodity] = str(status)
+                if pct is not None:
+                    info.port_pct_max[commodity] = max(0, min(100, int(pct)))
+                info.port_market_ts[commodity] = float(time.time())
+            except Exception:
+                pass
+
+        # Also feed port_prices so strategies can become price-aware even before any haggle completes.
+        if price is not None:
+            try:
+                p = int(price)
+                if p > 0:
+                    info.port_prices.setdefault(commodity, {})
+                    info.port_prices_ts.setdefault(commodity, {})
+                    if status == "buying":
+                        info.port_prices[commodity]["buy"] = p
+                        info.port_prices_ts[commodity]["buy"] = float(time.time())
+                    elif status == "selling":
+                        info.port_prices[commodity]["sell"] = p
+                        info.port_prices_ts[commodity]["sell"] = float(time.time())
+            except Exception:
+                pass
+
     knowledge._sectors[sector] = info
     knowledge._save_cache()
 
