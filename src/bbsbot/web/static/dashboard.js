@@ -141,8 +141,8 @@
           hijackHtml = `<span class="hijack-badge" title="Hijacked at ${hijackedTime} by ${b.hijacked_by}">🔒 HIJACKED</span>`;
         }
 
-        const turns_max = b.turns_max || 500;
-        const turnsDisplay = `${b.turns_executed} / ${turns_max}`;
+        const turns_max = (b.turns_max !== undefined && b.turns_max !== null) ? b.turns_max : 0;
+        const turnsDisplay = turns_max > 0 ? `${b.turns_executed} / ${turns_max}` : `${b.turns_executed} / Auto`;
 
         // Display "-" for uninitialized credits
         const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
@@ -597,12 +597,13 @@
     if (!termBotId || !lastData || !lastData.bots || !termStats) return;
     const bot = lastData.bots.find(b => b.bot_id === termBotId);
     if (!bot) return;
-    const turnsMax = bot.turns_max || 500;
+    const turnsMax = (bot.turns_max !== undefined && bot.turns_max !== null) ? bot.turns_max : 0;
+    const turnsDisplay = turnsMax > 0 ? `${bot.turns_executed || 0}/${turnsMax}` : `${bot.turns_executed || 0} / Auto`;
     const activity = bot.activity_context || bot.state || "-";
     termStats.innerHTML = [
       `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
       `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
-      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${bot.turns_executed || 0}/${turnsMax}</span></span>`,
+      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
       `<span class="stat"><span class="stat-label">Ship</span><span class="stat-value">${esc(bot.ship_level || "-")}</span></span>`,
       `<span class="stat"><span class="stat-label">User</span><span class="stat-value">${esc(bot.username || "-")}</span></span>`,
       `<span class="stat"><span class="stat-label">Activity</span><span class="stat-value">${esc(activity)}</span></span>`,

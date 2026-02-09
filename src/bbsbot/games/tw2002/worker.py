@@ -67,11 +67,12 @@ class WorkerBot(TradingBot):
                 credits = self.game_state.credits
 
             # Determine turns_max from config if available
+            # 0 = auto-detect server maximum (persistent mode)
             turns_max = getattr(self.config, 'session', {})
             if hasattr(turns_max, 'max_turns_per_session'):
                 turns_max = turns_max.max_turns_per_session
             else:
-                turns_max = 500  # Default fallback
+                turns_max = 0  # Default: auto-detect server max
 
             # Map game context to human-readable activity
             activity = "INITIALIZING"

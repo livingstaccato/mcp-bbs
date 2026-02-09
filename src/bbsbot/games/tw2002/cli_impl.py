@@ -100,17 +100,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     # Connection lost - attempt reconnection instead of exiting
                     print(f"\n⚠️  Connection lost after {consecutive_orient_failures} failures, attempting reconnect...")
                     try:
-                        # Reconnect to BBS
-                        bot.session = None  # Clear dead session
+                        # Reconnect to BBS using the connect() function
                         await asyncio.sleep(2)  # Wait before reconnect
-                        from bbsbot.games.tw2002.connection import SessionConnection
-                        bot.session = SessionConnection(
-                            host=config.connection.host,
-                            port=config.connection.port,
-                            cols=80,
-                            rows=25
-                        )
-                        await bot.session.connect()
+                        from bbsbot.games.tw2002.connection import connect
+                        await connect(bot, host=config.connection.host, port=config.connection.port)
                         print(f"✓ Reconnected! Resuming play...")
                         consecutive_orient_failures = 0
                         continue
