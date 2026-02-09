@@ -149,7 +149,7 @@ class WorkerBot(TradingBot):
                         "gather": "Gathering state",
                         "safe_state": "Finding safe prompt",
                         "blank_wake": "Waking connection",
-                        "failed": "Failed",
+                        "failed": "Recovering",  # Transient issue, bot recovers
                     }
                     phase_display = phase_names.get(orient_phase, orient_phase.title())
                     activity = f"ORIENTING: {phase_display}"
