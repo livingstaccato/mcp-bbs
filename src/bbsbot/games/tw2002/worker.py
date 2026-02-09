@@ -230,8 +230,13 @@ class WorkerBot(TradingBot):
             status_detail: str | None = None
             prompt_to_status = {
                 # Login flows
+                "prompt.login_name": "USERNAME",
+                "prompt.what_is_your_name": "USERNAME",
                 "prompt.character_name": "USERNAME",
                 "prompt.character_password": "PASSWORD",
+                "prompt.game_password": "GAME_PASSWORD",
+                "prompt.private_game_password": "GAME_PASSWORD",
+                "prompt.game_password_plain": "GAME_PASSWORD",
                 "prompt.game_selection": "GAME_SELECTION",
                 "prompt.menu_selection": "MENU_SELECTION",
                 "prompt.ship_name": "SHIP_NAME",
@@ -659,7 +664,13 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
         et = type(e).__name__.lower()
         if "watchdog_stuck" in msg or "watchdog" in msg:
             return "watchdog"
-        if "invalid_password" in msg or "prompt.character_password" in msg:
+        if (
+            "invalid_password" in msg
+            or "auth_failed" in msg
+            or "prompt.character_password" in msg
+            or "prompt.game_password" in msg
+            or "prompt.private_game_password" in msg
+        ):
             return "auth"
         if "connection" in msg or "not connected" in msg or "timeout" in msg:
             return "network"

@@ -187,6 +187,10 @@ async def login_sequence(
     print("=" * 80)
 
     step = 0
+    # Track disambiguation for generic "Password?" prompts.
+    sent_username: bool = False
+    last_password_kind: str | None = None  # "game" | "character"
+    ambiguous_password_attempts: int = 0
 
     # PHASE 1: Navigate to game selection (menu_selection prompt)
     print("\nNavigating to game selection menu...")
@@ -255,16 +259,19 @@ async def login_sequence(
             # Real name prompt during character creation
             print(f"      → Real name prompt, sending: {username}")
             await send_input(bot, username, input_type)
+            sent_username = True
 
         elif "what_is_your_name" in prompt_id:
             # Some systems ask this prior to the normal login_name prompt.
             print(f"      → What is your name? entering: {username}")
             await send_input(bot, username, input_type, wait_after=0.5)
+            sent_username = True
 
         elif "character_password" in prompt_id:
             # Character password for new character
             print(f"      → Character password prompt, sending password")
             await send_masked_password(bot, character_password)
+            last_password_kind = "character"
 
         elif "create_character" in prompt_id:
             # Character creation confirmation - answer Y
@@ -277,6 +284,7 @@ async def login_sequence(
             # Creating a new character - send the desired character name
             print(f"      → New player name prompt, entering: {username}")
             await send_input(bot, username, input_type)
+            sent_username = True
 
         elif "login_name" in prompt_id:
             # Send the desired username. Sending literal "new" here can accidentally log
@@ -286,6 +294,7 @@ async def login_sequence(
             # an explicit on-screen instruction, not by default heuristics.
             print(f"      → Sending username")
             await send_input(bot, username, input_type, wait_after=0.5)
+            sent_username = True
             # Give server extra time to process login and prepare next prompt
             await asyncio.sleep(0.3)
 
@@ -490,16 +499,43 @@ async def login_sequence(
             # - character password (new/existing character)
             #
             # Prefer explicit prompt_id classification when available.
+            kind: str | None = None
+            screen_lower = screen.lower()
             if prompt_id and ("game_password" in prompt_id or "private_game_password" in prompt_id):
+                kind = "game"
+            elif prompt_id and "character_password" in prompt_id:
+                kind = "character"
+            else:
+                # Heuristics for ambiguous servers that only emit "Password?".
+                # If we haven't sent a username yet, this is overwhelmingly likely to be
+                # a game-access password rather than a character password.
+                if not sent_username:
+                    kind = "game"
+                elif "private" in screen_lower or "game password" in screen_lower or "enter password for" in screen_lower:
+                    kind = "game"
+                else:
+                    kind = "character"
+
+                # If the screen says "invalid password" and the prompt is ambiguous,
+                # flip once to the other password to avoid getting stuck due to misclassification.
+                if "invalid password" in screen_lower:
+                    ambiguous_password_attempts += 1
+                    if ambiguous_password_attempts <= 2 and last_password_kind in ("game", "character"):
+                        kind = "character" if last_password_kind == "game" else "game"
+
+            if kind == "game":
                 print(f"      → Password prompt, sending game password")
                 await send_masked_password(bot, game_password)
+                last_password_kind = "game"
             else:
                 print(f"      → Password prompt, sending character password")
                 await send_masked_password(bot, character_password)
+                last_password_kind = "character"
 
         elif actual_prompt == "private_game_password":
             print(f"      → Private game password prompt, sending game password")
             await send_masked_password(bot, game_password)
+            last_password_kind = "game"
 
         elif actual_prompt == "new_character_prompt":
             print("      → New character prompt, answering Y to create character")
@@ -519,6 +555,7 @@ async def login_sequence(
         elif actual_prompt == "what_is_your_name":
             print(f"      → Entering character name: {username}")
             await send_input(bot, username, "multi_key")
+            sent_username = True
 
         elif actual_prompt == "use_ansi":
             print("      → Selecting ANSI graphics: Y")
@@ -552,16 +589,19 @@ async def login_sequence(
         elif "what_is_your_name" in prompt_id:
             print(f"      → Entering character name (pattern): {username}")
             await send_input(bot, username, "multi_key")
+            sent_username = True
 
         elif "private_game_password" in prompt_id:
             print(f"      → Sending game password (pattern)")
             await send_masked_password(bot, game_password)
+            last_password_kind = "game"
 
         elif "game_password" in prompt_id:
             # Some servers emit a plain `Password?` without the "private game" banner.
             # Treat this as a game password request, not a character password.
             print(f"      → Game password prompt (pattern), sending game password")
             await send_masked_password(bot, game_password)
+            last_password_kind = "game"
 
         elif "corporate_listings" in prompt_id:
             # Corporate listings menu - send Q to quit
