@@ -246,29 +246,46 @@ class WorkerBot(TradingBot):
                 "prompt.login_name": "USERNAME",
                 "prompt.what_is_your_name": "USERNAME",
                 "prompt.character_name": "USERNAME",
-                "prompt.character_password": "PASSWORD",
                 "prompt.game_password": "GAME_PASSWORD",
                 "prompt.private_game_password": "GAME_PASSWORD",
                 "prompt.game_password_plain": "GAME_PASSWORD",
                 "prompt.game_selection": "GAME_SELECTION",
                 "prompt.menu_selection": "MENU_SELECTION",
-                "prompt.ship_name": "SHIP_NAME",
-                "prompt.planet_name": "PLANET_NAME",
+
+                # Character creation (server reset)
+                "prompt.create_character": "CREATING_CHARACTER",
+                "prompt.new_player_name": "CREATING_CHARACTER",
+                "prompt.name_or_bbs": "CREATING_CHARACTER",
+                "prompt.twgs_gender": "CREATING_CHARACTER",
+                "prompt.twgs_real_name": "CREATING_CHARACTER",
+                "prompt.twgs_ship_selection": "CREATING_CHARACTER",
+                "prompt.twgs_begin_adventure": "CREATING_CHARACTER",
+                "prompt.ship_name": "CREATING_CHARACTER",
+                "prompt.planet_name": "CREATING_CHARACTER",
+
+                # Password selection / entry
+                # If we're not in-game yet, treat this as choosing/setting the character password.
+                "prompt.character_password": "CHOOSING_PASSWORD",
+
                 "prompt.corporate_listings": "CORPORATE_LISTINGS",
-                # In-game prompts
-                "prompt.sector_command": "SECTOR_COMMAND",
+
+                # In-game prompts (only the blocking ones; don't show "SECTOR_COMMAND" etc.)
                 "prompt.port_menu": "PORT_MENU",
                 "prompt.hardware_buy": "PORT_QTY",
                 "prompt.port_haggle": "PORT_HAGGLE",
+
                 # Pause variants
                 "prompt.pause_simple": "PAUSED",
                 "prompt.pause_space_or_enter": "PAUSED",
             }
             if prompt_id:
-                status_detail = prompt_to_status.get(
-                    prompt_id,
-                    prompt_id.replace("prompt.", "").upper(),
-                )
+                status_detail = prompt_to_status.get(prompt_id)
+
+            # If the password prompt is happening while already in-game, it's not password *selection*.
+            if prompt_id == "prompt.character_password":
+                in_game_now = bool(self.current_sector and self.current_sector > 0)
+                if in_game_now:
+                    status_detail = "PASSWORD"
 
             # Override activity for specific prompts that are more precise than context detection.
             if prompt_id == "prompt.stardock_buy":
@@ -312,6 +329,17 @@ class WorkerBot(TradingBot):
             else:
                 username = self.character_name
 
+            # Strategy name for dashboard column (prefer live instance, fall back to config).
+            try:
+                strategy_name = getattr(getattr(self, "strategy", None), "name", None)
+            except Exception:
+                strategy_name = None
+            if not strategy_name:
+                try:
+                    strategy_name = getattr(getattr(self, "config", None), "trading", None).strategy  # type: ignore[union-attr]
+                except Exception:
+                    strategy_name = None
+
             # Determine actual state from session connectivity
             connected = (
                 hasattr(self, 'session')
@@ -346,6 +374,7 @@ class WorkerBot(TradingBot):
                 "activity_context": activity,
                 "status_detail": status_detail,
                 "prompt_id": prompt_id,
+                "strategy": strategy_name,
                 "cargo_fuel_ore": cargo_fuel_ore,
                 "cargo_organics": cargo_organics,
                 "cargo_equipment": cargo_equipment,

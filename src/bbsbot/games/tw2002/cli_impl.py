@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import random
 import re
+import random
 
 from bbsbot.logging import get_logger
 from bbsbot.games.tw2002.config import BotConfig
@@ -20,6 +20,20 @@ _COMMODITY_PATTERNS = {
     "organics": re.compile(r"organics", re.IGNORECASE),
     "equipment": re.compile(r"equipment", re.IGNORECASE),
 }
+
+def _is_port_qty_prompt(line: str) -> bool:
+    """True if `line` is the active port quantity prompt line.
+
+    The screen buffer often contains old "How many ..." lines above the current
+    prompt (e.g. while haggling). We must only treat the *active prompt line* as
+    the quantity prompt, otherwise we keep re-sending qty while in haggle.
+    """
+    ll = (line or "").strip().lower()
+    if not ll:
+        return False
+    if "how many" not in ll:
+        return False
+    return bool(re.search(r"(?i)\bhow\s+many\b.*\[[\d,]+\]\s*\?\s*$", ll))
 
 
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
@@ -404,6 +418,9 @@ async def execute_port_trade(
     """
     from bbsbot.games.tw2002 import errors
 
+    def _is_qty_prompt(last_line: str) -> bool:
+        return _is_port_qty_prompt(last_line)
+
     initial_credits = bot.current_credits or 0
     pending_trade = False
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
@@ -455,6 +472,7 @@ async def execute_port_trade(
         # Use last lines to detect current prompt state
         lines = [l.strip() for l in screen.split("\n") if l.strip()]
         last_lines = "\n".join(lines[-6:]).lower() if lines else ""
+        last_line = (lines[-1].strip().lower() if lines else "")
 
         # Back at sector command = done trading
         if re.search(r"command.*\[\d+\].*\?", last_lines):
@@ -468,13 +486,12 @@ async def execute_port_trade(
             continue
 
         # Quantity prompt: "How many holds of X do you want to buy/sell?"
-        if "how many" in last_lines:
+        if _is_qty_prompt(last_line):
             offered_all_credits = False
             insufficient_haggle_loops = 0
 
             # Find the "how many" line to identify the commodity
-            how_many_lines = [l for l in lines if "how many" in l.lower()]
-            prompt_line = how_many_lines[-1].lower() if how_many_lines else last_lines
+            prompt_line = last_line
             is_buy = " buy" in prompt_line or prompt_line.strip().startswith("how many") and " buy" in prompt_line
             is_sell = " sell" in prompt_line
             last_trade_is_buy = True if is_buy else (False if is_sell else None)

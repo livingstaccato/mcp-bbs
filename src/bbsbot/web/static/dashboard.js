@@ -194,7 +194,7 @@
         <td>${stateHtml}</td>
         <td>${activityHtml}</td>
         <td>${statusHtml}</td>
-        <td>${esc(b.username || "-")}</td>
+        <td>${esc(b.strategy || "-")}</td>
         <td class="numeric">${b.sector}</td>
         <td class="numeric">${creditsDisplay}</td>
         <td class="numeric">${fuelDisplay}</td>
@@ -661,7 +661,7 @@
       `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
       `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
       `<span class="stat"><span class="stat-label">Prompt</span><span class="stat-value">${esc(promptId)}</span></span>`,
-      `<span class="stat"><span class="stat-label">User</span><span class="stat-value">${esc(bot.username || "-")}</span></span>`,
+      `<span class="stat"><span class="stat-label">Strategy</span><span class="stat-value">${esc(bot.strategy || "-")}</span></span>`,
       `<span class="stat"><span class="stat-label">Activity</span><span class="stat-value">${esc(activity)}</span></span>`,
     ].join("");
   }

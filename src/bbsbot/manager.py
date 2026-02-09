@@ -60,6 +60,7 @@ class BotStatus(BaseModel):
     recent_actions: list[dict] = Field(default_factory=list)
     # Character/game info for dashboard display
     username: str | None = None          # Character name
+    strategy: str | None = None          # Current strategy name (e.g., profitable_pairs)
     ship_name: str | None = None         # Current ship name
     ship_level: str | None = None        # Ship class/level (Fighter, Trader, etc)
     port_location: int | None = None     # Current port sector
@@ -400,6 +401,7 @@ class SwarmManager:
                             exit_reason=bot_data.get("exit_reason"),
                             recent_actions=bot_data.get("recent_actions", []),
                             username=bot_data.get("username"),
+                            strategy=bot_data.get("strategy"),
                             ship_name=bot_data.get("ship_name"),
                             ship_level=bot_data.get("ship_level"),
                             port_location=bot_data.get("port_location"),
