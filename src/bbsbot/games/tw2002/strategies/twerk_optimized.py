@@ -258,6 +258,36 @@ class TwerkOptimizedStrategy(TradingStrategy):
             self._current_route = None
             return TradeAction.WAIT, {}
 
+        def _commodity_index(commodity: str) -> int | None:
+            c = (commodity or "").lower().strip()
+            if c in ("fuel", "fuel_ore", "ore", "fuel ore"):
+                return 0
+            if c in ("org", "organics"):
+                return 1
+            if c in ("equip", "equipment"):
+                return 2
+            return None
+
+        def _trade_action_from_port_class(port_class: str | None, commodity: str) -> str | None:
+            """Infer buy/sell intent from the port class.
+
+            TW port class letters represent what the *port does*:
+            - 'S' = port sells that commodity to us -> we should BUY
+            - 'B' = port buys that commodity from us -> we should SELL
+            """
+            if not port_class:
+                return None
+            pc = str(port_class).strip().upper()
+            idx = _commodity_index(commodity)
+            if idx is None or len(pc) < idx + 1:
+                return None
+            letter = pc[idx]
+            if letter == "S":
+                return "buy"
+            if letter == "B":
+                return "sell"
+            return None
+
         current = state.sector
         position = self._route_position
 
@@ -268,20 +298,42 @@ class TwerkOptimizedStrategy(TradingStrategy):
             if current == target:
                 # At route sector - trade or move to next
                 if state.has_port:
-                    # Trade here
+                    # Decide buy vs sell based on the *actual port class* for this commodity.
+                    action = _trade_action_from_port_class(state.port_class, route.commodity)
+
+                    # If we can't infer direction (unknown port class), don't burn turns guessing.
+                    if action is None:
+                        self._route_position += 1
+                        return self._execute_route(state)
+
+                    # Avoid no-op sells when we have 0 cargo (common early-game).
+                    cargo = 0
+                    if route.commodity == "fuel_ore":
+                        cargo = int(state.cargo_fuel_ore or 0)
+                    elif route.commodity == "organics":
+                        cargo = int(state.cargo_organics or 0)
+                    elif route.commodity == "equipment":
+                        cargo = int(state.cargo_equipment or 0)
+
+                    if action == "sell" and cargo <= 0:
+                        # Nothing to sell here; continue along route to find a selling port.
+                        self._route_position += 1
+                        return self._execute_route(state)
+
+                    # Avoid buying when we're full; continue along route to find a buying port.
+                    if action == "buy" and (state.holds_free is not None) and int(state.holds_free) <= 0:
+                        self._route_position += 1
+                        return self._execute_route(state)
+
+                    # Trade here. TradeOpportunity is primarily for logging/visibility; set fields
+                    # to "current sector" for the chosen action.
                     opp = TradeOpportunity(
-                        buy_sector=route.sectors[0],
-                        sell_sector=route.sectors[-1],
+                        buy_sector=int(current or 0) if action == "buy" else int(route.sectors[0]),
+                        sell_sector=int(current or 0) if action == "sell" else int(route.sectors[-1]),
                         commodity=route.commodity,
                         expected_profit=route.expected_profit,
-                        distance=len(route.sectors) - 1,
+                        distance=max(0, len(route.sectors) - 1),
                     )
-
-                    # Determine if buying or selling based on position
-                    if position == 0:
-                        action = "buy"
-                    else:
-                        action = "sell"
 
                     self._route_position += 1
                     return TradeAction.TRADE, {"opportunity": opp, "action": action}
