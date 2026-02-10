@@ -91,6 +91,12 @@ def _get_actual_prompt(screen: str) -> str:
     if "alias" in last_line and ("want to use" in last_line or "do you want" in last_line):
         return "alias_prompt"
 
+    # Name/alias confirmation prompt - check EARLY.
+    # Ship/planet naming flows keep the "What do you want to name..." line in the scrollback,
+    # so if we don't prioritize this, we can loop forever re-sending the name.
+    if "is what you want?" in last_lines:
+        return "name_confirm"
+
     # Ship/planet naming prompts (new character creation).
     # IMPORTANT: these screens can retain stale "(N)ew Name or (B)BS Name" text
     # at the bottom of the buffer. Prefer the explicit ship/planet prompt text.
@@ -128,12 +134,6 @@ def _get_actual_prompt(screen: str) -> str:
     # Show today's log?
     if "show today's log" in last_line and "(y/n)" in last_line:
         return "show_log_prompt"
-
-    # Name/alias confirmation prompt - check BEFORE generic Y/N
-    # This catches both ship name and alias confirmation. Check last_lines because
-    # the cursor line may be blank and the confirmation text may be just above it.
-    if "is what you want?" in last_lines:
-        return "name_confirm"
 
     # Alias input prompt (when BBS name is taken)
     # e.g. "What Alias do you want to use?"
