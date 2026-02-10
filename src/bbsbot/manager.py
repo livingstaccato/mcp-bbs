@@ -110,11 +110,48 @@ class SwarmManager:
         self.processes: dict[str, subprocess.Popen] = {}
         self.websocket_clients: set[WebSocket] = set()
         self.log_service = LogService()
+        # Track the current background spawn task so we can avoid overlapping spawns.
+        self._spawn_task: asyncio.Task | None = None
 
         self.app = FastAPI(title="BBSBot Swarm Manager")
         self._setup_routes()
         self._setup_dashboard()
         self._load_state()
+
+    async def cancel_spawn(self) -> bool:
+        """Cancel any in-flight spawn batch.
+
+        Without this, users can accidentally start multiple spawn batches, and `clear`
+        won't actually clear because the old task keeps re-registering/spawning bots.
+        """
+        task = self._spawn_task
+        if task is None or task.done():
+            self._spawn_task = None
+            return False
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+        self._spawn_task = None
+        return True
+
+    async def start_spawn_swarm(
+        self,
+        config_paths: list[str],
+        *,
+        group_size: int = 1,
+        group_delay: float = 12.0,
+        cancel_existing: bool = True,
+    ) -> None:
+        """Start a background spawn batch (optionally canceling any existing batch)."""
+        if cancel_existing:
+            await self.cancel_spawn()
+        self._spawn_task = asyncio.create_task(
+            self.spawn_swarm(config_paths, group_size=group_size, group_delay=group_delay)
+        )
 
     def _setup_dashboard(self) -> None:
         """Mount web dashboard static files and route."""

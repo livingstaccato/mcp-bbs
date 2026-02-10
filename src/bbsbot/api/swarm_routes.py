@@ -72,13 +72,14 @@ async def spawn_batch(request: SpawnBatchRequest):
     total = len(request.config_paths)
     groups = (total + request.group_size - 1) // request.group_size
 
-    # Run spawning in background so the API returns immediately
-    asyncio.create_task(
-        _manager.spawn_swarm(
-            request.config_paths,
-            group_size=request.group_size,
-            group_delay=request.group_delay,
-        )
+    # Run spawning in background so the API returns immediately.
+    # Important: cancel any prior in-flight spawn; otherwise repeated spawn clicks
+    # or a spawn+clear loop leaves a background task that keeps repopulating bots.
+    await _manager.start_spawn_swarm(
+        request.config_paths,
+        group_size=request.group_size,
+        group_delay=request.group_delay,
+        cancel_existing=True,
     )
 
     return {
@@ -101,6 +102,7 @@ async def status():
 async def kill_all():
     """Kill all running bots in the swarm."""
     assert _manager is not None
+    await _manager.cancel_spawn()
     killed = []
     for bot_id in list(_manager.processes.keys()):
         try:
@@ -115,6 +117,7 @@ async def kill_all():
 async def clear_swarm():
     """Clear all bot entries (running bots are killed first)."""
     assert _manager is not None
+    await _manager.cancel_spawn()
     # Kill running bots first
     for bot_id in list(_manager.processes.keys()):
         try:
