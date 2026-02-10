@@ -623,7 +623,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             config_paths: configs,
-            group_size: 5,
+            // Spawn serially; TW2002 capacity/backpressure makes concurrent logins unstable.
+            group_size: 1,
             group_delay: 12.0
           })
         });

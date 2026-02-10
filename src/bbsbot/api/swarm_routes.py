@@ -29,8 +29,10 @@ class SpawnBatchRequest(BaseModel):
     """Request body for batch spawning bots."""
 
     config_paths: list[str]
-    group_size: int = 5
-    group_delay: float = 60.0
+    # Default to serialized spawns. TW2002 sessions are capacity constrained;
+    # spawning many bots concurrently causes "Failed to start game session" and disconnects.
+    group_size: int = 1
+    group_delay: float = 12.0
 
 
 def setup(manager: SwarmManager) -> APIRouter:
