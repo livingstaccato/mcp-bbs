@@ -40,12 +40,18 @@ class TermBridge:
         self._latest_snapshot: dict[str, Any] | None = None
         self._running = False
         self._task: asyncio.Task | None = None
+        # Session is created later (after connect/login). Attach lazily and re-attach
+        # if the worker reconnects with a new Session instance.
+        self._attached_session: Any | None = None
 
     def attach_session(self) -> None:
         """Attach a Session watcher to forward live terminal output."""
         session = getattr(self._bot, "session", None)
         if session is None:
             return
+        if self._attached_session is session:
+            return
+        self._attached_session = session
 
         def _watch(snapshot: dict[str, Any], raw: bytes) -> None:
             # Keep last snapshot for on-demand snapshot responses.
@@ -155,6 +161,12 @@ class TermBridge:
         session = getattr(self._bot, "session", None)
         if session is None:
             return
+        # If we started the bridge before the bot connected, we won't have a watcher attached.
+        # Attach here so the browser gets streaming output soon after the first snapshot request.
+        try:
+            self.attach_session()
+        except Exception:
+            pass
         try:
             snapshot = self._latest_snapshot or session.emulator.get_snapshot()
             msg = {
