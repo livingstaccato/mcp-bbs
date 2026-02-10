@@ -93,6 +93,28 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
             merged_kv = dict(bot.last_semantic_data)
             merged_kv.update({k: v for k, v in kv_data.items() if v is not None})
 
+            # If we don't know warps for this sector, navigation will stall (MOVE/EXPLORE/WAIT can't pick a target).
+            # Force one full scan (D-driven orient) to populate warps/port data, then continue.
+            try:
+                need_warps = not merged_kv.get("warps")
+                if need_warps and bot.sector_knowledge and quick_state.sector:
+                    info0 = bot.sector_knowledge.get_sector_info(quick_state.sector)
+                    if info0 and info0.warps:
+                        need_warps = False
+                if need_warps:
+                    bot.game_state = await orientation.orient(bot, bot.sector_knowledge)
+                    if bot.game_state.sector:
+                        bot.mark_scanned(bot.game_state.sector)
+                    # After full orient, sync + return early.
+                    if bot.game_state.sector:
+                        bot.current_sector = bot.game_state.sector
+                        bot.sectors_visited.add(bot.game_state.sector)
+                    if bot.game_state.credits:
+                        bot.current_credits = bot.game_state.credits
+                    return bot.game_state
+            except Exception:
+                pass
+
             # End-state: always learn core stats immediately after entering game.
             # On this server, "D" is re-display sector, not a stats screen. "i" reliably prints credits
             # and (often) holds, and can appear even without leaving the command context.

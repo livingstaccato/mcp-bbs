@@ -68,3 +68,6 @@ logs/diagnostics/*.json
 sessions/
 *.jsonl
 games/tw2002/session.jsonl
+
+# Local Playwright MCP artifacts
+.playwright-mcp/
