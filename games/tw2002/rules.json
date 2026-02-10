@@ -1984,7 +1984,11 @@
       "kind": "menu",
       "input_type": "single_key",
       "match": {
-        "pattern": "(?i)rankings|scores|leaderboard",
+        "pattern": "(?i)\\b(rankings|leaderboard)\\b",
+        "match_mode": "regex"
+      },
+      "negative_match": {
+        "pattern": "(?is)==--\\s*trade\\s+wars\\s+2002\\s*--==[\\s\\S]{0,600}enter\\s+your\\s+choice\\s*:",
         "match_mode": "regex"
       },
       "notes": "Rankings/scores menu"
