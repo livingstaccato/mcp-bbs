@@ -7,6 +7,7 @@ timeouts/disconnects at deterministic intervals so tests are repeatable.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import random
 from typing import Any
 
@@ -48,10 +49,8 @@ class ChaosTransport(ConnectionTransport):
             await asyncio.sleep(self._rng.uniform(0.0, float(self._max_jitter_ms)) / 1000.0)
 
         if self._disconnect_n > 0 and (self._rx_count % self._disconnect_n) == 0:
-            try:
+            with contextlib.suppress(Exception):
                 await self._inner.disconnect()
-            except Exception:
-                pass
             raise ConnectionError(f"{self._label}: injected disconnect on receive #{self._rx_count}")
 
         if self._timeout_n > 0 and (self._rx_count % self._timeout_n) == 0:

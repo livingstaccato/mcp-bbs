@@ -188,7 +188,7 @@ class TestWarpVerification:
                 ("single_key", "prompt.sector_command", "Sector 200 [?]:", {}),
             ]
 
-            with patch("bbsbot.games.tw2002.trading.navigation.send_input") as mock_send:
+            with patch("bbsbot.games.tw2002.trading.navigation.send_input"):
                 with patch("bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen") as mock_extract:
                     mock_extract.return_value = 200
 

@@ -141,10 +141,7 @@ def extract_semantic_kv(screen: str) -> dict:
     # Use cleaned display text to avoid ANSI artifacts.
     plain_lines = clean_screen_for_display(screen)
     # screen_utils.clean_screen_for_display returns list[str]
-    if isinstance(plain_lines, list):
-        iter_lines = plain_lines
-    else:
-        iter_lines = str(plain_lines).splitlines()
+    iter_lines = plain_lines if isinstance(plain_lines, list) else str(plain_lines).splitlines()
     for line in iter_lines:
         line_stripped = line.strip()
         if not line_stripped:

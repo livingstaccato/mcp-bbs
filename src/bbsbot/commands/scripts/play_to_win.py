@@ -17,16 +17,20 @@ Now supports configuration via YAML file and the new systems:
 
 import argparse
 import asyncio
+import contextlib
 import random
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from bbsbot.games.tw2002.bot import TradingBot
-from bbsbot.games.tw2002.character import CharacterState
 from bbsbot.games.tw2002.config import BotConfig, load_config
 from bbsbot.games.tw2002.multi_character import MultiCharacterManager
+
+if TYPE_CHECKING:
+    from bbsbot.games.tw2002.character import CharacterState
 
 
 class PortInfo(BaseModel):
@@ -94,7 +98,6 @@ class TradeWarPlayer:
             )
 
         # Create character using multi-char manager
-        prefix = self.config.character.name_prefix
         self.char_state = self.multi_char.create_character()
         char_name = self.char_state.name
 
@@ -408,7 +411,7 @@ class TradeWarPlayer:
         # Without this flag, the bot accepts prices for skipped commodities.
         pending_trade = False
 
-        for attempt in range(max_trade_attempts):
+        for _attempt in range(max_trade_attempts):
             result = await self.bot.session.read(timeout_ms=1500, max_bytes=8192)
             screen = result.get("screen", "")
             screen_lower = screen.lower()
@@ -449,10 +452,7 @@ class TradeWarPlayer:
                     break
                 # Extract max amount if shown
                 max_match = re.search(r"you can afford\s+(\d+)", screen_lower)
-                if max_match:
-                    amount = int(max_match.group(1))
-                else:
-                    amount = self.session.holds
+                amount = int(max_match.group(1)) if max_match else self.session.holds
 
                 # LLM HINT: If amount is 0, we're skipping this commodity.
                 # Set pending_trade accordingly so we don't accept price for skipped items.
@@ -767,10 +767,8 @@ class TradeWarPlayer:
 
                 # Close old session
                 if self.bot and self.bot.session_id:
-                    try:
+                    with contextlib.suppress(BaseException):
                         await self.bot.session_manager.close_session(self.bot.session_id)
-                    except:
-                        pass
 
                 # Reset session but keep stats
                 old_profit = self.session.total_profit
@@ -794,10 +792,8 @@ class TradeWarPlayer:
 
         # Cleanup
         if self.bot and self.bot.session_id:
-            try:
+            with contextlib.suppress(BaseException):
                 await self.bot.session_manager.close_session(self.bot.session_id)
-            except:
-                pass
 
     async def report(self) -> None:
         """Print session report."""

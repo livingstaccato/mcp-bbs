@@ -5,6 +5,7 @@ Automated credit accumulation via 499↔607 trading loop.
 """
 
 import asyncio
+import contextlib
 import sys
 from argparse import ArgumentParser
 
@@ -125,10 +126,8 @@ async def main():
         sys.exit(1)
     finally:
         if bot.session_id:
-            try:
+            with contextlib.suppress(Exception):
                 await bot.session_manager.close_session(bot.session_id)
-            except Exception:
-                pass
 
 
 if __name__ == "__main__":

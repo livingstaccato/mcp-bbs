@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -28,6 +27,7 @@ from bbsbot.transport.chaos import ChaosTransport
 from bbsbot.transport.telnet import TelnetTransport
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 log = structlog.get_logger()

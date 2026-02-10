@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from time import time
+from typing import TYPE_CHECKING
 
 import pytest
 
 from bbsbot.games.tw2002.character import CharacterState
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.multi_character import MultiCharacterManager
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture

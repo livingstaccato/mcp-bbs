@@ -24,7 +24,7 @@ async def debug_with_instrumentation():
 
         # Navigate to game selection menu
         print("Step 1: Get to menu_selection prompt...")
-        for step in range(5):
+        for _step in range(5):
             input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             if "menu_selection" in prompt_id:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002 import cli_impl
 from bbsbot.games.tw2002.io import wait_and_respond
@@ -12,6 +12,9 @@ from bbsbot.logging import get_logger
 
 from .navigation import resolve_paths, warp_to_sector
 from .operations import dock_and_trade
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 

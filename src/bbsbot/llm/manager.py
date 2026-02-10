@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from bbsbot.llm.base import LLMProvider
+from typing import TYPE_CHECKING
+
 from bbsbot.llm.cache import LLMCache
-from bbsbot.llm.config import LLMConfig
 from bbsbot.llm.exceptions import LLMError
-from bbsbot.llm.types import ChatRequest, ChatResponse, CompletionRequest, CompletionResponse
 from bbsbot.llm.usage_tracker import UsageTracker
 from bbsbot.logging import get_logger
+
+if TYPE_CHECKING:
+    from bbsbot.llm.base import LLMProvider
+    from bbsbot.llm.config import LLMConfig
+    from bbsbot.llm.types import ChatRequest, ChatResponse, CompletionRequest, CompletionResponse
 
 logger = get_logger(__name__)
 

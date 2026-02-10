@@ -6,12 +6,14 @@ Allows Claude to control the bot swarm through the central manager.
 from __future__ import annotations
 
 import glob
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
-from mcp.server import Server
 
 from bbsbot.defaults import MANAGER_URL
+
+if TYPE_CHECKING:
+    from mcp.server import Server
 
 
 def _get_client() -> httpx.Client:

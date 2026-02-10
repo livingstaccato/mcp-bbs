@@ -7,14 +7,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002.strategies.base import TradeResult
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.bot import TradingBot
     from bbsbot.games.tw2002.config import BotConfig
     from bbsbot.games.tw2002.orientation import SectorKnowledge
-    from bbsbot.games.tw2002.strategies.base import TradingStrategy
+    from bbsbot.games.tw2002.strategies.base import TradeResult, TradingStrategy
 
 logger = get_logger(__name__)
 

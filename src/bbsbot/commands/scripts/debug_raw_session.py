@@ -23,14 +23,14 @@ async def debug_raw_session():
 
         # Navigate to game selection
         print("Getting to menu_selection prompt...")
-        for step in range(5):
+        for _step in range(5):
             snapshot = await bot.session.read(timeout_ms=500, max_bytes=8192)
             detected = snapshot.get("prompt_detected")
 
             if detected and "menu_selection" in detected.get("prompt_id", ""):
                 print("✓ Found menu_selection\n")
-                prompt_id = detected.get("prompt_id")
-                input_type = detected.get("input_type")
+                detected.get("prompt_id")
+                detected.get("input_type")
                 break
 
             # Try to handle login

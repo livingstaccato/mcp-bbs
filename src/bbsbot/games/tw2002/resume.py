@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
 from time import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bbsbot.games.tw2002.character import CharacterState
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass

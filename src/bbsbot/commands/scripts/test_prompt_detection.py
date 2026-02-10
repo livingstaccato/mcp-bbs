@@ -59,7 +59,7 @@ def test_buffer_manager():
     assert buffer2.time_since_last_change > 0
 
     # Test idle detection (screen unchanged for 2+ seconds)
-    buffer3 = buffer_mgr.add_screen(snapshot3)
+    buffer_mgr.add_screen(snapshot3)
     is_idle = buffer_mgr.detect_idle_state(threshold_seconds=2.0)
     assert is_idle, "Should detect idle state after 3 seconds"
 

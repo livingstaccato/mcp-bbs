@@ -20,6 +20,8 @@ from typing import Any
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+import contextlib
+
 from bbsbot.games.tw2002 import TradingBot
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.connection import connect
@@ -176,10 +178,8 @@ class InterventionVerifier:
 
         finally:
             if bot and bot.session:
-                try:
+                with contextlib.suppress(Exception):
                     await bot.session.disconnect()
-                except Exception:
-                    pass
 
         return result
 

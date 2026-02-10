@@ -5,7 +5,7 @@ Tests GameState, SectorKnowledge, and context detection.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.orientation import (
     GameState,
@@ -15,6 +15,9 @@ from bbsbot.games.tw2002.orientation import (
     parse_display_screen,
     parse_sector_display,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestGameState:

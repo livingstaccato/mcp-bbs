@@ -123,7 +123,6 @@ async def test_kv_flow_through_system():
     print("K/V DATA FLOW TEST")
     print("=" * 80)
 
-
     print("\n1. Testing extraction in isolation...")
     from bbsbot.learning.extractor import KVExtractor
 

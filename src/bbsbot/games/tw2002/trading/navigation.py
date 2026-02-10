@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.io import send_input, wait_and_respond
 from bbsbot.logging import get_logger
 
 from .parsers import extract_sector_from_screen
 from .validation import validate_kv_data
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 

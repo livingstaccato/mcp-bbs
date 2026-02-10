@@ -81,7 +81,7 @@ async def dock_and_trade(
 
     # Handle commodity/quantity prompts
     action_attempts = 0
-    for attempt in range(10):
+    for _attempt in range(10):
         try:
             input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=3000)
             print(f"    → {prompt_id} ({input_type})")

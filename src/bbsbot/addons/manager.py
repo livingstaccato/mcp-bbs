@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from bbsbot.addons.base import Addon, AddonEvent
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bbsbot.addons.base import Addon, AddonEvent
 
 
 class AddonManager:

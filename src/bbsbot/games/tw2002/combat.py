@@ -157,10 +157,7 @@ class CombatManager:
         max_shields = 100  # Assumption - would be better from ship stats
 
         health_percent = (shields / max_shields) * 100
-        if health_percent < self.config.retreat_health_percent:
-            return True
-
-        return False
+        return health_percent < self.config.retreat_health_percent
 
     def should_avoid(self, state: GameState, sector: int) -> bool:
         """Check if we should avoid entering a sector.
@@ -352,7 +349,7 @@ class CombatManager:
             pass  # Keep the record for cooldown period
 
         # Track hostile traders
-        for trader in state.traders_present:
+        for _trader in state.traders_present:
             # Would need game data to determine if hostile
             pass
 

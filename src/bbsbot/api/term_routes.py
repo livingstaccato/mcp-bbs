@@ -144,7 +144,7 @@ class TermHub:
         @router.websocket("/ws/worker/{bot_id}/term")
         async def ws_worker_term(websocket: WebSocket, bot_id: str) -> None:
             await websocket.accept()
-            st = await self._get(bot_id)
+            await self._get(bot_id)
             async with self._lock:
                 st2 = self._bots.get(bot_id)
                 if st2 is None:

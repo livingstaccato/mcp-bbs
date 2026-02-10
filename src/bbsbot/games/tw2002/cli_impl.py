@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import random
 import re
+from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import OrientationError
 from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
 from bbsbot.games.tw2002.visualization import GoalStatusDisplay
 from bbsbot.logging import get_logger
+
+if TYPE_CHECKING:
+    from bbsbot.games.tw2002.config import BotConfig
 
 logger = get_logger(__name__)
 
@@ -265,10 +269,8 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 strategy.set_policy(effective_policy)
         except Exception:
             pass
-        try:
+        with contextlib.suppress(Exception):
             bot.strategy_mode = effective_policy
-        except Exception:
-            pass
 
         # Get next action from strategy (handle async strategies)
         if hasattr(strategy, "_get_next_action_async"):
@@ -317,10 +319,8 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 strategy.set_intent(intent)
         except Exception:
             pass
-        try:
+        with contextlib.suppress(Exception):
             bot.strategy_intent = intent
-        except Exception:
-            pass
 
         # Log AI reasoning to bot action feed and dashboard activity
         ai_reasoning = None
@@ -510,7 +510,6 @@ async def execute_port_trade(
     initial_credits = bot.current_credits or 0
     pending_trade = False
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
-    target_seen = False  # Track if we ever saw the target commodity prompt
     credits_available: int | None = None
     last_trade_commodity: str | None = None
     last_trade_is_buy: bool | None = None  # True when we are buying from port (port sells)
@@ -552,10 +551,8 @@ async def execute_port_trade(
         # reliable than cached state during login/orientation/trade screens.
         m_credits = re.search(r"\byou (?:only )?have\s+([\d,]+)\s+credits\b", screen_lower)
         if m_credits:
-            try:
+            with contextlib.suppress(Exception):
                 credits_available = int(m_credits.group(1).replace(",", ""))
-            except Exception:
-                pass
 
         # Check for error loops (e.g., "not in corporation" repeated)
         if errors._check_for_error_loop(bot, screen):
@@ -608,7 +605,6 @@ async def execute_port_trade(
                 # Targeted trading: only trade the target commodity
                 is_target = bool(target_re.search(prompt_line))
                 if is_target:
-                    target_seen = True
 
                     # If the caller specified buy/sell, enforce it.
                     if trade_action == "buy" and not is_buy:
@@ -641,10 +637,7 @@ async def execute_port_trade(
                     else:
                         # If we are buying and credits are unknown/low, do not accept the game's default.
                         # Default quantities frequently lead to "Your offer [X] ?" loops when broke.
-                        if is_buy and (credits_available is None or credits_available < 1000):
-                            qty_str = "1"
-                        else:
-                            qty_str = ""
+                        qty_str = "1" if is_buy and (credits_available is None or credits_available < 1000) else ""
                     await bot.session.send(f"{qty_str}\r")
                     pending_trade = True
                     logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
@@ -673,10 +666,8 @@ async def execute_port_trade(
         # Capture "Agreed, N units." to compute per-unit pricing when the total appears.
         m_agreed = re.search(r"(?i)\bagreed,\s*([\d,]+)\s+units\b", last_lines)
         if m_agreed:
-            try:
+            with contextlib.suppress(Exception):
                 last_trade_qty = int(m_agreed.group(1).replace(",", ""))
-            except Exception:
-                pass
 
         # Price/offer negotiation - only respond if we have a pending trade
         if pending_trade and ("offer" in last_lines or "price" in last_lines or "haggl" in last_lines):

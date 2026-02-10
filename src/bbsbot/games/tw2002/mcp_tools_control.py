@@ -35,12 +35,11 @@ def _mark_hijacked(bot: object, tool_name: str) -> None:
         if hasattr(bot, "session_id") and hasattr(bot, "session_manager"):
             session_id = bot.session_id
             manager = bot.session_manager
-            if manager and hasattr(manager, "bots"):
-                if session_id in manager.bots:
-                    status = manager.bots[session_id]
-                    status.is_hijacked = True
-                    status.hijacked_at = time.time()
-                    status.hijacked_by = tool_name
+            if manager and hasattr(manager, "bots") and session_id in manager.bots:
+                status = manager.bots[session_id]
+                status.is_hijacked = True
+                status.hijacked_at = time.time()
+                status.hijacked_by = tool_name
     except Exception as e:
         logger.debug(f"Could not mark bot as hijacked: {e}")
 

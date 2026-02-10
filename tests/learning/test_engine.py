@@ -161,7 +161,7 @@ class TestProcessScreen:
     @pytest.mark.asyncio
     async def test_process_screen_basic(self, engine, sample_snapshot):
         """Test basic screen processing."""
-        result = await engine.process_screen(sample_snapshot)
+        await engine.process_screen(sample_snapshot)
 
         # Should return None if no prompt detected (no patterns loaded)
         # But screen should still be buffered

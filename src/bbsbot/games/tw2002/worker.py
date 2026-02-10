@@ -22,6 +22,8 @@ from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
 
+import contextlib
+
 from bbsbot.defaults import MANAGER_URL as MANAGER_URL_DEFAULT
 
 
@@ -138,10 +140,8 @@ class WorkerBot(TradingBot):
                     except Exception:
                         pass
 
-                    try:
+                    with contextlib.suppress(Exception):
                         await self.disconnect()
-                    except Exception:
-                        pass
 
                     # Reset timer so we don't spam disconnect loops if reconnect is slow.
                     self._note_progress()
@@ -218,6 +218,7 @@ class WorkerBot(TradingBot):
             is_command_prompt = False
             screen_phase: str | None = None
             in_game_now = False
+            lifecycle_status: str | None = None
 
             # Get current screen from session
             if hasattr(self, "session") and self.session:
@@ -297,10 +298,7 @@ class WorkerBot(TradingBot):
                     activity = "ON_PLANET"
                 elif current_context == "menu":
                     # Check if it's game selection menu (sector is None means not in game yet)
-                    if not in_game_now:
-                        activity = "GAME_SELECTION_MENU"
-                    else:
-                        activity = "IN_GAME_MENU"
+                    activity = "GAME_SELECTION_MENU" if not in_game_now else "IN_GAME_MENU"
                 elif current_context == "pause":
                     # Keep Activity stable; show PAUSED in Status instead.
                     activity = self._last_activity_context or (
@@ -308,10 +306,7 @@ class WorkerBot(TradingBot):
                     )
                 elif current_context == "unknown":
                     # Ambiguous snapshot: keep last known in-game activity when possible.
-                    if in_game_now:
-                        activity = self._last_activity_context or "IN_GAME"
-                    else:
-                        activity = "LOGGING_IN"
+                    activity = self._last_activity_context or "IN_GAME" if in_game_now else "LOGGING_IN"
                 else:
                     # Any other context, show it verbatim
                     activity = current_context.upper()
@@ -320,10 +315,13 @@ class WorkerBot(TradingBot):
                 if hasattr(self, "session") and self.session and self.session.is_connected():
                     activity = (self._last_activity_context or "IN_GAME") if in_game_now else "CONNECTING"
                 else:
-                    activity = "DISCONNECTED"
+                    activity = self._last_activity_context or ("IN_GAME" if in_game_now else "LOGGING_IN")
+                    lifecycle_status = "DISCONNECTED"
 
             # Prefer a concise "Status" field for phase/prompt detail, separate from activity.
             status_detail: str | None = None
+            if lifecycle_status:
+                status_detail = lifecycle_status
             if screen_phase:
                 status_detail = screen_phase
                 # Avoid mislabeling stale sector-derived states as "IN_GAME".
@@ -469,8 +467,11 @@ class WorkerBot(TradingBot):
             actual_state = getattr(self, "lifecycle_state", "running") or "running"
             if actual_state == "running" and not connected:
                 actual_state = "disconnected"
-            if not connected and actual_state in ("running", "disconnected"):
-                activity = "DISCONNECTED"
+            if not connected:
+                if not activity or activity in ("INITIALIZING", "CONNECTING", "DISCONNECTED"):
+                    activity = self._last_activity_context or ("IN_GAME" if in_game_now else "LOGGING_IN")
+                if not status_detail:
+                    status_detail = "DISCONNECTED"
 
             # Check if AI strategy is thinking (waiting for LLM response).
             if self.strategy and hasattr(self.strategy, "_is_thinking") and self.strategy._is_thinking:
@@ -634,10 +635,8 @@ class WorkerBot(TradingBot):
                 delay = (last_sent + float(min_interval_s)) - now
                 if delay > 0:
                     await asyncio.sleep(delay)
-                try:
+                with contextlib.suppress(Exception):
                     await self.report_status()
-                except Exception:
-                    pass
                 last_sent = time.monotonic()
 
         self._screen_change_task = asyncio.create_task(_loop())
@@ -658,10 +657,8 @@ class WorkerBot(TradingBot):
         self._reporting = False
         if hasattr(self, "_report_task"):
             self._report_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._report_task
-            except asyncio.CancelledError:
-                pass
 
     def log_action(self, action: str, sector: int, details: str | None = None, result: str = "pending") -> None:
         """Log a bot action for the action feed."""
@@ -775,10 +772,8 @@ class WorkerBot(TradingBot):
         await self.set_hijacked(False)
         if self._screen_change_task is not None:
             self._screen_change_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._screen_change_task
-            except asyncio.CancelledError:
-                pass
             self._screen_change_task = None
         await self._http_client.aclose()
 
@@ -827,10 +822,8 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     game_password = config_obj.connection.game_password
 
     # Register with manager (best-effort; don't crash the worker if manager is down).
-    try:
+    with contextlib.suppress(Exception):
         await worker.register_with_manager()
-    except Exception:
-        pass
 
     # Start reporting immediately so the manager doesn't mark "no heartbeat".
     await worker.report_status()
@@ -920,10 +913,8 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
                 # (Re)connect if needed.
                 if not getattr(worker, "session", None) or not worker.session.is_connected():
-                    try:
+                    with contextlib.suppress(Exception):
                         await worker.disconnect()
-                    except Exception:
-                        pass
                     logger.info(f"Connecting to {config_obj.connection.host}:{config_obj.connection.port}")
                     worker.ai_activity = "CONNECTING"
                     worker.lifecycle_state = "recovering"
@@ -1000,10 +991,8 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                         fatal=False,
                         state="blocked",
                     )
-                    try:
+                    with contextlib.suppress(Exception):
                         await worker.report_status()
-                    except Exception:
-                        pass
                     await asyncio.sleep(sleep_s)
                     # After blocked sleep, keep the process alive and try again.
                     backoff_s = 1.0
@@ -1025,36 +1014,26 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
                 # If recovery didn't help, force reconnect.
                 if not recovered:
-                    try:
+                    with contextlib.suppress(Exception):
                         await worker.disconnect()
-                    except Exception:
-                        pass
 
                 # Exponential backoff to avoid thrashing the server on persistent failures.
                 sleep_s = min(60.0, backoff_s)
                 worker.ai_activity = f"BACKOFF {sleep_s:.0f}s (failures={failures})"
                 worker.lifecycle_state = "recovering"
-                try:
+                with contextlib.suppress(Exception):
                     await worker.report_status()
-                except Exception:
-                    pass
                 await asyncio.sleep(sleep_s)
                 backoff_s = min(60.0, backoff_s * 2.0)
                 continue
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await worker.stop_status_reporter()
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             await worker.disconnect()
-        except Exception:
-            pass
         if term_bridge is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await term_bridge.stop()
-            except Exception:
-                pass
         await worker.cleanup()
 
 

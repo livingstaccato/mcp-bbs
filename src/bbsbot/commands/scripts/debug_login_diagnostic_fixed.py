@@ -64,7 +64,7 @@ async def main():
         print("PHASE 1: Login → Menu Selection")
         print(f"{'═' * 80}")
 
-        for attempt in range(15):
+        for _attempt in range(15):
             step += 1
             try:
                 input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=8000)
@@ -114,7 +114,7 @@ async def main():
 
         pause_count = 0
 
-        for attempt in range(70):
+        for _attempt in range(70):
             step += 1
             try:
                 input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=20000)

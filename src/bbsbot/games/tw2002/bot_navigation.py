@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002 import orientation
@@ -211,10 +212,8 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
 
             # Persist what we observed, plus port market signals, even in fast path.
             if bot.sector_knowledge and bot.game_state.sector:
-                try:
+                with contextlib.suppress(Exception):
                     bot.sector_knowledge.record_observation(bot.game_state)
-                except Exception:
-                    pass
                 try:
                     for comm in ("fuel_ore", "organics", "equipment"):
                         st = merged_kv.get(f"port_{comm}_status")
@@ -376,9 +375,8 @@ async def go_to_tavern(bot: TradingBot) -> bool:
     state = await orientation.where_am_i(bot)
 
     # If not at StarDock, try to get there
-    if state.context != "stardock":
-        if not await go_to_stardock(bot):
-            return False
+    if state.context != "stardock" and not await go_to_stardock(bot):
+        return False
 
     # Enter Tavern
     await bot.session.send("T")

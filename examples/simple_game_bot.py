@@ -4,7 +4,6 @@ This demonstrates how a future game can leverage the framework patterns
 extracted from TW2002 to minimize boilerplate code.
 """
 
-
 from bbsbot.core import (
     BaseErrorDetector,
     BotBase,

@@ -236,7 +236,7 @@ class TEDITManager(BaseModel):
         await asyncio.sleep(0.3)
 
         # Read result
-        screen = await self._read_screen()
+        await self._read_screen()
 
         # Exit editor
         await self._send("Q")

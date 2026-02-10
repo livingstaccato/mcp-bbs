@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 InputType = Literal["single_key", "multi_key", "any_key", "menu_choice", "none"]
 MatchMode = Literal["regex", "contains", "exact"]

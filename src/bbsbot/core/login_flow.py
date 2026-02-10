@@ -7,8 +7,10 @@ but simpler games can use this framework to reduce boilerplate.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class LoginHandler(Protocol):
@@ -89,7 +91,7 @@ class MultiStageLoginFlow:
         Raises:
             RuntimeError: If login fails or max_steps exceeded
         """
-        for step in range(max_steps):
+        for _step in range(max_steps):
             # Wait for next prompt
             result = await self.wait_for_prompt(timeout_ms=timeout_ms)
             prompt_id = result.get("prompt_id", "")

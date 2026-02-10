@@ -10,13 +10,10 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002.config import BotConfig, GoalPhase
 from bbsbot.games.tw2002.interventions.advisor import InterventionAdvisor
 from bbsbot.games.tw2002.interventions.trigger import InterventionTrigger
-from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.ai import (
     decision_maker,
     goals,
@@ -32,10 +29,14 @@ from bbsbot.games.tw2002.strategies.base import (
 )
 from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
 from bbsbot.llm.manager import LLMManager
-from bbsbot.llm.types import ChatMessage
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from bbsbot.games.tw2002.config import BotConfig, GoalPhase
+    from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
+    from bbsbot.llm.types import ChatMessage
     from bbsbot.logging.session_logger import SessionLogger
 
 logger = get_logger(__name__)

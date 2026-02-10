@@ -3,13 +3,16 @@ from __future__ import annotations
 import asyncio
 import inspect
 import sys
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import click
 
 from bbsbot.app import create_app
 from bbsbot.cli_swarm import swarm_commands
 from bbsbot.settings import Settings
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})

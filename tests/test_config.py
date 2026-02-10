@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from bbsbot.paths import ENV_KNOWLEDGE_ROOT, default_knowledge_root, validate_knowledge_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_env_var_override(tmp_path: Path) -> None:

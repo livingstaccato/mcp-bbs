@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING
 from bbsbot.core.error_detection import LoopDetector
 from bbsbot.core.session_manager import SessionManager
 from bbsbot.games.tw2002.config import BotConfig
-from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.paths import default_knowledge_root
 
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.banking import BankingManager
     from bbsbot.games.tw2002.combat import CombatManager
+    from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
     from bbsbot.games.tw2002.strategies.base import TradingStrategy
     from bbsbot.games.tw2002.upgrades import UpgradeManager
     from bbsbot.watch.manager import WatchManager

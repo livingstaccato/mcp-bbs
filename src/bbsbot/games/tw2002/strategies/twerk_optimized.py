@@ -9,16 +9,19 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from time import time
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bbsbot.games.tw2002.config import BotConfig
-from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
     TradeOpportunity,
     TradingStrategy,
 )
+
+if TYPE_CHECKING:
+    from bbsbot.games.tw2002.config import BotConfig
+    from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 
 logger = logging.getLogger(__name__)
 

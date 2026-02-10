@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from twerk.analysis import SectorGraph, TradeRoute
 
     from bbsbot.games.tw2002.bot_core import TradingBot

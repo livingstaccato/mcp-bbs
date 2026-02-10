@@ -5,8 +5,12 @@ Converts game state into effective LLM prompts.
 
 from __future__ import annotations
 
-from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
+from typing import TYPE_CHECKING
+
 from bbsbot.llm.types import ChatMessage
+
+if TYPE_CHECKING:
+    from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 
 # System prompt explaining game mechanics and expected response format
 SYSTEM_PROMPT_BASE = """You are an expert Trade Wars 2002 player.

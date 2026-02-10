@@ -354,7 +354,7 @@ class SophisticatedTrader:
         # If we got a port class but no commodity details, use class to set up structure
         if port.port_class and len(port.commodities) == 0:
             commodity_names = ["fuel_ore", "organics", "equipment"]
-            for idx, char in enumerate(port.port_class):
+            for idx, _char in enumerate(port.port_class):
                 if idx < len(commodity_names):
                     commodity = Commodity(name=commodity_names[idx])
                     # B = port buys (we can sell), S = port sells (we can buy)

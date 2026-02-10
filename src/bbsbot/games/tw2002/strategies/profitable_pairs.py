@@ -8,17 +8,20 @@ from __future__ import annotations
 
 from collections import defaultdict
 from time import time
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bbsbot.games.tw2002.config import BotConfig
-from bbsbot.games.tw2002.orientation import GameState, SectorInfo, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
     TradeOpportunity,
     TradingStrategy,
 )
 from bbsbot.logging import get_logger
+
+if TYPE_CHECKING:
+    from bbsbot.games.tw2002.config import BotConfig
+    from bbsbot.games.tw2002.orientation import GameState, SectorInfo, SectorKnowledge
 
 logger = get_logger(__name__)
 
@@ -361,8 +364,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             buy_ports = sells[commodity]  # We buy where port sells
             sell_ports = buys[commodity]  # We sell where port buys
 
-            for buy_sector, buy_info in buy_ports:
-                for sell_sector, sell_info in sell_ports:
+            for buy_sector, _buy_info in buy_ports:
+                for sell_sector, _sell_info in sell_ports:
                     if buy_sector == sell_sector:
                         continue
 

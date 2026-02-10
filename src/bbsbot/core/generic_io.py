@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
-from typing import Any, Protocol
+from inspect import isawaitable
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class Session(Protocol):
@@ -26,6 +29,17 @@ class Session(Protocol):
     async def send(self, data: str) -> None:
         """Send data to session."""
         ...
+
+
+async def session_is_connected(session: Any) -> bool:
+    """Return connection state for sync or async `is_connected` implementations."""
+    checker = getattr(session, "is_connected", None)
+    if checker is None:
+        return True
+    value = checker() if callable(checker) else checker
+    if isawaitable(value):
+        value = await value
+    return bool(value)
 
 
 class PromptWaiter:
@@ -86,7 +100,7 @@ class PromptWaiter:
                 # The owning bot disconnected and cleared its session reference.
                 # Treat as a recoverable network failure so the worker can reconnect.
                 raise ConnectionError("Session is None")
-            if hasattr(self.session, "is_connected") and not self.session.is_connected():
+            if not await session_is_connected(self.session):
                 raise ConnectionError("Session disconnected")
 
             snapshot = self.session.snapshot()
@@ -120,16 +134,14 @@ class PromptWaiter:
                         continue
 
                 # Check if prompt matches expected pattern
-                if expected_prompt_id:
-                    if expected_prompt_id not in prompt_id:
-                        await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
-                        continue
+                if expected_prompt_id and expected_prompt_id not in prompt_id:
+                    await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
+                    continue
 
                 # Call custom filter callback if provided
-                if on_prompt_detected:
-                    if not on_prompt_detected(detected_full):
-                        await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
-                        continue
+                if on_prompt_detected and not on_prompt_detected(detected_full):
+                    await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
+                    continue
 
                 # Return the detected prompt
                 return {
@@ -175,7 +187,7 @@ class InputSender:
         """
         if self.session is None:
             raise ConnectionError("Session is None")
-        if hasattr(self.session, "is_connected") and not self.session.is_connected():
+        if not await session_is_connected(self.session):
             raise ConnectionError("Session disconnected")
 
         if input_type == "single_key":

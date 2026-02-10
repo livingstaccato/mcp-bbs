@@ -97,7 +97,7 @@ class TestLoginSequencePromptHandling:
             ),
         ]
         session = MockSession(screens)
-        bot = MockBot(session)
+        MockBot(session)
 
         # Import here to avoid issues with module loading
         from bbsbot.games.tw2002.login import _get_actual_prompt
@@ -306,7 +306,7 @@ Planet Command [?=Help]?"""
 
         expected = ["pause", "any_key", "pause"]
 
-        for screen, exp in zip(screens, expected):
+        for screen, exp in zip(screens, expected, strict=False):
             assert _get_actual_prompt(screen) == exp
 
 

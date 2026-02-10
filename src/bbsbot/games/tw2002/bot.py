@@ -10,15 +10,17 @@ This module provides the main public interface by re-exporting TradingBot.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002 import bot_navigation, bot_twerk, connection, io, login, parsing, trading
 from bbsbot.games.tw2002.bot_core import TradingBot
-from bbsbot.games.tw2002.orientation import GameState, QuickState
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from twerk.analysis import SectorGraph, TradeRoute
+
+    from bbsbot.games.tw2002.orientation import GameState, QuickState
 
 __all__ = ["TradingBot"]
 

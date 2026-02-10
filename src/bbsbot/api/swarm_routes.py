@@ -6,6 +6,7 @@ Handles spawning, killing, restarting, and status updates for bots.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter
@@ -120,10 +121,8 @@ async def clear_swarm():
     await _manager.cancel_spawn()
     # Kill running bots first
     for bot_id in list(_manager.processes.keys()):
-        try:
+        with contextlib.suppress(Exception):
             await _manager.kill_bot(bot_id)
-        except Exception:
-            pass
     count = len(_manager.bots)
     _manager.bots.clear()
     _manager.processes.clear()
@@ -283,7 +282,7 @@ async def get_bot_events(bot_id: str):
     import time as time_module
 
     events = []
-    now = time_module.time()
+    time_module.time()
 
     # Add state/activity-based events from recent actions
     if bot.recent_actions:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from typing import TYPE_CHECKING
 
 from bbsbot.mcp.server import create_app as create_mcp_app
 from bbsbot.settings import Settings
+
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
 
 
 def create_app(settings: Settings | None = None, tool_prefixes: str | None = None) -> FastMCP:

@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING
 
 from .models import SectorInfo
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from .models import GameState
 
 
@@ -243,15 +245,11 @@ class SectorKnowledge:
         if status:
             info.port_status[commodity] = str(status).lower()
         if trading_units is not None:
-            try:
+            with contextlib.suppress(Exception):
                 info.port_trading_units[commodity] = max(0, int(trading_units))
-            except Exception:
-                pass
         if pct_max is not None:
-            try:
+            with contextlib.suppress(Exception):
                 info.port_pct_max[commodity] = max(0, min(100, int(pct_max)))
-            except Exception:
-                pass
         info.port_market_ts[commodity] = float(now)
         self._save_cache()
 

@@ -11,6 +11,7 @@ to a stable in-game command prompt so you can drive from there.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from bbsbot.games.tw2002.mcp_tools import registry
@@ -175,10 +176,8 @@ async def login(
         or getattr(bot, "last_game_letter", None)
         or getattr(getattr(getattr(bot, "config", None), "connection", None), "game_letter", None)
     )
-    try:
+    with contextlib.suppress(Exception):
         bot.init_knowledge(session.host, session.port, resolved_game_letter)
-    except Exception:
-        pass
 
     return {
         "success": True,

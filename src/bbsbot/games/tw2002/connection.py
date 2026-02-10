@@ -1,5 +1,6 @@
 """Connection and session management for TW2002 Trading Bot."""
 
+import contextlib
 import json
 import os
 import time
@@ -123,7 +124,7 @@ async def connect(bot, host="localhost", port=2002):
         log_path = getattr(bot.session.logger, "_log_path", None)
         if log_path:
             print(f"Session log: {log_path}")
-        try:
+        with contextlib.suppress(Exception):
             bot.session.logger.set_context(
                 {
                     "game": "tw2002",
@@ -132,8 +133,6 @@ async def connect(bot, host="localhost", port=2002):
                     "port": str(port),
                 }
             )
-        except Exception:
-            pass
     bot.session.add_watch(lambda snapshot, raw: _semantic_watch(bot, snapshot, raw))
     print("Connected")
     logger.info("bbs_connected", host=host, port=port, session_id=bot.session_id)

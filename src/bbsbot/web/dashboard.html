@@ -110,7 +110,12 @@ table thead th:nth-child(8), table tbody td:nth-child(8) { width: 60px; }  /* Fu
 table thead th:nth-child(9), table tbody td:nth-child(9) { width: 60px; }  /* Org */
 table thead th:nth-child(10), table tbody td:nth-child(10) { width: 70px; } /* Equip */
 table thead th:nth-child(11), table tbody td:nth-child(11) { width: 100px; } /* Turns */
-table thead th:nth-child(12), table tbody td:nth-child(12) { width: 140px; } /* Actions */
+table thead th:nth-child(12), table tbody td:nth-child(12) { width: 220px; } /* Actions */
+table tbody td.actions {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
 thead th {
   text-align: left;
   padding: 10px 14px;
@@ -601,7 +606,7 @@ tbody tr:hover { background: var(--bg3); }
 <div class="error-modal-overlay" id="error-modal-overlay">
   <div class="error-modal">
     <div class="error-modal-header">
-      <h3>Error Details</h3>
+      <h3 id="error-modal-title">Error Details</h3>
       <button class="error-modal-close" id="error-modal-close">&times;</button>
     </div>
     <div class="error-modal-content" id="error-modal-content"></div>
@@ -626,6 +631,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=3"></script>
+<script src="/static/dashboard.js?v=4"></script>
 </body>
 </html>

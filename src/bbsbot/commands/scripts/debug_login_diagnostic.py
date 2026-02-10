@@ -120,7 +120,7 @@ CONTROLS:
         print("PHASE 1: Navigate to game selection")
         print("=" * 80)
 
-        for attempt in range(20):
+        for _attempt in range(20):
             step += 1
             try:
                 input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=8000)
@@ -185,7 +185,7 @@ CONTROLS:
         print("=" * 80)
 
         pause_count = 0
-        for phase3_step in range(65):
+        for _phase3_step in range(65):
             step += 1
             try:
                 input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=20000)

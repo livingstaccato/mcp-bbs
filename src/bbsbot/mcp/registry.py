@@ -6,8 +6,12 @@ Allows games to register their own MCP tools with custom prefixes
 
 from __future__ import annotations
 
+import importlib
 import logging
-from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +141,22 @@ class MCPRegistryManager:
 
 # Global registry manager instance
 _manager = MCPRegistryManager()
+_builtins_loaded = False
+
+
+def _ensure_builtin_registries_loaded() -> None:
+    """Load built-in game MCP registries once.
+
+    This keeps registry discovery deterministic even if callers only import
+    `bbsbot.mcp.registry` (without importing server/tool modules first).
+    """
+    global _builtins_loaded
+    if _builtins_loaded:
+        return
+
+    # Import side-effect modules that call create_registry(...).
+    importlib.import_module("bbsbot.games.tw2002.mcp_tools")
+    _builtins_loaded = True
 
 
 def get_manager() -> MCPRegistryManager:
@@ -145,6 +165,7 @@ def get_manager() -> MCPRegistryManager:
     Returns:
         MCPRegistryManager instance
     """
+    _ensure_builtin_registries_loaded()
     return _manager
 
 

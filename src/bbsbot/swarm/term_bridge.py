@@ -12,6 +12,7 @@ It forwards:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from typing import Any
@@ -84,10 +85,8 @@ class TermBridge:
         self._running = False
         if self._task is not None:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
 
     async def _run(self) -> None:
         try:
@@ -163,10 +162,8 @@ class TermBridge:
             return
         # If we started the bridge before the bot connected, we won't have a watcher attached.
         # Attach here so the browser gets streaming output soon after the first snapshot request.
-        try:
+        with contextlib.suppress(Exception):
             self.attach_session()
-        except Exception:
-            pass
         try:
             snapshot = self._latest_snapshot or session.emulator.get_snapshot()
             msg = {
@@ -238,7 +235,5 @@ class TermBridge:
         fn = getattr(self._bot, "set_hijacked", None)
         if callable(fn):
             await fn(enabled)
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 self._send_q.put_nowait({"type": "status", "hijacked": enabled, "ts": time.time()})
-            except asyncio.QueueFull:
-                pass

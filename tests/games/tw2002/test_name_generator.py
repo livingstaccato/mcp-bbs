@@ -1,6 +1,5 @@
 """Tests for themed name generator."""
 
-
 from bbsbot.games.tw2002.name_generator import NameGenerator
 
 

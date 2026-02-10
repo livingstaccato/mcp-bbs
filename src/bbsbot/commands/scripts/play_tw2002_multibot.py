@@ -18,14 +18,17 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bbsbot.core.session_manager import SessionManager
 from bbsbot.games.tw2002 import login, orientation
 from bbsbot.games.tw2002.bot import TradingBot
-from bbsbot.games.tw2002.character import CharacterState
 from bbsbot.games.tw2002.config import BotConfig, load_config
 from bbsbot.games.tw2002.sophisticated_trader import SophisticatedTrader
 from bbsbot.paths import default_knowledge_root
+
+if TYPE_CHECKING:
+    from bbsbot.games.tw2002.character import CharacterState
 
 logger = logging.getLogger(__name__)
 
@@ -415,7 +418,7 @@ class MultiBotCoordinator:
         # Calculate random connection delays for each bot
         # Spread evenly over the connection window
         connection_delays = []
-        for i in range(len(self.bots)):
+        for _i in range(len(self.bots)):
             # Random delay between 0 and connection_window seconds
             delay = random.uniform(0, self.connection_window)
             connection_delays.append(delay)
@@ -428,7 +431,7 @@ class MultiBotCoordinator:
         print()
 
         # Start all bots concurrently with staggered connections
-        tasks = [asyncio.create_task(self.run_bot(bot, delay)) for bot, delay in zip(self.bots, connection_delays)]
+        tasks = [asyncio.create_task(self.run_bot(bot, delay)) for bot, delay in zip(self.bots, connection_delays, strict=False)]
 
         # Add monitor task
         monitor_task = asyncio.create_task(self.monitor_and_report())

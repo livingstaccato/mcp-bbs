@@ -77,9 +77,8 @@ async def _reach_safe_state(
     gentle_keys = [" ", "\r", " ", "\r", "Q", " ", "\r", "Q", " ", "\r"]
 
     # Pre-check: is the session even connected?
-    if hasattr(bot, "session") and hasattr(bot.session, "is_connected"):
-        if not bot.session.is_connected():
-            raise ConnectionError("Session disconnected - cannot orient")
+    if hasattr(bot, "session") and hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+        raise ConnectionError("Session disconnected - cannot orient")
 
     last_screen = ""
     consecutive_blank = 0

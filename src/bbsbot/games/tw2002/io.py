@@ -1,11 +1,12 @@
 """Core I/O operations for TW2002 Trading Bot."""
 
 import asyncio
+import contextlib
 import json
 import time
 from pathlib import Path
 
-from bbsbot.core.generic_io import InputSender, PromptWaiter
+from bbsbot.core.generic_io import InputSender, PromptWaiter, session_is_connected
 from bbsbot.games.tw2002.errors import _check_for_loop, _detect_error_in_screen
 from bbsbot.games.tw2002.parsing import extract_semantic_kv
 
@@ -83,7 +84,7 @@ async def wait_and_respond(
     bot.step_count += 1
     if not getattr(bot, "session", None):
         raise ConnectionError("No session (bot.session is None)")
-    if hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+    if not await session_is_connected(bot.session):
         raise ConnectionError("Session disconnected")
 
     start_time = time.time()
@@ -190,7 +191,7 @@ async def send_input(bot, keys: str, input_type: str | None, wait_after: float =
     """
     if not getattr(bot, "session", None):
         raise ConnectionError("No session (bot.session is None)")
-    if hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+    if not await session_is_connected(bot.session):
         raise ConnectionError("Session disconnected")
 
     # TW2002-specific: Log the input being sent
@@ -219,7 +220,7 @@ async def send_masked_password(
     """
     if not getattr(bot, "session", None):
         raise ConnectionError("No session (bot.session is None)")
-    if hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+    if not await session_is_connected(bot.session):
         raise ConnectionError("Session disconnected")
 
     printable = password.replace("\r", "\\r").replace("\n", "\\n")
@@ -230,10 +231,8 @@ async def send_masked_password(
 
     # 2) Give the server a moment to echo masked characters ("****").
     # We do not strictly require the echo; we just avoid bundling Enter.
-    try:
+    with contextlib.suppress(Exception):
         await bot.session.wait_for_update(timeout_ms=wait_echo_ms)
-    except Exception:
-        pass
 
     # 3) Submit with Enter as a separate keystroke.
     await bot.session.send("\r")

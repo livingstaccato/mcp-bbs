@@ -150,13 +150,8 @@
           if (b.exit_reason && !b.exit_reason.toLowerCase().includes("exit_code")) {
             exitInfo = ` (${b.exit_reason})`;
           }
-        } else if (b.state === "blocked") {
-          activity = b.activity_context ? getActivityBadge(b.activity_context) : "BLOCKED";
-          if (b.exit_reason) {
-            exitInfo = ` (${b.exit_reason})`;
-          }
         } else {
-          activity = getActivityBadge(b.activity_context || (isQueued ? "QUEUED" : isDead ? b.state : "IDLE"));
+          activity = getActivityBadge(b.activity_context || (isQueued ? "QUEUED" : "IDLE"));
         }
 
         const activityClass = getActivityClass(activity);
@@ -175,8 +170,24 @@
           const hijackedTime = b.hijacked_at ? new Date(b.hijacked_at * 1000).toLocaleTimeString() : "now";
           statusHtml += `<span class="hijack-badge" title="Hijacked at ${hijackedTime} by ${esc(b.hijacked_by || '-')}" style="margin-right:6px;">🔒 HIJACKED</span>`;
         }
+        const lifecycleLabel = {
+          blocked: "BLOCKED",
+          recovering: "RECOVERING",
+          disconnected: "DISCONNECTED",
+          error: "ERROR",
+          stopped: "STOPPED",
+          queued: "QUEUED",
+          completed: "COMPLETED",
+        }[b.state];
+        if (lifecycleLabel) {
+          const withReason = (b.exit_reason && ["blocked", "error", "disconnected"].includes(b.state))
+            ? `${lifecycleLabel} (${b.exit_reason})`
+            : lifecycleLabel;
+          statusHtml += `<span class="status-detail">${esc(withReason)}</span>`;
+        }
         const detail = (b.status_detail || "").trim();
         if (detail) {
+          if (statusHtml) statusHtml += " ";
           statusHtml += `<span class="status-detail">${esc(detail)}</span>`;
         } else if (b.prompt_id) {
           // Avoid showing "prompt.sector_command" etc. as status; Status is for meaningful blocking phases.
@@ -228,6 +239,7 @@
 	        <td class="numeric">${turnsDisplay}</td>
 	        <td class="actions">
 	          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
+          <button class="btn" onclick="window._openMetrics('${esc(b.bot_id)}')" style="border-color:var(--yellow);color:var(--yellow);" title="Metrics">Σ</button>
           <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')" title="Activity">📊</button>
           <button class="btn" onclick="window._openLogs('${esc(b.bot_id)}')" style="border-color:var(--fg2);color:var(--fg2);" title="Logs">📝</button>
           <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"} title="Restart">🔄</button>
@@ -261,12 +273,14 @@
 
   // --- Error modal ---
   const errorModalOverlay = $("#error-modal-overlay");
+  const errorModalTitle = $("#error-modal-title");
   const errorModalContent = $("#error-modal-content");
 
   window._openErrorModal = function (botId) {
     if (!lastData || !lastData.bots) return;
     const bot = lastData.bots.find(b => b.bot_id === botId);
     if (!bot) return;
+    if (errorModalTitle) errorModalTitle.textContent = "Error Details";
 
     let html = `
       <div class="field">
@@ -324,6 +338,36 @@
     `;
 
     errorModalContent.innerHTML = html;
+    errorModalOverlay.classList.add("open");
+  };
+
+  window._openMetrics = function (botId) {
+    if (!lastData || !lastData.bots) return;
+    const bot = lastData.bots.find(b => b.bot_id === botId);
+    if (!bot) return;
+
+    const haggleAccept = Number(bot.haggle_accept || 0);
+    const haggleCounter = Number(bot.haggle_counter || 0);
+    const haggleHigh = Number(bot.haggle_too_high || 0);
+    const haggleLow = Number(bot.haggle_too_low || 0);
+    const haggleTotal = haggleAccept + haggleCounter + haggleHigh + haggleLow;
+    const acceptRate = haggleTotal > 0 ? ((haggleAccept / haggleTotal) * 100).toFixed(1) + "%" : "0.0%";
+    const creditsDelta = Number(bot.credits_delta || 0);
+    const cpt = Number(bot.credits_per_turn || 0);
+
+    if (errorModalTitle) errorModalTitle.textContent = "Bot Metrics";
+    errorModalContent.innerHTML = `
+      <div class="field"><div class="label">Bot ID</div><div class="value">${esc(bot.bot_id)}</div></div>
+      <div class="field"><div class="label">Strategy</div><div class="value">${esc((bot.strategy || bot.strategy_id || "-") + (bot.strategy_mode ? " (" + bot.strategy_mode + ")" : ""))}</div></div>
+      <div class="field"><div class="label">Trades Executed</div><div class="value">${esc(String(bot.trades_executed || 0))}</div></div>
+      <div class="field"><div class="label">Credits Delta</div><div class="value">${esc(String(creditsDelta))}</div></div>
+      <div class="field"><div class="label">Credits / Turn</div><div class="value">${esc(cpt.toFixed(2))}</div></div>
+      <div class="field"><div class="label">Haggle Accept</div><div class="value">${esc(String(haggleAccept))}</div></div>
+      <div class="field"><div class="label">Haggle Counter</div><div class="value">${esc(String(haggleCounter))}</div></div>
+      <div class="field"><div class="label">Haggle Too High</div><div class="value">${esc(String(haggleHigh))}</div></div>
+      <div class="field"><div class="label">Haggle Too Low</div><div class="value">${esc(String(haggleLow))}</div></div>
+      <div class="field"><div class="label">Haggle Accept Rate</div><div class="value">${esc(acceptRate)}</div></div>
+    `;
     errorModalOverlay.classList.add("open");
   };
 
@@ -684,10 +728,16 @@
 	    const creditsDisplay = (bot.credits !== undefined && bot.credits !== null && bot.credits >= 0)
 	      ? formatCredits(bot.credits)
 	      : "-";
+      const cpt = Number(bot.credits_per_turn || 0);
+      const trades = Number(bot.trades_executed || 0);
+      const haggleTotal = Number(bot.haggle_accept || 0) + Number(bot.haggle_counter || 0) + Number(bot.haggle_too_high || 0) + Number(bot.haggle_too_low || 0);
 	    termStats.innerHTML = [
 	      `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${esc(creditsDisplay)}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
+        `<span class="stat"><span class="stat-label">Trades</span><span class="stat-value">${esc(String(trades))}</span></span>`,
+        `<span class="stat"><span class="stat-label">C/T</span><span class="stat-value">${esc(cpt.toFixed(2))}</span></span>`,
+        `<span class="stat"><span class="stat-label">Haggles</span><span class="stat-value">${esc(String(haggleTotal))}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Prompt</span><span class="stat-value">${esc(promptId)}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Strategy</span><span class="stat-value">${esc((bot.strategy || "").trim() || (bot.strategy_id ? (String(bot.strategy_id).trim() + (bot.strategy_mode ? "(" + String(bot.strategy_mode).trim() + ")" : "")) : "-"))}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Intent</span><span class="stat-value">${esc((bot.strategy_intent || "-").trim() || "-")}</span></span>`,

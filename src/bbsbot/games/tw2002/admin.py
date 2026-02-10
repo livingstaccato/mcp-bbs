@@ -7,12 +7,13 @@ Two access methods:
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from twerk.parsers import PlayerRecord, PortRecord, SectorRecord
 
 

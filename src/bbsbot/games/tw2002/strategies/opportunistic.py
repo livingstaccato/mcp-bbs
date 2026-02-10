@@ -7,17 +7,20 @@ encountered during exploration. Balances exploration with profit.
 from __future__ import annotations
 
 import random
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bbsbot.games.tw2002.config import BotConfig
-from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
     TradeOpportunity,
     TradingStrategy,
 )
 from bbsbot.logging import get_logger
+
+if TYPE_CHECKING:
+    from bbsbot.games.tw2002.config import BotConfig
+    from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 
 logger = get_logger(__name__)
 

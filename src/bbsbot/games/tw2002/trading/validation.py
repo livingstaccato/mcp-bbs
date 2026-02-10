@@ -107,15 +107,11 @@ def extract_port_info(bot, screen: str) -> tuple[bool, str | None, str | None]:
             break
 
     if not port_class:
-        if (class_match := _PORT_CLASS_INLINE_RE.search(screen)) or (class_match := _PORT_CLASS_NAME_RE.search(screen)):
+        if (class_match := _PORT_CLASS_INLINE_RE.search(screen)) or (class_match := _PORT_CLASS_NAME_RE.search(screen)) or port_line and (class_match := re.search(r"\(([A-Z]{3})\)", port_line)):
             port_class = class_match.group(1).strip().upper()
-        elif port_line:
-            if class_match := re.search(r"\(([A-Z]{3})\)", port_line):
-                port_class = class_match.group(1).strip().upper()
 
-    if port_name is None:
-        if name_match := re.search(r"Ports?\s*:\s*([^,\n]+)", screen, re.IGNORECASE):
-            port_name = name_match.group(1).strip()
+    if port_name is None and (name_match := re.search(r"Ports?\s*:\s*([^,\n]+)", screen, re.IGNORECASE)):
+        port_name = name_match.group(1).strip()
 
     if has_port is None and port_line:
         has_port = True

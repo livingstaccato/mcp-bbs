@@ -445,10 +445,7 @@ class NameGenerator:
                 # Always use number
                 base = f"{self.rng.choice(PREFIXES)}{self.rng.choice(SUFFIXES)}"
                 self._name_counter += 1
-                if number_prefix:
-                    name = f"{self._name_counter}{base}"
-                else:
-                    name = f"{base}{self._name_counter}"
+                name = f"{self._name_counter}{base}" if number_prefix else f"{base}{self._name_counter}"
 
             if name not in self.used_names:
                 self.used_names.add(name)
@@ -457,10 +454,7 @@ class NameGenerator:
         # Fallback with counter if all attempts exhausted
         self._name_counter += 1
         base = f"{self.rng.choice(PREFIXES)}Bot"
-        if number_prefix:
-            name = f"{self._name_counter}{base}"
-        else:
-            name = f"{base}{self._name_counter}"
+        name = f"{self._name_counter}{base}" if number_prefix else f"{base}{self._name_counter}"
         self.used_names.add(name)
         return name
 

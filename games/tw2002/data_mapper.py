@@ -460,7 +460,7 @@ def get_affected_files(settings: dict[str, Any]) -> set[DataFileType]:
 
     for editor, fields in settings.items():
         if isinstance(fields, dict):
-            for key in fields.keys():
+            for key in fields:
                 mapping = get_mapping(editor, key)
                 if mapping:
                     affected.add(mapping.data_file)

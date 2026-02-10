@@ -404,7 +404,7 @@ Command [TL=00:00:00]:[1] (?=Help)?"""
         assert final_context == "sector_command"
 
         # Earlier partial renders should be "unknown" or something safe
-        for ctx in contexts_seen[:-5]:  # Allow last few chars to trigger detection
+        for _ctx in contexts_seen[:-5]:  # Allow last few chars to trigger detection
             # Shouldn't prematurely detect as a specific safe context
             # (implementation detail: might be "unknown" or "menu")
             pass  # Just verify no exceptions

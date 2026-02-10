@@ -153,12 +153,10 @@ def _style_to_sgr(
         codes.append(4)
     if blink:
         codes.append(5)
-    if fg != "default":
-        if fg in FG_CODES:
-            codes.append(FG_CODES[fg])
-    if bg != "default":
-        if bg in BG_CODES:
-            codes.append(BG_CODES[bg])
+    if fg != "default" and fg in FG_CODES:
+        codes.append(FG_CODES[fg])
+    if bg != "default" and bg in BG_CODES:
+        codes.append(BG_CODES[bg])
     if not codes:
         return ANSI_RESET
     return f"\x1b[{';'.join(str(c) for c in codes)}m"
@@ -353,9 +351,8 @@ class SpyTui:
                 self._apply_replay_index(target)
         elif key == "g" and self._mode == "replay":
             self._apply_replay_index(0)
-        elif key == "G" and self._mode == "replay":
-            if self._events:
-                self._apply_replay_index(len(self._events) - 1)
+        elif key == "G" and self._mode == "replay" and self._events:
+            self._apply_replay_index(len(self._events) - 1)
         self._dirty = True
 
     def _mark_dirty(self) -> None:

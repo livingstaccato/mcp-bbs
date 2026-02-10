@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import time
 from collections.abc import Callable
@@ -162,10 +163,8 @@ class Session(BaseModel):
 
                 # Best-effort logging and addons.
                 if self.logger:
-                    try:
+                    with contextlib.suppress(Exception):
                         await self.logger.log_screen(snapshot, raw)
-                    except Exception:
-                        pass
                 if self.addons and self.logger:
                     try:
                         for event in self.addons.process(snapshot):

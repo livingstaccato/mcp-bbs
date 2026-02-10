@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from bbsbot.core.session import Session
 from bbsbot.watch.broker import WatchBroker
 from bbsbot.watch.registry import watch_settings
+
+if TYPE_CHECKING:
+    from bbsbot.core.session import Session
 
 
 class WatchManager:

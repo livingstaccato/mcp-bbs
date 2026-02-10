@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from pathlib import Path
 
@@ -229,10 +230,8 @@ async def run_bot(
                 break
         finally:
             if bot.session_id:
-                try:
+                with contextlib.suppress(Exception):
                     await bot.session_manager.close_session(bot.session_id)
-                except Exception:
-                    pass
 
     # Release character locks so other processes can use them
     multi_char.release_all_locks()

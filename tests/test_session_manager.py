@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from bbsbot.core.session_manager import SessionManager
 
 from .mock_bbs_server import MockBBS
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.asyncio

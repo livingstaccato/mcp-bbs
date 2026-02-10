@@ -42,16 +42,14 @@ def validate_decision(
             return False
 
     # TRADE requires being at a port
-    if action == TradeAction.TRADE:
-        if not state.has_port:
-            logger.debug("trade_without_port")
-            return False
+    if action == TradeAction.TRADE and not state.has_port:
+        logger.debug("trade_without_port")
+        return False
 
     # BANK requires banking enabled
-    if action == TradeAction.BANK:
-        if not config.banking.enabled:
-            logger.debug("bank_not_enabled")
-            return False
+    if action == TradeAction.BANK and not config.banking.enabled:
+        logger.debug("bank_not_enabled")
+        return False
 
     # UPGRADE requires upgrade type
     if action == TradeAction.UPGRADE:

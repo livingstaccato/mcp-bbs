@@ -100,7 +100,7 @@ async def main():
     else:
         print("\n❌ No sequences worked!")
         print("\nAll attempts resulted in same screen hashes:")
-        unique_hashes = set(r.get("screen_hash", "N/A") for r in results)
+        unique_hashes = {r.get("screen_hash", "N/A") for r in results}
         for h in unique_hashes:
             count = sum(1 for r in results if r.get("screen_hash") == h)
             print(f"   {h}: {count} occurrences")

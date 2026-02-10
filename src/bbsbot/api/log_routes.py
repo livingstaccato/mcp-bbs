@@ -5,11 +5,15 @@ Provides REST endpoints and WebSocket streaming for bot log files.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, WebSocket
 from fastapi.responses import JSONResponse
 
-from bbsbot.log_service import LogService
 from bbsbot.logging import get_logger
+
+if TYPE_CHECKING:
+    from bbsbot.log_service import LogService
 
 logger = get_logger(__name__)
 
