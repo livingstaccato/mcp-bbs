@@ -258,124 +258,63 @@ async def _gather_state(
     state.traders_present = sector_info.get('traders_present', [])
     state.hostile_fighters = sector_info.get('hostile_fighters', 0)
 
-    # Send 'D' for full display
-    print(f"  [Orient] Sending D for full status...")
-    await bot.session.send("D")
-    await asyncio.sleep(0.1)
-
-    # Read display output
-    # Use longer timeout for heavily loaded servers (match login timeout)
+    # This server's `D` is "Re-Display" (sector), not "stats". We still need an
+    # early, cheap stats refresh so strategies can reason about bankroll/holds.
+    #
+    # Empirically, `i` prints a credits line ("You have X credits") and returns
+    # to the command prompt without consuming turns.
     from bbsbot.games.tw2002.io import wait_and_respond
+    from bbsbot.games.tw2002.parsing import extract_semantic_kv
+
     try:
-        _, _, display_screen, display_kv = await wait_and_respond(
-            bot,
-            timeout_ms=60000,  # 60 seconds for heavily loaded servers
-            # Ignore loop detection for D command - it's normal to see sector_command prompt again
-            ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter", "prompt.sector_command"},
-        )
+        bot_semantic_before = getattr(bot, "last_semantic_data", {}) or {}
+        have_credits = bool((kv_data or {}).get("credits") or bot_semantic_before.get("credits"))
+        stats_refreshed = bool(getattr(bot, "_stats_refreshed", False))
 
-        # Parse display output
-        display_info = parse_display_screen(display_screen)
-        if not display_info.get('credits'):
-            print(f"  [Orient] D command parsing found no credits (display_screen might be a prompt)")
+        if context == "sector_command" and (not have_credits) and (not stats_refreshed):
+            print("  [Orient] Refreshing stats via 'i' (credits/holds)...")
+            await bot.session.send("i")
+            await asyncio.sleep(0.05)
+            _, _, info_screen, _ = await wait_and_respond(
+                bot,
+                timeout_ms=10000,
+                ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter", "prompt.sector_command"},
+            )
+            # Ensure semantic updates even if the waiter's callback missed the transient line.
+            bot.last_semantic_data.update(extract_semantic_kv(info_screen))
+            setattr(bot, "_stats_refreshed", True)
 
-        # Multi-source fallback: Use display parse first, then kv_data, then initial kv_data
-        # This provides 3 layers of fallback for critical game state
-        def get_with_fallback(key: str):
-            """Get value with fallback chain: display_info -> display_kv -> kv_data"""
-            value = display_info.get(key)
-            if value is not None:
-                return value
-            if display_kv and key in display_kv:
-                return display_kv.get(key)
-            if kv_data and key in kv_data:
-                return kv_data.get(key)
-            return None
-
-        # Credits: Always prefer semantic data if display parsing fails
-        # The D command often returns a prompt instead of actual display data
-        state.credits = get_with_fallback('credits')
-        # If we got 0 or None, try semantic data from kv_data
-        if (state.credits is None or state.credits == 0) and kv_data and 'credits' in kv_data:
-            semantic_credits = kv_data.get('credits')
-            if semantic_credits is not None and semantic_credits > 0:
-                state.credits = semantic_credits
-                print(f"  [Orient] Using semantic credits (fallback from 0): {state.credits}")
-        # Final fallback: bot.last_semantic_data (populated by io callbacks)
-        if (state.credits is None or state.credits == 0):
-            bot_semantic = getattr(bot, 'last_semantic_data', {})
-            if bot_semantic.get('credits') and bot_semantic['credits'] > 0:
-                state.credits = bot_semantic['credits']
-                print(f"  [Orient] Using bot.last_semantic_data credits: {state.credits}")
-
-        state.turns_left = get_with_fallback('turns_left')
-
-        # Cargo: prefer bot.last_semantic_data (port tables) and fall back to any
-        # current-screen semantic data if present.
+        # Build a best-effort snapshot from merged semantic cache.
         bot_semantic = getattr(bot, "last_semantic_data", {}) or {}
-        def _cargo_from(*sources: dict, key: str) -> int | None:
-            for src in sources:
-                if not src:
-                    continue
-                if key in src and src.get(key) is not None:
-                    try:
-                        return int(src.get(key) or 0)
-                    except Exception:
-                        continue
+
+        def get_with_fallback(key: str):
+            if kv_data and key in kv_data and kv_data.get(key) is not None:
+                return kv_data.get(key)
+            if bot_semantic and key in bot_semantic and bot_semantic.get(key) is not None:
+                return bot_semantic.get(key)
             return None
 
-        state.cargo_fuel_ore = _cargo_from(bot_semantic, display_kv or {}, kv_data or {}, key="cargo_fuel_ore")
-        state.cargo_organics = _cargo_from(bot_semantic, display_kv or {}, kv_data or {}, key="cargo_organics")
-        state.cargo_equipment = _cargo_from(bot_semantic, display_kv or {}, kv_data or {}, key="cargo_equipment")
+        state.credits = get_with_fallback("credits")
+        state.turns_left = get_with_fallback("turns_left")
+        state.fighters = get_with_fallback("fighters")
+        state.shields = get_with_fallback("shields")
+        state.holds_total = get_with_fallback("holds_total")
+        state.holds_free = get_with_fallback("holds_free")
+        state.ship_type = get_with_fallback("ship_type")
+        state.player_name = get_with_fallback("player_name")
+        state.alignment = get_with_fallback("alignment")
+        state.experience = get_with_fallback("experience")
+        state.corp_id = get_with_fallback("corp_id")
 
-        state.fighters = get_with_fallback('fighters')
-        if (state.fighters is None or state.fighters == 0) and kv_data and kv_data.get('fighters'):
-            state.fighters = kv_data.get('fighters')
-
-        state.shields = get_with_fallback('shields')
-        if (state.shields is None or state.shields == 0) and kv_data and kv_data.get('shields'):
-            state.shields = kv_data.get('shields')
-        state.holds_total = get_with_fallback('holds_total')
-        state.holds_free = get_with_fallback('holds_free')
-        state.ship_type = get_with_fallback('ship_type')
-        state.player_name = get_with_fallback('player_name')
-        state.alignment = get_with_fallback('alignment')
-        state.experience = get_with_fallback('experience')
-        state.corp_id = get_with_fallback('corp_id')
-
-        # Sector from display if not already set
-        if state.sector is None:
-            state.sector = get_with_fallback('sector')
-
-        # Update raw screen with full display
-        state.raw_screen = display_screen
-
-        # Debug: Log which source provided credits
-        if state.credits is not None:
-            if display_info.get('credits'):
-                print(f"  [Orient] Credits from D command: {state.credits}")
-            elif display_kv and display_kv.get('credits'):
-                print(f"  [Orient] Credits from D semantic: {state.credits}")
-            elif kv_data and kv_data.get('credits'):
-                print(f"  [Orient] Credits from sector semantic: {state.credits}")
-
+        # Cargo is primarily learned from port tables; default to 0 if unknown.
+        try:
+            state.cargo_fuel_ore = int(bot_semantic.get("cargo_fuel_ore") or 0)
+            state.cargo_organics = int(bot_semantic.get("cargo_organics") or 0)
+            state.cargo_equipment = int(bot_semantic.get("cargo_equipment") or 0)
+        except Exception:
+            pass
     except Exception as e:
-        print(f"  [Orient] Warning: Display command failed: {e}")
-        # Even if D command fails, try to use semantic data
-        if kv_data:
-            state.credits = kv_data.get('credits')
-            state.turns_left = kv_data.get('turns_left')
-            state.fighters = kv_data.get('fighters')
-            state.shields = kv_data.get('shields')
-            # Cargo best-effort from semantic snapshot (often only present after port tables).
-            try:
-                state.cargo_fuel_ore = int((kv_data.get("cargo_fuel_ore") if kv_data else None) or (getattr(bot, "last_semantic_data", {}) or {}).get("cargo_fuel_ore") or 0)
-                state.cargo_organics = int((kv_data.get("cargo_organics") if kv_data else None) or (getattr(bot, "last_semantic_data", {}) or {}).get("cargo_organics") or 0)
-                state.cargo_equipment = int((kv_data.get("cargo_equipment") if kv_data else None) or (getattr(bot, "last_semantic_data", {}) or {}).get("cargo_equipment") or 0)
-            except Exception:
-                pass
-            if state.credits is not None:
-                print(f"  [Orient] Using fallback semantic credits: {state.credits}")
+        print(f"  [Orient] Warning: Stats refresh failed: {e}")
 
     return state
 
