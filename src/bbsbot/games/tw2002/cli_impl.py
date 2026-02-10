@@ -508,20 +508,8 @@ async def execute_port_trade(
     last_trade_is_buy: bool | None = None  # True when we are buying from port (port sells)
     last_trade_qty: int | None = None
 
-    # If strategy asked us to sell but we have nothing, skip early to avoid wasting turns.
-    if trade_action == "sell" and commodity:
-        try:
-            snap0 = bot.session.snapshot() if bot.session else {}
-            kv0 = (snap0.get("prompt_detected") or {}).get("kv_data") or {}
-        except Exception:
-            kv0 = {}
-        cargo_key = {
-            "fuel_ore": "cargo_fuel_ore",
-            "organics": "cargo_organics",
-            "equipment": "cargo_equipment",
-        }.get(commodity)
-        if cargo_key and int((kv0.get(cargo_key) or 0)) <= 0:
-            return 0
+    # Note: we cannot reliably know per-commodity cargo from the sector command prompt.
+    # Only skip sells when the port prompt itself shows we have 0 in holds.
 
     # Guardrails for haggle loops when the bot doesn't have enough credits.
     offered_all_credits: bool = False
@@ -625,6 +613,14 @@ async def execute_port_trade(
                         await bot.session.send("0\r")
                         pending_trade = False
                         logger.debug("Skipping target commodity due to action mismatch (wanted=sell)")
+                        await asyncio.sleep(0.3)
+                        continue
+
+                    # If we're trying to sell but the port reports we have none, skip.
+                    if trade_action == "sell" and "you have 0 in your holds" in screen_lower:
+                        await bot.session.send("0\r")
+                        pending_trade = False
+                        logger.debug("Skipping sell: no cargo in holds")
                         await asyncio.sleep(0.3)
                         continue
 
@@ -733,21 +729,18 @@ async def execute_port_trade(
                     continue
 
                 policy = getattr(bot, "strategy_mode", None) or "balanced"
-                if policy == "conservative":
-                    buy_discount = 0.03
-                    sell_markup = 0.05
-                    step = 0.02
-                    max_attempts = 2
-                elif policy == "aggressive":
-                    buy_discount = 0.12
-                    sell_markup = 0.20
-                    step = 0.04
-                    max_attempts = 4
-                else:
-                    buy_discount = 0.07
-                    sell_markup = 0.12
-                    step = 0.03
-                    max_attempts = 3
+                # Many TW2002 servers treat the bracketed offer as non-negotiable,
+                # or will abort the transaction if you deviate. Only haggle in
+                # aggressive mode; otherwise accept defaults for reliability.
+                if policy != "aggressive":
+                    await bot.session.send("\r")
+                    await asyncio.sleep(0.5)
+                    continue
+
+                buy_discount = 0.08
+                sell_markup = 0.12
+                step = 0.03
+                max_attempts = 3
 
                 # Reset negotiation state if the prompt's default changed (new deal).
                 if last_default_offer is None or default_offer != last_default_offer:
