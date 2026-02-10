@@ -327,7 +327,9 @@ class SwarmManager:
         bots = list(self.bots.values())
         return SwarmStatus(
             total_bots=len(bots),
-            running=sum(1 for b in bots if b.state == "running"),
+            # "recovering"/"blocked" are live workers; the dashboard's Running card
+            # should reflect "alive", not just the narrow "running" state.
+            running=sum(1 for b in bots if b.state in ("running", "recovering", "blocked")),
             completed=sum(1 for b in bots if b.state == "completed"),
             # "blocked" is an intentional non-terminal state (backoff + retry) but should
             # still be counted as an "error" metric for dashboard visibility.
