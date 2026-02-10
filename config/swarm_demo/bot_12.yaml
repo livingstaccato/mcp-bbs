@@ -10,9 +10,11 @@ session:
   target_credits: 500000
 trading:
   policy: balanced
+  twerk_optimized:
+    data_dir: /Users/tim/code/gh/livingstaccato/tw2002/data/games/GameB
   opportunistic:
     explore_chance: 0.3
     max_wander_without_trade: 5
-  strategy: profitable_pairs
+  strategy: twerk_optimized
 upgrades:
   enabled: false
