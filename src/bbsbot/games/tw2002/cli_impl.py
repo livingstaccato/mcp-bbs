@@ -884,6 +884,19 @@ async def execute_port_trade(
     # Make sure we're out of the port and at a safe state
     await bot.recover()
 
+    # After port transactions, the sector command prompt doesn't include credits/cargo.
+    # Force an info refresh so profit/cargo accounting stays accurate.
+    try:
+        if getattr(bot, "session", None):
+            before = bot.session.screen_change_seq()
+            await bot.session.send("i")
+            await bot.session.wait_for_update(timeout_ms=2500)
+            changed = await bot.session.wait_for_screen_change(timeout_ms=1200, since=before)
+            if changed:
+                await bot.session.wait_for_update(timeout_ms=800)
+    except Exception:
+        pass
+
     # Get updated state
     new_state = await bot.orient()
     new_credits = new_state.credits or 0
