@@ -506,6 +506,11 @@ async def execute_port_trade(
     offered_all_credits: bool = False
     insufficient_haggle_loops: int = 0
 
+    # Bounded, policy-dependent negotiation state for the current commodity trade.
+    haggle_attempts: int = 0
+    last_default_offer: int | None = None
+    last_offer_sent: int | None = None
+
     # Dock at port
     await bot.session.send("P")
     await asyncio.sleep(1.0)
@@ -561,6 +566,9 @@ async def execute_port_trade(
         if _is_qty_prompt(last_line):
             offered_all_credits = False
             insufficient_haggle_loops = 0
+            haggle_attempts = 0
+            last_default_offer = None
+            last_offer_sent = None
 
             # Find the "how many" line to identify the commodity
             prompt_line = last_line
@@ -678,6 +686,91 @@ async def execute_port_trade(
                     pending_trade = False
                     await asyncio.sleep(0.7)
                     continue
+
+            # Negotiate modestly when possible. If we can't determine the side
+            # (buy vs sell), or credits are unknown, fall back to accepting.
+            if default_offer is not None and default_offer > 0 and last_trade_is_buy is not None:
+                credits_now = credits_available
+                if credits_now is None:
+                    await bot.session.send("\r")
+                    await asyncio.sleep(0.5)
+                    continue
+
+                policy = getattr(bot, "strategy_mode", None) or "balanced"
+                if policy == "conservative":
+                    buy_discount = 0.03
+                    sell_markup = 0.05
+                    step = 0.02
+                    max_attempts = 2
+                elif policy == "aggressive":
+                    buy_discount = 0.12
+                    sell_markup = 0.20
+                    step = 0.04
+                    max_attempts = 4
+                else:
+                    buy_discount = 0.07
+                    sell_markup = 0.12
+                    step = 0.03
+                    max_attempts = 3
+
+                # Reset negotiation state if the prompt's default changed (new deal).
+                if last_default_offer is None or default_offer != last_default_offer:
+                    haggle_attempts = 0
+                    last_offer_sent = None
+                    last_default_offer = default_offer
+
+                if last_trade_is_buy:
+                    # Buying from port. Start below the default, then step up.
+                    max_offer = min(default_offer, credits_now)
+                    if haggle_attempts == 0 or last_offer_sent is None:
+                        offer = int(round(default_offer * (1.0 - buy_discount)))
+                    else:
+                        offer = int(round(last_offer_sent + max(1, default_offer * step)))
+                    offer = max(1, min(max_offer, offer))
+
+                    if haggle_attempts >= max_attempts or offer >= max_offer:
+                        await bot.session.send("\r")
+                    else:
+                        haggle_attempts += 1
+                        last_offer_sent = offer
+                        logger.debug(
+                            "haggle_buy: policy=%s attempt=%s default=%s offer=%s credits=%s",
+                            policy,
+                            haggle_attempts,
+                            default_offer,
+                            offer,
+                            credits_now,
+                        )
+                        await bot.session.send(f"{offer}\r")
+
+                    await asyncio.sleep(0.5)
+                    continue
+
+                # Selling to port. Ask above the default, then step down.
+                min_offer = default_offer
+                cap = int(round(default_offer * (1.0 + sell_markup)))
+                if haggle_attempts == 0 or last_offer_sent is None:
+                    offer = cap
+                else:
+                    offer = int(round(last_offer_sent - max(1, default_offer * step)))
+                offer = max(min_offer, offer)
+
+                if haggle_attempts >= max_attempts or offer <= min_offer:
+                    await bot.session.send("\r")
+                else:
+                    haggle_attempts += 1
+                    last_offer_sent = offer
+                    logger.debug(
+                        "haggle_sell: policy=%s attempt=%s default=%s offer=%s",
+                        policy,
+                        haggle_attempts,
+                        default_offer,
+                        offer,
+                    )
+                    await bot.session.send(f"{offer}\r")
+
+                await asyncio.sleep(0.5)
+                continue
 
             # Default: accept the server's proposed offer/price.
             await bot.session.send("\r")
