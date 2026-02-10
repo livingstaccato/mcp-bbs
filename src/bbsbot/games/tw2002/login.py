@@ -135,8 +135,9 @@ def _get_actual_prompt(screen: str) -> str:
         return "show_log_prompt"
 
     # Name/alias confirmation prompt - check BEFORE generic Y/N
-    # This catches both ship name and alias confirmation
-    if "is what you want?" in last_line:
+    # This catches both ship name and alias confirmation. Check last_lines because
+    # the cursor line may be blank and the confirmation text may be just above it.
+    if "is what you want?" in last_lines:
         return "name_confirm"
 
     # Generic Y/N prompt
