@@ -596,23 +596,23 @@ async def login_sequence(
                 last_password_kind = "game"
             else:
                 print("      → Password prompt, sending character password")
-                await send_masked_password(bot, character_password)
-                last_password_kind = "character"
-                # Some TWGS variants (or high-latency telnet bursts) can render both the initial
-                # "Password?" and the "Repeat password to verify. Password?" prompt in one buffer.
-                # If we only submit once, the server treats it as the *repeat* and the initial is blank,
-                # yielding "Passwords didn't match".
+                # Some TWGS variants (or high-latency telnet bursts) can render both:
+                # - "Please enter a password... Password?"
+                # - "Repeat password to verify. Password?"
+                # in one buffer. If we only submit once, TW treats the *repeat* as blank
+                # (second Enter with no text) and we get "Passwords didn't match".
                 if "repeat password to verify" in screen_lower:
-                    try:
-                        # Wait for the follow-up prompt to actually be ready.
-                        await bot.session.wait_for_update(timeout_ms=1200)
-                        follow = (bot.session.snapshot().get("screen", "") or "").lower()
-                        # If we're still at a password prompt after the first submission, send again.
-                        if "password?" in follow and "didn't match" not in follow:
-                            print("      → Verify password prompt detected, sending character password again")
-                            await send_masked_password(bot, character_password)
-                    except Exception:
-                        pass
+                    await send_masked_password(bot, character_password)
+                    await asyncio.sleep(0.2)
+                    await send_masked_password(bot, character_password)
+                else:
+                    await send_masked_password(bot, character_password)
+                last_password_kind = "character"
+                # If the server explicitly complains, immediately retry with the double-submit.
+                if "passwords didn't match" in screen_lower:
+                    await send_masked_password(bot, character_password)
+                    await asyncio.sleep(0.2)
+                    await send_masked_password(bot, character_password)
 
         elif actual_prompt == "private_game_password":
             print(f"      → Private game password prompt, sending game password")
