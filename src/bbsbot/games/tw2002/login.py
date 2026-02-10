@@ -439,10 +439,13 @@ async def login_sequence(
 
         # If the prompt detector matched a very specific prompt, trust it over
         # last-line heuristics (the screen buffer frequently contains stale text).
+        #
+        # Exception: ship/planet naming screens have an immediate Y/N confirmation
+        # ("X is what you want?") that must be answered before we re-send the name.
         if prompt_id == "prompt.ship_name":
-            actual_prompt = "ship_name_prompt"
+            actual_prompt = "name_confirm" if "is what you want" in screen_lower else "ship_name_prompt"
         elif prompt_id == "prompt.planet_name":
-            actual_prompt = "planet_name_prompt"
+            actual_prompt = "name_confirm" if "is what you want" in screen_lower else "planet_name_prompt"
 
         print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}", flush=True)
 
