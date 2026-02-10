@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+import sys
 import time
 from pydantic import BaseModel, Field
 from pathlib import Path
@@ -203,8 +204,10 @@ class SwarmManager:
 
         logger.info(f"Spawning bot: {bot_id} with config {config_path}")
 
+        # Spawn workers with the same interpreter as the manager process.
+        # This avoids shell/PATH dependencies (e.g., missing `uv` under launchd).
         cmd = [
-            "uv", "run", "python", "-m",
+            sys.executable, "-m",
             "bbsbot.games.tw2002.worker",
             "--config", config_path,
             "--bot-id", bot_id,
