@@ -395,7 +395,8 @@ async def login_sequence(
     kv_data = {}
 
     # Increased loop limit to handle slow game loading (can take 10+ seconds after pressing T)
-    for step_in_phase3 in range(100):
+    reached_game = False
+    for step_in_phase3 in range(200):
         step += 1
         try:
             # Game loading takes 11+ seconds, need longer timeout
@@ -490,6 +491,7 @@ async def login_sequence(
         if actual_prompt == "command_prompt" or actual_prompt == "planet_prompt":
             # Reached game! (either sector command or planet command for new chars)
             print(f"      ✓ Reached game!", flush=True)
+            reached_game = True
             break
 
         elif actual_prompt == "corporate_listings":
@@ -508,16 +510,14 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "tw_game_menu":
-            # Check if we already entered T (echoed on screen)
-            if "choice: t" in screen.lower() or "choice:t" in screen.lower():
-                print(f"      → T already entered, sending Enter to submit")
-                await bot.session.send("\r")
-            else:
-                print(f"      → At game menu, pressing T to play Trade Wars")
-                await bot.session.send("T")
-            # Game loading can take 10+ seconds after pressing T
-            # Don't sleep here - let wait_and_respond handle the delay
-            await asyncio.sleep(0.3)
+            # End-state behavior: always submit "T" with Enter.
+            #
+            # Some TWGS stacks won't echo the typed character reliably, and
+            # waiting for the echo can lead to never actually entering the game.
+            print("      → At game menu, sending T+Enter to start Trade Wars")
+            await bot.session.send("T\r")
+            # Let the server start loading; prompt waiter will handle the rest.
+            await asyncio.sleep(0.5)
 
         elif actual_prompt == "name_selection":
             print("      → Name selection prompt, choosing (B)BS Name")
@@ -699,6 +699,9 @@ async def login_sequence(
             print(f"      → Unknown state, pressing space")
             await bot.session.send(" ")
             await asyncio.sleep(0.2)
+
+    if not reached_game:
+        raise RuntimeError("Login did not reach game command prompt (stuck in pre-game menus)")
 
     # Restore threshold after game loading phase
     bot.loop_detection.threshold = original_threshold
