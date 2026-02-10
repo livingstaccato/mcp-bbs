@@ -388,26 +388,63 @@ class SwarmMonitor:
             out.append(_move(row, 2) + FG_GRAY + "No bots" + ANSI_RESET)
             return row + 1
 
-        # Column widths
-        id_w = max(10, min(20, max(len(b.get("bot_id", "")) for b in bots) + 2))
-        state_w = 12
-        sector_w = 8
-        credits_w = 14
-        turns_w = 8
-        config_w = max(0, cols - id_w - state_w - sector_w - credits_w - turns_w - 8)
+        def _shorten(s: str, w: int) -> str:
+            s = str(s or "")
+            if w <= 0:
+                return ""
+            if len(s) <= w:
+                return s.ljust(w)
+            if w <= 3:
+                return s[:w]
+            # Keep head/tail to preserve identity across updates.
+            head = max(1, (w - 1) // 2)
+            tail = max(1, w - head - 1)
+            return (s[:head] + "…" + s[-tail:])[:w]
+
+        # Fixed widths to avoid jitter as values change.
+        id_w = 14
+        state_w = 10
+        status_w = 18
+        strat_w = 18
+        sector_w = 6
+        credits_w = 10
+        fuel_w = 5
+        org_w = 5
+        equip_w = 5
+        turns_w = 7
+        act_w = 12
+
+        want_status = cols >= (id_w + state_w + status_w + sector_w + credits_w + turns_w + act_w + 10)
+        want_strat = cols >= (id_w + state_w + status_w + strat_w + sector_w + credits_w + turns_w + act_w + 12)
+        want_cargo = cols >= (id_w + state_w + status_w + strat_w + sector_w + credits_w + fuel_w + org_w + equip_w + turns_w + act_w + 16)
+
+        # Any remaining space goes to a final "NOTE" column (stable width, no jitter).
+        base = id_w + state_w + sector_w + credits_w + turns_w + act_w + 7
+        if want_status:
+            base += status_w + 1
+        if want_strat:
+            base += strat_w + 1
+        if want_cargo:
+            base += fuel_w + org_w + equip_w + 3
+        note_w = max(0, cols - base - 1)
 
         # Header
         out.append(_move(row, 1))
         out.append(BG_HEADER + ANSI_BOLD + FG_WHITE)
-        hdr = (
-            f" {'BOT ID':<{id_w}}"
-            f"{'STATE':<{state_w}}"
-            f"{'SECTOR':>{sector_w}}"
-            f"{'CREDITS':>{credits_w}}"
-            f"{'TURNS':>{turns_w}}"
+        hdr = f" {'BOT':<{id_w}}{'STATE':<{state_w}}"
+        if want_status:
+            hdr += f"{'STATUS':<{status_w}}"
+        if want_strat:
+            hdr += f"{'STRATEGY':<{strat_w}}"
+        hdr += (
+            f"{'SEC':>{sector_w}}"
+            f"{'CR':>{credits_w}}"
         )
-        if config_w > 5:
-            hdr += f"  {'CONFIG':<{config_w}}"
+        if want_cargo:
+            hdr += f"{'F':>{fuel_w}}{'O':>{org_w}}{'E':>{equip_w}}"
+        hdr += f"{'TURNS':>{turns_w}}{'ACT':<{act_w}}"
+        if note_w > 8:
+            hdr += f" {'NOTE':<{note_w}}"
         out.append(hdr.ljust(cols)[:cols])
         out.append(ANSI_RESET)
         row += 1
@@ -441,25 +478,43 @@ class SwarmMonitor:
             sector = str(bot.get("sector", 0))
             credits = _format_credits(bot.get("credits", 0))
             turns = str(bot.get("turns_executed", 0))
-            config = bot.get("config", "")
+            status_detail = (bot.get("status_detail") or "").strip()
+            if not status_detail:
+                status_detail = "-"
+            strat = (bot.get("strategy") or "").strip()
+            if not strat:
+                # Prefer id(mode) if available, match web dashboard behavior.
+                sid = (bot.get("strategy_id") or "").strip()
+                smode = (bot.get("strategy_mode") or "").strip()
+                strat = (sid + (f"({smode})" if (sid and smode) else "")) or "-"
+            activity = (bot.get("activity_context") or "").strip() or state
+            fuel = str(bot.get("cargo_fuel_ore", 0) or 0)
+            org = str(bot.get("cargo_organics", 0) or 0)
+            equip = str(bot.get("cargo_equipment", 0) or 0)
+            note = (bot.get("exit_reason") or "").strip()
 
             line = (
-                f" {bot_id:<{id_w}}"
+                f" {_shorten(bot_id, id_w)}"
                 f"{state_color}{state:<{state_w}}{ANSI_RESET}{bg}"
+            )
+            if want_status:
+                line += f"{FG_GRAY}{_shorten(status_detail, status_w)}{ANSI_RESET}{bg}"
+            if want_strat:
+                line += f"{FG_WHITE}{_shorten(strat, strat_w)}{ANSI_RESET}{bg}"
+            line += (
                 f"{sector:>{sector_w}}"
                 f"{FG_CYAN}{credits:>{credits_w}}{ANSI_RESET}{bg}"
-                f"{turns:>{turns_w}}"
             )
-            if config_w > 5:
-                config_short = config[-config_w:] if len(config) > config_w else config
-                line += f"  {FG_GRAY}{config_short:<{config_w}}{ANSI_RESET}{bg}"
+            if want_cargo:
+                line += f"{fuel:>{fuel_w}}{org:>{org_w}}{equip:>{equip_w}}"
+            line += f"{turns:>{turns_w}}{_shorten(activity, act_w)}"
+            if note_w > 8:
+                line += f" {FG_GRAY}{_shorten(note, note_w)}{ANSI_RESET}{bg}"
 
             out.append(_move(row, 1) + bg + line)
-            padded_len = id_w + state_w + sector_w + credits_w + turns_w + 3
-            if config_w > 5:
-                padded_len += config_w + 2
-            remaining = cols - padded_len
-            if remaining > 0:
+            # Pad to full terminal width (stops artifacts when shrinking lines).
+            remaining = max(0, cols - len(line) - 1)
+            if remaining:
                 out.append(" " * remaining)
             out.append(ANSI_RESET)
             row += 1

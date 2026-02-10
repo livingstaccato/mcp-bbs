@@ -159,17 +159,19 @@ class WorkerBot(TradingBot):
                     pass
             sem = getattr(self, "last_semantic_data", {}) or {}
             try:
-                cargo_fuel_ore = int(sem.get("cargo_fuel_ore")) if sem.get("cargo_fuel_ore") is not None else None
+                # Default to 0 so the dashboard/TUI show stable numeric columns even
+                # before we've visited a port table that includes OnBoard quantities.
+                cargo_fuel_ore = int(sem.get("cargo_fuel_ore")) if sem.get("cargo_fuel_ore") is not None else 0
             except Exception:
-                cargo_fuel_ore = None
+                cargo_fuel_ore = 0
             try:
-                cargo_organics = int(sem.get("cargo_organics")) if sem.get("cargo_organics") is not None else None
+                cargo_organics = int(sem.get("cargo_organics")) if sem.get("cargo_organics") is not None else 0
             except Exception:
-                cargo_organics = None
+                cargo_organics = 0
             try:
-                cargo_equipment = int(sem.get("cargo_equipment")) if sem.get("cargo_equipment") is not None else None
+                cargo_equipment = int(sem.get("cargo_equipment")) if sem.get("cargo_equipment") is not None else 0
             except Exception:
-                cargo_equipment = None
+                cargo_equipment = 0
 
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)
