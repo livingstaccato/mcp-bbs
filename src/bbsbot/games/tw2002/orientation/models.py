@@ -12,7 +12,7 @@ class GameState(BaseModel):
 
     # Context - where are we in the game UI?
     context: str  # "sector_command" | "planet_command" | "citadel_command" |
-                  # "port_menu" | "combat" | "menu" | "unknown"
+    # "port_menu" | "combat" | "menu" | "unknown"
     sector: int | None = None
 
     # Resources
@@ -80,6 +80,7 @@ class OrientationError(Exception):
 
 class SectorInfo(BaseModel):
     """What we know about a sector."""
+
     warps: list[int] = Field(default_factory=list)
     has_port: bool = False
     port_class: str | None = None
@@ -107,6 +108,7 @@ class SectorInfo(BaseModel):
 
 class QuickState(BaseModel):
     """Minimal state info from quick check."""
+
     context: str
     sector: int | None = None
     prompt_id: str | None = None

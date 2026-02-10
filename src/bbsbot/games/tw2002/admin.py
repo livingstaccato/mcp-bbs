@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
+
 if TYPE_CHECKING:
-    from twerk.parsers import ConfigRecord, PlayerRecord, PortRecord, SectorRecord
+    from twerk.parsers import PlayerRecord, PortRecord, SectorRecord
 
 
 class TW2002Admin(BaseModel):

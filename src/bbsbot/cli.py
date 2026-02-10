@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 import click
 
@@ -296,8 +296,8 @@ def tw2002_list_resume(
     name_prefix: str | None,
 ) -> None:
     """List resumable TW2002 characters from local state."""
-    from bbsbot.paths import default_knowledge_root
     from bbsbot.games.tw2002.resume import as_dict, list_resumable_tw2002
+    from bbsbot.paths import default_knowledge_root
 
     entries = list_resumable_tw2002(
         default_knowledge_root(),
@@ -320,9 +320,7 @@ def tw2002_list_resume(
         host = f"{entry.host}:{entry.port}" if entry.port is not None else entry.host
         click.echo(f"{host}  resumable:{len(entry.resumable)}  dead:{entry.dead}  total:{entry.total}")
         for char in entry.resumable:
-            click.echo(
-                f"  - {char.name}  credits:{char.credits}  sector:{char.sector}  last_active:{char.last_active}"
-            )
+            click.echo(f"  - {char.name}  credits:{char.credits}  sector:{char.sector}  last_active:{char.last_active}")
 
 
 @cli.group("replay")
@@ -355,7 +353,9 @@ def replay_view(log: str, speed: float, step: bool, events: tuple[str, ...]) -> 
 @cli.command("spy")
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", type=int, default=8765, show_default=True)
-@click.option("--encoding", default="cp437", show_default=True, help="Decode bytes before printing (set to '' for raw).")
+@click.option(
+    "--encoding", default="cp437", show_default=True, help="Decode bytes before printing (set to '' for raw)."
+)
 def spy(host: str, port: int, encoding: str) -> None:
     """Attach to a watch socket and render ANSI output locally."""
     import asyncio
@@ -405,7 +405,7 @@ def tw2002_parse_semantic(input_path: str | None, output_format: str) -> None:
     from bbsbot.games.tw2002.parsing import extract_semantic_kv
 
     if input_path:
-        with open(input_path, "r", encoding="utf-8") as handle:
+        with open(input_path, encoding="utf-8") as handle:
             screen = handle.read()
     else:
         screen = sys.stdin.read()

@@ -5,13 +5,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from bbsbot.addons.base import Addon, AddonEvent
 from pydantic import BaseModel, ConfigDict
 
+from bbsbot.addons.base import AddonEvent
 
-_FIELD_RE = re.compile(
-    r"<(?P<key>.?)>\s*(?P<label>[^:]+?)\s*:\s*(?P<value>.+)$"
-)
+_FIELD_RE = re.compile(r"<(?P<key>.?)>\s*(?P<label>[^:]+?)\s*:\s*(?P<value>.+)$")
 _SIMPLE_KV_RE = re.compile(r"^(?P<label>[A-Za-z0-9 /#'\-\[\]<>]+)\s*:\s*(?P<value>.+)$")
 _PROMPT_RE = re.compile(r"^(?P<prompt>.+?\[[^\]]*\]\s*:\s*)$")
 

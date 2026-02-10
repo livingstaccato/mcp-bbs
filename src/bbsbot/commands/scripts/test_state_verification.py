@@ -5,11 +5,10 @@ import asyncio
 import sys
 from pathlib import Path
 
-
 from bbsbot.games.tw2002 import TradingBot
-from bbsbot.games.tw2002.io import wait_and_respond, send_input
-from bbsbot.learning.rules import RuleSet
+from bbsbot.games.tw2002.io import wait_and_respond
 from bbsbot.learning.extractor import KVExtractor
+from bbsbot.learning.rules import RuleSet
 
 
 async def test_sector_command_detection():
@@ -23,6 +22,7 @@ async def test_sector_command_detection():
     try:
         # Connect
         from bbsbot.games.tw2002.connection import connect
+
         await connect(bot)
 
         # Load rules
@@ -58,7 +58,7 @@ async def test_sector_command_detection():
 
         print(f"\nPrompt detected: {prompt_id}")
         print(f"Input type: {input_type}")
-        print(f"\nScreen content:")
+        print("\nScreen content:")
         print("-" * 80)
         print(screen[:500])  # First 500 chars
         print("-" * 80)
@@ -106,6 +106,7 @@ async def test_sector_command_detection():
     except Exception as e:
         print(f"\n✗ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -122,10 +123,6 @@ async def test_kv_flow_through_system():
     print("K/V DATA FLOW TEST")
     print("=" * 80)
 
-    from bbsbot.core.session import Session
-    from bbsbot.learning.engine import LearningEngine
-    from bbsbot.terminal.emulator import TerminalEmulator
-    from bbsbot.transport.telnet import TelnetTransport
 
     print("\n1. Testing extraction in isolation...")
     from bbsbot.learning.extractor import KVExtractor

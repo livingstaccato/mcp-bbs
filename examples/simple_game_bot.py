@@ -4,11 +4,10 @@ This demonstrates how a future game can leverage the framework patterns
 extracted from TW2002 to minimize boilerplate code.
 """
 
-import asyncio
 
 from bbsbot.core import (
-    BotBase,
     BaseErrorDetector,
+    BotBase,
     InputSender,
     PromptWaiter,
 )
@@ -44,24 +43,15 @@ class SimpleGameBot(BotBase):
         sender = InputSender(self.session)
 
         # Wait for username prompt
-        result = await waiter.wait_for_prompt(
-            expected_prompt_id="username",
-            timeout_ms=5000
-        )
+        result = await waiter.wait_for_prompt(expected_prompt_id="username", timeout_ms=5000)
         await sender.send_input(username, result["input_type"])
 
         # Wait for password prompt
-        result = await waiter.wait_for_prompt(
-            expected_prompt_id="password",
-            timeout_ms=5000
-        )
+        result = await waiter.wait_for_prompt(expected_prompt_id="password", timeout_ms=5000)
         await sender.send_input(password, result["input_type"])
 
         # Wait for main menu
-        result = await waiter.wait_for_prompt(
-            expected_prompt_id="main_menu",
-            timeout_ms=10000
-        )
+        result = await waiter.wait_for_prompt(expected_prompt_id="main_menu", timeout_ms=10000)
 
         print(f"✓ Logged in as {username}")
 
@@ -71,10 +61,7 @@ class SimpleGameBot(BotBase):
         sender = InputSender(self.session)
 
         # Wait for menu
-        result = await waiter.wait_for_prompt(
-            expected_prompt_id="main_menu",
-            timeout_ms=5000
-        )
+        result = await waiter.wait_for_prompt(expected_prompt_id="main_menu", timeout_ms=5000)
 
         # Extract menu options using framework utility
         options = extract_menu_options(result["screen"])
@@ -122,11 +109,7 @@ async def main():
     bot = SimpleGameBot(character_name="Hero")
 
     # Connect using inherited method
-    await bot.connect(
-        host="localhost",
-        port=2323,
-        namespace="simple_game"
-    )
+    await bot.connect(host="localhost", port=2323, namespace="simple_game")
 
     # Run game
     await bot.run()

@@ -9,7 +9,8 @@ This script:
 """
 
 import asyncio
-from bbsbot.games.tw2002 import TradingBot, OrientationError
+
+from bbsbot.games.tw2002 import OrientationError, TradingBot
 
 
 async def test_recovery_from_planet_menu():
@@ -76,8 +77,9 @@ async def test_recovery_from_planet_menu():
             print(f"    Recovered: {state4.context}")
 
             # Either we're at sector_command (backed out) or port_menu (recognized)
-            assert state4.context in ("sector_command", "port_menu"), \
+            assert state4.context in ("sector_command", "port_menu"), (
                 f"Expected sector_command or port_menu, got {state4.context}"
+            )
             print("    ✓ Successfully handled port state!")
 
         print("\n" + "=" * 60)
@@ -92,6 +94,7 @@ async def test_recovery_from_planet_menu():
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -139,8 +142,7 @@ async def test_recovery_from_random_keys():
         print(f"    Recovered: {state2.context} @ sector {state2.sector}")
 
         assert state2.is_safe(), f"Expected safe state, got {state2.context}"
-        assert state2.sector == state1.sector, \
-            f"Sector changed unexpectedly: {state1.sector} -> {state2.sector}"
+        assert state2.sector == state1.sector, f"Sector changed unexpectedly: {state1.sector} -> {state2.sector}"
 
         print("    ✓ Successfully recovered to same sector!")
 
@@ -179,4 +181,5 @@ async def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(asyncio.run(main()))

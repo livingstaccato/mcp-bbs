@@ -7,6 +7,7 @@ from pathlib import Path
 
 from bbsbot.games.tw2002.io import send_input, wait_and_respond
 from bbsbot.logging import get_logger
+
 from .parsers import extract_sector_from_screen
 from .validation import validate_kv_data
 
@@ -202,12 +203,8 @@ async def resolve_paths(
     # Fall back to in-game knowledge if available.
     if bot.sector_knowledge and bot.current_sector:
         try:
-            path_to_buy = bot.sector_knowledge.find_path(
-                bot.current_sector, route.buy_sector
-            )
-            path_buy_to_sell = bot.sector_knowledge.find_path(
-                route.buy_sector, route.sell_sector
-            )
+            path_to_buy = bot.sector_knowledge.find_path(bot.current_sector, route.buy_sector)
+            path_buy_to_sell = bot.sector_knowledge.find_path(route.buy_sector, route.sell_sector)
         except Exception:
             pass
 

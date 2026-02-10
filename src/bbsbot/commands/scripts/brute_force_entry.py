@@ -2,8 +2,9 @@
 """Brute force test different ways to enter the game."""
 
 import asyncio
-from bbsbot.paths import default_knowledge_root
+
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 async def test_sequence(name: str, game_select_keys: str, wait_time: float = 3.0):
@@ -32,34 +33,29 @@ async def test_sequence(name: str, game_select_keys: str, wait_time: float = 3.0
         await asyncio.sleep(wait_time)
         snapshot = await session.read(timeout_ms=1000, max_bytes=8192)
 
-        screen = snapshot.get('screen', '')
-        screen_hash = snapshot.get('screen_hash', '')[:16]
+        screen = snapshot.get("screen", "")
+        screen_hash = snapshot.get("screen_hash", "")[:16]
 
         # Check if we got past the menu
-        is_menu = 'Select game' in screen or 'Show Game Descriptions' in screen
+        is_menu = "Select game" in screen or "Show Game Descriptions" in screen
 
         await manager.close_all_sessions()
 
         return {
-            'keys': repr(game_select_keys),
-            'wait': wait_time,
-            'success': not is_menu,
-            'screen_hash': screen_hash,
-            'screen_preview': screen[:100].replace('\n', ' ')
+            "keys": repr(game_select_keys),
+            "wait": wait_time,
+            "success": not is_menu,
+            "screen_hash": screen_hash,
+            "screen_preview": screen[:100].replace("\n", " "),
         }
     except Exception as e:
-        return {
-            'keys': repr(game_select_keys),
-            'wait': wait_time,
-            'success': False,
-            'error': str(e)
-        }
+        return {"keys": repr(game_select_keys), "wait": wait_time, "success": False, "error": str(e)}
 
 
 async def main():
-    print("="*80)
+    print("=" * 80)
     print("BRUTE FORCE TESTING GAME ENTRY SEQUENCES")
-    print("="*80)
+    print("=" * 80)
 
     test_cases = [
         ("A", 2.0),
@@ -82,21 +78,21 @@ async def main():
         result = await test_sequence(f"TestBot{i}", keys, wait)
         results.append(result)
 
-        if result.get('success'):
-            print(f"  ✅ SUCCESS! Got past menu")
+        if result.get("success"):
+            print("  ✅ SUCCESS! Got past menu")
             print(f"     Screen: {result['screen_preview']}")
         else:
-            print(f"  ❌ Still at menu")
-            if 'error' in result:
+            print("  ❌ Still at menu")
+            if "error" in result:
                 print(f"     Error: {result['error']}")
 
         await asyncio.sleep(1.0)  # Delay between tests
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("RESULTS SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
-    successful = [r for r in results if r.get('success')]
+    successful = [r for r in results if r.get("success")]
     if successful:
         print(f"\n✅ Found {len(successful)} working sequence(s):")
         for r in successful:
@@ -104,9 +100,9 @@ async def main():
     else:
         print("\n❌ No sequences worked!")
         print("\nAll attempts resulted in same screen hashes:")
-        unique_hashes = set(r.get('screen_hash', 'N/A') for r in results)
+        unique_hashes = set(r.get("screen_hash", "N/A") for r in results)
         for h in unique_hashes:
-            count = sum(1 for r in results if r.get('screen_hash') == h)
+            count = sum(1 for r in results if r.get("screen_hash") == h)
             print(f"   {h}: {count} occurrences")
 
 

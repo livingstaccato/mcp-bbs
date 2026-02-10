@@ -118,9 +118,7 @@ class SectorKnowledge:
                 sectors_path = self.twerk_data_dir / "TWSECT.DAT"
             if sectors_path.exists():
                 sectors = parse_sectors(sectors_path)
-                self._twerk_sectors = {
-                    s.sector_id: list(s.warps) for s in sectors if s.warps
-                }
+                self._twerk_sectors = {s.sector_id: list(s.warps) for s in sectors if s.warps}
         except ImportError:
             pass  # twerk not available
         except Exception as e:
@@ -330,7 +328,4 @@ class SectorKnowledge:
         Returns:
             Set of sector numbers that have been scanned
         """
-        return {
-            sector for sector, info in self._sectors.items()
-            if info.last_scanned is not None
-        }
+        return {sector for sector, info in self._sectors.items() if info.last_scanned is not None}

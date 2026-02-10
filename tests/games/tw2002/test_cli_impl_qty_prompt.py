@@ -7,4 +7,3 @@ def test_is_port_qty_prompt_only_matches_active_qty_prompt_line() -> None:
     assert not _is_port_qty_prompt("We'll sell them for 13 credits.")
     assert not _is_port_qty_prompt("Your offer [13] ?")
     assert not _is_port_qty_prompt("")
-

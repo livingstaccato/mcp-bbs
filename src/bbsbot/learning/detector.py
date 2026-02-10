@@ -7,9 +7,9 @@ End-state goals:
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
-import hashlib
 
 from pydantic import BaseModel, ConfigDict
 
@@ -81,11 +81,13 @@ class PromptDetector:
                 logger.debug(f"[PATTERN COMPILE] ✓ Compiled: {pattern.get('id', 'unknown')}")
             except re.error as e:
                 # Pattern compilation failed - emit diagnostic
-                failed_patterns.append({
-                    "id": pattern.get("id", "unknown"),
-                    "regex": pattern.get("regex", ""),
-                    "error": str(e),
-                })
+                failed_patterns.append(
+                    {
+                        "id": pattern.get("id", "unknown"),
+                        "regex": pattern.get("regex", ""),
+                        "error": str(e),
+                    }
+                )
                 logger.error(
                     f"[PATTERN COMPILE] ✗ FAILED to compile pattern: {pattern.get('id', 'unknown')}\n"
                     f"  Regex: {pattern.get('regex', '')!r}\n"
@@ -99,21 +101,20 @@ class PromptDetector:
                     f"  Missing key: {e}\n"
                     f"  Pattern keys: {list(pattern.keys())}"
                 )
-                failed_patterns.append({
-                    "id": pattern.get("id", "unknown"),
-                    "error": f"Missing key: {e}",
-                })
+                failed_patterns.append(
+                    {
+                        "id": pattern.get("id", "unknown"),
+                        "error": f"Missing key: {e}",
+                    }
+                )
                 continue
 
-        logger.info(
-            f"[PATTERN COMPILE] Compilation complete: {len(compiled)} succeeded, "
-            f"{len(failed_patterns)} failed"
-        )
+        logger.info(f"[PATTERN COMPILE] Compilation complete: {len(compiled)} succeeded, {len(failed_patterns)} failed")
 
         if failed_patterns:
             logger.error(
-                f"[PATTERN COMPILE] ⚠️  {len(failed_patterns)} patterns failed compilation:\n" +
-                "\n".join(f"  - {p['id']}: {p.get('error', 'unknown error')}" for p in failed_patterns)
+                f"[PATTERN COMPILE] ⚠️  {len(failed_patterns)} patterns failed compilation:\n"
+                + "\n".join(f"  - {p['id']}: {p.get('error', 'unknown error')}" for p in failed_patterns)
             )
 
         return compiled
@@ -191,7 +192,7 @@ class PromptDetector:
         cursor_at_end: bool,
         compiled: list[tuple[re.Pattern[str], dict[str, Any]]],
         regex_matched_but_failed: list[dict[str, Any]],
-        cursor_miss_candidates: list["PromptMatch"] | None = None,
+        cursor_miss_candidates: list[PromptMatch] | None = None,
     ) -> PromptMatch | None:
         for regex, pattern in compiled:
             match = regex.search(text)
@@ -289,8 +290,7 @@ class PromptDetector:
             )
             if match:
                 logger.info(
-                    f"[PROMPT DETECTION] ✓✓✓ MATCHED (region): {match.prompt_id} "
-                    f"(input_type: {match.input_type})"
+                    f"[PROMPT DETECTION] ✓✓✓ MATCHED (region): {match.prompt_id} (input_type: {match.input_type})"
                 )
                 return match
 
@@ -305,8 +305,7 @@ class PromptDetector:
             )
             if match:
                 logger.info(
-                    f"[PROMPT DETECTION] ✓✓✓ MATCHED (full): {match.prompt_id} "
-                    f"(input_type: {match.input_type})"
+                    f"[PROMPT DETECTION] ✓✓✓ MATCHED (full): {match.prompt_id} (input_type: {match.input_type})"
                 )
                 return match
 
@@ -315,8 +314,7 @@ class PromptDetector:
         if cursor_miss_candidates and not bool(cursor_at_end) and bool(has_trailing_space):
             cand = cursor_miss_candidates[0]
             logger.warning(
-                "[PROMPT DETECTION] Cursor-at-end heuristic blocked prompt match; "
-                f"falling back to {cand.prompt_id}"
+                f"[PROMPT DETECTION] Cursor-at-end heuristic blocked prompt match; falling back to {cand.prompt_id}"
             )
             return cand
 
@@ -324,8 +322,8 @@ class PromptDetector:
         if regex_matched_but_failed:
             logger.error(
                 f"[PROMPT DETECTION] ✗✗✗ DETECTION FAILED: {len(regex_matched_but_failed)} patterns matched "
-                f"regex but failed additional checks:\n" +
-                "\n".join(f"  - {p['pattern_id']}: {p['reason']}" for p in regex_matched_but_failed)
+                f"regex but failed additional checks:\n"
+                + "\n".join(f"  - {p['pattern_id']}: {p['reason']}" for p in regex_matched_but_failed)
             )
         else:
             # No patterns matched at all - this might be okay (e.g., data display)

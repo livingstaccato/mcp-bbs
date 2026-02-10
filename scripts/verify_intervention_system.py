@@ -51,9 +51,7 @@ class InterventionVerifier:
         try:
             # Navigate to game selection menu
             for _ in range(10):
-                input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                    bot, timeout_ms=5000
-                )
+                input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
                 # Check if we're at a game selection menu
                 if "menu_selection" in prompt_id or "select game" in screen.lower():
@@ -61,10 +59,7 @@ class InterventionVerifier:
                     lines = screen.split("\n")
                     for line in lines:
                         # Look for lines like "A) Trade Wars 2002 - Game 1 (5 players)"
-                        if ")" in line and any(
-                            game in line.lower()
-                            for game in ["trade wars", "tw", "game"]
-                        ):
+                        if ")" in line and any(game in line.lower() for game in ["trade wars", "tw", "game"]):
                             parts = line.split(")")
                             if len(parts) >= 2:
                                 letter = parts[0].strip()
@@ -94,9 +89,7 @@ class InterventionVerifier:
 
         return games
 
-    async def verify_game(
-        self, game_letter: str, game_name: str, max_turns: int = 50
-    ) -> dict[str, Any]:
+    async def verify_game(self, game_letter: str, game_name: str, max_turns: int = 50) -> dict[str, Any]:
         """Verify intervention system on a specific game.
 
         Args:
@@ -107,9 +100,9 @@ class InterventionVerifier:
         Returns:
             Dict with verification results
         """
-        logger.info(f"\n{'='*80}")
+        logger.info(f"\n{'=' * 80}")
         logger.info(f"Testing game {game_letter}: {game_name}")
-        logger.info(f"{'='*80}")
+        logger.info(f"{'=' * 80}")
 
         result = {
             "game_letter": game_letter,
@@ -125,9 +118,7 @@ class InterventionVerifier:
         bot = None
         try:
             # Create bot with intervention enabled
-            config = BotConfig.from_yaml(
-                Path(__file__).parent.parent / "config" / "tw2002_bot.yaml"
-            )
+            config = BotConfig.from_yaml(Path(__file__).parent.parent / "config" / "tw2002_bot.yaml")
             config.trading.ai_strategy.intervention.enabled = True
             config.trading.ai_strategy.intervention.min_priority = "medium"
             config.trading.ai_strategy.intervention.cooldown_turns = 3
@@ -148,9 +139,7 @@ class InterventionVerifier:
             while turns < max_turns:
                 try:
                     # Get intervention status
-                    if hasattr(bot, "strategy") and hasattr(
-                        bot.strategy, "_intervention_trigger"
-                    ):
+                    if hasattr(bot, "strategy") and hasattr(bot.strategy, "_intervention_trigger"):
                         trigger = bot.strategy._intervention_trigger
                         if trigger and trigger.enabled:
                             # Log current intervention state
@@ -158,20 +147,12 @@ class InterventionVerifier:
                             opportunities = trigger.detector.recent_opportunities
 
                             if anomalies:
-                                result["anomalies"].extend(
-                                    [a.model_dump() for a in anomalies]
-                                )
-                                logger.info(
-                                    f"Turn {turns}: Detected {len(anomalies)} anomalies"
-                                )
+                                result["anomalies"].extend([a.model_dump() for a in anomalies])
+                                logger.info(f"Turn {turns}: Detected {len(anomalies)} anomalies")
 
                             if opportunities:
-                                result["opportunities"].extend(
-                                    [o.model_dump() for o in opportunities]
-                                )
-                                logger.info(
-                                    f"Turn {turns}: Detected {len(opportunities)} opportunities"
-                                )
+                                result["opportunities"].extend([o.model_dump() for o in opportunities])
+                                logger.info(f"Turn {turns}: Detected {len(opportunities)} opportunities")
 
                     # Take a turn
                     await bot._cycle()
@@ -210,9 +191,7 @@ class InterventionVerifier:
             game_letter: Game selection letter
         """
         for step in range(20):
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Check if we're in the game (command prompt)
             if "command" in prompt_id.lower() or "sector_command" in prompt_id:
@@ -226,9 +205,7 @@ class InterventionVerifier:
                 await send_input(bot, "verifier", input_type)
             elif "login_pass" in prompt_id or "password" in prompt_id.lower():
                 await send_input(bot, "verify123", input_type)
-            elif "new_character" in prompt_id.lower() or "start a new" in screen.lower():
-                await send_input(bot, "Y", input_type)
-            elif "ansi" in prompt_id.lower():
+            elif "new_character" in prompt_id.lower() or "start a new" in screen.lower() or "ansi" in prompt_id.lower():
                 await send_input(bot, "Y", input_type)
             elif "name" in prompt_id.lower() and "ship" not in prompt_id.lower():
                 await send_input(bot, f"Verify{game_letter}", input_type)
@@ -252,13 +229,13 @@ class InterventionVerifier:
             max_games: Maximum number of games to test
             turns_per_game: Turns to play per game
         """
-        logger.info("="*80)
+        logger.info("=" * 80)
         logger.info("INTERVENTION SYSTEM VERIFICATION")
-        logger.info("="*80)
-        logger.info(f"Target: localhost:2002")
+        logger.info("=" * 80)
+        logger.info("Target: localhost:2002")
         logger.info(f"Max games: {max_games}")
         logger.info(f"Turns per game: {turns_per_game}")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         # Discover games
         bot = TradingBot()
@@ -281,9 +258,7 @@ class InterventionVerifier:
         # Test each game
         games_to_test = games[:max_games]
         for game in games_to_test:
-            result = await self.verify_game(
-                game["letter"], game["name"], turns_per_game
-            )
+            result = await self.verify_game(game["letter"], game["name"], turns_per_game)
             self.results.append(result)
 
             if result["success"]:
@@ -299,9 +274,9 @@ class InterventionVerifier:
 
     def _print_summary(self) -> None:
         """Print verification summary."""
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("VERIFICATION SUMMARY")
-        logger.info("="*80)
+        logger.info("=" * 80)
         logger.info(f"Games tested: {self.games_tested}")
         logger.info(f"Interventions triggered: {self.interventions_triggered}")
         logger.info(f"Anomalies detected: {self.anomalies_detected}")
@@ -310,10 +285,7 @@ class InterventionVerifier:
         # Per-game results
         for result in self.results:
             status = "✓" if result["success"] else "✗"
-            logger.info(
-                f"{status} {result['game_letter']}: {result['game_name']} "
-                f"({result['turns_played']} turns)"
-            )
+            logger.info(f"{status} {result['game_letter']}: {result['game_name']} ({result['turns_played']} turns)")
 
             if result.get("anomalies"):
                 anomaly_types = {}
@@ -332,7 +304,7 @@ class InterventionVerifier:
             if result.get("error"):
                 logger.info(f"  Error: {result['error']}")
 
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         # Save detailed results
         results_file = Path(__file__).parent.parent / "verification_results.json"

@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+
 class DataFileType(Enum):
     """TW2002 data file types."""
 

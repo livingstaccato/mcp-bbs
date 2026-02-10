@@ -10,6 +10,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
+
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.bot import TradingBot
     from bbsbot.games.tw2002.config import BotConfig
@@ -254,21 +255,15 @@ class UpgradeManager:
 
             # Enter hardware emporium (H)
             await send_input(bot, "H", "single_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Buy holds (typically option 1 or H)
             await send_input(bot, "H", "single_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Enter quantity
             await send_input(bot, str(quantity), "multi_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Exit hardware
             await send_input(bot, "Q", "single_key")
@@ -334,21 +329,15 @@ class UpgradeManager:
 
             # Enter hardware emporium (H)
             await send_input(bot, "H", "single_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Buy fighters (F)
             await send_input(bot, "F", "single_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Enter quantity
             await send_input(bot, str(quantity), "multi_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Exit hardware
             await send_input(bot, "Q", "single_key")
@@ -413,21 +402,15 @@ class UpgradeManager:
 
             # Enter hardware emporium (H)
             await send_input(bot, "H", "single_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Buy shields (S)
             await send_input(bot, "S", "single_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Enter quantity
             await send_input(bot, str(quantity), "multi_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Exit hardware
             await send_input(bot, "Q", "single_key")

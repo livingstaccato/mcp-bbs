@@ -11,6 +11,7 @@ from pathlib import Path
 from time import time
 
 from pydantic import BaseModel, ConfigDict, Field
+
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
@@ -65,6 +66,7 @@ class TwerkOptimizedStrategy(TradingStrategy):
         """Initialize twerk library if available."""
         try:
             from twerk.parsers import parse_ports, parse_sectors
+
             self._twerk_available = True
             logger.info("Twerk library available")
         except ImportError:
@@ -166,7 +168,7 @@ class TwerkOptimizedStrategy(TradingStrategy):
         data_dir = self._settings.data_dir
         if not data_dir:
             # Try to find data dir from knowledge
-            if hasattr(self.knowledge, 'twerk_data_dir') and self.knowledge.twerk_data_dir:
+            if hasattr(self.knowledge, "twerk_data_dir") and self.knowledge.twerk_data_dir:
                 data_dir = str(self.knowledge.twerk_data_dir)
             else:
                 logger.warning("No twerk data directory configured")
@@ -178,8 +180,8 @@ class TwerkOptimizedStrategy(TradingStrategy):
             return
 
         try:
-            from twerk.parsers import parse_ports, parse_sectors
             from twerk.analysis import find_trade_routes
+            from twerk.parsers import parse_ports, parse_sectors
 
             # TWGS typically stores these as uppercase; accept either.
             sectors_path = data_path / "twsect.dat"
@@ -198,7 +200,7 @@ class TwerkOptimizedStrategy(TradingStrategy):
 
             # Find optimal routes
             # Use ship holds from knowledge or default to 20
-            holds = getattr(self.knowledge, 'ship_holds', 20)
+            holds = getattr(self.knowledge, "ship_holds", 20)
             max_hops = 5  # Maximum warp hops for route calculation
             routes = find_trade_routes(sectors, ports, holds, max_hops)
 
@@ -376,6 +378,7 @@ class TwerkOptimizedStrategy(TradingStrategy):
         # Explore
         if state.warps:
             import random
+
             direction = random.choice(state.warps)
             return TradeAction.EXPLORE, {"direction": direction}
 

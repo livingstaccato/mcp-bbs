@@ -112,9 +112,7 @@ async def main():
 
         else:
             # Full trading loop
-            await bot.run_trading_loop(
-                target_credits=args.target_credits, max_cycles=args.max_cycles
-            )
+            await bot.run_trading_loop(target_credits=args.target_credits, max_cycles=args.max_cycles)
 
     except KeyboardInterrupt:
         print("\n\n⚠️  Interrupted by user")

@@ -7,7 +7,8 @@ but simpler games can use this framework to reduce boilerplate.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 
 class LoginHandler(Protocol):
@@ -16,9 +17,7 @@ class LoginHandler(Protocol):
     Handlers are called when specific prompts are detected during login.
     """
 
-    async def handle_prompt(
-        self, screen: str, prompt_id: str, input_type: str
-    ) -> str | None:
+    async def handle_prompt(self, screen: str, prompt_id: str, input_type: str) -> str | None:
         """Handle a login prompt.
 
         Args:

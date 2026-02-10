@@ -2,7 +2,6 @@
 """Quick integration test for prompt detection system."""
 
 import time
-from pathlib import Path
 
 from bbsbot.learning.buffer import BufferManager
 from bbsbot.learning.detector import PromptDetector

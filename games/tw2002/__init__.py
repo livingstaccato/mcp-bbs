@@ -13,29 +13,29 @@ Modules:
     data_mapper: Map TEDIT settings to underlying data files
 """
 
-from .tedit_manager import TEDITManager
-from .settings_diff import (
-    diff_games,
-    diff_from_baseline,
-    diff_from_files,
-    diff_settings,
-    format_diff_report,
-    DiffReport,
-    SettingDiff,
-    DEFAULT_BASELINE,
-    quick_diff_from_defaults,
-)
 from .data_mapper import (
+    FIELD_MAPPINGS,
     DataFileType,
     FieldMapping,
-    FIELD_MAPPINGS,
+    format_data_file_summary,
+    get_affected_files,
+    get_file_info,
+    get_mapping,
     get_mappings_by_editor,
     get_mappings_by_file,
-    get_mapping,
-    get_affected_files,
-    format_data_file_summary,
-    get_file_info,
 )
+from .settings_diff import (
+    DEFAULT_BASELINE,
+    DiffReport,
+    SettingDiff,
+    diff_from_baseline,
+    diff_from_files,
+    diff_games,
+    diff_settings,
+    format_diff_report,
+    quick_diff_from_defaults,
+)
+from .tedit_manager import TEDITManager
 
 # Import TW2002Admin from bbsbot.tw2002 for unified admin access
 try:

@@ -7,7 +7,7 @@ Allows games to register their own MCP tools with custom prefixes
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class MCPToolRegistry:
 
             # Creates tool: tw2002_set_goal
         """
+
         def decorator(func: Callable) -> Callable:
             tool_name = name or func.__name__
             full_name = f"{self.prefix}_{tool_name}"

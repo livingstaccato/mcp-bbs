@@ -1,7 +1,8 @@
 """Tests for Ollama provider."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from bbsbot.llm.config import OllamaConfig
 from bbsbot.llm.exceptions import (
@@ -43,9 +44,7 @@ async def test_ollama_completion_success(ollama_provider):
         "done_reason": "stop",
     }
 
-    with patch.object(
-        ollama_provider._client, "post", return_value=mock_response
-    ) as mock_post:
+    with patch.object(ollama_provider._client, "post", return_value=mock_response) as mock_post:
         request = CompletionRequest(
             prompt="Hello",
             model="llama2",
@@ -69,9 +68,7 @@ async def test_ollama_chat_success(ollama_provider):
         "done_reason": "stop",
     }
 
-    with patch.object(
-        ollama_provider._client, "post", return_value=mock_response
-    ) as mock_post:
+    with patch.object(ollama_provider._client, "post", return_value=mock_response) as mock_post:
         request = ChatRequest(
             messages=[ChatMessage(role="user", content="Hello")],
             model="llama2",
@@ -127,9 +124,7 @@ async def test_ollama_model_not_found(ollama_provider):
     with patch.object(
         ollama_provider._client,
         "post",
-        side_effect=httpx.HTTPStatusError(
-            "Model not found", request=MagicMock(), response=mock_response
-        ),
+        side_effect=httpx.HTTPStatusError("Model not found", request=MagicMock(), response=mock_response),
     ):
         request = CompletionRequest(prompt="Hello", model="nonexistent")
 

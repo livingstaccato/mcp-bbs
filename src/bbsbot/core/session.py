@@ -90,9 +90,7 @@ class Session(BaseModel):
             self._disconnected = True
             return
         self._disconnected = False
-        self._reader_task = asyncio.create_task(
-            self._reader_loop(max_bytes=max_bytes, timeout_ms=timeout_ms)
-        )
+        self._reader_task = asyncio.create_task(self._reader_loop(max_bytes=max_bytes, timeout_ms=timeout_ms))
 
     async def stop_reader(self) -> None:
         task = self._reader_task
@@ -279,11 +277,7 @@ class Session(BaseModel):
             if any(p.kind == p.VAR_POSITIONAL for p in params):
                 arity = 2
             else:
-                positional = [
-                    p
-                    for p in params
-                    if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
-                ]
+                positional = [p for p in params if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
                 if len(positional) >= 2:
                     arity = 2
         except (TypeError, ValueError):

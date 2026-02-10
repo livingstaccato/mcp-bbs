@@ -146,9 +146,7 @@ def export_goal_timeline(phases: list[GoalPhase], output_path: Path) -> None:
     # Convert phases to dicts
     data = {
         "phases": [phase.model_dump() for phase in phases],
-        "total_turns": max(
-            p.end_turn for p in phases if p.end_turn is not None
-        ) if phases else 0,
+        "total_turns": max(p.end_turn for p in phases if p.end_turn is not None) if phases else 0,
         "total_phases": len(phases),
         "timestamp": datetime.now().isoformat(),
     }

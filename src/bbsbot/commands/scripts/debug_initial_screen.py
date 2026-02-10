@@ -2,8 +2,9 @@
 """Debug script to see initial TW2002 screen."""
 
 import asyncio
-from bbsbot.paths import default_knowledge_root
+
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 async def main():
@@ -11,9 +12,7 @@ async def main():
     knowledge_root = default_knowledge_root()
 
     print("Connecting to localhost:2002...")
-    session_id = await manager.create_session(
-        host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0
-    )
+    session_id = await manager.create_session(host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0)
     session = await manager.get_session(session_id)
     await manager.enable_learning(session_id, knowledge_root, namespace="tw2002")
 
@@ -22,14 +21,14 @@ async def main():
 
     snapshot = await session.read(timeout_ms=1000, max_bytes=8192)
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("INITIAL SCREEN")
-    print("="*80)
-    print(snapshot.get('screen', ''))
-    print("="*80)
+    print("=" * 80)
+    print(snapshot.get("screen", ""))
+    print("=" * 80)
 
-    if 'prompt_detected' in snapshot:
-        detected = snapshot['prompt_detected']
+    if "prompt_detected" in snapshot:
+        detected = snapshot["prompt_detected"]
         print(f"\n✓ Prompt detected: {detected['prompt_id']} ({detected['input_type']})")
         print(f"  Matched text: {repr(detected.get('matched_text', ''))}")
     else:

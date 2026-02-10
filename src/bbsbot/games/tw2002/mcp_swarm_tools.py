@@ -88,9 +88,7 @@ def register_swarm_tools(server: Server) -> None:
             Bot status including sector, credits, turns
         """
         with _get_client() as client:
-            response = client.get(
-                f"{MANAGER_URL}/bot/{bot_id}/status"
-            )
+            response = client.get(f"{MANAGER_URL}/bot/{bot_id}/status")
             return response.json()
 
     @server.tool()
@@ -104,9 +102,7 @@ def register_swarm_tools(server: Server) -> None:
             Updated bot status
         """
         with _get_client() as client:
-            response = client.post(
-                f"{MANAGER_URL}/bot/{bot_id}/pause"
-            )
+            response = client.post(f"{MANAGER_URL}/bot/{bot_id}/pause")
             return response.json()
 
     @server.tool()
@@ -120,9 +116,7 @@ def register_swarm_tools(server: Server) -> None:
             Updated bot status
         """
         with _get_client() as client:
-            response = client.post(
-                f"{MANAGER_URL}/bot/{bot_id}/resume"
-            )
+            response = client.post(f"{MANAGER_URL}/bot/{bot_id}/resume")
             return response.json()
 
     @server.tool()
@@ -136,15 +130,11 @@ def register_swarm_tools(server: Server) -> None:
             Confirmation of termination
         """
         with _get_client() as client:
-            response = client.delete(
-                f"{MANAGER_URL}/bot/{bot_id}"
-            )
+            response = client.delete(f"{MANAGER_URL}/bot/{bot_id}")
             return response.json()
 
     @server.tool()
-    async def tw2002_set_bot_goal(
-        bot_id: str, goal: str
-    ) -> dict[str, Any]:
+    async def tw2002_set_bot_goal(bot_id: str, goal: str) -> dict[str, Any]:
         """Change a bot's trading goal.
 
         Args:
@@ -208,20 +198,12 @@ def register_swarm_tools(server: Server) -> None:
                 b
                 for b in status["bots"]
                 if (error_only and b["state"] == "error")
-                or (
-                    not error_only
-                    and (
-                        b["state"] == "error"
-                        or (b["turns_executed"] > 0 and b["credits"] <= 0)
-                    )
-                )
+                or (not error_only and (b["state"] == "error" or (b["turns_executed"] > 0 and b["credits"] <= 0)))
             ]
 
             return {
                 "count": len(bots),
-                "bots": sorted(
-                    bots, key=lambda b: b["turns_executed"], reverse=True
-                ),
+                "bots": sorted(bots, key=lambda b: b["turns_executed"], reverse=True),
             }
 
     @server.tool()
@@ -237,9 +219,7 @@ def register_swarm_tools(server: Server) -> None:
 
             # Calculate statistics
             credits = [b["credits"] for b in status["bots"]]
-            avg_credits = (
-                sum(credits) / len(credits) if credits else 0
-            )
+            avg_credits = sum(credits) / len(credits) if credits else 0
 
             return {
                 "total_bots": status["total_bots"],
@@ -250,9 +230,7 @@ def register_swarm_tools(server: Server) -> None:
                 "average_credits_per_bot": int(avg_credits),
                 "total_turns": status["total_turns"],
                 "average_turns_per_bot": (
-                    status["total_turns"] // status["total_bots"]
-                    if status["total_bots"] > 0
-                    else 0
+                    status["total_turns"] // status["total_bots"] if status["total_bots"] > 0 else 0
                 ),
                 "uptime_minutes": status["uptime_seconds"] / 60,
             }

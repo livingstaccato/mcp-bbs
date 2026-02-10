@@ -6,7 +6,6 @@ from typing import Any
 
 import httpx
 
-from bbsbot.logging import get_logger
 from bbsbot.llm.config import OllamaConfig
 from bbsbot.llm.exceptions import (
     LLMConnectionError,
@@ -23,6 +22,7 @@ from bbsbot.llm.types import (
     CompletionResponse,
     StreamChunk,
 )
+from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -86,18 +86,12 @@ class OllamaProvider:
                     finish_reason=data.get("done_reason"),
                 )
             except httpx.ConnectError as e:
-                raise LLMConnectionError(
-                    f"Failed to connect to Ollama at {self.config.base_url}"
-                ) from e
+                raise LLMConnectionError(f"Failed to connect to Ollama at {self.config.base_url}") from e
             except httpx.TimeoutException as e:
-                raise LLMTimeoutError(
-                    f"Request timed out after {self.config.timeout_seconds}s"
-                ) from e
+                raise LLMTimeoutError(f"Request timed out after {self.config.timeout_seconds}s") from e
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
-                    raise LLMModelNotFoundError(
-                        f"Model '{request.model}' not found"
-                    ) from e
+                    raise LLMModelNotFoundError(f"Model '{request.model}' not found") from e
                 raise LLMInvalidResponseError(f"HTTP {e.response.status_code}") from e
 
         return await retry_with_backoff(
@@ -122,9 +116,7 @@ class OllamaProvider:
 
         async def _make_request() -> ChatResponse:
             # Convert messages to Ollama format
-            messages = [
-                {"role": msg.role, "content": msg.content} for msg in request.messages
-            ]
+            messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
             payload: dict[str, Any] = {
                 "model": request.model,
@@ -155,18 +147,12 @@ class OllamaProvider:
                     finish_reason=data.get("done_reason"),
                 )
             except httpx.ConnectError as e:
-                raise LLMConnectionError(
-                    f"Failed to connect to Ollama at {self.config.base_url}"
-                ) from e
+                raise LLMConnectionError(f"Failed to connect to Ollama at {self.config.base_url}") from e
             except httpx.TimeoutException as e:
-                raise LLMTimeoutError(
-                    f"Request timed out after {self.config.timeout_seconds}s"
-                ) from e
+                raise LLMTimeoutError(f"Request timed out after {self.config.timeout_seconds}s") from e
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
-                    raise LLMModelNotFoundError(
-                        f"Model '{request.model}' not found"
-                    ) from e
+                    raise LLMModelNotFoundError(f"Model '{request.model}' not found") from e
                 raise LLMInvalidResponseError(f"HTTP {e.response.status_code}") from e
 
         return await retry_with_backoff(
@@ -188,9 +174,7 @@ class OllamaProvider:
         Raises:
             LLMError: On API errors
         """
-        messages = [
-            {"role": msg.role, "content": msg.content} for msg in request.messages
-        ]
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
         payload: dict[str, Any] = {
             "model": request.model,
@@ -207,9 +191,7 @@ class OllamaProvider:
             payload["options"]["stop"] = request.stop
 
         try:
-            async with self._client.stream(
-                "POST", "/api/chat", json=payload
-            ) as response:
+            async with self._client.stream("POST", "/api/chat", json=payload) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     if line:
@@ -227,13 +209,9 @@ class OllamaProvider:
                             logger.warning("ollama_invalid_stream_chunk", line=line)
                             continue
         except httpx.ConnectError as e:
-            raise LLMConnectionError(
-                f"Failed to connect to Ollama at {self.config.base_url}"
-            ) from e
+            raise LLMConnectionError(f"Failed to connect to Ollama at {self.config.base_url}") from e
         except httpx.TimeoutException as e:
-            raise LLMTimeoutError(
-                f"Request timed out after {self.config.timeout_seconds}s"
-            ) from e
+            raise LLMTimeoutError(f"Request timed out after {self.config.timeout_seconds}s") from e
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 raise LLMModelNotFoundError(f"Model '{request.model}' not found") from e
@@ -273,13 +251,9 @@ class OllamaProvider:
             response = await self._client.get("/api/tags")
             response.raise_for_status()
         except httpx.ConnectError as e:
-            raise LLMConnectionError(
-                f"Failed to connect to Ollama at {self.config.base_url}"
-            ) from e
+            raise LLMConnectionError(f"Failed to connect to Ollama at {self.config.base_url}") from e
         except httpx.TimeoutException as e:
-            raise LLMTimeoutError(
-                f"Ollama health check timed out after {self.config.timeout_seconds}s"
-            ) from e
+            raise LLMTimeoutError(f"Ollama health check timed out after {self.config.timeout_seconds}s") from e
 
         data = response.json()
         models = data.get("models", [])
@@ -293,9 +267,7 @@ class OllamaProvider:
 
         if not model_info:
             available = [m.get("name", "") for m in models]
-            raise LLMModelNotFoundError(
-                f"Model '{model}' not found. Available: {available}"
-            )
+            raise LLMModelNotFoundError(f"Model '{model}' not found. Available: {available}")
 
         # Step 2: Warm up - load model into memory and keep it alive
         # Send a minimal generate request to force model loading

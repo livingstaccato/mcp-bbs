@@ -7,6 +7,7 @@ matched by prompt detection rules and handled correctly by the bot.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
 from pydantic import BaseModel
 
 from bbsbot.logging import get_logger
@@ -71,15 +72,13 @@ async def analyze_screen(bot: TradingBot) -> ScreenAnalysis:
     kv_data = {}
     if kv_extract:
         from bbsbot.learning.extractor import extract_kv
+
         kv_data = extract_kv(screen_text, kv_extract)
 
     # Get list of all patterns that were checked
     all_patterns = []
     if bot.session.learning and bot.session.learning._prompt_detector:
-        all_patterns = [
-            p.get("id", "unknown")
-            for _, p in bot.session.learning._prompt_detector._compiled
-        ]
+        all_patterns = [p.get("id", "unknown") for _, p in bot.session.learning._prompt_detector._compiled]
 
     # Generate recommendation
     recommendation = _generate_recommendation(
@@ -141,34 +140,18 @@ def _generate_recommendation(
     # Matched - provide context-specific guidance
     if "sector_command" in prompt_id:
         return (
-            "MATCHED: Bot is at sector command prompt. "
-            "Should execute next strategy action (warp, dock, display, etc.)"
+            "MATCHED: Bot is at sector command prompt. Should execute next strategy action (warp, dock, display, etc.)"
         )
     elif "port" in prompt_id.lower():
-        return (
-            "MATCHED: Bot is at port. "
-            "Should execute trade based on strategy."
-        )
+        return "MATCHED: Bot is at port. Should execute trade based on strategy."
     elif "pause" in prompt_id.lower():
-        return (
-            "MATCHED: Pause screen detected. "
-            "Bot should press Space or Enter to continue."
-        )
+        return "MATCHED: Pause screen detected. Bot should press Space or Enter to continue."
     elif "menu" in prompt_id.lower():
-        return (
-            "MATCHED: Menu detected. "
-            "Bot should select game letter or press Q to exit."
-        )
+        return "MATCHED: Menu detected. Bot should select game letter or press Q to exit."
     elif "password" in prompt_id.lower() or "login" in prompt_id.lower():
-        return (
-            "MATCHED: Login/password prompt. "
-            "Bot should enter credentials."
-        )
+        return "MATCHED: Login/password prompt. Bot should enter credentials."
     else:
-        return (
-            f"MATCHED: {prompt_id} (input_type: {input_type}). "
-            f"Bot should respond based on prompt type."
-        )
+        return f"MATCHED: {prompt_id} (input_type: {input_type}). Bot should respond based on prompt type."
 
 
 def format_screen_analysis(analysis: ScreenAnalysis) -> str:
@@ -208,13 +191,15 @@ def format_screen_analysis(analysis: ScreenAnalysis) -> str:
     else:
         lines.append("  (none)")
 
-    lines.extend([
-        "",
-        "Recommendation:",
-        f"  {analysis.recommendation}",
-        "",
-        f"Total Patterns Checked: {len(analysis.all_patterns_checked)}",
-        "=" * 80,
-    ])
+    lines.extend(
+        [
+            "",
+            "Recommendation:",
+            f"  {analysis.recommendation}",
+            "",
+            f"Total Patterns Checked: {len(analysis.all_patterns_checked)}",
+            "=" * 80,
+        ]
+    )
 
     return "\n".join(lines)

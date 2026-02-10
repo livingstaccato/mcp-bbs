@@ -13,8 +13,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from bbsbot.paths import default_knowledge_root
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 class IntelligentTW2002Bot:
@@ -52,9 +52,7 @@ class IntelligentTW2002Bot:
             host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0
         )
         self.session = await self.session_manager.get_session(self.session_id)
-        await self.session_manager.enable_learning(
-            self.session_id, self.knowledge_root, namespace="tw2002"
-        )
+        await self.session_manager.enable_learning(self.session_id, self.knowledge_root, namespace="tw2002")
 
         patterns = len(self.session.learning._prompt_detector._patterns)
         print(f"✓ Connected to {host}:{port}")
@@ -71,12 +69,7 @@ class IntelligentTW2002Bot:
         """
         return await self.session.read(timeout_ms=timeout_ms, max_bytes=max_bytes)
 
-    async def wait_for_prompt(
-        self,
-        expected_prompt_id: str | None = None,
-        max_wait=10.0,
-        check_interval=0.3
-    ) -> dict:
+    async def wait_for_prompt(self, expected_prompt_id: str | None = None, max_wait=10.0, check_interval=0.3) -> dict:
         """Wait until a prompt is detected.
 
         Args:
@@ -96,12 +89,12 @@ class IntelligentTW2002Bot:
 
         while time.time() - start < max_wait:
             snapshot = await self.read_screen(timeout_ms=int(check_interval * 1000))
-            screen = snapshot.get('screen', '')
+            screen = snapshot.get("screen", "")
 
             # Check for prompt detection
-            if 'prompt_detected' in snapshot:
-                detected = snapshot['prompt_detected']
-                prompt_id = detected['prompt_id']
+            if "prompt_detected" in snapshot:
+                detected = snapshot["prompt_detected"]
+                prompt_id = detected["prompt_id"]
 
                 # If expecting specific prompt, check match
                 if expected_prompt_id:
@@ -119,7 +112,7 @@ class IntelligentTW2002Bot:
                 stable_count += 1
                 if stable_count >= 3:  # Screen stable for 3 checks
                     # Might be unknown prompt or just waiting
-                    print(f"  ⚠️  Screen stable but no prompt detected")
+                    print("  ⚠️  Screen stable but no prompt detected")
                     return snapshot
             else:
                 stable_count = 0
@@ -131,31 +124,29 @@ class IntelligentTW2002Bot:
 
     def _track_detection(self, snapshot: dict):
         """Track detected prompt for analysis."""
-        if 'prompt_detected' not in snapshot:
+        if "prompt_detected" not in snapshot:
             return
 
-        detected = snapshot['prompt_detected']
-        prompt_id = detected['prompt_id']
+        detected = snapshot["prompt_detected"]
+        prompt_id = detected["prompt_id"]
 
         # Track pattern match count
         self.pattern_matches[prompt_id] = self.pattern_matches.get(prompt_id, 0) + 1
 
         # Track prompt in history
-        self.detected_prompts.append({
-            'step': self.step_counter,
-            'prompt_id': prompt_id,
-            'input_type': detected['input_type'],
-            'matched_text': detected.get('matched_text', ''),
-        })
+        self.detected_prompts.append(
+            {
+                "step": self.step_counter,
+                "prompt_id": prompt_id,
+                "input_type": detected["input_type"],
+                "matched_text": detected.get("matched_text", ""),
+            }
+        )
 
         self.last_prompt_id = prompt_id
 
     async def send_and_wait(
-        self,
-        keys: str,
-        action_desc: str = "",
-        expected_prompt: str | None = None,
-        wait_time=1.0
+        self, keys: str, action_desc: str = "", expected_prompt: str | None = None, wait_time=1.0
     ) -> dict:
         """Send input and wait for next prompt.
 
@@ -186,11 +177,11 @@ class IntelligentTW2002Bot:
         snapshot = await self.wait_for_prompt(expected_prompt)
 
         # Show result
-        if 'prompt_detected' in snapshot:
-            detected = snapshot['prompt_detected']
+        if "prompt_detected" in snapshot:
+            detected = snapshot["prompt_detected"]
             print(f"  → Detected: {detected['prompt_id']} ({detected['input_type']})")
         else:
-            print(f"  → No prompt detected (screen stable)")
+            print("  → No prompt detected (screen stable)")
 
         return snapshot
 
@@ -207,15 +198,15 @@ class IntelligentTW2002Bot:
         pages = 0
 
         while pages < max_pages:
-            if 'prompt_detected' not in snapshot:
+            if "prompt_detected" not in snapshot:
                 break
 
-            detected = snapshot['prompt_detected']
-            prompt_id = detected['prompt_id']
-            input_type = detected['input_type']
+            detected = snapshot["prompt_detected"]
+            prompt_id = detected["prompt_id"]
+            input_type = detected["input_type"]
 
             # Check if this is a pagination prompt
-            if input_type == 'any_key' or 'more' in prompt_id.lower() or 'press_any_key' in prompt_id:
+            if input_type == "any_key" or "more" in prompt_id.lower() or "press_any_key" in prompt_id:
                 print(f"  📄 Pagination detected ({prompt_id}) - continuing...")
                 await self.session.send(" ")
                 await asyncio.sleep(0.5)
@@ -232,35 +223,35 @@ class IntelligentTW2002Bot:
 
     async def show_screen(self, snapshot: dict, max_lines=25, title=""):
         """Display screen snapshot."""
-        print(f"\n{'─'*80}")
+        print(f"\n{'─' * 80}")
         if title:
             print(f"{title}")
         else:
             print(f"SCREEN {self.step_counter}")
-        print(f"{'─'*80}")
+        print(f"{'─' * 80}")
 
         # Show prompt info
-        if 'prompt_detected' in snapshot:
-            detected = snapshot['prompt_detected']
+        if "prompt_detected" in snapshot:
+            detected = snapshot["prompt_detected"]
             print(f"🎯 Prompt: {detected['prompt_id']} ({detected['input_type']})")
-            if 'matched_text' in detected:
+            if "matched_text" in detected:
                 print(f"   Match: {repr(detected['matched_text'])}")
 
         # Show screen content
-        screen = snapshot.get('screen', '')
-        lines = screen.split('\n')
+        screen = snapshot.get("screen", "")
+        lines = screen.split("\n")
         for i, line in enumerate(lines[:max_lines], 1):
             print(f"{i:2d}│ {line}")
 
         if len(lines) > max_lines:
             print(f"  │ ... ({len(lines) - max_lines} more lines)")
 
-        print(f"{'─'*80}")
+        print(f"{'─' * 80}")
 
     async def navigate_twgs_to_game(self):
         """Navigate TWGS menus to enter the game."""
         print("\n🎮 PHASE 1: Navigate TWGS to Game Entry")
-        print("="*80)
+        print("=" * 80)
 
         # Wait for initial screen
         await asyncio.sleep(1.5)
@@ -268,11 +259,7 @@ class IntelligentTW2002Bot:
         await self.show_screen(snapshot, title="Initial TWGS Screen")
 
         # Test pattern: twgs_main_menu or twgs_select_game
-        snapshot = await self.send_and_wait(
-            "A\r",
-            "Select 'A' - My Game",
-            wait_time=1.5
-        )
+        snapshot = await self.send_and_wait("A\r", "Select 'A' - My Game", wait_time=1.5)
         await self.show_screen(snapshot)
 
         self.game_location = "game_entry"
@@ -291,17 +278,13 @@ class IntelligentTW2002Bot:
         print(f"\n👤 Entering game as: {player_name}")
 
         # Should be at player name prompt
-        snapshot = await self.send_and_wait(
-            f"{player_name}\r",
-            f"Enter player name: {player_name}",
-            wait_time=1.5
-        )
+        snapshot = await self.send_and_wait(f"{player_name}\r", f"Enter player name: {player_name}", wait_time=1.5)
         await self.show_screen(snapshot)
 
         # Check if new player creation
-        screen_text = snapshot.get('screen', '').lower()
+        screen_text = snapshot.get("screen", "").lower()
 
-        if 'new player' in screen_text or 'create' in screen_text:
+        if "new player" in screen_text or "create" in screen_text:
             print("  ℹ️  New player creation detected")
 
             # Confirm new player
@@ -332,12 +315,12 @@ class IntelligentTW2002Bot:
         print(f"\n🧪 Testing: {description}")
 
         test_result = {
-            'command': command,
-            'description': description,
-            'expected_pattern': expected_pattern,
-            'detected_pattern': None,
-            'success': False,
-            'notes': []
+            "command": command,
+            "description": description,
+            "expected_pattern": expected_pattern,
+            "detected_pattern": None,
+            "success": False,
+            "notes": [],
         }
 
         try:
@@ -347,33 +330,31 @@ class IntelligentTW2002Bot:
             snapshot = await self.handle_pagination(snapshot)
 
             # Check detection
-            if 'prompt_detected' in snapshot:
-                detected = snapshot['prompt_detected']
-                test_result['detected_pattern'] = detected['prompt_id']
+            if "prompt_detected" in snapshot:
+                detected = snapshot["prompt_detected"]
+                test_result["detected_pattern"] = detected["prompt_id"]
 
                 if expected_pattern:
-                    if detected['prompt_id'] == expected_pattern:
-                        test_result['success'] = True
-                        test_result['notes'].append("✓ Matched expected pattern")
+                    if detected["prompt_id"] == expected_pattern:
+                        test_result["success"] = True
+                        test_result["notes"].append("✓ Matched expected pattern")
                     else:
-                        test_result['notes'].append(
-                            f"✗ Expected {expected_pattern}, got {detected['prompt_id']}"
-                        )
+                        test_result["notes"].append(f"✗ Expected {expected_pattern}, got {detected['prompt_id']}")
                 else:
-                    test_result['success'] = True
-                    test_result['notes'].append(f"✓ Detected {detected['prompt_id']}")
+                    test_result["success"] = True
+                    test_result["notes"].append(f"✓ Detected {detected['prompt_id']}")
             else:
-                test_result['notes'].append("⚠️  No prompt detected")
+                test_result["notes"].append("⚠️  No prompt detected")
 
             await self.show_screen(snapshot, max_lines=20)
 
         except Exception as e:
-            test_result['notes'].append(f"❌ Error: {e}")
+            test_result["notes"].append(f"❌ Error: {e}")
 
         self.pattern_test_results.append(test_result)
 
         # Show result
-        result_icon = "✓" if test_result['success'] else "✗"
+        result_icon = "✓" if test_result["success"] else "✗"
         print(f"{result_icon} Test result: {' | '.join(test_result['notes'])}")
 
         return snapshot
@@ -381,7 +362,7 @@ class IntelligentTW2002Bot:
     async def run_pattern_tests(self):
         """Run tests for all defined patterns."""
         print("\n🧪 PHASE 2: Pattern Testing")
-        print("="*80)
+        print("=" * 80)
 
         # Test basic commands (should trigger various prompts)
         tests = [
@@ -405,16 +386,16 @@ class IntelligentTW2002Bot:
     async def test_navigation(self):
         """Test navigation commands."""
         print("\n🧭 PHASE 3: Navigation Testing")
-        print("="*80)
+        print("=" * 80)
 
         # Try moving to another sector
         snapshot = await self.send_and_wait("M\r", "Move to sector", wait_time=1.0)
         await self.show_screen(snapshot)
 
         # Check if asking for sector number
-        if 'prompt_detected' in snapshot:
-            detected = snapshot['prompt_detected']
-            if detected['input_type'] == 'multi_key' or 'enter_number' in detected['prompt_id']:
+        if "prompt_detected" in snapshot:
+            detected = snapshot["prompt_detected"]
+            if detected["input_type"] == "multi_key" or "enter_number" in detected["prompt_id"]:
                 # Enter sector number
                 snapshot = await self.send_and_wait("2\r", "Move to sector 2", wait_time=1.5)
                 await self.show_screen(snapshot)
@@ -422,35 +403,44 @@ class IntelligentTW2002Bot:
     async def test_quit_sequence(self):
         """Test quitting game to validate quit prompts."""
         print("\n🚪 PHASE 4: Quit Sequence Testing")
-        print("="*80)
+        print("=" * 80)
 
         snapshot = await self.send_and_wait("Q\r", "Quit game", wait_time=1.0)
         await self.show_screen(snapshot)
 
         # Should trigger quit_confirm or yes_no_prompt
-        if 'prompt_detected' in snapshot:
-            detected = snapshot['prompt_detected']
-            if 'quit' in detected['prompt_id'].lower() or detected['input_type'] == 'single_key':
+        if "prompt_detected" in snapshot:
+            detected = snapshot["prompt_detected"]
+            if "quit" in detected["prompt_id"].lower() or detected["input_type"] == "single_key":
                 snapshot = await self.send_and_wait("Y\r", "Confirm quit")
                 await self.show_screen(snapshot)
 
     async def generate_report(self):
         """Generate comprehensive test report."""
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("INTELLIGENT BOT - TEST RESULTS")
-        print("="*80)
+        print("=" * 80)
 
         # Pattern coverage
-        print(f"\n📊 Pattern Matches:")
+        print("\n📊 Pattern Matches:")
         for pattern_id, count in sorted(self.pattern_matches.items()):
             print(f"  ✓ {pattern_id}: {count} times")
 
         # Patterns never matched
         all_pattern_ids = {
-            'login_username', 'login_password', 'press_any_key', 'main_menu',
-            'yes_no_prompt', 'more_prompt', 'quit_confirm', 'enter_number',
-            'sector_command', 'planet_command', 'twgs_select_game',
-            'twgs_main_menu', 'command_prompt_generic'
+            "login_username",
+            "login_password",
+            "press_any_key",
+            "main_menu",
+            "yes_no_prompt",
+            "more_prompt",
+            "quit_confirm",
+            "enter_number",
+            "sector_command",
+            "planet_command",
+            "twgs_select_game",
+            "twgs_main_menu",
+            "command_prompt_generic",
         }
         unmatched = all_pattern_ids - set(self.pattern_matches.keys())
 
@@ -460,21 +450,21 @@ class IntelligentTW2002Bot:
                 print(f"  - {pattern_id}")
 
         # Test results summary
-        print(f"\n🧪 Test Results Summary:")
+        print("\n🧪 Test Results Summary:")
         total = len(self.pattern_test_results)
-        passed = sum(1 for t in self.pattern_test_results if t['success'])
+        passed = sum(1 for t in self.pattern_test_results if t["success"])
         print(f"  Total tests: {total}")
         print(f"  Passed: {passed}")
         print(f"  Failed: {total - passed}")
 
         # Screen saver stats
         saver_status = self.session.learning.get_screen_saver_status()
-        print(f"\n💾 Screen Saver:")
+        print("\n💾 Screen Saver:")
         print(f"  Saved: {saver_status['saved_count']} unique screens")
         print(f"  Location: {saver_status['screens_dir']}")
 
         # Prompt sequences
-        print(f"\n📝 Prompt Sequences (first 10):")
+        print("\n📝 Prompt Sequences (first 10):")
         for action, prompt in self.prompt_sequences[:10]:
             print(f"  {action} → {prompt}")
 
@@ -491,24 +481,21 @@ class IntelligentTW2002Bot:
 
         # Save JSON
         results = {
-            'timestamp': timestamp,
-            'steps': self.step_counter,
-            'pattern_matches': self.pattern_matches,
-            'test_results': self.pattern_test_results,
-            'prompt_sequences': [
-                {'action': a, 'from_prompt': p}
-                for a, p in self.prompt_sequences
-            ],
-            'detected_prompts': self.detected_prompts,
+            "timestamp": timestamp,
+            "steps": self.step_counter,
+            "pattern_matches": self.pattern_matches,
+            "test_results": self.pattern_test_results,
+            "prompt_sequences": [{"action": a, "from_prompt": p} for a, p in self.prompt_sequences],
+            "detected_prompts": self.detected_prompts,
         }
 
-        with open(json_file, 'w') as f:
+        with open(json_file, "w") as f:
             json.dump(results, f, indent=2)
 
         # Save Markdown
         saver_status = self.session.learning.get_screen_saver_status()
 
-        with open(md_file, 'w') as f:
+        with open(md_file, "w") as f:
             f.write("# Intelligent TW2002 Bot - Test Results\n\n")
             f.write(f"**Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"**Steps**: {self.step_counter}\n\n")
@@ -519,10 +506,19 @@ class IntelligentTW2002Bot:
 
             # Unmatched patterns
             all_pattern_ids = {
-                'login_username', 'login_password', 'press_any_key', 'main_menu',
-                'yes_no_prompt', 'more_prompt', 'quit_confirm', 'enter_number',
-                'sector_command', 'planet_command', 'twgs_select_game',
-                'twgs_main_menu', 'command_prompt_generic'
+                "login_username",
+                "login_password",
+                "press_any_key",
+                "main_menu",
+                "yes_no_prompt",
+                "more_prompt",
+                "quit_confirm",
+                "enter_number",
+                "sector_command",
+                "planet_command",
+                "twgs_select_game",
+                "twgs_main_menu",
+                "command_prompt_generic",
             }
             unmatched = all_pattern_ids - set(self.pattern_matches.keys())
 
@@ -533,12 +529,12 @@ class IntelligentTW2002Bot:
 
             f.write("\n## Test Results\n\n")
             for test in self.pattern_test_results:
-                icon = "✓" if test['success'] else "✗"
+                icon = "✓" if test["success"] else "✗"
                 f.write(f"### {icon} {test['description']}\n\n")
                 f.write(f"- **Command**: `{test['command']}`\n")
-                if test['expected_pattern']:
+                if test["expected_pattern"]:
                     f.write(f"- **Expected**: `{test['expected_pattern']}`\n")
-                if test['detected_pattern']:
+                if test["detected_pattern"]:
                     f.write(f"- **Detected**: `{test['detected_pattern']}`\n")
                 f.write(f"- **Notes**: {', '.join(test['notes'])}\n\n")
 
@@ -547,14 +543,14 @@ class IntelligentTW2002Bot:
             f.write(f"- **Location**: `{saver_status['screens_dir']}`\n\n")
 
             # List screens
-            screens_dir = Path(saver_status['screens_dir'])
+            screens_dir = Path(saver_status["screens_dir"])
             if screens_dir.exists():
                 screens = sorted(screens_dir.glob("*.txt"))
                 f.write(f"### Screen Files ({len(screens)} total)\n\n")
                 for screen_file in screens:
                     f.write(f"- `{screen_file.name}`\n")
 
-        print(f"\n📄 Results saved:")
+        print("\n📄 Results saved:")
         print(f"  - JSON: {json_file}")
         print(f"  - Markdown: {md_file}")
 
@@ -589,6 +585,7 @@ class IntelligentTW2002Bot:
         except Exception as e:
             print(f"\n\n❌ Error: {e}")
             import traceback
+
             traceback.print_exc()
         finally:
             print("\nDisconnecting...")

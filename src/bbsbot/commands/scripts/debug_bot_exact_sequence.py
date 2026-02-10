@@ -2,13 +2,10 @@
 """Replicate the exact bot login sequence to debug where it fails."""
 
 import asyncio
-import sys
-from pathlib import Path
-
 
 from bbsbot.games.tw2002 import TradingBot
 from bbsbot.games.tw2002.connection import connect
-from bbsbot.games.tw2002.io import wait_and_respond, send_input
+from bbsbot.games.tw2002.io import send_input, wait_and_respond
 
 
 async def test_exact_sequence():
@@ -26,9 +23,7 @@ async def test_exact_sequence():
 
         # Step 1: Get login_name prompt (like bot loop iteration 1)
         print("Step 1: Call wait_and_respond() for login_name...")
-        input_type1, prompt_id1, screen1, kv_data1 = await wait_and_respond(
-            bot, timeout_ms=20000
-        )
+        input_type1, prompt_id1, screen1, kv_data1 = await wait_and_respond(bot, timeout_ms=20000)
         print(f"  Got: {prompt_id1} ({input_type1})")
 
         # Handle it like bot does (skip telnet login)
@@ -42,9 +37,7 @@ async def test_exact_sequence():
 
         # Step 2: Get menu_selection prompt (like bot loop iteration 2)
         print("\nStep 2: Call wait_and_respond() for menu_selection...")
-        input_type2, prompt_id2, screen2, kv_data2 = await wait_and_respond(
-            bot, timeout_ms=20000
-        )
+        input_type2, prompt_id2, screen2, kv_data2 = await wait_and_respond(bot, timeout_ms=20000)
         print(f"  Got: {prompt_id2} ({input_type2})")
 
         # Handle it like bot does (send game selection)
@@ -57,13 +50,11 @@ async def test_exact_sequence():
         print("\nStep 3: Call wait_and_respond() for next prompt...")
         print("  (This is where the bot times out)")
         try:
-            input_type3, prompt_id3, screen3, kv_data3 = await wait_and_respond(
-                bot, timeout_ms=20000
-            )
+            input_type3, prompt_id3, screen3, kv_data3 = await wait_and_respond(bot, timeout_ms=20000)
             print(f"  ✓ SUCCESS: Got {prompt_id3} ({input_type3})")
         except TimeoutError as e:
             print(f"  ✗ TIMEOUT: {e}")
-            print(f"\n  Bot state at failure:")
+            print("\n  Bot state at failure:")
             print(f"    step_count: {bot.step_count}")
             print(f"    last_prompt_id: {bot.last_prompt_id}")
             print(f"    loop_detection: {bot.loop_detection}")
@@ -72,6 +63,7 @@ async def test_exact_sequence():
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -7,7 +7,6 @@ like session management, error tracking, and connection lifecycle.
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from typing import Any
 
 from bbsbot.core.error_detection import LoopDetector
@@ -86,9 +85,7 @@ class BotBase:
 
         # Enable learning if namespace provided
         if namespace:
-            await self.session_manager.enable_learning(
-                self.session_id, self.knowledge_root, namespace=namespace
-            )
+            await self.session_manager.enable_learning(self.session_id, self.knowledge_root, namespace=namespace)
 
     async def disconnect(self) -> None:
         """Generic disconnect cleanup."""

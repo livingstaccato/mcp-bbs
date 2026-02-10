@@ -1,7 +1,7 @@
 from bbsbot.games.tw2002.config import BotConfig
-from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge, SectorInfo
+from bbsbot.games.tw2002.orientation import GameState, SectorInfo, SectorKnowledge
+from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
 from bbsbot.games.tw2002.strategies.profitable_pairs import ProfitablePairsStrategy
-from bbsbot.games.tw2002.strategies.base import TradeAction
 
 
 def test_price_profit_estimate_is_capped_by_liquidity() -> None:
@@ -57,6 +57,7 @@ def test_select_best_pair_scans_beyond_first_twenty_candidates() -> None:
 
     orig_find_path = knowledge.find_path
     try:
+
         def _find_path(src: int, dst: int, max_hops: int | None = None):
             if dst == 124:
                 return [src, dst]
@@ -84,6 +85,7 @@ def test_known_unprofitable_pair_is_skipped() -> None:
     knowledge._sectors[3] = sell_info
 
     from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
     pair = PortPair(buy_sector=2, sell_sector=3, commodity="fuel_ore", distance=1, path=[2, 3], estimated_profit=0)
     strat._pairs = [pair]
 
@@ -186,8 +188,62 @@ def test_unknown_holds_free_still_allows_minimum_trade_planning() -> None:
     knowledge._sectors[3] = sell_info
 
     from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
     pair = PortPair(buy_sector=2, sell_sector=3, commodity="fuel_ore", distance=1, path=[2, 3], estimated_profit=0)
 
     state = GameState(context="sector_command", sector=2, credits=300, holds_free=None)
     assert strat._recommended_buy_qty(state, pair) >= 1
     assert strat._estimate_profit_for_pair(state, pair) > 0
+
+
+def test_select_best_pair_prefers_viable_priced_pair_over_unpriced() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    # Priced pair: small but positive profit.
+    buy_info = SectorInfo(has_port=True, port_class="SBB")
+    buy_info.port_prices = {"fuel_ore": {"sell": 100}}
+    sell_info = SectorInfo(has_port=True, port_class="BSS")
+    sell_info.port_prices = {"fuel_ore": {"buy": 101}}
+    knowledge._sectors[10] = buy_info
+    knowledge._sectors[11] = sell_info
+
+    # Unpriced pair: structurally valid but no market data.
+    knowledge._sectors[20] = SectorInfo(has_port=True, port_class="SBB")
+    knowledge._sectors[21] = SectorInfo(has_port=True, port_class="BSS")
+
+    from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
+    priced = PortPair(
+        buy_sector=10, sell_sector=11, commodity="fuel_ore", distance=1, path=[10, 11], estimated_profit=0
+    )
+    unpriced = PortPair(
+        buy_sector=20, sell_sector=21, commodity="fuel_ore", distance=1, path=[20, 21], estimated_profit=0
+    )
+    strat._pairs = [unpriced, priced]
+
+    orig_find_path = knowledge.find_path
+    try:
+        # Make both reachable from current sector.
+        knowledge.find_path = lambda src, dst, max_hops=None: [src, dst]  # type: ignore[assignment]
+        state = GameState(context="sector_command", sector=1, credits=300, holds_free=1)
+        best = strat._select_best_pair(state)
+        assert best is not None
+        assert best.buy_sector == 10
+        assert best.sell_sector == 11
+    finally:
+        knowledge.find_path = orig_find_path  # type: ignore[assignment]
+
+
+def test_explore_streak_resets_on_profitable_trade() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    strat.record_result(TradeResult(success=True, action=TradeAction.EXPLORE, profit=0, turns_used=1))
+    strat.record_result(TradeResult(success=True, action=TradeAction.MOVE, profit=0, turns_used=1))
+    assert strat._explore_since_profit >= 2
+
+    strat.record_result(TradeResult(success=True, action=TradeAction.TRADE, profit=50, turns_used=1))
+    assert strat._explore_since_profit == 0

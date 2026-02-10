@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+
 import pytest
 from fastmcp import Client
 from fastmcp.mcp_config import StdioMCPServer

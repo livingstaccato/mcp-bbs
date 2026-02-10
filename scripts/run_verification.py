@@ -15,7 +15,6 @@ from bbsbot.game.tw2002.verification import (
     validation_and_menus_main,
 )
 
-
 FLOWS = [
     ("twgs_commands", twgs_commands_main),
     ("login", login_main),
@@ -25,6 +24,7 @@ FLOWS = [
     ("trading_integration", trading_integration_main),
     ("validation_and_menus", validation_and_menus_main),
 ]
+
 
 async def run_flow(name: str, func) -> bool:
     print("=" * 80)

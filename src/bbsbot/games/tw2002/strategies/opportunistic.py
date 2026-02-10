@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 
 from pydantic import BaseModel, ConfigDict, Field
-from bbsbot.logging import get_logger
+
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import (
@@ -17,6 +17,7 @@ from bbsbot.games.tw2002.strategies.base import (
     TradeOpportunity,
     TradingStrategy,
 )
+from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -71,7 +72,8 @@ class OpportunisticStrategy(TradingStrategy):
             target = random.choice(state.warps)
             logger.info(
                 "Repeated trade failures at sector %s, exploring sector %s",
-                state.sector, target,
+                state.sector,
+                target,
             )
             return TradeAction.EXPLORE, {"direction": target}
 
@@ -336,9 +338,7 @@ class OpportunisticStrategy(TradingStrategy):
         """
         warps = state.warps or []
         unexplored = [
-            w for w in warps
-            if w not in self._exploration.explored_this_session
-            and self.knowledge.get_warps(w) is None
+            w for w in warps if w not in self._exploration.explored_this_session and self.knowledge.get_warps(w) is None
         ]
 
         if unexplored:

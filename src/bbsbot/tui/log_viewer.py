@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
 from collections import deque
 
 from bbsbot.defaults import MANAGER_URL
@@ -166,10 +165,17 @@ class LogViewerOverlay:
         hint = " ESC close  j/k scroll  G bottom "
         pad = cols - len(title) - len(hint) - 8
         out.append(
-            BG_HEADER + ANSI_BOLD + FG_CYAN + title
-            + FG_GRAY + " " * max(pad, 1)
-            + status + ANSI_RESET + BG_HEADER
-            + FG_GRAY + hint
+            BG_HEADER
+            + ANSI_BOLD
+            + FG_CYAN
+            + title
+            + FG_GRAY
+            + " " * max(pad, 1)
+            + status
+            + ANSI_RESET
+            + BG_HEADER
+            + FG_GRAY
+            + hint
             + " " * max(cols - len(title) - len(hint) - max(pad, 1) - 8, 0)
             + ANSI_RESET
         )
@@ -201,15 +207,9 @@ class LogViewerOverlay:
             if row > end_row:
                 break
             # Truncate line to terminal width
-            display = line[:cols - 2] if len(line) > cols - 2 else line
+            display = line[: cols - 2] if len(line) > cols - 2 else line
             pad_len = cols - len(display) - 1
-            out.append(
-                _move(row, 1)
-                + BG_OVERLAY + FG_WHITE
-                + " " + display
-                + " " * max(pad_len, 0)
-                + ANSI_RESET
-            )
+            out.append(_move(row, 1) + BG_OVERLAY + FG_WHITE + " " + display + " " * max(pad_len, 0) + ANSI_RESET)
 
         # Fill any remaining rows
         filled = len(visible)

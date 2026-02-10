@@ -6,8 +6,6 @@ to determine the actual prompt type based on last-line analysis.
 
 from __future__ import annotations
 
-import pytest
-
 from bbsbot.games.tw2002.login import _get_actual_prompt, _is_description_mode
 
 

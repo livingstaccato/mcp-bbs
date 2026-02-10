@@ -135,9 +135,7 @@ async def clear_swarm():
 async def bot_status(bot_id: str):
     assert _manager is not None
     if bot_id not in _manager.bots:
-        return JSONResponse(
-            {"error": f"Bot {bot_id} not found"}, status_code=404
-        )
+        return JSONResponse({"error": f"Bot {bot_id} not found"}, status_code=404)
     return _manager.bots[bot_id].model_dump()
 
 
@@ -145,9 +143,7 @@ async def bot_status(bot_id: str):
 async def update_status(bot_id: str, update: dict):
     assert _manager is not None
     if bot_id not in _manager.bots:
-        return JSONResponse(
-            {"error": f"Bot {bot_id} not found"}, status_code=404
-        )
+        return JSONResponse({"error": f"Bot {bot_id} not found"}, status_code=404)
     bot = _manager.bots[bot_id]
     if "sector" in update:
         bot.sector = update["sector"]
@@ -161,6 +157,7 @@ async def update_status(bot_id: str, update: dict):
         new_turns = update["turns_executed"]
         if new_turns != bot.turns_executed:
             from bbsbot.logging import get_logger
+
             logger = get_logger(__name__)
             logger.debug(f"Bot {bot_id} turns: {bot.turns_executed} → {new_turns}")
         bot.turns_executed = new_turns
@@ -210,6 +207,20 @@ async def update_status(bot_id: str, update: dict):
         bot.ship_level = update["ship_level"]
     if "port_location" in update:
         bot.port_location = update["port_location"]
+    if "haggle_accept" in update:
+        bot.haggle_accept = int(update["haggle_accept"])
+    if "haggle_counter" in update:
+        bot.haggle_counter = int(update["haggle_counter"])
+    if "haggle_too_high" in update:
+        bot.haggle_too_high = int(update["haggle_too_high"])
+    if "haggle_too_low" in update:
+        bot.haggle_too_low = int(update["haggle_too_low"])
+    if "trades_executed" in update:
+        bot.trades_executed = int(update["trades_executed"])
+    if "credits_delta" in update:
+        bot.credits_delta = int(update["credits_delta"])
+    if "credits_per_turn" in update:
+        bot.credits_per_turn = float(update["credits_per_turn"])
     import time
 
     bot.last_update_time = time.time()
@@ -245,9 +256,7 @@ async def resume(bot_id: str):
 async def set_goal(bot_id: str, goal: str):
     assert _manager is not None
     if bot_id not in _manager.bots:
-        return JSONResponse(
-            {"error": f"Bot {bot_id} not found"}, status_code=404
-        )
+        return JSONResponse({"error": f"Bot {bot_id} not found"}, status_code=404)
     return {"bot_id": bot_id, "goal": goal}
 
 
@@ -255,9 +264,7 @@ async def set_goal(bot_id: str, goal: str):
 async def kill(bot_id: str):
     assert _manager is not None
     if bot_id not in _manager.bots:
-        return JSONResponse(
-            {"error": f"Bot {bot_id} not found"}, status_code=404
-        )
+        return JSONResponse({"error": f"Bot {bot_id} not found"}, status_code=404)
     await _manager.kill_bot(bot_id)
     return {"killed": bot_id}
 
@@ -282,35 +289,41 @@ async def get_bot_events(bot_id: str):
     if bot.recent_actions:
         for action in bot.recent_actions:
             action_time = action.get("time", 0)
-            events.append({
-                "timestamp": action_time,
-                "type": "action",
-                "action": action.get("action", "UNKNOWN"),
-                "sector": action.get("sector"),
-                "result": action.get("result"),
-                "details": action.get("details"),
-            })
+            events.append(
+                {
+                    "timestamp": action_time,
+                    "type": "action",
+                    "action": action.get("action", "UNKNOWN"),
+                    "sector": action.get("sector"),
+                    "result": action.get("result"),
+                    "details": action.get("details"),
+                }
+            )
 
     # Add error event if applicable
     if bot.error_timestamp:
-        events.append({
-            "timestamp": bot.error_timestamp,
-            "type": "error",
-            "error_type": bot.error_type,
-            "error_message": bot.error_message,
-        })
+        events.append(
+            {
+                "timestamp": bot.error_timestamp,
+                "type": "error",
+                "error_type": bot.error_type,
+                "error_message": bot.error_message,
+            }
+        )
 
     # Add state change event
     if bot.last_update_time:
-        events.append({
-            "timestamp": bot.last_update_time,
-            "type": "status_update",
-            "state": bot.state,
-            "activity": bot.activity_context,
-            "sector": bot.sector,
-            "credits": bot.credits,
-            "turns_executed": bot.turns_executed,
-        })
+        events.append(
+            {
+                "timestamp": bot.last_update_time,
+                "type": "status_update",
+                "state": bot.state,
+                "activity": bot.activity_context,
+                "sector": bot.sector,
+                "credits": bot.credits,
+                "turns_executed": bot.turns_executed,
+            }
+        )
 
     # Sort by timestamp descending (most recent first)
     events.sort(key=lambda e: e["timestamp"], reverse=True)
@@ -330,9 +343,7 @@ async def restart_bot(bot_id: str):
     """
     assert _manager is not None
     if bot_id not in _manager.bots:
-        return JSONResponse(
-            {"error": f"Bot {bot_id} not found"}, status_code=404
-        )
+        return JSONResponse({"error": f"Bot {bot_id} not found"}, status_code=404)
 
     config = _manager.bots[bot_id].config
 
@@ -353,6 +364,4 @@ async def restart_bot(bot_id: str):
             "pid": _manager.bots[bot_id].pid,
         }
     except Exception as e:
-        return JSONResponse(
-            {"error": f"Failed to restart: {e}"}, status_code=500
-        )
+        return JSONResponse({"error": f"Failed to restart: {e}"}, status_code=500)

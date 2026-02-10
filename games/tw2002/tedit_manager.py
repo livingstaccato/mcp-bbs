@@ -11,9 +11,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bbsbot.paths import default_knowledge_root
 from bbsbot.core.session_manager import SessionManager
-
+from bbsbot.paths import default_knowledge_root
 
 # Regex patterns for parsing TEDIT screens
 _FIELD_PATTERN = re.compile(r"<(?P<key>.?)>\s*(?P<label>[^:]+?)\s*:\s*(?P<value>.+)$")
@@ -79,9 +78,7 @@ class TEDITManager(BaseModel):
         self.session = await self.session_manager.get_session(self.session_id)
 
         # Enable learning with tedit namespace
-        await self.session_manager.enable_learning(
-            self.session_id, self.knowledge_root, namespace="tedit"
-        )
+        await self.session_manager.enable_learning(self.session_id, self.knowledge_root, namespace="tedit")
 
         # Wait for initial screen
         await asyncio.sleep(0.5)
@@ -264,16 +261,18 @@ class TEDITManager(BaseModel):
         # Parse user lines
         for line in screen.splitlines():
             if match := _USER_LINE_PATTERN.match(line):
-                users.append({
-                    "id": int(match["id"]),
-                    "name": match["name"],
-                    "sector": int(match["sector"]),
-                    "fighters": int(match["fighters"]),
-                    "shields": int(match["shields"]),
-                    "ship": match["ship"].strip(),
-                    "turns": int(match["turns"]),
-                    "corp": int(match["corp"]),
-                })
+                users.append(
+                    {
+                        "id": int(match["id"]),
+                        "name": match["name"],
+                        "sector": int(match["sector"]),
+                        "fighters": int(match["fighters"]),
+                        "shields": int(match["shields"]),
+                        "ship": match["ship"].strip(),
+                        "turns": int(match["turns"]),
+                        "corp": int(match["corp"]),
+                    }
+                )
 
         # Handle pagination if needed
         while "[more]" in screen.lower() or "press any key" in screen.lower():
@@ -283,16 +282,18 @@ class TEDITManager(BaseModel):
 
             for line in screen.splitlines():
                 if match := _USER_LINE_PATTERN.match(line):
-                    users.append({
-                        "id": int(match["id"]),
-                        "name": match["name"],
-                        "sector": int(match["sector"]),
-                        "fighters": int(match["fighters"]),
-                        "shields": int(match["shields"]),
-                        "ship": match["ship"].strip(),
-                        "turns": int(match["turns"]),
-                        "corp": int(match["corp"]),
-                    })
+                    users.append(
+                        {
+                            "id": int(match["id"]),
+                            "name": match["name"],
+                            "sector": int(match["sector"]),
+                            "fighters": int(match["fighters"]),
+                            "shields": int(match["shields"]),
+                            "ship": match["ship"].strip(),
+                            "turns": int(match["turns"]),
+                            "corp": int(match["corp"]),
+                        }
+                    )
 
         # Exit user list
         await self._send("Q")

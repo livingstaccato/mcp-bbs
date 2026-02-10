@@ -98,6 +98,7 @@ async def connect(bot, host="localhost", port=2002):
     print(f"\nConnecting to {host}:{port}...")
     chaos = None
     if os.getenv("BBSBOT_CHAOS", "").strip() in ("1", "true", "TRUE", "yes", "YES"):
+
         def _get_int(name: str, default: int) -> int:
             try:
                 return int(os.getenv(name, str(default)).strip())
@@ -116,9 +117,7 @@ async def connect(bot, host="localhost", port=2002):
         host=host, port=port, cols=80, rows=25, term="ANSI", timeout=10.0, chaos=chaos
     )
     bot.session = await bot.session_manager.get_session(bot.session_id)
-    await bot.session_manager.enable_learning(
-        bot.session_id, bot.knowledge_root, namespace="tw2002"
-    )
+    await bot.session_manager.enable_learning(bot.session_id, bot.knowledge_root, namespace="tw2002")
     if bot.session and bot.session.logger:
         # Surface the exact session log path so debugging is immediate.
         log_path = getattr(bot.session.logger, "_log_path", None)

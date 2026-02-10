@@ -40,4 +40,3 @@ async def test_tw2002_login_requires_connection() -> None:
     result = await login_func(username="test", character_password="pw")
     assert result["success"] is False
     assert "Not connected" in (result.get("error") or "")
-

@@ -2,8 +2,9 @@
 """Test what different keys do after the 'No description [ANY KEY]' screen."""
 
 import asyncio
-from bbsbot.paths import default_knowledge_root
+
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 async def test_key_after_A(key_desc: str, key_to_send: str):
@@ -31,42 +32,42 @@ async def test_key_after_A(key_desc: str, key_to_send: str):
         await asyncio.sleep(3.0)
         snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
 
-        screen_before = snapshot.get('screen', '')
-        if '[ANY KEY]' not in screen_before:
-            return {'key': key_desc, 'error': 'Never reached [ANY KEY] screen'}
+        screen_before = snapshot.get("screen", "")
+        if "[ANY KEY]" not in screen_before:
+            return {"key": key_desc, "error": "Never reached [ANY KEY] screen"}
 
         # Send the test key
         await session.send(key_to_send)
         await asyncio.sleep(3.0)
         snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
 
-        screen_after = snapshot.get('screen', '')
-        screen_hash = snapshot.get('screen_hash', '')[:16]
+        screen_after = snapshot.get("screen", "")
+        screen_hash = snapshot.get("screen_hash", "")[:16]
 
         # Check what we got
-        is_menu = 'Select game' in screen_after or 'Show Game Descriptions' in screen_after
-        is_planet_prompt = 'planet' in screen_after.lower()
-        is_any_key = '[ANY KEY]' in screen_after
+        is_menu = "Select game" in screen_after or "Show Game Descriptions" in screen_after
+        is_planet_prompt = "planet" in screen_after.lower()
+        is_any_key = "[ANY KEY]" in screen_after
 
         await manager.close_all_sessions()
 
         return {
-            'key': key_desc,
-            'sent': repr(key_to_send),
-            'back_to_menu': is_menu,
-            'planet_prompt': is_planet_prompt,
-            'still_any_key': is_any_key,
-            'screen_hash': screen_hash,
-            'screen_preview': screen_after[:150].replace('\n', ' ')
+            "key": key_desc,
+            "sent": repr(key_to_send),
+            "back_to_menu": is_menu,
+            "planet_prompt": is_planet_prompt,
+            "still_any_key": is_any_key,
+            "screen_hash": screen_hash,
+            "screen_preview": screen_after[:150].replace("\n", " "),
         }
     except Exception as e:
-        return {'key': key_desc, 'error': str(e)}
+        return {"key": key_desc, "error": str(e)}
 
 
 async def main():
-    print("="*80)
+    print("=" * 80)
     print("TESTING KEYS AFTER 'No description [ANY KEY]' SCREEN")
-    print("="*80)
+    print("=" * 80)
 
     test_cases = [
         ("Space", " "),
@@ -86,26 +87,26 @@ async def main():
         result = await test_key_after_A(key_desc, key_to_send)
         results.append(result)
 
-        if 'error' in result:
+        if "error" in result:
             print(f"  ❌ Error: {result['error']}")
-        elif result.get('planet_prompt'):
-            print(f"  ✅ PLANET PROMPT! Got into game!")
+        elif result.get("planet_prompt"):
+            print("  ✅ PLANET PROMPT! Got into game!")
             print(f"     Screen: {result['screen_preview']}")
-        elif result.get('back_to_menu'):
-            print(f"  ❌ Back to menu")
-        elif result.get('still_any_key'):
-            print(f"  ⚠️  Still at [ANY KEY] screen")
+        elif result.get("back_to_menu"):
+            print("  ❌ Back to menu")
+        elif result.get("still_any_key"):
+            print("  ⚠️  Still at [ANY KEY] screen")
         else:
-            print(f"  ❓ Unknown state")
+            print("  ❓ Unknown state")
             print(f"     Screen: {result['screen_preview']}")
 
         await asyncio.sleep(1.0)
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("RESULTS SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
-    successful = [r for r in results if r.get('planet_prompt')]
+    successful = [r for r in results if r.get("planet_prompt")]
     if successful:
         print(f"\n✅ Found {len(successful)} working key(s):")
         for r in successful:
@@ -115,8 +116,16 @@ async def main():
 
     print("\nAll results:")
     for r in results:
-        if 'error' not in r:
-            status = "✅ GAME" if r.get('planet_prompt') else "❌ MENU" if r.get('back_to_menu') else "⚠️  STUCK" if r.get('still_any_key') else "❓"
+        if "error" not in r:
+            status = (
+                "✅ GAME"
+                if r.get("planet_prompt")
+                else "❌ MENU"
+                if r.get("back_to_menu")
+                else "⚠️  STUCK"
+                if r.get("still_any_key")
+                else "❓"
+            )
             print(f"  {status} {r['key']:15s} → {r['screen_hash']}")
 
 

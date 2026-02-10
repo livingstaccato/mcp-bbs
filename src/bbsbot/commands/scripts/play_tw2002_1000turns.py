@@ -12,8 +12,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from bbsbot.paths import default_knowledge_root
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 class TW2002_1000TurnBot:
@@ -54,9 +54,7 @@ class TW2002_1000TurnBot:
             host=self.host, port=self.port, cols=80, rows=25, term="ANSI", timeout=10.0
         )
         self.session = await self.session_manager.get_session(self.session_id)
-        await self.session_manager.enable_learning(
-            self.session_id, self.knowledge_root, namespace="tw2002"
-        )
+        await self.session_manager.enable_learning(self.session_id, self.knowledge_root, namespace="tw2002")
 
         patterns = len(self.session.learning._prompt_detector._patterns)
         print(f"✓ Connected to {self.host}:{self.port}")
@@ -75,11 +73,11 @@ class TW2002_1000TurnBot:
 
         while time.time() - start < max_wait:
             snapshot = await self.read_screen(timeout_ms=int(check_interval * 1000))
-            screen = snapshot.get('screen', '')
+            screen = snapshot.get("screen", "")
 
-            if 'prompt_detected' in snapshot:
-                detected = snapshot['prompt_detected']
-                prompt_id = detected['prompt_id']
+            if "prompt_detected" in snapshot:
+                detected = snapshot["prompt_detected"]
+                prompt_id = detected["prompt_id"]
 
                 # Track pattern
                 self.pattern_matches[prompt_id] = self.pattern_matches.get(prompt_id, 0) + 1
@@ -111,11 +109,13 @@ class TW2002_1000TurnBot:
         snapshot = await self.wait_for_prompt()
 
         # Track action
-        self.actions_taken.append({
-            'turn': self.turns_played,
-            'action': action_desc or keys,
-            'prompt_detected': snapshot.get('prompt_detected', {}).get('prompt_id', 'none')
-        })
+        self.actions_taken.append(
+            {
+                "turn": self.turns_played,
+                "action": action_desc or keys,
+                "prompt_detected": snapshot.get("prompt_detected", {}).get("prompt_id", "none"),
+            }
+        )
 
         return snapshot
 
@@ -125,14 +125,14 @@ class TW2002_1000TurnBot:
         pages = 0
 
         while pages < max_pages:
-            if 'prompt_detected' not in snapshot:
+            if "prompt_detected" not in snapshot:
                 break
 
-            detected = snapshot['prompt_detected']
-            prompt_id = detected['prompt_id']
-            input_type = detected['input_type']
+            detected = snapshot["prompt_detected"]
+            prompt_id = detected["prompt_id"]
+            input_type = detected["input_type"]
 
-            if input_type == 'any_key' or 'more' in prompt_id.lower() or 'press_any_key' in prompt_id:
+            if input_type == "any_key" or "more" in prompt_id.lower() or "press_any_key" in prompt_id:
                 await self.session.send(" ")
                 await asyncio.sleep(0.3)
                 snapshot = await self.read_screen()
@@ -144,24 +144,25 @@ class TW2002_1000TurnBot:
 
     async def parse_screen_data(self, snapshot: dict):
         """Extract game data from screen."""
-        screen = snapshot.get('screen', '')
+        screen = snapshot.get("screen", "")
 
         # Try to find turns remaining
         import re
-        turns_match = re.search(r'Turns?[:\s]+(\d+)', screen, re.IGNORECASE)
+
+        turns_match = re.search(r"Turns?[:\s]+(\d+)", screen, re.IGNORECASE)
         if turns_match:
             turns_available = int(turns_match.group(1))
             if turns_available == 0:
-                print(f"\n⚠️  Out of turns!")
+                print("\n⚠️  Out of turns!")
                 return False
 
         # Try to find credits
-        credits_match = re.search(r'Credits?[:\s]+(\d+)', screen, re.IGNORECASE)
+        credits_match = re.search(r"Credits?[:\s]+(\d+)", screen, re.IGNORECASE)
         if credits_match:
             self.credits = int(credits_match.group(1))
 
         # Try to find current sector
-        sector_match = re.search(r'Sector[:\s]+(\d+)', screen, re.IGNORECASE)
+        sector_match = re.search(r"Sector[:\s]+(\d+)", screen, re.IGNORECASE)
         if sector_match:
             self.current_sector = int(sector_match.group(1))
 
@@ -177,15 +178,19 @@ class TW2002_1000TurnBot:
         snapshot = await self.read_screen()
 
         # First, enter player name at login
-        screen_text = snapshot.get('screen', '').lower()
-        if 'please enter your name' in screen_text or ('prompt_detected' in snapshot and snapshot['prompt_detected']['prompt_id'] == 'login_username'):
+        screen_text = snapshot.get("screen", "").lower()
+        if "please enter your name" in screen_text or (
+            "prompt_detected" in snapshot and snapshot["prompt_detected"]["prompt_id"] == "login_username"
+        ):
             print("  At login prompt")
             player_name = "Bot1000"
             snapshot = await self.send_and_wait(f"{player_name}\r", f"Enter player: {player_name}", wait_time=2.0)
-            screen_text = snapshot.get('screen', '').lower()
+            screen_text = snapshot.get("screen", "").lower()
 
         # Check if we got TWGS game selection menu
-        if 'select game' in screen_text or ('prompt_detected' in snapshot and snapshot['prompt_detected']['prompt_id'] == 'twgs_select_game'):
+        if "select game" in screen_text or (
+            "prompt_detected" in snapshot and snapshot["prompt_detected"]["prompt_id"] == "twgs_select_game"
+        ):
             print("  TWGS game selection menu detected - sending single key 'A'")
             # single_key prompt - send just 'A' without Enter
             await self.session.send("A")
@@ -195,7 +200,10 @@ class TW2002_1000TurnBot:
             print(f"  DEBUG: Screen after A: {snapshot.get('screen', '')[:100]}")
 
             # Check for "press any key" screen after selecting game
-            if '[ANY KEY]' in snapshot.get('screen', '').upper() or 'NO DESCRIPTION' in snapshot.get('screen', '').upper():
+            if (
+                "[ANY KEY]" in snapshot.get("screen", "").upper()
+                or "NO DESCRIPTION" in snapshot.get("screen", "").upper()
+            ):
                 print("  Pressing key to continue past description...")
                 await self.session.send(" ")
                 await asyncio.sleep(3.0)
@@ -206,8 +214,8 @@ class TW2002_1000TurnBot:
             print(f"  DEBUG: Final screen hash: {snapshot.get('screen_hash', '')[:16]}")
 
         # Handle new player creation if needed
-        screen_text = snapshot.get('screen', '').lower()
-        if 'new player' in screen_text or 'create' in screen_text:
+        screen_text = snapshot.get("screen", "").lower()
+        if "new player" in screen_text or "create" in screen_text:
             print("  Creating new player...")
             await self.send_and_wait("Y\r", "Confirm new player")
             await self.send_and_wait("bot1000\r", "Set password")
@@ -230,16 +238,13 @@ class TW2002_1000TurnBot:
         choices = [
             # Movement
             ("M\r", "Move to random sector", 0.3),
-
             # Information gathering
             ("D\r", "Display computer", 0.15),
             ("I\r", "Check inventory", 0.1),
             ("L\r", "Long range scan", 0.15),
             ("<\r", "Computer scan", 0.1),
-
             # Trading (if at port)
             ("P\r", "Port report", 0.1),
-
             # Exploration
             ("?\r", "Help/Commands", 0.05),
             ("C\r", "Corporate report", 0.05),
@@ -279,32 +284,30 @@ class TW2002_1000TurnBot:
                 return False
 
             # Handle special prompts
-            if 'prompt_detected' in snapshot:
-                detected = snapshot['prompt_detected']
-                prompt_id = detected['prompt_id']
-                input_type = detected['input_type']
+            if "prompt_detected" in snapshot:
+                detected = snapshot["prompt_detected"]
+                prompt_id = detected["prompt_id"]
+                input_type = detected["input_type"]
 
                 # Handle sector movement
-                if prompt_id == 'enter_number' and 'move' in description.lower():
+                if prompt_id == "enter_number" and "move" in description.lower():
                     # Choose random nearby sector
                     target_sector = random.randint(1, 100)
                     snapshot = await self.send_and_wait(
-                        f"{target_sector}\r",
-                        f"Move to sector {target_sector}",
-                        wait_time=2.0
+                        f"{target_sector}\r", f"Move to sector {target_sector}", wait_time=2.0
                     )
                     self.current_sector = target_sector
 
                 # Handle yes/no prompts (usually say no to avoid traps)
-                elif prompt_id == 'yes_no_prompt':
+                elif prompt_id == "yes_no_prompt":
                     snapshot = await self.send_and_wait("N\r", "Decline", wait_time=2.0)
 
             # Increment turn counter
             self.turns_played += 1
 
             # Loop detection - check if we're seeing the same screen repeatedly
-            screen_hash = snapshot.get('screen_hash', 'N/A')
-            if not hasattr(self, 'screen_history'):
+            screen_hash = snapshot.get("screen_hash", "N/A")
+            if not hasattr(self, "screen_history"):
                 self.screen_history = []
 
             self.screen_history.append(screen_hash)
@@ -321,7 +324,7 @@ class TW2002_1000TurnBot:
 
             # Show progress every turn for debugging
             if self.turns_played <= 10 or self.turns_played % 10 == 0:
-                screen_preview = snapshot.get('screen', '')[:100].replace('\n', ' ')
+                screen_preview = snapshot.get("screen", "")[:100].replace("\n", " ")
                 print(f"  [Turn {self.turns_played} complete | Hash: {screen_hash[:8]} | Screen: {screen_preview}...]")
 
             # Add delay between turns to avoid overwhelming BBS
@@ -329,13 +332,16 @@ class TW2002_1000TurnBot:
             return True
 
         except Exception as e:
-            self.errors_encountered.append({
-                'turn': self.turns_played,
-                'error': str(e),
-                'action': description if 'description' in locals() else 'unknown'
-            })
+            self.errors_encountered.append(
+                {
+                    "turn": self.turns_played,
+                    "error": str(e),
+                    "action": description if "description" in locals() else "unknown",
+                }
+            )
             print(f"  ⚠️  Error on turn {self.turns_played}: {e}")
             import traceback
+
             traceback.print_exc()
             return True  # Continue despite error
 
@@ -354,13 +360,13 @@ class TW2002_1000TurnBot:
                 rate = self.turns_played / elapsed if elapsed > 0 else 0
                 eta = (self.target_turns - self.turns_played) / rate if rate > 0 else 0
 
-                print(f"\n{'─'*80}")
+                print(f"\n{'─' * 80}")
                 print(f"Turn {self.turns_played}/{self.target_turns}")
                 print(f"Elapsed: {elapsed:.1f}s | Rate: {rate:.1f} turns/sec | ETA: {eta:.1f}s")
                 print(f"Sector: {self.current_sector} | Credits: {self.credits}")
                 print(f"Patterns detected: {len(self.pattern_matches)}")
                 print(f"Errors: {len(self.errors_encountered)}")
-                print(f"{'─'*80}")
+                print(f"{'─' * 80}")
 
             # Execute turn
             should_continue = await self.execute_turn()
@@ -381,11 +387,11 @@ class TW2002_1000TurnBot:
         print("FINAL REPORT - 1000 TURN PLAYTHROUGH")
         print("=" * 80)
 
-        print(f"\n📊 Statistics:")
+        print("\n📊 Statistics:")
         print(f"  Total turns: {self.turns_played}/{self.target_turns}")
         print(f"  Actions taken: {len(self.actions_taken)}")
-        print(f"  Total time: {elapsed:.1f}s ({elapsed/60:.1f} minutes)")
-        print(f"  Average: {self.turns_played/elapsed:.2f} turns/sec")
+        print(f"  Total time: {elapsed:.1f}s ({elapsed / 60:.1f} minutes)")
+        print(f"  Average: {self.turns_played / elapsed:.2f} turns/sec")
         print(f"  Final credits: {self.credits}")
         print(f"  Final sector: {self.current_sector}")
 
@@ -405,7 +411,7 @@ class TW2002_1000TurnBot:
 
         # Screen statistics
         saver_status = self.session.learning.get_screen_saver_status()
-        print(f"\n💾 Screens Saved:")
+        print("\n💾 Screens Saved:")
         print(f"  Unique screens: {saver_status['saved_count']}")
         print(f"  Location: {saver_status['screens_dir']}")
 
@@ -419,28 +425,30 @@ class TW2002_1000TurnBot:
 
         # JSON
         results = {
-            'timestamp': timestamp,
-            'target_turns': self.target_turns,
-            'turns_played': self.turns_played,
-            'total_actions': len(self.actions_taken),
-            'elapsed_time': time.time() - self.start_time,
-            'pattern_matches': self.pattern_matches,
-            'errors': self.errors_encountered,
-            'final_state': {
-                'sector': self.current_sector,
-                'credits': self.credits,
+            "timestamp": timestamp,
+            "target_turns": self.target_turns,
+            "turns_played": self.turns_played,
+            "total_actions": len(self.actions_taken),
+            "elapsed_time": time.time() - self.start_time,
+            "pattern_matches": self.pattern_matches,
+            "errors": self.errors_encountered,
+            "final_state": {
+                "sector": self.current_sector,
+                "credits": self.credits,
             },
-            'actions_sample': self.actions_taken[:100] + self.actions_taken[-100:] if len(self.actions_taken) > 200 else self.actions_taken,
+            "actions_sample": self.actions_taken[:100] + self.actions_taken[-100:]
+            if len(self.actions_taken) > 200
+            else self.actions_taken,
         }
 
-        with open(json_file, 'w') as f:
+        with open(json_file, "w") as f:
             json.dump(results, f, indent=2)
 
         # Markdown
         saver_status = self.session.learning.get_screen_saver_status()
         elapsed = time.time() - self.start_time
 
-        with open(md_file, 'w') as f:
+        with open(md_file, "w") as f:
             f.write("# TW2002 - 1000 Turn Playthrough Results\n\n")
             f.write(f"**Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"**Server**: {self.host}:{self.port}\n\n")
@@ -449,8 +457,8 @@ class TW2002_1000TurnBot:
             f.write(f"- **Target turns**: {self.target_turns}\n")
             f.write(f"- **Turns played**: {self.turns_played}\n")
             f.write(f"- **Total actions**: {len(self.actions_taken)}\n")
-            f.write(f"- **Total time**: {elapsed:.1f}s ({elapsed/60:.1f} minutes)\n")
-            f.write(f"- **Average rate**: {self.turns_played/elapsed:.2f} turns/sec\n")
+            f.write(f"- **Total time**: {elapsed:.1f}s ({elapsed / 60:.1f} minutes)\n")
+            f.write(f"- **Average rate**: {self.turns_played / elapsed:.2f} turns/sec\n")
             f.write(f"- **Errors**: {len(self.errors_encountered)}\n\n")
 
             f.write("## Final State\n\n")
@@ -466,11 +474,11 @@ class TW2002_1000TurnBot:
                 for err in self.errors_encountered:
                     f.write(f"- Turn {err['turn']}: {err['error']}\n")
 
-            f.write(f"\n## Screens Saved\n\n")
+            f.write("\n## Screens Saved\n\n")
             f.write(f"- **Count**: {saver_status['saved_count']} unique screens\n")
             f.write(f"- **Location**: `{saver_status['screens_dir']}`\n")
 
-        print(f"\n📄 Results saved:")
+        print("\n📄 Results saved:")
         print(f"  JSON: {json_file}")
         print(f"  Markdown: {md_file}")
 
@@ -490,6 +498,7 @@ class TW2002_1000TurnBot:
         except Exception as e:
             print(f"\n\n❌ Fatal Error: {e}")
             import traceback
+
             traceback.print_exc()
             await self.generate_final_report()
             await self.save_results()

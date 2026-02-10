@@ -86,10 +86,7 @@ def spawn_impl(config: str, bot_id: str | None = None) -> None:
             )
             data = response.json()
             if response.status_code == 200:
-                console.print(
-                    f"[green]✓[/green] Spawned bot: "
-                    f"[cyan]{data['bot_id']}[/cyan] (PID: {data['pid']})"
-                )
+                console.print(f"[green]✓[/green] Spawned bot: [cyan]{data['bot_id']}[/cyan] (PID: {data['pid']})")
             else:
                 console.print(f"[red]Error: {data.get('error', 'Unknown')}")
         except Exception as e:
@@ -109,10 +106,7 @@ def spawn_swarm_impl(
         console.print(f"[red]Error: No configs found matching: {pattern}")
         return
 
-    console.print(
-        f"[cyan]Spawning {len(configs)} bots with "
-        f"{stagger}s stagger...[/cyan]"
-    )
+    console.print(f"[cyan]Spawning {len(configs)} bots with {stagger}s stagger...[/cyan]")
 
     with httpx.Client() as client:
         try:
@@ -122,16 +116,11 @@ def spawn_swarm_impl(
             )
             data = response.json()
             if response.status_code == 200:
-                console.print(
-                    f"[green]✓[/green] Spawned "
-                    f"[cyan]{data['count']}[/cyan] bots"
-                )
+                console.print(f"[green]✓[/green] Spawned [cyan]{data['count']}[/cyan] bots")
                 for bid in data["bot_ids"][:5]:
                     console.print(f"  - {bid}")
                 if len(data["bot_ids"]) > 5:
-                    console.print(
-                        f"  ... and {len(data['bot_ids']) - 5} more"
-                    )
+                    console.print(f"  ... and {len(data['bot_ids']) - 5} more")
             else:
                 console.print(f"[red]Error: {data.get('error', 'Unknown')}")
         except Exception as e:
@@ -145,48 +134,28 @@ def status_impl(bot_id: str | None = None) -> None:
     with httpx.Client() as client:
         try:
             if bot_id:
-                response = client.get(
-                    f"{MANAGER_URL}/bot/{bot_id}/status"
-                )
+                response = client.get(f"{MANAGER_URL}/bot/{bot_id}/status")
                 if response.status_code == 200:
                     bot = response.json()
                     console.print(f"\n[cyan]Bot Status: {bot['bot_id']}[/cyan]")
                     console.print(f"  PID: {bot['pid']}")
                     console.print(f"  State: {bot['state']}")
                     console.print(f"  Sector: {bot['sector']}")
-                    console.print(
-                        f"  Credits: {format_credits(bot['credits'])}"
-                    )
+                    console.print(f"  Credits: {format_credits(bot['credits'])}")
                     console.print(f"  Turns: {bot['turns_executed']}")
                 else:
-                    console.print(
-                        f"[red]Error: {response.json().get('error')}"
-                    )
+                    console.print(f"[red]Error: {response.json().get('error')}")
             else:
                 response = client.get(f"{MANAGER_URL}/swarm/status")
                 data = response.json()
 
                 console.print("\n[cyan]Swarm Status[/cyan]")
-                console.print(
-                    f"  Running: [green]{data['running']}[/green] / "
-                    f"{data['total_bots']}"
-                )
-                console.print(
-                    f"  Completed: [green]{data['completed']}[/green]"
-                )
+                console.print(f"  Running: [green]{data['running']}[/green] / {data['total_bots']}")
+                console.print(f"  Completed: [green]{data['completed']}[/green]")
                 console.print(f"  Errors: [red]{data['errors']}[/red]")
-                console.print(
-                    f"  Total Credits: "
-                    f"[cyan]{format_credits(data['total_credits'])}[/cyan]"
-                )
-                console.print(
-                    f"  Total Turns: "
-                    f"[cyan]{data['total_turns']:,}[/cyan]"
-                )
-                console.print(
-                    f"  Uptime: "
-                    f"[cyan]{format_uptime(data['uptime_seconds'])}[/cyan]"
-                )
+                console.print(f"  Total Credits: [cyan]{format_credits(data['total_credits'])}[/cyan]")
+                console.print(f"  Total Turns: [cyan]{data['total_turns']:,}[/cyan]")
+                console.print(f"  Uptime: [cyan]{format_uptime(data['uptime_seconds'])}[/cyan]")
 
                 if data["bots"]:
                     table = Table(title="Bot Details", show_header=True, show_footer=False)
@@ -222,7 +191,7 @@ def status_impl(bot_id: str | None = None) -> None:
                                 activity = "—"  # Hide while thinking
                             else:
                                 # Take first line, remove spaces, limit to 25 chars
-                                activity = activity_upper.split('\n')[0].replace(" ", "")[:25]
+                                activity = activity_upper.split("\n")[0].replace(" ", "")[:25]
                         else:
                             activity = "—"
 
@@ -244,9 +213,7 @@ def status_impl(bot_id: str | None = None) -> None:
                         )
 
                     if len(data["bots"]) > 20:
-                        console.print(
-                            f"\n... and {len(data['bots']) - 20} more bots"
-                        )
+                        console.print(f"\n... and {len(data['bots']) - 20} more bots")
                     console.print(table)
 
         except Exception as e:
@@ -259,15 +226,11 @@ def pause_impl(bot_id: str) -> None:
         return
     with httpx.Client() as client:
         try:
-            response = client.post(
-                f"{MANAGER_URL}/bot/{bot_id}/pause"
-            )
+            response = client.post(f"{MANAGER_URL}/bot/{bot_id}/pause")
             if response.status_code == 200:
                 console.print(f"[green]✓[/green] Paused bot: {bot_id}")
             else:
-                console.print(
-                    f"[red]Error: {response.json().get('error')}"
-                )
+                console.print(f"[red]Error: {response.json().get('error')}")
         except Exception as e:
             console.print(f"[red]Error: {e}")
 
@@ -278,15 +241,11 @@ def resume_impl(bot_id: str) -> None:
         return
     with httpx.Client() as client:
         try:
-            response = client.post(
-                f"{MANAGER_URL}/bot/{bot_id}/resume"
-            )
+            response = client.post(f"{MANAGER_URL}/bot/{bot_id}/resume")
             if response.status_code == 200:
                 console.print(f"[green]✓[/green] Resumed bot: {bot_id}")
             else:
-                console.print(
-                    f"[red]Error: {response.json().get('error')}"
-                )
+                console.print(f"[red]Error: {response.json().get('error')}")
         except Exception as e:
             console.print(f"[red]Error: {e}")
 
@@ -299,15 +258,11 @@ def kill_impl(bot_id: str, confirm: bool = True) -> None:
         return
     with httpx.Client() as client:
         try:
-            response = client.delete(
-                f"{MANAGER_URL}/bot/{bot_id}"
-            )
+            response = client.delete(f"{MANAGER_URL}/bot/{bot_id}")
             if response.status_code == 200:
                 console.print(f"[green]✓[/green] Killed bot: {bot_id}")
             else:
-                console.print(
-                    f"[red]Error: {response.json().get('error')}"
-                )
+                console.print(f"[red]Error: {response.json().get('error')}")
         except Exception as e:
             console.print(f"[red]Error: {e}")
 
@@ -323,13 +278,9 @@ def set_goal_impl(bot_id: str, goal: str) -> None:
                 params={"goal": goal},
             )
             if response.status_code == 200:
-                console.print(
-                    f"[green]✓[/green] Set {bot_id} goal to: {goal}"
-                )
+                console.print(f"[green]✓[/green] Set {bot_id} goal to: {goal}")
             else:
-                console.print(
-                    f"[red]Error: {response.json().get('error')}"
-                )
+                console.print(f"[red]Error: {response.json().get('error')}")
         except Exception as e:
             console.print(f"[red]Error: {e}")
 
@@ -346,22 +297,14 @@ def watch_impl() -> None:
         async def watch_swarm() -> None:
             uri = MANAGER_URL.replace("http", "ws") + "/ws/swarm"
             async with websockets.connect(uri) as websocket:
-                console.print(
-                    "[green]✓[/green] Connected to swarm manager"
-                )
-                console.print(
-                    "[yellow]Press Ctrl+C to stop[/yellow]\n"
-                )
+                console.print("[green]✓[/green] Connected to swarm manager")
+                console.print("[yellow]Press Ctrl+C to stop[/yellow]\n")
                 while True:
                     message = await websocket.recv()
                     data = json.loads(message)
 
                     console.clear()
-                    console.print(
-                        f"[cyan]Swarm Status - "
-                        f"Uptime: {format_uptime(data['uptime_seconds'])}"
-                        f"[/cyan]\n"
-                    )
+                    console.print(f"[cyan]Swarm Status - Uptime: {format_uptime(data['uptime_seconds'])}[/cyan]\n")
                     console.print(
                         f"Running: [green]{data['running']}[/green] / "
                         f"{data['total_bots']} | "
@@ -395,10 +338,7 @@ def watch_impl() -> None:
         asyncio.run(watch_swarm())
 
     except ImportError:
-        console.print(
-            "[red]Error: websockets library not found[/red]\n"
-            "Install with: pip install websockets"
-        )
+        console.print("[red]Error: websockets library not found[/red]\nInstall with: pip install websockets")
     except KeyboardInterrupt:
         console.print("\n[yellow]Stopped watching[/yellow]")
     except Exception as e:

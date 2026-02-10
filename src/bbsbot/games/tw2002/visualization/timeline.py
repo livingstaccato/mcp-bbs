@@ -8,10 +8,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.visualization.colors import (
-    Colors,
-    Icons,
     STATUS_COLORS,
     STATUS_ICONS,
+    Colors,
+    Icons,
     colorize,
     get_goal_color,
 )

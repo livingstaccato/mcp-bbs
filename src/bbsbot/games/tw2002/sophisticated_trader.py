@@ -10,10 +10,9 @@ Features:
 """
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +20,17 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Commodity:
     """A commodity that can be traded."""
+
     name: str
-    buy_price: Optional[int] = None  # Price to buy at this port
-    sell_price: Optional[int] = None  # Price to sell at this port
+    buy_price: int | None = None  # Price to buy at this port
+    sell_price: int | None = None  # Price to sell at this port
     quantity: int = 0  # How much we're carrying
 
 
 @dataclass
 class PortInfo:
     """Information about a port."""
+
     sector: int
     port_class: str = ""  # Class 1-9
     commodities: dict[str, Commodity] = field(default_factory=dict)
@@ -39,6 +40,7 @@ class PortInfo:
 @dataclass
 class CargoHold:
     """What we're currently carrying."""
+
     commodities: dict[str, int] = field(default_factory=dict)  # name -> quantity
     purchase_price: dict[str, int] = field(default_factory=dict)  # name -> price paid
     purchase_sector: dict[str, int] = field(default_factory=dict)  # name -> where bought
@@ -48,6 +50,7 @@ class CargoHold:
 @dataclass
 class TradeRoute:
     """A profitable trade route."""
+
     buy_sector: int
     sell_sector: int
     commodity: str
@@ -98,9 +101,11 @@ class SophisticatedTrader:
         best_route = self._get_best_known_route()
 
         if best_route:
-            logger.info(f"Following known route: {best_route.commodity} "
-                       f"${best_route.buy_price} -> ${best_route.sell_price} "
-                       f"(+${best_route.profit_per_unit}/unit)")
+            logger.info(
+                f"Following known route: {best_route.commodity} "
+                f"${best_route.buy_price} -> ${best_route.sell_price} "
+                f"(+${best_route.profit_per_unit}/unit)"
+            )
 
             # Go to buy port
             await self._warp_to_sector(best_route.buy_sector)
@@ -139,15 +144,9 @@ class SophisticatedTrader:
                 profit = result.get("profit", (sell_price - buy_price) * quantity)
 
                 # Record this profitable route
-                self._record_route(buy_sector, best_sell_sector, commodity_name,
-                                 buy_price, sell_price)
+                self._record_route(buy_sector, best_sell_sector, commodity_name, buy_price, sell_price)
 
-                return {
-                    "success": True,
-                    "action": "sold",
-                    "profit": profit,
-                    "commodity": commodity_name
-                }
+                return {"success": True, "action": "sold", "profit": profit, "commodity": commodity_name}
 
         # Don't know where to sell - just explore and try to sell at any port
         await self._explore_and_scan()
@@ -157,27 +156,20 @@ class SophisticatedTrader:
             result = await self._sell_commodity(commodity_name, quantity)
             if result.get("success"):
                 profit = result.get("profit", 500)  # Default profit estimate
-                return {
-                    "success": True,
-                    "action": "sold",
-                    "profit": profit,
-                    "commodity": commodity_name
-                }
+                return {"success": True, "action": "sold", "profit": profit, "commodity": commodity_name}
 
         return {"success": True, "action": "searching_for_buyer"}
 
-    def _get_best_known_route(self) -> Optional[TradeRoute]:
+    def _get_best_known_route(self) -> TradeRoute | None:
         """Get the most profitable known route."""
         if not self.profitable_routes:
             return None
 
         # Sort by profit per unit, return best
-        sorted_routes = sorted(self.profitable_routes,
-                             key=lambda r: r.profit_per_unit,
-                             reverse=True)
+        sorted_routes = sorted(self.profitable_routes, key=lambda r: r.profit_per_unit, reverse=True)
         return sorted_routes[0]
 
-    def _find_best_sell_port(self, commodity: str, min_price: int) -> Optional[int]:
+    def _find_best_sell_port(self, commodity: str, min_price: int) -> int | None:
         """Find port that pays best for this commodity."""
         best_sector = None
         best_price = min_price
@@ -191,8 +183,7 @@ class SophisticatedTrader:
 
         return best_sector
 
-    def _record_route(self, buy_sector: int, sell_sector: int, commodity: str,
-                     buy_price: int, sell_price: int):
+    def _record_route(self, buy_sector: int, sell_sector: int, commodity: str, buy_price: int, sell_price: int):
         """Record a profitable trade route."""
         import time
 
@@ -204,7 +195,7 @@ class SophisticatedTrader:
             buy_price=buy_price,
             sell_price=sell_price,
             profit_per_unit=profit,
-            last_used=time.time()
+            last_used=time.time(),
         )
 
         self.profitable_routes.append(route)
@@ -217,14 +208,13 @@ class SophisticatedTrader:
                 "commodity": commodity,
                 "buy_price": buy_price,
                 "sell_price": sell_price,
-                "profit": profit
+                "profit": profit,
             }
             if route_dict not in self.shared_state.profitable_routes:
                 self.shared_state.profitable_routes.append(route_dict)
                 self.shared_state.save()
 
-        logger.info(f"📊 Recorded route: {commodity} Sector {buy_sector} -> {sell_sector} "
-                   f"(+${profit}/unit)")
+        logger.info(f"📊 Recorded route: {commodity} Sector {buy_sector} -> {sell_sector} (+${profit}/unit)")
 
     async def _explore_and_scan(self):
         """Explore to find new ports and try to trade."""
@@ -260,18 +250,19 @@ class SophisticatedTrader:
             port_info = self._parse_port_screen(screen)
             if port_info:
                 self.known_ports[self.current_sector] = port_info
-                logger.debug(f"Found port in sector {self.current_sector}: "
-                           f"Class {port_info.port_class}")
+                logger.debug(f"Found port in sector {self.current_sector}: Class {port_info.port_class}")
 
     def _has_port(self, screen: str) -> bool:
         """Check if screen shows a port."""
         screen_lower = screen.lower()
         # Look for port indicators in TW2002
-        return ("port" in screen_lower and "class" in screen_lower) or \
-               ("trading" in screen_lower and "port" in screen_lower) or \
-               ("buy" in screen_lower and "sell" in screen_lower and "commodities" in screen_lower)
+        return (
+            ("port" in screen_lower and "class" in screen_lower)
+            or ("trading" in screen_lower and "port" in screen_lower)
+            or ("buy" in screen_lower and "sell" in screen_lower and "commodities" in screen_lower)
+        )
 
-    def _parse_port_screen(self, screen: str) -> Optional[PortInfo]:
+    def _parse_port_screen(self, screen: str) -> PortInfo | None:
         """Parse port screen to extract commodities and prices.
 
         Parses TW2002 port screens to extract:
@@ -287,10 +278,10 @@ class SophisticatedTrader:
         # Extract port class from various formats:
         # "Class BBS", "Port Class: BBS", "Class 1 (BBS)", "(BBS)"
         class_patterns = [
-            r'Class\s+\d*\s*\(([BSbs]{3})\)',  # Class 1 (BBS)
-            r'Class\s+([BSbs]{3})',             # Class BBS
-            r'Port\s+Class[:\s]+([BSbs]{3})',   # Port Class: BBS
-            r'\(([BSbs]{3})\)',                 # (BBS)
+            r"Class\s+\d*\s*\(([BSbs]{3})\)",  # Class 1 (BBS)
+            r"Class\s+([BSbs]{3})",  # Class BBS
+            r"Port\s+Class[:\s]+([BSbs]{3})",  # Port Class: BBS
+            r"\(([BSbs]{3})\)",  # (BBS)
         ]
 
         for pattern in class_patterns:
@@ -306,19 +297,15 @@ class SophisticatedTrader:
         # "Equipment: Selling for 1200 cr"
 
         commodities = {
-            'fuel_ore': ['fuel ore', 'fuel'],
-            'organics': ['organics', 'organic'],
-            'equipment': ['equipment', 'equip']
+            "fuel_ore": ["fuel ore", "fuel"],
+            "organics": ["organics", "organic"],
+            "equipment": ["equipment", "equip"],
         }
 
         for commodity_key, aliases in commodities.items():
             for alias in aliases:
                 # Pattern for "Fuel Ore: 100 at 500 cr" or "Organics: 50 @ 300"
-                quantity_price = re.search(
-                    rf'{alias}[:\s]+(\d+)\s+(?:at|@)\s+(\d+)',
-                    screen,
-                    re.IGNORECASE
-                )
+                quantity_price = re.search(rf"{alias}[:\s]+(\d+)\s+(?:at|@)\s+(\d+)", screen, re.IGNORECASE)
                 if quantity_price:
                     quantity = int(quantity_price.group(1))
                     price = int(quantity_price.group(2))
@@ -331,38 +318,34 @@ class SophisticatedTrader:
 
                     commodity = Commodity(name=commodity_key, quantity=quantity)
 
-                    if 'buying' in context or 'buy' in context:
+                    if "buying" in context or "buy" in context:
                         commodity.buy_price = price  # Port buys (we sell)
-                    elif 'selling' in context or 'sell' in context:
+                    elif "selling" in context or "sell" in context:
                         commodity.sell_price = price  # Port sells (we buy)
                     else:
                         # Use port class to determine
                         if port.port_class:
-                            idx = ['fuel_ore', 'organics', 'equipment'].index(commodity_key)
+                            idx = ["fuel_ore", "organics", "equipment"].index(commodity_key)
                             if idx < len(port.port_class):
-                                if port.port_class[idx] == 'B':
+                                if port.port_class[idx] == "B":
                                     commodity.buy_price = price
-                                elif port.port_class[idx] == 'S':
+                                elif port.port_class[idx] == "S":
                                     commodity.sell_price = price
 
                     port.commodities[commodity_key] = commodity
                     break
 
                 # Pattern for "Fuel Ore: Buying at 500 cr" (no quantity)
-                price_only = re.search(
-                    rf'{alias}[:\s]+(?:buying|selling)?\s+(?:at|for)\s+(\d+)',
-                    screen,
-                    re.IGNORECASE
-                )
+                price_only = re.search(rf"{alias}[:\s]+(?:buying|selling)?\s+(?:at|for)\s+(\d+)", screen, re.IGNORECASE)
                 if price_only:
                     price = int(price_only.group(1))
-                    context = screen[max(0, price_only.start()-30):price_only.end()+30].lower()
+                    context = screen[max(0, price_only.start() - 30) : price_only.end() + 30].lower()
 
                     commodity = Commodity(name=commodity_key)
 
-                    if 'buying' in context or 'buy' in context:
+                    if "buying" in context or "buy" in context:
                         commodity.buy_price = price
-                    elif 'selling' in context or 'sell' in context:
+                    elif "selling" in context or "sell" in context:
                         commodity.sell_price = price
 
                     port.commodities[commodity_key] = commodity
@@ -370,7 +353,7 @@ class SophisticatedTrader:
 
         # If we got a port class but no commodity details, use class to set up structure
         if port.port_class and len(port.commodities) == 0:
-            commodity_names = ['fuel_ore', 'organics', 'equipment']
+            commodity_names = ["fuel_ore", "organics", "equipment"]
             for idx, char in enumerate(port.port_class):
                 if idx < len(commodity_names):
                     commodity = Commodity(name=commodity_names[idx])

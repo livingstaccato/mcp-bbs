@@ -9,8 +9,8 @@ Uses property-based testing to verify orientation handles:
 
 from __future__ import annotations
 
-import re
-from hypothesis import given, strategies as st, assume, settings
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
 from bbsbot.games.tw2002.orientation import (
     GameState,
@@ -20,7 +20,6 @@ from bbsbot.games.tw2002.orientation import (
     parse_display_screen,
     parse_sector_display,
 )
-
 
 # =============================================================================
 # Strategies for generating test data
@@ -80,6 +79,7 @@ garbage_text = st.text(
 # GameState Property Tests
 # =============================================================================
 
+
 class TestGameStateProperties:
     """Property tests for GameState invariants."""
 
@@ -98,9 +98,7 @@ class TestGameStateProperties:
         context=st.sampled_from(VALID_CONTEXTS),
         warps=st.lists(sector_numbers, min_size=0, max_size=6),
     )
-    def test_can_warp_requires_sector_command_and_warps(
-        self, context: str, warps: list[int]
-    ) -> None:
+    def test_can_warp_requires_sector_command_and_warps(self, context: str, warps: list[int]) -> None:
         """can_warp() requires being at sector_command with available warps."""
         state = GameState(context=context, warps=warps)
 
@@ -112,9 +110,7 @@ class TestGameStateProperties:
         credits=st.one_of(st.none(), credit_amounts),
         turns=st.one_of(st.none(), st.integers(min_value=0, max_value=10000)),
     )
-    def test_summary_never_raises(
-        self, sector: int | None, credits: int | None, turns: int | None
-    ) -> None:
+    def test_summary_never_raises(self, sector: int | None, credits: int | None, turns: int | None) -> None:
         """summary() should never raise, regardless of field values."""
         state = GameState(
             context="sector_command",
@@ -131,6 +127,7 @@ class TestGameStateProperties:
 # Context Detection Property Tests
 # =============================================================================
 
+
 class TestContextDetectionProperties:
     """Property tests for detect_context."""
 
@@ -145,9 +142,7 @@ class TestContextDetectionProperties:
         prefix=garbage_text,
         suffix=garbage_text,
     )
-    def test_sector_command_detected_with_noise(
-        self, prefix: str, suffix: str
-    ) -> None:
+    def test_sector_command_detected_with_noise(self, prefix: str, suffix: str) -> None:
         """Sector command prompt should be detected even with surrounding noise."""
         # Build a screen with command prompt at the end (where it should be)
         prompt = "Command [TL=00:00:00]:[1] (?=Help)?"
@@ -200,6 +195,7 @@ class TestContextDetectionProperties:
 # =============================================================================
 # Parsing Property Tests
 # =============================================================================
+
 
 class TestParsingProperties:
     """Property tests for screen parsing functions."""
@@ -276,6 +272,7 @@ class TestParsingProperties:
 # Sector Knowledge Property Tests
 # =============================================================================
 
+
 class TestSectorKnowledgeProperties:
     """Property tests for SectorKnowledge."""
 
@@ -286,9 +283,7 @@ class TestSectorKnowledgeProperties:
             max_size=20,
         )
     )
-    def test_record_and_retrieve_consistency(
-        self, sectors: list[tuple[int, list[int]]]
-    ) -> None:
+    def test_record_and_retrieve_consistency(self, sectors: list[tuple[int, list[int]]]) -> None:
         """Recorded observations should be retrievable."""
         knowledge = SectorKnowledge()
 
@@ -325,9 +320,7 @@ class TestSectorKnowledgeProperties:
         middle=sector_numbers,
         end=sector_numbers,
     )
-    def test_find_path_linear_graph(
-        self, start: int, middle: int, end: int
-    ) -> None:
+    def test_find_path_linear_graph(self, start: int, middle: int, end: int) -> None:
         """Path finding works for simple linear graphs."""
         assume(start != middle != end and start != end)
 
@@ -342,9 +335,7 @@ class TestSectorKnowledgeProperties:
         assert path[-1] == end
         assert len(path) == 3
 
-    @given(
-        sectors=st.lists(sector_numbers, min_size=2, max_size=10, unique=True)
-    )
+    @given(sectors=st.lists(sector_numbers, min_size=2, max_size=10, unique=True))
     def test_find_path_fully_connected(self, sectors: list[int]) -> None:
         """All paths should be found in fully connected graph."""
         knowledge = SectorKnowledge()
@@ -366,6 +357,7 @@ class TestSectorKnowledgeProperties:
 # =============================================================================
 # Baud Rate Simulation Tests
 # =============================================================================
+
 
 class TestBaudRateSimulation:
     """Tests simulating partial screens due to baud rate."""
@@ -421,6 +413,7 @@ Command [TL=00:00:00]:[1] (?=Help)?"""
 # =============================================================================
 # Edge Case Tests
 # =============================================================================
+
 
 class TestEdgeCases:
     """Edge cases that hypothesis might not naturally generate."""

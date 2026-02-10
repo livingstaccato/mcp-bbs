@@ -179,9 +179,7 @@ async def wait_and_respond(
         raise TimeoutError(f"No prompt detected within {timeout_ms}ms")
 
 
-async def send_input(
-    bot, keys: str, input_type: str | None, wait_after: float = 0.2
-):
+async def send_input(bot, keys: str, input_type: str | None, wait_after: float = 0.2):
     """Send input based on input_type metadata.
 
     Args:
@@ -197,9 +195,7 @@ async def send_input(
 
     # TW2002-specific: Log the input being sent
     printable = keys.replace("\r", "\\r").replace("\n", "\\n")
-    print(
-        f"status action=send step={bot.step_count} input_type={input_type} keys={printable}"
-    )
+    print(f"status action=send step={bot.step_count} input_type={input_type} keys={printable}")
 
     # Use framework InputSender for actual sending
     sender = InputSender(bot.session)

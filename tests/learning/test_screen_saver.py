@@ -1,8 +1,9 @@
 """Tests for screen saver functionality."""
 
-import pytest
 import time
-from pathlib import Path
+
+import pytest
+
 from bbsbot.learning.screen_saver import ScreenSaver
 
 
@@ -235,10 +236,7 @@ class TestScreenSaverHashTracking:
 
     def test_multiple_unique_screens(self, screen_saver):
         """Test saving multiple unique screens."""
-        snapshots = [
-            {"screen": f"Screen {i}", "screen_hash": f"hash{i}", "captured_at": time.time()}
-            for i in range(5)
-        ]
+        snapshots = [{"screen": f"Screen {i}", "screen_hash": f"hash{i}", "captured_at": time.time()} for i in range(5)]
 
         for snapshot in snapshots:
             result = screen_saver.save_screen(snapshot)

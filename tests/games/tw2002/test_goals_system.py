@@ -97,4 +97,3 @@ def test_tw2002_tools_registered() -> None:
 
     missing = expected - set(tools)
     assert not missing, f"Missing tools: {sorted(missing)}"
-

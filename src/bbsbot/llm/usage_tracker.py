@@ -74,16 +74,12 @@ class UsageTracker:
 
     def __init__(self):
         """Initialize usage tracker."""
-        self._model_stats: dict[str, ModelUsageStats] = defaultdict(
-            lambda: ModelUsageStats(model="unknown")
-        )
+        self._model_stats: dict[str, ModelUsageStats] = defaultdict(lambda: ModelUsageStats(model="unknown"))
         self._session_start = None
         self._total_requests = 0
         self._total_cached = 0
 
-    def track_usage(
-        self, model: str, usage: TokenUsage | None, cached: bool = False
-    ) -> None:
+    def track_usage(self, model: str, usage: TokenUsage | None, cached: bool = False) -> None:
         """Track usage for an LLM call.
 
         Args:
@@ -132,9 +128,7 @@ class UsageTracker:
         """
         total_tokens = sum(s.total_tokens for s in self._model_stats.values())
         total_cost = sum(s.estimated_cost_usd for s in self._model_stats.values())
-        cache_hit_rate = (
-            self._total_cached / self._total_requests if self._total_requests > 0 else 0.0
-        )
+        cache_hit_rate = self._total_cached / self._total_requests if self._total_requests > 0 else 0.0
 
         return {
             "total_requests": self._total_requests,

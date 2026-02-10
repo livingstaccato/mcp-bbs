@@ -8,9 +8,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.visualization.colors import (
+    STATUS_ICONS,
     Colors,
     Icons,
-    STATUS_ICONS,
     colorize,
     get_goal_color,
 )

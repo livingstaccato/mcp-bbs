@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from bbsbot.paths import default_knowledge_root, find_repo_games_root
 from bbsbot.learning.buffer import BufferManager
 from bbsbot.learning.detector import PromptDetection, PromptDetector
 from bbsbot.learning.discovery import discover_menu
@@ -16,6 +14,7 @@ from bbsbot.learning.extractor import extract_kv
 from bbsbot.learning.knowledge import append_md
 from bbsbot.learning.rules import RuleLoadResult, RuleSet
 from bbsbot.learning.screen_saver import ScreenSaver
+from bbsbot.paths import default_knowledge_root, find_repo_games_root
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -104,9 +103,7 @@ class LearningEngine:
         self._last_prompt_match: PromptMatch | None = None
 
         # NEW: Screen saving to disk
-        self._screen_saver = ScreenSaver(
-            base_dir=knowledge_root, namespace=namespace, enabled=True
-        )
+        self._screen_saver = ScreenSaver(base_dir=knowledge_root, namespace=namespace, enabled=True)
 
         # Auto-load prompt patterns from JSON
         self._load_prompt_patterns()
@@ -179,6 +176,7 @@ class LearningEngine:
         - Falls back to empty detector if file doesn't exist
         """
         from bbsbot.logging import get_logger
+
         logger = get_logger(__name__)
 
         logger.info(f"[PATTERN LOAD] Loading patterns for namespace: {self._namespace}")
@@ -204,6 +202,7 @@ class LearningEngine:
 
     def _load_rules_or_patterns(self) -> RuleLoadResult:
         from bbsbot.logging import get_logger
+
         logger = get_logger(__name__)
 
         if not self._namespace:
@@ -243,7 +242,7 @@ class LearningEngine:
                 logger.debug(f"[RULES LOAD] Found games directory with rules: {direct_games}")
                 repo_games_root = direct_games
             else:
-                logger.debug(f"[RULES LOAD] No rules.json in knowledge_root games dir")
+                logger.debug("[RULES LOAD] No rules.json in knowledge_root games dir")
 
         # If still nothing, try searching from current working directory (production case ONLY)
         # Only do this if knowledge_root is the default production directory, not a test temp dir
@@ -255,7 +254,7 @@ class LearningEngine:
             logger.debug(f"[RULES LOAD] is_default: {is_default_knowledge_root}")
 
             if is_default_knowledge_root:
-                logger.debug(f"[RULES LOAD] Using default knowledge_root in production, trying cwd")
+                logger.debug("[RULES LOAD] Using default knowledge_root in production, trying cwd")
                 try:
                     repo_games_root = find_repo_games_root()
                     logger.debug(f"[RULES LOAD] Searched from cwd, found: {repo_games_root}")
@@ -263,7 +262,7 @@ class LearningEngine:
                     logger.error(f"[RULES LOAD] Error finding repo games root from cwd: {e}")
                     repo_games_root = None
             else:
-                logger.debug(f"[RULES LOAD] Custom knowledge_root (test mode), not falling back to cwd")
+                logger.debug("[RULES LOAD] Custom knowledge_root (test mode), not falling back to cwd")
 
         if repo_games_root:
             repo_rules = repo_games_root / self._namespace / "rules.json"
@@ -282,11 +281,13 @@ class LearningEngine:
                         metadata={"game": rules.game, "version": rules.version, **rules.metadata},
                     )
                 except (json.JSONDecodeError, OSError, ValueError) as e:
-                    logger.warning(f"[RULES LOAD] RuleSet loading failed ({type(e).__name__}: {e}), trying legacy format")
+                    logger.warning(
+                        f"[RULES LOAD] RuleSet loading failed ({type(e).__name__}: {e}), trying legacy format"
+                    )
                     # Legacy rules.json support (minimal prompt list).
                     try:
                         data = json.loads(repo_rules.read_text())
-                        logger.debug(f"[RULES LOAD] Parsed JSON, checking for legacy 'prompts' key")
+                        logger.debug("[RULES LOAD] Parsed JSON, checking for legacy 'prompts' key")
                         legacy_patterns: list[dict[str, Any]] = []
                         for prompt in data.get("prompts", []):
                             prompt_id = prompt.get("prompt_id")
@@ -313,7 +314,7 @@ class LearningEngine:
                                 metadata=data.get("metadata", {}),
                             )
                         else:
-                            logger.warning(f"[RULES LOAD] Legacy format parsed but no valid patterns found")
+                            logger.warning("[RULES LOAD] Legacy format parsed but no valid patterns found")
                     except Exception as e2:
                         logger.error(f"[RULES LOAD] Legacy format parsing also failed: {type(e2).__name__}: {e2}")
                         pass

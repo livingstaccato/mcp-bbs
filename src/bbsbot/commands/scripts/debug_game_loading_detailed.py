@@ -2,14 +2,11 @@
 """Detailed debug of what happens during and after game selection."""
 
 import asyncio
-import sys
 import time
-from pathlib import Path
-
 
 from bbsbot.games.tw2002 import TradingBot
 from bbsbot.games.tw2002.connection import connect
-from bbsbot.games.tw2002.io import wait_and_respond, send_input
+from bbsbot.games.tw2002.io import send_input, wait_and_respond
 
 
 async def debug_with_instrumentation():
@@ -28,12 +25,10 @@ async def debug_with_instrumentation():
         # Navigate to game selection menu
         print("Step 1: Get to menu_selection prompt...")
         for step in range(5):
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             if "menu_selection" in prompt_id:
-                print(f"✓ Found menu_selection prompt\n")
+                print("✓ Found menu_selection prompt\n")
                 break
 
             # Handle login prompts
@@ -50,17 +45,13 @@ async def debug_with_instrumentation():
         print("✓ Sent 'B'\n")
 
         # Now use wait_and_respond with instrumentation
-        print(
-            "Step 3: Using wait_and_respond() to get next prompt (this is what fails)...\n"
-        )
+        print("Step 3: Using wait_and_respond() to get next prompt (this is what fails)...\n")
         print("Monitoring internally...")
 
         start = time.time()
         try:
             # This is the call that times out
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=15000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=15000)
             elapsed = time.time() - start
             print(f"\n✓ Got prompt after {elapsed:.2f}s")
             print(f"  Prompt: {prompt_id}")
@@ -69,22 +60,18 @@ async def debug_with_instrumentation():
         except TimeoutError as e:
             elapsed = time.time() - start
             print(f"\n✗ Timeout after {elapsed:.2f}s: {e}")
-            print(f"\nLast detected prompts:")
+            print("\nLast detected prompts:")
             for p in bot.detected_prompts[-5:]:
-                print(
-                    f"  Step {p['step']}: {p['prompt_id']} ({p.get('input_type', 'unknown')})"
-                )
+                print(f"  Step {p['step']}: {p['prompt_id']} ({p.get('input_type', 'unknown')})")
             print(f"\nLoop detection state: {bot.loop_detection}")
             print(f"Last prompt: {bot.last_prompt_id}")
 
         except RuntimeError as e:
             elapsed = time.time() - start
             print(f"\n✗ RuntimeError after {elapsed:.2f}s: {e}")
-            print(f"\nLast detected prompts:")
+            print("\nLast detected prompts:")
             for p in bot.detected_prompts[-5:]:
-                print(
-                    f"  Step {p['step']}: {p['prompt_id']} ({p.get('input_type', 'unknown')})"
-                )
+                print(f"  Step {p['step']}: {p['prompt_id']} ({p.get('input_type', 'unknown')})")
             print(f"\nLoop detection state: {bot.loop_detection}")
             print(f"Last prompt: {bot.last_prompt_id}")
 

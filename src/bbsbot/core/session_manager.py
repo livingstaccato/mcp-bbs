@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from bbsbot.paths import default_knowledge_root, find_repo_games_root
+from bbsbot.addons.manager import AddonManager
+from bbsbot.addons.tedit import TeditAddon
+from bbsbot.addons.tw2002 import Tw2002Addon
 from bbsbot.constants import (
     DEFAULT_COLS,
     DEFAULT_CONNECT_TIMEOUT_S,
@@ -18,13 +21,11 @@ from bbsbot.constants import (
 )
 from bbsbot.core.session import Session
 from bbsbot.learning.engine import LearningEngine
-from bbsbot.addons.manager import AddonManager
-from bbsbot.addons.tw2002 import Tw2002Addon
-from bbsbot.addons.tedit import TeditAddon
 from bbsbot.logging.session_logger import SessionLogger
+from bbsbot.paths import default_knowledge_root, find_repo_games_root
 from bbsbot.terminal.emulator import TerminalEmulator
-from bbsbot.transport.telnet import TelnetTransport
 from bbsbot.transport.chaos import ChaosTransport
+from bbsbot.transport.telnet import TelnetTransport
 
 if TYPE_CHECKING:
     from pathlib import Path

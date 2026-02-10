@@ -13,10 +13,10 @@ from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
+
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.config import BotConfig
-    from bbsbot.games.tw2002.orientation import SectorKnowledge
 
 from bbsbot.games.tw2002.character import CharacterManager, CharacterState
 from bbsbot.games.tw2002.name_generator import NameGenerator
@@ -172,7 +172,7 @@ class MultiCharacterManager:
         try:
             lock_age = time_module.time() - lock_file.stat().st_mtime
             if lock_age > 7200:  # 2 hours in seconds
-                logger.warning(f"Removing stale lock for {name} (age: {lock_age/3600:.1f} hours)")
+                logger.warning(f"Removing stale lock for {name} (age: {lock_age / 3600:.1f} hours)")
                 lock_file.unlink()
                 return False
         except Exception as e:
@@ -208,8 +208,7 @@ class MultiCharacterManager:
             or with number prefix: "1QuantumTrader", "2NeuralDataProfit"
         """
         name = self.name_generator.generate_character_name(
-            complexity=self.character_config.name_complexity,
-            number_prefix=self.character_config.number_prefix
+            complexity=self.character_config.name_complexity, number_prefix=self.character_config.number_prefix
         )
         logger.info(f"Generated character name: {name}")
         return name
@@ -221,9 +220,7 @@ class MultiCharacterManager:
             Themed ship name like "Swift Venture" or None if disabled
         """
         if self.character_config.generate_ship_names:
-            ship_name = self.name_generator.generate_ship_name(
-                add_number=self.character_config.ship_names_with_numbers
-            )
+            ship_name = self.name_generator.generate_ship_name(add_number=self.character_config.ship_names_with_numbers)
             logger.info(f"Generated ship name: {ship_name}")
             return ship_name
         return None
@@ -245,15 +242,9 @@ class MultiCharacterManager:
             ship_name = self.generate_ship_name()
 
         # Check max characters limit
-        living_characters = [
-            r for r in self._records.values()
-            if r.died_at is None
-        ]
+        living_characters = [r for r in self._records.values() if r.died_at is None]
         if len(living_characters) >= self.config.max_characters:
-            logger.warning(
-                f"Max characters ({self.config.max_characters}) reached, "
-                "oldest will be retired"
-            )
+            logger.warning(f"Max characters ({self.config.max_characters}) reached, oldest will be retired")
 
         # Create state with ship name
         state = self._character_manager.load(name)
@@ -380,10 +371,7 @@ class MultiCharacterManager:
         # Don't inherit credits, bank balance, ship status
         # Those are lost on death
 
-        logger.info(
-            f"Inherited {len(to_char.visited_sectors)} sectors "
-            f"from {from_char.name} to {to_char.name}"
-        )
+        logger.info(f"Inherited {len(to_char.visited_sectors)} sectors from {from_char.name} to {to_char.name}")
 
     def get_knowledge_path(self, character_name: str) -> Path:
         """Get path to knowledge file for a character.
@@ -407,10 +395,7 @@ class MultiCharacterManager:
         Returns:
             List of character names that haven't died
         """
-        return [
-            name for name, record in self._records.items()
-            if record.died_at is None
-        ]
+        return [name for name, record in self._records.items() if record.died_at is None]
 
     def list_all_characters(self) -> list[CharacterRecord]:
         """Get records of all characters (living and dead).
@@ -513,9 +498,7 @@ class MultiCharacterManager:
             "total_deaths": total_deaths,
             "total_sessions": total_sessions,
             "total_profit": total_profit,
-            "avg_profit_per_character": (
-                total_profit / len(self._records) if self._records else 0
-            ),
+            "avg_profit_per_character": (total_profit / len(self._records) if self._records else 0),
         }
 
     def cleanup_old_characters(self, max_dead_to_keep: int = 10) -> int:
@@ -527,11 +510,7 @@ class MultiCharacterManager:
         Returns:
             Number of records removed
         """
-        dead_chars = [
-            (name, record)
-            for name, record in self._records.items()
-            if record.died_at is not None
-        ]
+        dead_chars = [(name, record) for name, record in self._records.items() if record.died_at is not None]
 
         # Sort by death time (oldest first)
         dead_chars.sort(key=lambda x: x[1].died_at or 0)

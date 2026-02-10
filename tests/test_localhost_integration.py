@@ -22,7 +22,7 @@ def is_port_open(host: str, port: int) -> bool:
         result = sock.connect_ex((host, port))
         sock.close()
         return result == 0
-    except socket.error:
+    except OSError:
         return False
 
 

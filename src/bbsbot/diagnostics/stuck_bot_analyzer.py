@@ -99,14 +99,8 @@ Respond in JSON:
             try:
                 return json.loads(response.message.content)
             except json.JSONDecodeError:
-                return {
-                    "error": "LLM response not valid JSON",
-                    "raw": response.message.content
-                }
+                return {"error": "LLM response not valid JSON", "raw": response.message.content}
 
         except Exception as e:
             logger.error(f"Diagnostic analysis failed: {e}")
-            return {
-                "error": f"Analysis failed: {type(e).__name__}",
-                "message": str(e)
-            }
+            return {"error": f"Analysis failed: {type(e).__name__}", "message": str(e)}

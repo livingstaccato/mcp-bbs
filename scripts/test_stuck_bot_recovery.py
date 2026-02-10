@@ -10,20 +10,16 @@ This script creates scenarios where bots get stuck and verifies that:
 
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
-from typing import Any
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from bbsbot.games.tw2002.interventions.detector import InterventionDetector
 from bbsbot.games.tw2002.interventions.types import (
-    Anomaly,
     AnomalyType,
     InterventionPriority,
-    TurnData,
 )
 from bbsbot.games.tw2002.orientation import GameState
 from bbsbot.logging import get_logger
@@ -77,19 +73,13 @@ class StuckBotTester:
             )
 
         # Detect anomalies
-        anomalies = detector.detect_anomalies(
-            current_turn=6, state=state, strategy=strategy
-        )
+        anomalies = detector.detect_anomalies(current_turn=6, state=state, strategy=strategy)
 
         # Verify detection
-        stagnation_detected = any(
-            a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies
-        )
+        stagnation_detected = any(a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies)
         if stagnation_detected:
-            stagnation = next(
-                a for a in anomalies if a.type == AnomalyType.COMPLETE_STAGNATION
-            )
-            logger.info(f"✓ PASS: Detected complete stagnation")
+            stagnation = next(a for a in anomalies if a.type == AnomalyType.COMPLETE_STAGNATION)
+            logger.info("✓ PASS: Detected complete stagnation")
             logger.info(f"  Priority: {stagnation.priority}")
             logger.info(f"  Confidence: {stagnation.confidence}")
             logger.info(f"  Description: {stagnation.description}")
@@ -97,13 +87,13 @@ class StuckBotTester:
 
             # Verify it's CRITICAL priority
             if stagnation.priority == InterventionPriority.CRITICAL:
-                logger.info(f"✓ PASS: Correctly marked as CRITICAL")
+                logger.info("✓ PASS: Correctly marked as CRITICAL")
                 self.tests_passed += 1
             else:
                 logger.error(f"✗ FAIL: Expected CRITICAL, got {stagnation.priority}")
                 self.tests_failed += 1
         else:
-            logger.error(f"✗ FAIL: Complete stagnation not detected")
+            logger.error("✗ FAIL: Complete stagnation not detected")
             logger.error(f"  Anomalies detected: {[a.type for a in anomalies]}")
             self.tests_failed += 1
 
@@ -141,24 +131,18 @@ class StuckBotTester:
             )
 
         # Detect anomalies
-        anomalies = detector.detect_anomalies(
-            current_turn=7, state=state, strategy=strategy
-        )
+        anomalies = detector.detect_anomalies(current_turn=7, state=state, strategy=strategy)
 
         # Verify detection
-        stagnation_detected = any(
-            a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies
-        )
+        stagnation_detected = any(a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies)
         if stagnation_detected:
-            stagnation = next(
-                a for a in anomalies if a.type == AnomalyType.COMPLETE_STAGNATION
-            )
-            logger.info(f"✓ PASS: Detected complete stagnation with varying actions")
+            stagnation = next(a for a in anomalies if a.type == AnomalyType.COMPLETE_STAGNATION)
+            logger.info("✓ PASS: Detected complete stagnation with varying actions")
             logger.info(f"  Priority: {stagnation.priority}")
             logger.info(f"  Description: {stagnation.description}")
             self.tests_passed += 1
         else:
-            logger.error(f"✗ FAIL: Complete stagnation not detected")
+            logger.error("✗ FAIL: Complete stagnation not detected")
             self.tests_failed += 1
 
         self.tests_run += 1
@@ -194,19 +178,15 @@ class StuckBotTester:
             )
 
         # Detect anomalies
-        anomalies = detector.detect_anomalies(
-            current_turn=6, state=state, strategy=strategy
-        )
+        anomalies = detector.detect_anomalies(current_turn=6, state=state, strategy=strategy)
 
         # Verify NO complete stagnation detected
-        stagnation_detected = any(
-            a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies
-        )
+        stagnation_detected = any(a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies)
         if not stagnation_detected:
-            logger.info(f"✓ PASS: No false positive - bot is making progress")
+            logger.info("✓ PASS: No false positive - bot is making progress")
             self.tests_passed += 1
         else:
-            logger.error(f"✗ FAIL: False positive - detected stagnation when bot is moving")
+            logger.error("✗ FAIL: False positive - detected stagnation when bot is moving")
             self.tests_failed += 1
 
         self.tests_run += 1
@@ -242,23 +222,17 @@ class StuckBotTester:
             )
 
         # Detect anomalies
-        anomalies = detector.detect_anomalies(
-            current_turn=4, state=state, strategy=strategy
-        )
+        anomalies = detector.detect_anomalies(current_turn=4, state=state, strategy=strategy)
 
         # Should detect action loop, NOT complete stagnation
         loop_detected = any(a.type == AnomalyType.ACTION_LOOP for a in anomalies)
-        stagnation_detected = any(
-            a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies
-        )
+        stagnation_detected = any(a.type == AnomalyType.COMPLETE_STAGNATION for a in anomalies)
 
         if loop_detected and not stagnation_detected:
-            logger.info(f"✓ PASS: Action loop detected, complete stagnation not triggered")
+            logger.info("✓ PASS: Action loop detected, complete stagnation not triggered")
             self.tests_passed += 1
         else:
-            logger.error(
-                f"✗ FAIL: Expected action loop only, got: {[a.type for a in anomalies]}"
-            )
+            logger.error(f"✗ FAIL: Expected action loop only, got: {[a.type for a in anomalies]}")
             self.tests_failed += 1
 
         self.tests_run += 1

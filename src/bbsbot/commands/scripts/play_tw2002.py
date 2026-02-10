@@ -6,8 +6,8 @@ import json
 import time
 from pathlib import Path
 
-from bbsbot.paths import default_knowledge_root
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 class TW2002Player:
@@ -41,11 +41,7 @@ class TW2002Player:
         self.session = await self.session_manager.get_session(self.session_id)
 
         # Enable learning
-        await self.session_manager.enable_learning(
-            self.session_id,
-            self.knowledge_root,
-            namespace="tw2002"
-        )
+        await self.session_manager.enable_learning(self.session_id, self.knowledge_root, namespace="tw2002")
 
         print(f"✓ Connected! Session ID: {self.session_id}")
         print(f"✓ Learning enabled with {len(self.session.learning._prompt_detector._patterns)} patterns")
@@ -90,12 +86,12 @@ class TW2002Player:
                     return snapshot
 
         # Timeout
-        print(f"  ⚠️  Timeout waiting for prompt")
+        print("  ⚠️  Timeout waiting for prompt")
         if last_screen:
             print(f"  Last screen hash: {last_screen.get('screen_hash', 'unknown')[:16]}...")
             # Show last few lines
-            lines = last_screen.get('screen', '').split('\n')
-            print(f"  Last screen content (last 5 lines):")
+            lines = last_screen.get("screen", "").split("\n")
+            print("  Last screen content (last 5 lines):")
             for line in lines[-5:]:
                 print(f"    {line}")
 
@@ -119,22 +115,24 @@ class TW2002Player:
 
     def document_step(self, step, description, prompt_id, input_type, screen, screen_hash):
         """Document a game step."""
-        self.documentation.append({
-            "step": step,
-            "description": description,
-            "prompt_id": prompt_id,
-            "input_type": input_type,
-            "screen_preview": screen,
-            "screen_hash": screen_hash,
-            "timestamp": time.time(),
-        })
+        self.documentation.append(
+            {
+                "step": step,
+                "description": description,
+                "prompt_id": prompt_id,
+                "input_type": input_type,
+                "screen_preview": screen,
+                "screen_hash": screen_hash,
+                "timestamp": time.time(),
+            }
+        )
 
     def show_screen(self, snapshot, max_lines=25):
         """Display current screen."""
         print("\n" + "─" * 80)
         print("CURRENT SCREEN:")
         print("─" * 80)
-        lines = snapshot.get('screen', '').split('\n')[:max_lines]
+        lines = snapshot.get("screen", "").split("\n")[:max_lines]
         for line in lines:
             print(line)
         print("─" * 80)
@@ -143,10 +141,7 @@ class TW2002Player:
         """Play through Trade Wars 2002 game."""
 
         # Step 1: Login
-        await self.wait_for_prompt(
-            prompt_id="login_username",
-            description="Waiting for login prompt"
-        )
+        await self.wait_for_prompt(prompt_id="login_username", description="Waiting for login prompt")
 
         await self.send_keys("TestPlayer\r", "Enter username 'TestPlayer'")
 
@@ -167,10 +162,7 @@ class TW2002Player:
                 print(f"  Unexpected prompt: {detected['prompt_id']}")
 
         # Wait for main menu or next prompt
-        snapshot = await self.wait_for_prompt(
-            timeout_ms=5000,
-            description="Waiting for next prompt after login"
-        )
+        snapshot = await self.wait_for_prompt(timeout_ms=5000, description="Waiting for next prompt after login")
 
         if snapshot:
             self.show_screen(snapshot, max_lines=25)
@@ -183,11 +175,12 @@ class TW2002Player:
 
         # Try to detect what commands are available
         print("\n🔍 Analyzing available commands...")
-        screen_text = snapshot.get('screen', '')
+        screen_text = snapshot.get("screen", "")
 
         # Look for menu-style options
         import re
-        menu_pattern = r'^\s*([A-Z])\s*[-:)]?\s*(.+)$'
+
+        menu_pattern = r"^\s*([A-Z])\s*[-:)]?\s*(.+)$"
         matches = re.findall(menu_pattern, screen_text, re.MULTILINE)
 
         if matches:
@@ -196,10 +189,7 @@ class TW2002Player:
                 print(f"    {key}: {description.strip()}")
 
         # Wait for command prompt
-        snapshot = await self.wait_for_prompt(
-            timeout_ms=5000,
-            description="Waiting for command prompt"
-        )
+        snapshot = await self.wait_for_prompt(timeout_ms=5000, description="Waiting for command prompt")
 
         if snapshot:
             self.show_screen(snapshot, max_lines=10)
@@ -210,10 +200,7 @@ class TW2002Player:
         self.show_screen(snapshot)
 
         # Continue navigation
-        snapshot = await self.wait_for_prompt(
-            timeout_ms=5000,
-            description="Waiting for next command prompt"
-        )
+        snapshot = await self.wait_for_prompt(timeout_ms=5000, description="Waiting for next command prompt")
 
         # Try port report (P)
         await self.send_keys("P\r", "Port report")
@@ -221,10 +208,7 @@ class TW2002Player:
         self.show_screen(snapshot)
 
         # Wait for next prompt
-        snapshot = await self.wait_for_prompt(
-            timeout_ms=5000,
-            description="Waiting for command prompt"
-        )
+        snapshot = await self.wait_for_prompt(timeout_ms=5000, description="Waiting for command prompt")
 
         # Try moving (M)
         await self.send_keys("M\r", "Move to another sector")
@@ -237,10 +221,7 @@ class TW2002Player:
         self.show_screen(snapshot)
 
         # Check for warp prompt or other navigation
-        snapshot = await self.wait_for_prompt(
-            timeout_ms=5000,
-            description="Checking after sector move"
-        )
+        snapshot = await self.wait_for_prompt(timeout_ms=5000, description="Checking after sector move")
 
         # Quit gracefully
         print("\n\n" + "=" * 80)
@@ -264,19 +245,23 @@ class TW2002Player:
         doc_file = Path(".provide") / f"tw2002-playthrough-{int(time.time())}.json"
         doc_file.parent.mkdir(exist_ok=True)
 
-        with open(doc_file, 'w') as f:
-            json.dump({
-                "session_id": self.session_id,
-                "timestamp": time.time(),
-                "steps": self.documentation,
-                "total_steps": self.step_counter,
-            }, f, indent=2)
+        with open(doc_file, "w") as f:
+            json.dump(
+                {
+                    "session_id": self.session_id,
+                    "timestamp": time.time(),
+                    "steps": self.documentation,
+                    "total_steps": self.step_counter,
+                },
+                f,
+                indent=2,
+            )
 
         print(f"\n📄 Documentation saved to: {doc_file}")
 
         # Also create markdown summary
-        md_file = doc_file.with_suffix('.md')
-        with open(md_file, 'w') as f:
+        md_file = doc_file.with_suffix(".md")
+        with open(md_file, "w") as f:
             f.write("# Trade Wars 2002 Playthrough\n\n")
             f.write(f"Session: {self.session_id}\n")
             f.write(f"Steps: {self.step_counter}\n\n")
@@ -287,7 +272,7 @@ class TW2002Player:
                 f.write(f"- **Input Type**: {doc['input_type']}\n")
                 f.write(f"- **Screen Hash**: {doc['screen_hash'][:16]}...\n\n")
                 f.write("```\n")
-                f.write(doc['screen_preview'])
+                f.write(doc["screen_preview"])
                 f.write("\n```\n\n")
 
         print(f"📄 Markdown summary saved to: {md_file}")
@@ -327,6 +312,7 @@ class TW2002Player:
         except Exception as e:
             print(f"\n\n❌ Error: {e}")
             import traceback
+
             traceback.print_exc()
         finally:
             print("\nDisconnecting...")

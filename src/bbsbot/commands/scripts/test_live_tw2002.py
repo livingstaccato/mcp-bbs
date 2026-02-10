@@ -2,7 +2,6 @@
 """Live test of prompt detection with Trade Wars 2002."""
 
 import asyncio
-import json
 import sys
 
 from bbsbot.core.session_manager import SessionManager
@@ -38,7 +37,7 @@ async def test_live_tw2002():
         # Enable learning with tw2002 namespace (auto-loads patterns)
         print("2. Enabling learning with tw2002 namespace...")
         await session_manager.enable_learning(session_id, knowledge_root, namespace="tw2002")
-        print(f"   ✓ Learning enabled")
+        print("   ✓ Learning enabled")
         print(f"   - Patterns loaded: {len(session.learning._prompt_detector._patterns)}")
         print(f"   - Screen saver: {session.learning._screen_saver._enabled}")
         print()
@@ -57,7 +56,7 @@ async def test_live_tw2002():
         # Show first 20 lines of screen
         print("   Screen content (first 20 lines):")
         print("   " + "-" * 76)
-        lines = snapshot['screen'].split('\n')[:20]
+        lines = snapshot["screen"].split("\n")[:20]
         for line in lines:
             print(f"   {line}")
         print("   " + "-" * 76)
@@ -66,13 +65,13 @@ async def test_live_tw2002():
         # Check if prompt was detected
         if "prompt_detected" in snapshot:
             detected = snapshot["prompt_detected"]
-            print(f"   🎯 PROMPT DETECTED!")
+            print("   🎯 PROMPT DETECTED!")
             print(f"   - Prompt ID: {detected['prompt_id']}")
             print(f"   - Input Type: {detected['input_type']}")
             print(f"   - Is Idle: {detected['is_idle']}")
             print()
         else:
-            print(f"   ℹ️  No prompt detected in initial screen")
+            print("   ℹ️  No prompt detected in initial screen")
             print()
 
         # Test bbs_wait_for_prompt behavior
@@ -87,7 +86,7 @@ async def test_live_tw2002():
 
             if "prompt_detected" in snap:
                 detected = snap["prompt_detected"]
-                print(f"   ✓ Prompt detected!")
+                print("   ✓ Prompt detected!")
                 print(f"   - Prompt ID: {detected['prompt_id']}")
                 print(f"   - Input Type: {detected['input_type']}")
                 print(f"   - Is Idle: {detected['is_idle']}")
@@ -95,7 +94,7 @@ async def test_live_tw2002():
                 break
 
         if not matched:
-            print(f"   ⚠️  No prompt detected within timeout")
+            print("   ⚠️  No prompt detected within timeout")
         print()
 
         # Check buffer status
@@ -121,7 +120,8 @@ async def test_live_tw2002():
 
         # List saved screens
         from pathlib import Path
-        screens_dir = Path(saver_status['screens_dir'])
+
+        screens_dir = Path(saver_status["screens_dir"])
         if screens_dir.exists():
             screens = list(screens_dir.glob("*.txt"))
             print(f"   📁 Saved screens ({len(screens)}):")
@@ -147,21 +147,22 @@ async def test_live_tw2002():
         print("=" * 80)
         print()
         print("Summary:")
-        print(f"  ✓ Connected to TW2002 on port 2002")
+        print("  ✓ Connected to TW2002 on port 2002")
         print(f"  ✓ Loaded {len(session.learning._prompt_detector._patterns)} prompt patterns")
         print(f"  ✓ Screen buffering active ({len(buffer_mgr._buffer)} screens)")
         print(f"  ✓ Saved {saver_status['saved_count']} unique screens to disk")
 
         if matched:
-            print(f"  ✓ Prompt detection working!")
+            print("  ✓ Prompt detection working!")
         else:
-            print(f"  ⚠️  No prompt detected - may need pattern refinement")
+            print("  ⚠️  No prompt detected - may need pattern refinement")
 
         print()
 
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
     finally:

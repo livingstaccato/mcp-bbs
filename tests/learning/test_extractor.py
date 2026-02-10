@@ -1,6 +1,7 @@
 """Tests for K/V extraction from screen text."""
 
 import pytest
+
 from bbsbot.learning.extractor import KVExtractor, extract_kv
 
 

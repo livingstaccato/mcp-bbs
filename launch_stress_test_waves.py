@@ -6,8 +6,10 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-import yaml
 from pathlib import Path
+
+import yaml
+
 
 def launch_bots_in_waves(bots_per_wave: int = 10, delay_between_waves: float = 5.0):
     """Launch bots in waves to avoid overwhelming server."""
@@ -74,6 +76,7 @@ def launch_bots_in_waves(bots_per_wave: int = 10, delay_between_waves: float = 5
     print("Monitor logs with:")
     print(f"  ls -lrt {log_dir}/")
     print(f"  tail -f {log_dir}/bot_*.log")
+
 
 if __name__ == "__main__":
     # Launch 10 bots per wave with 5 second delay between waves

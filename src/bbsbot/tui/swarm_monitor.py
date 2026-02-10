@@ -190,7 +190,8 @@ class SwarmMonitor:
                 try:
                     async with httpx.AsyncClient() as client:
                         resp = await client.get(
-                            f"{self.manager_url}/swarm/status", timeout=5,
+                            f"{self.manager_url}/swarm/status",
+                            timeout=5,
                         )
                         if resp.status_code == 200:
                             self._swarm_data = resp.json()
@@ -277,11 +278,13 @@ class SwarmMonitor:
                 match action:
                     case "kill":
                         await client.delete(
-                            f"{self.manager_url}/bot/{bot_id}", timeout=10,
+                            f"{self.manager_url}/bot/{bot_id}",
+                            timeout=10,
                         )
                     case "restart":
                         await client.post(
-                            f"{self.manager_url}/bot/{bot_id}/restart", timeout=10,
+                            f"{self.manager_url}/bot/{bot_id}/restart",
+                            timeout=10,
                         )
         except Exception:
             pass
@@ -348,9 +351,7 @@ class SwarmMonitor:
         sys.stdout.write("".join(out))
         sys.stdout.flush()
 
-    def _render_summary(
-        self, out: list[str], row: int, cols: int, data: dict
-    ) -> int:
+    def _render_summary(self, out: list[str], row: int, cols: int, data: dict) -> int:
         running = data.get("running", 0)
         total = data.get("total_bots", 0)
         completed = data.get("completed", 0)
@@ -380,9 +381,7 @@ class SwarmMonitor:
 
         return row + 2
 
-    def _render_bot_table(
-        self, out: list[str], row: int, cols: int, total_rows: int, data: dict
-    ) -> int:
+    def _render_bot_table(self, out: list[str], row: int, cols: int, total_rows: int, data: dict) -> int:
         bots = self._get_sorted_bots()
         if not bots:
             out.append(_move(row, 2) + FG_GRAY + "No bots" + ANSI_RESET)
@@ -416,7 +415,9 @@ class SwarmMonitor:
 
         want_status = cols >= (id_w + state_w + status_w + sector_w + credits_w + turns_w + act_w + 10)
         want_strat = cols >= (id_w + state_w + status_w + strat_w + sector_w + credits_w + turns_w + act_w + 12)
-        want_cargo = cols >= (id_w + state_w + status_w + strat_w + sector_w + credits_w + fuel_w + org_w + equip_w + turns_w + act_w + 16)
+        want_cargo = cols >= (
+            id_w + state_w + status_w + strat_w + sector_w + credits_w + fuel_w + org_w + equip_w + turns_w + act_w + 16
+        )
 
         # Any remaining space goes to a final "NOTE" column (stable width, no jitter).
         base = id_w + state_w + sector_w + credits_w + turns_w + act_w + 7
@@ -436,10 +437,7 @@ class SwarmMonitor:
             hdr += f"{'STATUS':<{status_w}}"
         if want_strat:
             hdr += f"{'STRATEGY':<{strat_w}}"
-        hdr += (
-            f"{'SEC':>{sector_w}}"
-            f"{'CR':>{credits_w}}"
-        )
+        hdr += f"{'SEC':>{sector_w}}{'CR':>{credits_w}}"
         if want_cargo:
             hdr += f"{'F':>{fuel_w}}{'O':>{org_w}}{'E':>{equip_w}}"
         hdr += f"{'TURNS':>{turns_w}}{'ACT':<{act_w}}"
@@ -493,18 +491,12 @@ class SwarmMonitor:
             equip = str(bot.get("cargo_equipment", 0) or 0)
             note = (bot.get("exit_reason") or "").strip()
 
-            line = (
-                f" {_shorten(bot_id, id_w)}"
-                f"{state_color}{state:<{state_w}}{ANSI_RESET}{bg}"
-            )
+            line = f" {_shorten(bot_id, id_w)}{state_color}{state:<{state_w}}{ANSI_RESET}{bg}"
             if want_status:
                 line += f"{FG_GRAY}{_shorten(status_detail, status_w)}{ANSI_RESET}{bg}"
             if want_strat:
                 line += f"{FG_WHITE}{_shorten(strat, strat_w)}{ANSI_RESET}{bg}"
-            line += (
-                f"{sector:>{sector_w}}"
-                f"{FG_CYAN}{credits:>{credits_w}}{ANSI_RESET}{bg}"
-            )
+            line += f"{sector:>{sector_w}}{FG_CYAN}{credits:>{credits_w}}{ANSI_RESET}{bg}"
             if want_cargo:
                 line += f"{fuel:>{fuel_w}}{org:>{org_w}}{equip:>{equip_w}}"
             line += f"{turns:>{turns_w}}{_shorten(activity, act_w)}"
@@ -528,11 +520,7 @@ class SwarmMonitor:
         msg = f" {action.upper()} bot {bot_id}? [y/N] "
         col = max(1, (cols - len(msg)) // 2)
         return (
-            _move(rows - 2, col)
-            + BG_HEADER + ANSI_BOLD
-            + (FG_RED if action == "kill" else FG_GREEN)
-            + msg
-            + ANSI_RESET
+            _move(rows - 2, col) + BG_HEADER + ANSI_BOLD + (FG_RED if action == "kill" else FG_GREEN) + msg + ANSI_RESET
         )
 
     def _render_help_bar(self, cols: int) -> str:

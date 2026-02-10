@@ -9,12 +9,12 @@ import asyncio
 import os
 import random
 import string
+import time
+from collections import deque
+from pathlib import Path
 
 import click
 import httpx
-from pathlib import Path
-import time
-from collections import deque
 
 from bbsbot.games.tw2002.bot import TradingBot
 from bbsbot.games.tw2002.config import BotConfig
@@ -65,6 +65,31 @@ class WorkerBot(TradingBot):
         self.lifecycle_state: str = "running"
         # Preserve last non-pause activity so pause screens don't overwrite Activity.
         self._last_activity_context: str | None = None
+        # Trading telemetry (reported to manager/dashboard).
+        self._session_start_credits: int | None = None
+        self.haggle_accept: int = 0
+        self.haggle_counter: int = 0
+        self.haggle_too_high: int = 0
+        self.haggle_too_low: int = 0
+        self.trades_executed: int = 0
+
+    def note_trade_telemetry(self, metric: str, amount: int = 1) -> None:
+        """Increment a trade telemetry counter in a safe, no-throw way."""
+        try:
+            if amount == 0:
+                return
+            if metric == "haggle_accept":
+                self.haggle_accept = max(0, int(self.haggle_accept) + int(amount))
+            elif metric == "haggle_counter":
+                self.haggle_counter = max(0, int(self.haggle_counter) + int(amount))
+            elif metric == "haggle_too_high":
+                self.haggle_too_high = max(0, int(self.haggle_too_high) + int(amount))
+            elif metric == "haggle_too_low":
+                self.haggle_too_low = max(0, int(self.haggle_too_low) + int(amount))
+            elif metric == "trades_executed":
+                self.trades_executed = max(0, int(self.trades_executed) + int(amount))
+        except Exception:
+            pass
 
     def _note_progress(self) -> None:
         self._last_progress_mono = time.monotonic()
@@ -177,8 +202,8 @@ class WorkerBot(TradingBot):
 
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)
-            turns_max = getattr(self.config, 'session', {})
-            if hasattr(turns_max, 'max_turns_per_session'):
+            turns_max = getattr(self.config, "session", {})
+            if hasattr(turns_max, "max_turns_per_session"):
                 turns_max = turns_max.max_turns_per_session
             else:
                 turns_max = 0  # Default: auto-detect server max
@@ -195,7 +220,7 @@ class WorkerBot(TradingBot):
             in_game_now = False
 
             # Get current screen from session
-            if hasattr(self, 'session') and self.session:
+            if hasattr(self, "session") and self.session:
                 try:
                     current_screen = self.session.get_screen()
                 except Exception:
@@ -254,6 +279,7 @@ class WorkerBot(TradingBot):
             # Detect REAL-TIME context from current screen
             if current_screen.strip():
                 from bbsbot.games.tw2002.orientation.detection import detect_context
+
                 current_context = detect_context(current_screen)
 
                 # Map detected context to human-readable activity
@@ -277,7 +303,9 @@ class WorkerBot(TradingBot):
                         activity = "IN_GAME_MENU"
                 elif current_context == "pause":
                     # Keep Activity stable; show PAUSED in Status instead.
-                    activity = self._last_activity_context or ("IN_GAME" if (self.current_sector and self.current_sector > 0) else "LOGGING_IN")
+                    activity = self._last_activity_context or (
+                        "IN_GAME" if (self.current_sector and self.current_sector > 0) else "LOGGING_IN"
+                    )
                 elif current_context == "unknown":
                     # Ambiguous snapshot: keep last known in-game activity when possible.
                     if in_game_now:
@@ -289,7 +317,7 @@ class WorkerBot(TradingBot):
                     activity = current_context.upper()
             else:
                 # No screen content - must be connecting/disconnected
-                if hasattr(self, 'session') and self.session and self.session.is_connected():
+                if hasattr(self, "session") and self.session and self.session.is_connected():
                     activity = (self._last_activity_context or "IN_GAME") if in_game_now else "CONNECTING"
                 else:
                     activity = "DISCONNECTED"
@@ -312,7 +340,6 @@ class WorkerBot(TradingBot):
                 "prompt.game_password_plain": "GAME_PASSWORD",
                 "prompt.game_selection": "GAME_SELECTION",
                 "prompt.menu_selection": "MENU_SELECTION",
-
                 # Character creation (server reset)
                 "prompt.create_character": "CREATING_CHARACTER",
                 "prompt.new_player_name": "CREATING_CHARACTER",
@@ -323,18 +350,14 @@ class WorkerBot(TradingBot):
                 "prompt.twgs_begin_adventure": "CREATING_CHARACTER",
                 "prompt.ship_name": "CREATING_CHARACTER",
                 "prompt.planet_name": "CREATING_CHARACTER",
-
                 # Password selection / entry
                 # If we're not in-game yet, treat this as choosing/setting the character password.
                 "prompt.character_password": "CHOOSING_PASSWORD",
-
                 "prompt.corporate_listings": "CORPORATE_LISTINGS",
-
                 # In-game prompts (only the blocking ones; don't show "SECTOR_COMMAND" etc.)
                 "prompt.port_menu": "PORT_MENU",
                 "prompt.hardware_buy": "PORT_QTY",
                 "prompt.port_haggle": "PORT_HAGGLE",
-
                 # Pause variants
                 "prompt.pause_simple": "PAUSED",
                 "prompt.pause_space_or_enter": "PAUSED",
@@ -372,9 +395,9 @@ class WorkerBot(TradingBot):
                 activity = self._last_activity_context or "IN_GAME"
 
             # Orient progress tracking for debugging (Status, not Activity).
-            orient_step = getattr(self, '_orient_step', 0)
-            orient_max = getattr(self, '_orient_max', 0)
-            orient_phase = getattr(self, '_orient_phase', '')
+            orient_step = getattr(self, "_orient_step", 0)
+            orient_max = getattr(self, "_orient_max", 0)
+            orient_phase = getattr(self, "_orient_phase", "")
 
             # CRITICAL: Do NOT override activity with "ORIENTING" if we know the context
             # Only show ORIENTING if context is actually "unknown"
@@ -437,9 +460,9 @@ class WorkerBot(TradingBot):
 
             # Determine actual state from session connectivity
             connected = (
-                hasattr(self, 'session')
+                hasattr(self, "session")
                 and self.session is not None
-                and hasattr(self.session, 'is_connected')
+                and hasattr(self.session, "is_connected")
                 and self.session.is_connected()
             )
             # Preserve lifecycle state (recovering/blocked) across periodic status reports.
@@ -450,7 +473,7 @@ class WorkerBot(TradingBot):
                 activity = "DISCONNECTED"
 
             # Check if AI strategy is thinking (waiting for LLM response).
-            if self.strategy and hasattr(self.strategy, '_is_thinking') and self.strategy._is_thinking:
+            if self.strategy and hasattr(self.strategy, "_is_thinking") and self.strategy._is_thinking:
                 status_detail = "THINKING"
 
             # Override with AI reasoning if available (Status, not Activity).
@@ -465,7 +488,7 @@ class WorkerBot(TradingBot):
                 if self.current_sector and int(self.current_sector) > 0:
                     sector_out = int(self.current_sector)
                 elif self.game_state and getattr(self.game_state, "sector", None):
-                    gs_sector = int(getattr(self.game_state, "sector"))
+                    gs_sector = int(self.game_state.sector)
                     if gs_sector > 0:
                         sector_out = gs_sector
                 elif sem.get("sector") is not None:
@@ -476,6 +499,13 @@ class WorkerBot(TradingBot):
                 sector_out = 0
 
             # Build status update dict
+            if credits_out >= 0 and self._session_start_credits is None:
+                self._session_start_credits = credits_out
+            credits_delta = 0
+            if credits_out >= 0 and self._session_start_credits is not None:
+                credits_delta = int(credits_out - self._session_start_credits)
+            credits_per_turn = float(credits_delta) / float(self.turns_used) if self.turns_used > 0 else 0.0
+
             status_data = {
                 "sector": sector_out,
                 "turns_executed": self.turns_used,
@@ -494,11 +524,22 @@ class WorkerBot(TradingBot):
                 "cargo_organics": cargo_organics,
                 "cargo_equipment": cargo_equipment,
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
+                "haggle_accept": int(self.haggle_accept),
+                "haggle_counter": int(self.haggle_counter),
+                "haggle_too_high": int(self.haggle_too_high),
+                "haggle_too_low": int(self.haggle_too_low),
+                "trades_executed": int(self.trades_executed),
+                "credits_delta": int(credits_delta),
+                "credits_per_turn": float(credits_per_turn),
             }
 
             # Update "last activity" memory after we've computed the final Activity value.
             # Do not record pause screens, since they are transient overlays.
-            if current_context != "pause" and activity and activity not in ("DISCONNECTED", "CONNECTING", "INITIALIZING"):
+            if (
+                current_context != "pause"
+                and activity
+                and activity not in ("DISCONNECTED", "CONNECTING", "INITIALIZING")
+            ):
                 self._last_activity_context = activity
 
             # Always send credits, even if 0 (only skip if negative sentinel)
@@ -625,6 +666,7 @@ class WorkerBot(TradingBot):
     def log_action(self, action: str, sector: int, details: str | None = None, result: str = "pending") -> None:
         """Log a bot action for the action feed."""
         import time
+
         action_entry = {
             "time": time.time(),
             "action": action,
@@ -651,6 +693,7 @@ class WorkerBot(TradingBot):
         reported as `recovering` (not terminal) and the worker keeps running.
         """
         import time
+
         try:
             report_state = state
             if report_state is None:
@@ -676,11 +719,12 @@ class WorkerBot(TradingBot):
         error_str = str(error).lower()
         if any(x in error_str for x in ["loop", "menu", "orientation", "stuck"]):
             try:
-                from bbsbot.diagnostics.stuck_bot_analyzer import StuckBotAnalyzer
-                from bbsbot.llm.manager import LLMManager
-                from bbsbot.llm.config import LLMConfig, OllamaConfig
                 import json
                 from pathlib import Path
+
+                from bbsbot.diagnostics.stuck_bot_analyzer import StuckBotAnalyzer
+                from bbsbot.llm.config import LLMConfig, OllamaConfig
+                from bbsbot.llm.manager import LLMManager
 
                 llm_config = LLMConfig(
                     provider="ollama",
@@ -690,7 +734,7 @@ class WorkerBot(TradingBot):
 
                 # Get loop history from loop detector
                 loop_history = []
-                if hasattr(self, 'loop_detection') and hasattr(self.loop_detection, 'alternation_history'):
+                if hasattr(self, "loop_detection") and hasattr(self.loop_detection, "alternation_history"):
                     loop_history = self.loop_detection.alternation_history
 
                 diagnosis = await analyzer.analyze_stuck_bot(
@@ -709,12 +753,16 @@ class WorkerBot(TradingBot):
                 diagnostic_file = Path(f"logs/diagnostics/{self.bot_id}_diagnosis.json")
                 diagnostic_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(diagnostic_file, "w") as f:
-                    json.dump({
-                        "timestamp": time.time(),
-                        "bot_id": self.bot_id,
-                        "error": str(error),
-                        "diagnosis": diagnosis,
-                    }, f, indent=2)
+                    json.dump(
+                        {
+                            "timestamp": time.time(),
+                            "bot_id": self.bot_id,
+                            "error": str(error),
+                            "diagnosis": diagnosis,
+                        },
+                        f,
+                        indent=2,
+                    )
 
                 print(f"  🔍 LLM Diagnosis saved to: {diagnostic_file}")
 
@@ -813,11 +861,11 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 "watchdog": deque(),
             }
             self._limits: dict[str, int] = {
-                "auth": 1,        # unrecoverable; block immediately
-                "game_full": 1,   # stop retrying character creation when game is full
-                "network": 5,     # 5 in 10m => blocked
-                "logic": 5,       # 5 in 10m => blocked
-                "watchdog": 3,    # 3 in 10m => blocked
+                "auth": 1,  # unrecoverable; block immediately
+                "game_full": 1,  # stop retrying character creation when game is full
+                "network": 5,  # 5 in 10m => blocked
+                "logic": 5,  # 5 in 10m => blocked
+                "watchdog": 3,  # 3 in 10m => blocked
             }
 
         def note(self, cls: str) -> int:
@@ -876,10 +924,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                         await worker.disconnect()
                     except Exception:
                         pass
-                    logger.info(
-                        f"Connecting to {config_obj.connection.host}:"
-                        f"{config_obj.connection.port}"
-                    )
+                    logger.info(f"Connecting to {config_obj.connection.host}:{config_obj.connection.port}")
                     worker.ai_activity = "CONNECTING"
                     worker.lifecycle_state = "recovering"
                     await worker.connect(
@@ -900,9 +945,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
                 # Initialize knowledge and strategy (safe to re-init across reconnects).
                 game_letter = config_obj.connection.game_letter or worker.last_game_letter
-                worker.init_knowledge(
-                    config_obj.connection.host, config_obj.connection.port, game_letter
-                )
+                worker.init_knowledge(config_obj.connection.host, config_obj.connection.port, game_letter)
                 worker.init_strategy()
                 worker.lifecycle_state = "running"
                 await worker.report_status()
@@ -941,7 +984,9 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 if cls in ("auth", "game_full") or budget.exceeded(cls):
                     lvl = int(blocked_level.get(cls, 0))
                     blocked_level[cls] = min(lvl + 1, len(blocked_schedule_s) - 1)
-                    base_sleep = 86400.0 if cls == "game_full" else blocked_schedule_s[min(lvl, len(blocked_schedule_s) - 1)]
+                    base_sleep = (
+                        86400.0 if cls == "game_full" else blocked_schedule_s[min(lvl, len(blocked_schedule_s) - 1)]
+                    )
                     # Add small deterministic jitter to avoid a herd on the minute.
                     sleep_s = float(base_sleep) * (0.85 + 0.3 * rng.random())
                     if cls == "game_full":

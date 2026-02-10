@@ -35,9 +35,7 @@ __all__ = [
 ]
 
 
-async def run_trading_loop(
-    bot, target_credits: int = 5_000_000, max_cycles: int = 20
-) -> None:
+async def run_trading_loop(bot, target_credits: int = 5_000_000, max_cycles: int = 20) -> None:
     """Run trading loop until target credits or max cycles.
 
     Args:
@@ -70,17 +68,11 @@ async def run_trading_loop(
 
         for cycle in range(max_cycles):
             if bot.current_credits >= target_credits:
-                print(
-                    f"\n✓ Target reached: {bot.current_credits:,} / "
-                    f"{target_credits:,}"
-                )
+                print(f"\n✓ Target reached: {bot.current_credits:,} / {target_credits:,}")
                 logger.info("target_reached", credits=bot.current_credits)
                 break
 
-            print(
-                f"\nCycle {cycle + 1}/{max_cycles} - "
-                f"Credits: {bot.current_credits:,}"
-            )
+            print(f"\nCycle {cycle + 1}/{max_cycles} - Credits: {bot.current_credits:,}")
             logger.info(
                 "cycle_start",
                 cycle=cycle + 1,

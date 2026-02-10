@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002 import connection, io, login, orientation
+from bbsbot.games.tw2002 import orientation
 
 if TYPE_CHECKING:
-    from bbsbot.games.tw2002.orientation import GameState, QuickState
     from bbsbot.games.tw2002.bot_core import TradingBot
+    from bbsbot.games.tw2002.orientation import GameState
 
 
 # Mix-in methods for TradingBot navigation
@@ -150,16 +150,17 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
 
             # Use cached knowledge
             from bbsbot.games.tw2002.orientation import GameState
+
             bot.game_state = GameState(
                 context=quick_state.context,
                 sector=quick_state.sector,
                 raw_screen=quick_state.screen,
                 prompt_id=quick_state.prompt_id,
                 # Extract critical state from semantic data
-                credits=merged_kv.get('credits'),
-                turns_left=merged_kv.get('turns_left'),
-                fighters=merged_kv.get('fighters'),
-                shields=merged_kv.get('shields'),
+                credits=merged_kv.get("credits"),
+                turns_left=merged_kv.get("turns_left"),
+                fighters=merged_kv.get("fighters"),
+                shields=merged_kv.get("shields"),
             )
             # Pull additional state from semantic extraction when present. This keeps
             # our SectorKnowledge fresh even when we skip the full D-driven orient().
@@ -434,6 +435,7 @@ def find_path_from_knowledge(bot: TradingBot, destination: int) -> list[int] | N
 def is_safe(bot: TradingBot) -> bool:
     """Quick check if we're in a safe state based on last game_state."""
     from bbsbot.games.tw2002.orientation import SAFE_CONTEXTS
+
     if not bot.game_state:
         return False
     return bot.game_state.context in SAFE_CONTEXTS
@@ -442,6 +444,7 @@ def is_safe(bot: TradingBot) -> bool:
 def is_in_danger(bot: TradingBot) -> bool:
     """Quick check if we're in a dangerous state."""
     from bbsbot.games.tw2002.orientation import DANGER_CONTEXTS
+
     if not bot.game_state:
         return False
     return bot.game_state.context in DANGER_CONTEXTS

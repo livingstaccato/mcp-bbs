@@ -63,4 +63,3 @@ class ChaosTransport(ConnectionTransport):
 
     def is_connected(self) -> bool:
         return self._inner.is_connected()
-

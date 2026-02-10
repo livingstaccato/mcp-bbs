@@ -2,10 +2,6 @@
 """Trace raw session behavior after game selection."""
 
 import asyncio
-import sys
-import time
-from pathlib import Path
-
 
 from bbsbot.games.tw2002 import TradingBot
 from bbsbot.games.tw2002.connection import connect
@@ -52,7 +48,7 @@ async def debug_raw_session():
 
         for i in range(5):
             try:
-                print(f"\nRead attempt #{i+1}:")
+                print(f"\nRead attempt #{i + 1}:")
                 snapshot = await bot.session.read(timeout_ms=1000, max_bytes=8192)
 
                 # Check for errors
@@ -81,11 +77,13 @@ async def debug_raw_session():
             except Exception as e:
                 print(f"  Exception during read: {e}")
                 import traceback
+
                 traceback.print_exc()
 
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:

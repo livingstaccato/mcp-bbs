@@ -11,16 +11,15 @@ import json
 import subprocess
 import sys
 import time
-from pydantic import BaseModel, Field
 from pathlib import Path
 
+import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-import uvicorn
+from pydantic import BaseModel, Field
 
-from bbsbot.api import log_routes, swarm_routes
-from bbsbot.api import term_routes
+from bbsbot.api import log_routes, swarm_routes, term_routes
 from bbsbot.defaults import MANAGER_HOST, MANAGER_PORT
 from bbsbot.log_service import LogService
 from bbsbot.logging import get_logger
@@ -44,38 +43,46 @@ class BotStatus(BaseModel):
     completed_at: float | None = None  # Timestamp when bot completed
     error_message: str | None = None
     # Activity tracking
-    last_action: str | None = None        # "TRADING", "EXPLORING", "BATTLING", etc
-    last_action_time: float = 0           # timestamp of last action
-    activity_context: str | None = None   # current game context
-    status_detail: str | None = None      # phase/prompt detail (e.g., USERNAME, PAUSED, PORT_HAGGLE)
-    prompt_id: str | None = None          # last detected prompt id (debugging/diagnostics)
+    last_action: str | None = None  # "TRADING", "EXPLORING", "BATTLING", etc
+    last_action_time: float = 0  # timestamp of last action
+    activity_context: str | None = None  # current game context
+    status_detail: str | None = None  # phase/prompt detail (e.g., USERNAME, PAUSED, PORT_HAGGLE)
+    prompt_id: str | None = None  # last detected prompt id (debugging/diagnostics)
     # Cargo tracking (best-effort from semantic extraction)
     cargo_fuel_ore: int | None = None
     cargo_organics: int | None = None
     cargo_equipment: int | None = None
     # Error tracking
-    error_type: str | None = None         # Exception class name (e.g., "TimeoutError")
+    error_type: str | None = None  # Exception class name (e.g., "TimeoutError")
     error_timestamp: float | None = None  # When error occurred
-    exit_reason: str | None = None        # "target_reached", "out_of_turns", "login_failed", etc
+    exit_reason: str | None = None  # "target_reached", "out_of_turns", "login_failed", etc
     # Action feed (last 10 actions)
     recent_actions: list[dict] = Field(default_factory=list)
     # Character/game info for dashboard display
-    username: str | None = None          # Character name
+    username: str | None = None  # Character name
     # Strategy reporting is separate from on-screen context/prompt ids.
     # strategy_id: stable identifier (profitable_pairs/opportunistic/ai_strategy/...)
     # strategy_mode: conservative|balanced|aggressive (static or dynamic)
     # strategy_intent: short live "what I'm trying to do" string
-    strategy: str | None = None          # Back-compat: UI display (usually "id(mode)")
+    strategy: str | None = None  # Back-compat: UI display (usually "id(mode)")
     strategy_id: str | None = None
     strategy_mode: str | None = None
     strategy_intent: str | None = None
-    ship_name: str | None = None         # Current ship name
-    ship_level: str | None = None        # Ship class/level (Fighter, Trader, etc)
-    port_location: int | None = None     # Current port sector
+    ship_name: str | None = None  # Current ship name
+    ship_level: str | None = None  # Ship class/level (Fighter, Trader, etc)
+    port_location: int | None = None  # Current port sector
+    # Trading telemetry (for strategy tuning / haggle diagnostics)
+    haggle_accept: int = 0
+    haggle_counter: int = 0
+    haggle_too_high: int = 0
+    haggle_too_low: int = 0
+    trades_executed: int = 0
+    credits_delta: int = 0
+    credits_per_turn: float = 0.0
     # Hijack/MCP control tracking
-    is_hijacked: bool = False            # Whether bot is under MCP control
-    hijacked_at: float | None = None     # Timestamp when hijack started
-    hijacked_by: str | None = None       # Who/what hijacked it (e.g., "mcp", "user")
+    is_hijacked: bool = False  # Whether bot is under MCP control
+    hijacked_at: float | None = None  # Timestamp when hijack started
+    hijacked_by: str | None = None  # Who/what hijacked it (e.g., "mcp", "user")
 
 
 class SwarmStatus(BaseModel):
@@ -207,10 +214,13 @@ class SwarmManager:
         # Spawn workers with the same interpreter as the manager process.
         # This avoids shell/PATH dependencies (e.g., missing `uv` under launchd).
         cmd = [
-            sys.executable, "-m",
+            sys.executable,
+            "-m",
             "bbsbot.games.tw2002.worker",
-            "--config", config_path,
-            "--bot-id", bot_id,
+            "--config",
+            config_path,
+            "--bot-id",
+            bot_id,
         ]
 
         try:
@@ -282,10 +292,7 @@ class SwarmManager:
             group_num = (group_start // group_size) + 1
             total_groups = (total + group_size - 1) // group_size
 
-            logger.info(
-                f"Spawning group {group_num}/{total_groups}: "
-                f"bots {group_start + 1}-{group_end} of {total}"
-            )
+            logger.info(f"Spawning group {group_num}/{total_groups}: bots {group_start + 1}-{group_end} of {total}")
 
             # Spawn all bots in this group concurrently
             for i, config in enumerate(group_configs):
@@ -383,6 +390,7 @@ class SwarmManager:
                     bot.error_type = "HeartbeatTimeout"
                     bot.exit_reason = "heartbeat_timeout"
                     import time as time_module
+
                     bot.error_timestamp = time_module.time()
 
             await asyncio.sleep(self.health_check_interval)
@@ -405,10 +413,7 @@ class SwarmManager:
         """Save swarm state to file."""
         state = {
             "timestamp": time.time(),
-            "bots": {
-                bot_id: bot.model_dump()
-                for bot_id, bot in self.bots.items()
-            },
+            "bots": {bot_id: bot.model_dump() for bot_id, bot in self.bots.items()},
         }
         with open(self.state_file, "w") as f:
             json.dump(state, f, indent=2)
@@ -449,16 +454,16 @@ class SwarmManager:
                             error_type=bot_data.get("error_type"),
                             error_timestamp=bot_data.get("error_timestamp"),
                             exit_reason=bot_data.get("exit_reason"),
-	                            recent_actions=bot_data.get("recent_actions", []),
-	                            username=bot_data.get("username"),
-	                            strategy=bot_data.get("strategy"),
-	                            strategy_id=bot_data.get("strategy_id"),
-	                            strategy_mode=bot_data.get("strategy_mode"),
-	                            strategy_intent=bot_data.get("strategy_intent"),
-	                            ship_name=bot_data.get("ship_name"),
-	                            ship_level=bot_data.get("ship_level"),
-	                            port_location=bot_data.get("port_location"),
-	                        )
+                            recent_actions=bot_data.get("recent_actions", []),
+                            username=bot_data.get("username"),
+                            strategy=bot_data.get("strategy"),
+                            strategy_id=bot_data.get("strategy_id"),
+                            strategy_mode=bot_data.get("strategy_mode"),
+                            strategy_intent=bot_data.get("strategy_intent"),
+                            ship_name=bot_data.get("ship_name"),
+                            ship_level=bot_data.get("ship_level"),
+                            port_location=bot_data.get("port_location"),
+                        )
                 logger.info(f"Loaded {len(state.get('bots', {}))} bots from {self.state_file}")
         except Exception as e:
             logger.error(f"Failed to load state: {e}")
@@ -477,7 +482,10 @@ class SwarmManager:
         asyncio.create_task(save_periodically())
 
         config = uvicorn.Config(
-            self.app, host=host, port=port, log_level="info",
+            self.app,
+            host=host,
+            port=port,
+            log_level="info",
         )
         server = uvicorn.Server(config)
         await server.serve()

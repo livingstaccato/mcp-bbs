@@ -33,7 +33,7 @@ def _get_active_session_id() -> str | None:
 def _set_active_session_id(session_id: str) -> None:
     import bbsbot.mcp.server as mcp_server
 
-    setattr(mcp_server, "_active_session_id", session_id)
+    mcp_server._active_session_id = session_id
 
 
 @registry.tool()
@@ -170,8 +170,10 @@ async def login(
         }
 
     # Initialize knowledge AFTER login so we can scope by detected game letter.
-    resolved_game_letter = game_letter or getattr(bot, "last_game_letter", None) or getattr(
-        getattr(getattr(bot, "config", None), "connection", None), "game_letter", None
+    resolved_game_letter = (
+        game_letter
+        or getattr(bot, "last_game_letter", None)
+        or getattr(getattr(getattr(bot, "config", None), "connection", None), "game_letter", None)
     )
     try:
         bot.init_knowledge(session.host, session.port, resolved_game_letter)

@@ -2,13 +2,10 @@
 """Use diagnostic's Phase 1 logic exactly."""
 
 import asyncio
-import sys
-from pathlib import Path
-
 
 from bbsbot.games.tw2002 import TradingBot
 from bbsbot.games.tw2002.connection import connect
-from bbsbot.games.tw2002.io import wait_and_respond, send_input
+from bbsbot.games.tw2002.io import send_input, wait_and_respond
 
 
 async def test():
@@ -26,18 +23,16 @@ async def test():
         # PHASE 1: Copy diagnostic's exact loop
         print("Phase 1: Navigate to menu_selection (diagnostic loop)...")
         for step in range(5):
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
             print(f"  Step {step}: {prompt_id}")
 
             if "menu_selection" in prompt_id:
-                print(f"✓ Found menu_selection prompt\n")
+                print("✓ Found menu_selection prompt\n")
                 break
 
             # Handle login prompts like diagnostic
             if "login_name" in prompt_id:
-                print(f"  Handling login_name")
+                print("  Handling login_name")
                 await send_input(bot, "testbot", input_type)
             elif "login_password" in prompt_id:
                 await send_input(bot, "test", input_type)
@@ -53,7 +48,8 @@ async def test():
         print("Phase 3: Wait for next prompt...")
         try:
             input_type3, prompt_id3, screen3, kv_data3 = await wait_and_respond(
-                bot, timeout_ms=15000  # Use same 15s as diagnostic
+                bot,
+                timeout_ms=15000,  # Use same 15s as diagnostic
             )
             print(f"✓ SUCCESS: Got {prompt_id3} ({input_type3})")
             return True
@@ -64,6 +60,7 @@ async def test():
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

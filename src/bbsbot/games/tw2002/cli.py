@@ -84,6 +84,7 @@ def _make_watch_callback(clear: bool, show_prompt: bool = True):
             detected = snapshot["prompt_detected"]
             print("")
             print(f"[prompt] {detected.get('prompt_id')} ({detected.get('input_type')})")
+
     return _watch
 
 
@@ -141,9 +142,7 @@ async def run_bot(
         watch_manager = WatchManager()
         await watch_manager.start()
         if watch_socket_protocol == "json":
-            print(
-                f"[Spy] Attach: bbsbot spy --encoding utf-8 --host {watch_socket_host} --port {watch_socket_port}"
-            )
+            print(f"[Spy] Attach: bbsbot spy --encoding utf-8 --host {watch_socket_host} --port {watch_socket_port}")
         else:
             print(f"[Spy] Attach: bbsbot spy --host {watch_socket_host} --port {watch_socket_port}")
 
@@ -164,7 +163,7 @@ async def run_bot(
             try:
                 bot.set_watch_manager(watch_manager)
             except Exception:
-                setattr(bot, "_watch_manager", watch_manager)
+                bot._watch_manager = watch_manager
 
         try:
             print(f"\n[Connect] Connecting to {config.connection.host}:{config.connection.port}...")
@@ -207,9 +206,9 @@ async def run_bot(
             total_profit += char_state.total_profit
 
             if char_state.credits >= config.session.target_credits:
-                print(f"\n{'='*60}")
+                print(f"\n{'=' * 60}")
                 print(f"TARGET REACHED: {char_state.credits:,} credits!")
-                print(f"{'='*60}")
+                print(f"{'=' * 60}")
                 break
 
         except KeyboardInterrupt:
@@ -240,10 +239,7 @@ async def run_bot(
 
     # Display goal progression summary (AI strategy only).
     try:
-        show_viz = (
-            config.trading.strategy == "ai_strategy"
-            and config.trading.ai_strategy.show_goal_visualization
-        )
+        show_viz = config.trading.strategy == "ai_strategy" and config.trading.ai_strategy.show_goal_visualization
     except Exception:
         show_viz = False
 
@@ -282,7 +278,6 @@ async def run_bot(
 
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     """Run the main trading loop using the configured strategy."""
-    import random
 
     # This function remains unchanged; existing implementation follows.
     from bbsbot.games.tw2002.cli_impl import run_trading_loop as _impl
@@ -298,13 +293,13 @@ def run_health_check(host: str, port: int, timeout: int) -> None:
         port: BBS server port
         timeout: Connection timeout in seconds
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("TW2002 SERVER HEALTH CHECK")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Host: {host}")
     print(f"Port: {port}")
     print(f"Timeout: {timeout}s")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     async def _check() -> None:
         from bbsbot.core.session_manager import SessionManager
@@ -323,19 +318,19 @@ def run_health_check(host: str, port: int, timeout: int) -> None:
                     send_newline=False,
                     reuse=False,
                 ),
-                timeout=timeout
+                timeout=timeout,
             )
             print("  ✓ Connection successful")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(f"  ✗ Connection timeout after {timeout}s")
             print(f"\n[ERROR] Could not connect to {host}:{port}")
             print("Possible causes:")
-            print(f"  - Server is not running")
-            print(f"  - Wrong host/port (check your configuration)")
-            print(f"  - Firewall blocking connection")
-            print(f"\nTroubleshooting:")
+            print("  - Server is not running")
+            print("  - Wrong host/port (check your configuration)")
+            print("  - Firewall blocking connection")
+            print("\nTroubleshooting:")
             print(f"  - Verify server is running: telnet {host} {port}")
-            print(f"  - Check firewall settings")
+            print("  - Check firewall settings")
             return
         except Exception as e:
             print(f"  ✗ Connection failed: {e}")
@@ -360,8 +355,8 @@ def run_health_check(host: str, port: int, timeout: int) -> None:
 
             if screen and screen.strip():
                 print("  ✓ Server is responding")
-                print(f"\n[SUCCESS] Server is reachable and responding!")
-                print(f"\nFirst 5 lines of screen:")
+                print("\n[SUCCESS] Server is reachable and responding!")
+                print("\nFirst 5 lines of screen:")
                 lines = screen.split("\n")[:5]
                 for line in lines:
                     print(f"  {line}")
@@ -372,7 +367,7 @@ def run_health_check(host: str, port: int, timeout: int) -> None:
             print(f"  ✗ Read failed: {e}")
 
         await manager.close_session(session_id)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
 
     asyncio.run(_check())
 
@@ -444,17 +439,18 @@ def run_bot_cli(
             )
         )
     except ConnectionError as e:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"[ERROR] Connection failed: {e}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"\nIs the BBS server running at {config.connection.host}:{config.connection.port}?")
         print("\nRun health check to diagnose:")
         print(f"  bbsbot tw2002 check --host {config.connection.host} --port {config.connection.port}")
     except KeyboardInterrupt:
         print("\n\nBot stopped by user")
     except Exception as e:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"[ERROR] {e}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         import traceback
+
         traceback.print_exc()

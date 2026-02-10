@@ -5,14 +5,12 @@ Tests GameState, SectorKnowledge, and context detection.
 
 from __future__ import annotations
 
-import json
-import pytest
 from pathlib import Path
 
 from bbsbot.games.tw2002.orientation import (
     GameState,
-    SectorKnowledge,
     SectorInfo,
+    SectorKnowledge,
     detect_context,
     parse_display_screen,
     parse_sector_display,

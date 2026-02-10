@@ -13,8 +13,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002.bot_core import TradingBot
 from bbsbot.games.tw2002 import bot_navigation, bot_twerk, connection, io, login, parsing, trading
+from bbsbot.games.tw2002.bot_core import TradingBot
 from bbsbot.games.tw2002.orientation import GameState, QuickState
 
 if TYPE_CHECKING:
@@ -26,12 +26,15 @@ __all__ = ["TradingBot"]
 # Dynamically add navigation and connection methods to TradingBot
 def _add_methods() -> None:
     """Add delegated methods to TradingBot class."""
+
     # Connection methods
     async def connect(self, host="localhost", port=2002):
         """Connect to TW2002 BBS."""
         await connection.connect(self, host, port)
 
-    async def login_sequence(self, game_password: str = "game", character_password: str = "tim", username: str = "claude"):
+    async def login_sequence(
+        self, game_password: str = "game", character_password: str = "tim", username: str = "claude"
+    ):
         """Complete login sequence from telnet login to game entry."""
         await login.login_sequence(self, game_password, character_password, username)
 
@@ -55,11 +58,13 @@ def _add_methods() -> None:
     async def where_am_i(self, timeout_ms: int = 500) -> QuickState:
         """Fast state check - quickly determine where we are."""
         from bbsbot.games.tw2002.orientation import where_am_i
+
         return await where_am_i(self, timeout_ms)
 
     async def recover(self, max_attempts: int = 20) -> QuickState:
         """Attempt to recover to a safe state from any situation."""
         from bbsbot.games.tw2002.orientation import recover_to_safe_state
+
         return await recover_to_safe_state(self, max_attempts)
 
     def is_safe(self) -> bool:
@@ -112,7 +117,9 @@ def _add_methods() -> None:
         """Run trading loop until target credits or max cycles."""
         await trading.run_trading_loop(self, target_credits, max_cycles)
 
-    async def execute_route(self, route, quantity: int | None = None, max_retries: int = 2, data_dir: Path | None = None) -> dict:
+    async def execute_route(
+        self, route, quantity: int | None = None, max_retries: int = 2, data_dir: Path | None = None
+    ) -> dict:
         """Execute a twerk-analyzed trade route via terminal."""
         return await trading.execute_route(self, route, quantity, max_retries, data_dir)
 
@@ -150,31 +157,38 @@ def _add_methods() -> None:
     def _detect_error_in_screen(self, screen: str) -> str | None:
         """Detect common error messages in screen text."""
         from bbsbot.games.tw2002 import errors
+
         return errors._detect_error_in_screen(screen)
 
     def _check_for_loop(self, prompt_id: str) -> bool:
         """Check if we're stuck in a loop seeing the same prompt repeatedly."""
         from bbsbot.games.tw2002 import errors
+
         return errors._check_for_loop(self, prompt_id)
 
     # Logging methods
     def _log_trade(self, action: str, sector: int, quantity: int, price: int, total: int, credits_after: int):
         """Log a trade transaction."""
         from bbsbot.games.tw2002 import logging_utils
+
         logging_utils._log_trade(self, action, sector, quantity, price, total, credits_after)
 
     def _save_trade_history(self, filename: str = "trade_history.csv"):
         """Save trade history to CSV file."""
         from bbsbot.games.tw2002 import logging_utils
+
         logging_utils._save_trade_history(self, filename)
 
     def _print_session_summary(self):
         """Print session statistics summary."""
         from bbsbot.games.tw2002 import logging_utils
+
         logging_utils._print_session_summary(self)
 
     # Twerk integration methods
-    async def analyze_trade_routes(self, data_dir: Path, ship_holds: int | None = None, max_hops: int = 10) -> list[TradeRoute]:
+    async def analyze_trade_routes(
+        self, data_dir: Path, ship_holds: int | None = None, max_hops: int = 10
+    ) -> list[TradeRoute]:
         """Use twerk to find optimal trade routes from game data files."""
         return await bot_twerk.analyze_trade_routes(self, data_dir, ship_holds, max_hops)
 
@@ -182,7 +196,9 @@ def _add_methods() -> None:
         """Use twerk to build sector graph from game data."""
         return await bot_twerk.get_sector_map(self, data_dir)
 
-    async def find_path_twerk(self, data_dir: Path, start_sector: int, end_sector: int, max_hops: int = 999) -> list[int] | None:
+    async def find_path_twerk(
+        self, data_dir: Path, start_sector: int, end_sector: int, max_hops: int = 999
+    ) -> list[int] | None:
         """Find shortest path between two sectors using twerk."""
         return await bot_twerk.find_path_twerk(self, data_dir, start_sector, end_sector, max_hops)
 

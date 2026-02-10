@@ -50,16 +50,14 @@ class LoopDetector:
         # Track alternating patterns
         self.alternation_history.append(prompt_id)
         if len(self.alternation_history) > self.max_history:
-            self.alternation_history = self.alternation_history[-self.max_history:]
+            self.alternation_history = self.alternation_history[-self.max_history :]
 
         # Detect A-B-A-B-A-B pattern (same 2 prompts alternating)
         if len(self.alternation_history) >= 6:
             recent = self.alternation_history[-6:]
             if len(set(recent)) == 2:  # Only 2 unique prompts
                 # Check if alternating: A,B,A,B,A,B
-                is_alternating = all(
-                    recent[i] != recent[i+1] for i in range(len(recent)-1)
-                )
+                is_alternating = all(recent[i] != recent[i + 1] for i in range(len(recent) - 1))
                 if is_alternating:
                     return True
 

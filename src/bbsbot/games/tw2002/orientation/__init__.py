@@ -11,21 +11,22 @@ Usage:
 
 from __future__ import annotations
 
-# Re-export public APIs
-from .models import GameState, OrientationError, SectorInfo, QuickState
-from .knowledge import SectorKnowledge
 from .detection import (
-    where_am_i,
-    recover_to_safe_state,
-    detect_context,
-    SAFE_CONTEXTS,
     ACTION_CONTEXTS,
     DANGER_CONTEXTS,
     INFO_CONTEXTS,
-    TRANSITION_CONTEXTS,
     NAVIGATION_CONTEXTS,
+    SAFE_CONTEXTS,
+    TRANSITION_CONTEXTS,
+    detect_context,
+    recover_to_safe_state,
+    where_am_i,
 )
+from .knowledge import SectorKnowledge
 from .layers import orient
+
+# Re-export public APIs
+from .models import GameState, OrientationError, QuickState, SectorInfo
 from .parsing import parse_display_screen, parse_sector_display
 
 __all__ = [

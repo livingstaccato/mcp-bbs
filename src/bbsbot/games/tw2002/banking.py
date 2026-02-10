@@ -9,6 +9,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
+
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.bot import TradingBot
     from bbsbot.games.tw2002.config import BotConfig
@@ -185,10 +186,7 @@ class BankingManager:
             if result.success:
                 self._bank_balance += result.deposited
                 self._last_deposit_sector = state.sector
-                logger.info(
-                    f"Deposited {result.deposited:,} credits, "
-                    f"balance: {self._bank_balance:,}"
-                )
+                logger.info(f"Deposited {result.deposited:,} credits, balance: {self._bank_balance:,}")
 
             return result
 
@@ -217,9 +215,7 @@ class BankingManager:
 
         # Enter bank (B)
         await send_input(bot, "B", "single_key")
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=5000
-        )
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
         # Check if we're in bank menu
         if "bank" not in screen.lower():
@@ -230,15 +226,11 @@ class BankingManager:
 
         # Deposit (D)
         await send_input(bot, "D", "single_key")
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=5000
-        )
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
         # Enter amount
         await send_input(bot, str(amount), "multi_key")
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=5000
-        )
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
         # Check for success
         if "deposited" in screen.lower() or "balance" in screen.lower():
@@ -276,21 +268,15 @@ class BankingManager:
 
         # Enter treasury (T)
         await send_input(bot, "T", "single_key")
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=5000
-        )
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
         # Deposit (D)
         await send_input(bot, "D", "single_key")
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=5000
-        )
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
         # Enter amount
         await send_input(bot, str(amount), "multi_key")
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=5000
-        )
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
         # Check for success
         if "deposited" in screen.lower():

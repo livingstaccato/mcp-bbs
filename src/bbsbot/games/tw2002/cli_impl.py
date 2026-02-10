@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import re
 import random
+import re
 
-from bbsbot.logging import get_logger
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import OrientationError
 from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
 from bbsbot.games.tw2002.visualization import GoalStatusDisplay
+from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -20,6 +20,7 @@ _COMMODITY_PATTERNS = {
     "organics": re.compile(r"organics", re.IGNORECASE),
     "equipment": re.compile(r"equipment", re.IGNORECASE),
 }
+
 
 def _is_port_qty_prompt(line: str) -> bool:
     """True if `line` is the active port quantity prompt line.
@@ -87,7 +88,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 from bbsbot.games.tw2002 import errors
 
                 if "Stuck in loop" in str(e) or "loop_detected" in str(e):
-                    print(f"\n⚠️  Loop detected, attempting escape...")
+                    print("\n⚠️  Loop detected, attempting escape...")
                     escaped = await errors.escape_loop(bot)
                     if escaped:
                         print("  ✓ Escaped from loop, retrying orientation...")
@@ -101,7 +102,9 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     orient_retries += 1
                     if orient_retries < max_orient_retries:
                         backoff_s = orient_retries * 0.5
-                        print(f"\n⚠️  {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries}) in {backoff_s}s...")
+                        print(
+                            f"\n⚠️  {type(e).__name__}, retrying ({orient_retries}/{max_orient_retries}) in {backoff_s}s..."
+                        )
                         await asyncio.sleep(backoff_s)
                         continue
                     else:
@@ -114,15 +117,16 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             # Track consecutive orient failures - try reconnection instead of exiting
             consecutive_orient_failures += 1
             if consecutive_orient_failures >= 10:
-                if hasattr(bot, 'session') and hasattr(bot.session, 'is_connected') and not bot.session.is_connected():
+                if hasattr(bot, "session") and hasattr(bot.session, "is_connected") and not bot.session.is_connected():
                     # Connection lost - attempt reconnection instead of exiting
                     print(f"\n⚠️  Connection lost after {consecutive_orient_failures} failures, attempting reconnect...")
                     try:
                         # Reconnect to BBS using the connect() function
                         await asyncio.sleep(2)  # Wait before reconnect
                         from bbsbot.games.tw2002.connection import connect
+
                         await connect(bot, host=config.connection.host, port=config.connection.port)
-                        print(f"✓ Reconnected! Resuming play...")
+                        print("✓ Reconnected! Resuming play...")
                         consecutive_orient_failures = 0
                         continue
                     except Exception as e:
@@ -134,7 +138,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     await bot.recover()
                     consecutive_orient_failures = 0
                 except Exception:
-                    print(f"✗ Recovery failed, waiting before retry...")
+                    print("✗ Recovery failed, waiting before retry...")
                     await asyncio.sleep(3)
             continue
 
@@ -149,7 +153,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             print(f"  📊 Server max turns: {server_max_turns}")
 
         # After first successful orient, push full state to dashboard immediately
-        if turns_used == 1 and hasattr(bot, 'report_status'):
+        if turns_used == 1 and hasattr(bot, "report_status"):
             await bot.report_status()
 
         char_state.update_from_game_state(state)
@@ -164,16 +168,16 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         # CRITICAL: Handle game selection menu - bot should auto-enter game
         if state.context == "menu" and state.sector is None:
             # Check if this is the game selection menu by looking at screen content
-            screen = bot.session.get_screen() if hasattr(bot, 'session') and bot.session else ""
+            screen = bot.session.get_screen() if hasattr(bot, "session") and bot.session else ""
             screen_lower = screen.lower() if screen else ""
             is_game_selection = (
-                "trade wars" in screen_lower or
-                "supports up to" in screen_lower or
-                "- play" in screen_lower or
-                "game selection" in screen_lower
+                "trade wars" in screen_lower
+                or "supports up to" in screen_lower
+                or "- play" in screen_lower
+                or "game selection" in screen_lower
             )
 
-            if is_game_selection and hasattr(bot, 'last_game_letter') and bot.last_game_letter:
+            if is_game_selection and hasattr(bot, "last_game_letter") and bot.last_game_letter:
                 print(f"  ⚠️  At game selection menu - entering game with '{bot.last_game_letter}'...")
                 await bot.session.send(bot.last_game_letter + "\r")
                 await asyncio.sleep(2.0)
@@ -267,7 +271,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             pass
 
         # Get next action from strategy (handle async strategies)
-        if hasattr(strategy, '_get_next_action_async'):
+        if hasattr(strategy, "_get_next_action_async"):
             # AIStrategy has async implementation
             action, params = await strategy._get_next_action_async(state)
         else:
@@ -320,7 +324,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         # Log AI reasoning to bot action feed and dashboard activity
         ai_reasoning = None
-        if hasattr(strategy, '_last_reasoning') and strategy._last_reasoning:
+        if hasattr(strategy, "_last_reasoning") and strategy._last_reasoning:
             ai_reasoning = strategy._last_reasoning
 
         profit = 0
@@ -328,7 +332,8 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         # Log action to bot's action feed (if worker bot)
         import time
-        if hasattr(bot, 'log_action'):
+
+        if hasattr(bot, "log_action"):
             bot.current_action = action.name
             bot.current_action_time = time.time()
             # Log AI decision with reasoning
@@ -355,9 +360,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 commodity = opportunity.commodity if opportunity else params.get("commodity")
 
                 if commodity:
-                    print(
-                        f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})"
-                    )
+                    print(f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})")
                     max_qty = 0
                     try:
                         max_qty = int(params.get("max_quantity") or 0)
@@ -376,9 +379,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                         print("  No trade executed")
                         success = False
                 else:
-                    print(
-                        f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})"
-                    )
+                    print(f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})")
                     profit = await execute_port_trade(bot, commodity=None)
                     if profit != 0:
                         char_state.record_trade(profit)
@@ -435,7 +436,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             success = False
 
         # Log action to bot's action feed (if worker bot)
-        if hasattr(bot, 'log_action'):
+        if hasattr(bot, "log_action"):
             details = None
             if action == TradeAction.TRADE:
                 commodity = params.get("commodity")
@@ -445,10 +446,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 details = str(target)
 
             bot.log_action(
-                action=action.name,
-                sector=state.sector,
-                details=details,
-                result="success" if success else "failure"
+                action=action.name, sector=state.sector, details=details, result="success" if success else "failure"
             )
 
         result = TradeResult(
@@ -568,7 +566,7 @@ async def execute_port_trade(
         # Use last lines to detect current prompt state
         lines = [l.strip() for l in screen.split("\n") if l.strip()]
         last_lines = "\n".join(lines[-6:]).lower() if lines else ""
-        last_line = (lines[-1].strip().lower() if lines else "")
+        last_line = lines[-1].strip().lower() if lines else ""
 
         # Back at sector command = done trading
         if re.search(r"command.*\[\d+\].*\?", last_lines):
@@ -681,11 +679,7 @@ async def execute_port_trade(
                 pass
 
         # Price/offer negotiation - only respond if we have a pending trade
-        if pending_trade and (
-            "offer" in last_lines
-            or "price" in last_lines
-            or "haggl" in last_lines
-        ):
+        if pending_trade and ("offer" in last_lines or "price" in last_lines or "haggl" in last_lines):
             # Avoid getting stuck at "Your offer [X] ?" when credits are insufficient.
             default_offer: int | None = None
             m_offer = re.search(r"your offer\s*\[(\d+)\]", last_lines)
@@ -697,12 +691,12 @@ async def execute_port_trade(
 
             screen_insufficient = "you only have" in screen_lower
             offer_too_high = (
-                credits_available is not None
-                and default_offer is not None
-                and default_offer > credits_available
+                credits_available is not None and default_offer is not None and default_offer > credits_available
             )
 
             if screen_insufficient or offer_too_high:
+                if hasattr(bot, "note_trade_telemetry"):
+                    bot.note_trade_telemetry("haggle_too_high", 1)
                 insufficient_haggle_loops += 1
                 if credits_available is not None and not offered_all_credits:
                     offered_all_credits = True
@@ -729,11 +723,25 @@ async def execute_port_trade(
                     await asyncio.sleep(0.7)
                     continue
 
+            too_low_phrase = any(
+                phrase in screen_lower
+                for phrase in (
+                    "offer is too low",
+                    "that's too low",
+                    "too low",
+                    "insulting offer",
+                )
+            )
+            if too_low_phrase and hasattr(bot, "note_trade_telemetry"):
+                bot.note_trade_telemetry("haggle_too_low", 1)
+
             # Negotiate modestly when possible. If we can't determine the side
             # (buy vs sell), or credits are unknown, fall back to accepting.
             if default_offer is not None and default_offer > 0 and last_trade_is_buy is not None:
                 credits_now = credits_available
                 if credits_now is None:
+                    if hasattr(bot, "note_trade_telemetry"):
+                        bot.note_trade_telemetry("haggle_accept", 1)
                     await bot.session.send("\r")
                     await asyncio.sleep(0.5)
                     continue
@@ -743,6 +751,8 @@ async def execute_port_trade(
                 # or will abort the transaction if you deviate. Only haggle in
                 # aggressive mode; otherwise accept defaults for reliability.
                 if policy != "aggressive":
+                    if hasattr(bot, "note_trade_telemetry"):
+                        bot.note_trade_telemetry("haggle_accept", 1)
                     await bot.session.send("\r")
                     await asyncio.sleep(0.5)
                     continue
@@ -768,10 +778,14 @@ async def execute_port_trade(
                     offer = max(1, min(max_offer, offer))
 
                     if haggle_attempts >= max_attempts or offer >= max_offer:
+                        if hasattr(bot, "note_trade_telemetry"):
+                            bot.note_trade_telemetry("haggle_accept", 1)
                         await bot.session.send("\r")
                     else:
                         haggle_attempts += 1
                         last_offer_sent = offer
+                        if hasattr(bot, "note_trade_telemetry"):
+                            bot.note_trade_telemetry("haggle_counter", 1)
                         logger.debug(
                             "haggle_buy: policy=%s attempt=%s default=%s offer=%s credits=%s",
                             policy,
@@ -795,10 +809,14 @@ async def execute_port_trade(
                 offer = max(min_offer, offer)
 
                 if haggle_attempts >= max_attempts or offer <= min_offer:
+                    if hasattr(bot, "note_trade_telemetry"):
+                        bot.note_trade_telemetry("haggle_accept", 1)
                     await bot.session.send("\r")
                 else:
                     haggle_attempts += 1
                     last_offer_sent = offer
+                    if hasattr(bot, "note_trade_telemetry"):
+                        bot.note_trade_telemetry("haggle_counter", 1)
                     logger.debug(
                         "haggle_sell: policy=%s attempt=%s default=%s offer=%s",
                         policy,
@@ -812,6 +830,8 @@ async def execute_port_trade(
                 continue
 
             # Default: accept the server's proposed offer/price.
+            if hasattr(bot, "note_trade_telemetry"):
+                bot.note_trade_telemetry("haggle_accept", 1)
             await bot.session.send("\r")
             await asyncio.sleep(0.5)
             continue
@@ -905,6 +925,8 @@ async def execute_port_trade(
     new_credits = new_state.credits or 0
 
     credit_change = new_credits - initial_credits
+    if credit_change != 0 and hasattr(bot, "note_trade_telemetry"):
+        bot.note_trade_telemetry("trades_executed", 1)
     logger.info(
         "Trade complete: %+d credits (was %d, now %d)",
         credit_change,
@@ -991,7 +1013,7 @@ async def warp_along_path(bot, path: list[int]) -> bool:
         return True  # Already at destination
 
     for i, sector in enumerate(path[1:], 1):
-        print(f"    Hop {i}/{len(path)-1}: -> {sector}")
+        print(f"    Hop {i}/{len(path) - 1}: -> {sector}")
         success = await warp_to_sector(bot, sector)
         if not success:
             logger.warning("Path navigation failed at hop %d (sector %d)", i, sector)

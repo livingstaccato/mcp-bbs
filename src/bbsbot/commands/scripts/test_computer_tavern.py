@@ -9,10 +9,8 @@ Tests:
 5. Navigate to StarDock (if nearby)
 6. Access Tavern (if at StarDock)
 """
-import asyncio
-import sys
-from pathlib import Path
 
+import asyncio
 
 from bbsbot.games.tw2002.bot import TradingBot
 from bbsbot.games.tw2002.orientation import INFO_CONTEXTS
@@ -28,7 +26,7 @@ async def test_computer_menu(bot: TradingBot) -> bool:
     print(f"  Current state: {state.context} @ sector {state.sector}")
 
     if state.context != "sector_command":
-        print(f"  ✗ Not at sector command, cannot test")
+        print("  ✗ Not at sector command, cannot test")
         return False
 
     # Try to access computer
@@ -39,9 +37,9 @@ async def test_computer_menu(bot: TradingBot) -> bool:
     # Check what we got
     result = await bot.session.read(timeout_ms=1000, max_bytes=8192)
     screen = result.get("screen", "")
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
 
-    print(f"  Response (last 8 lines):")
+    print("  Response (last 8 lines):")
     for line in lines[-8:]:
         print(f"    {line[:70]}")
 
@@ -81,7 +79,7 @@ async def test_port_report(bot: TradingBot) -> bool:
     # Read the report
     result = await bot.session.read(timeout_ms=2000, max_bytes=16384)
     screen = result.get("screen", "")
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
 
     print(f"  Response ({len(lines)} lines):")
     # Show first 10 and last 5 lines
@@ -126,7 +124,7 @@ async def test_course_plotter(bot: TradingBot, destination: int = 100) -> bool:
     # Read prompt
     result = await bot.session.read(timeout_ms=1000, max_bytes=8192)
     screen = result.get("screen", "")
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
     print(f"  Prompt: {lines[-1] if lines else 'none'}")
 
     # Enter destination
@@ -137,9 +135,9 @@ async def test_course_plotter(bot: TradingBot, destination: int = 100) -> bool:
     # Read result
     result = await bot.session.read(timeout_ms=2000, max_bytes=8192)
     screen = result.get("screen", "")
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
 
-    print(f"  Response (last 8 lines):")
+    print("  Response (last 8 lines):")
     for line in lines[-8:]:
         print(f"    {line[:70]}")
 
@@ -192,9 +190,9 @@ async def test_stardock_access(bot: TradingBot) -> bool:
     # Check result
     result = await bot.session.read(timeout_ms=1000, max_bytes=8192)
     screen = result.get("screen", "")
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
 
-    print(f"  Response (last 5 lines):")
+    print("  Response (last 5 lines):")
     for line in lines[-5:]:
         print(f"    {line[:70]}")
 
@@ -227,9 +225,9 @@ async def test_tavern_access(bot: TradingBot) -> bool:
     # Check result
     result = await bot.session.read(timeout_ms=1000, max_bytes=8192)
     screen = result.get("screen", "")
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
 
-    print(f"  Response (last 8 lines):")
+    print("  Response (last 8 lines):")
     for line in lines[-8:]:
         print(f"    {line[:70]}")
 
@@ -303,6 +301,7 @@ async def main():
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:

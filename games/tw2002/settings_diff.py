@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
 from .tedit_manager import TEDITManager
 
 
@@ -52,11 +53,7 @@ class DiffReport(BaseModel):
     def total_changes(self) -> int:
         """Count total number of changed settings."""
         return sum(
-            1
-            for diff in (
-                self.general_one + self.general_two + self.general_three + self.game_timing
-            )
-            if diff.changed
+            1 for diff in (self.general_one + self.general_two + self.general_three + self.game_timing) if diff.changed
         )
 
     @property
@@ -87,19 +84,19 @@ def diff_settings(
 
         value_a = a.get("value") if isinstance(a, dict) else None
         value_b = b.get("value") if isinstance(b, dict) else None
-        label = a.get("label", "") if isinstance(a, dict) else (
-            b.get("label", "") if isinstance(b, dict) else key
-        )
+        label = a.get("label", "") if isinstance(a, dict) else (b.get("label", "") if isinstance(b, dict) else key)
 
         changed = value_a != value_b and not (value_a is None and value_b is None)
 
-        diffs.append(SettingDiff(
-            key=key,
-            label=label,
-            value_a=value_a,
-            value_b=value_b,
-            changed=changed,
-        ))
+        diffs.append(
+            SettingDiff(
+                key=key,
+                label=label,
+                value_a=value_a,
+                value_b=value_b,
+                changed=changed,
+            )
+        )
 
     return diffs
 
@@ -274,9 +271,7 @@ def format_diff_report(report: DiffReport, show_unchanged: bool = False) -> str:
             elif diff.diff_type == "removed":
                 lines.append(f"{marker} [{diff.key}] {diff.label}: {diff.value_a} (removed)")
             elif diff.changed:
-                lines.append(
-                    f"{marker} [{diff.key}] {diff.label}: {diff.value_a} -> {diff.value_b}"
-                )
+                lines.append(f"{marker} [{diff.key}] {diff.label}: {diff.value_a} -> {diff.value_b}")
             else:
                 lines.append(f"  [{diff.key}] {diff.label}: {diff.value_a}")
 
@@ -479,13 +474,15 @@ def diff_config_files(
     diffs: list[SettingDiff] = []
 
     # Compare game titles
-    diffs.append(SettingDiff(
-        key="game_title",
-        label="Game title",
-        value_a=config_a.game_title,
-        value_b=config_b.game_title,
-        changed=config_a.game_title != config_b.game_title,
-    ))
+    diffs.append(
+        SettingDiff(
+            key="game_title",
+            label="Game title",
+            value_a=config_a.game_title,
+            value_b=config_b.game_title,
+            changed=config_a.game_title != config_b.game_title,
+        )
+    )
 
     # Compare header values
     max_len = max(len(config_a.header_values), len(config_b.header_values))
@@ -514,12 +511,14 @@ def diff_config_files(
 
         label = header_labels[i] if i < len(header_labels) else f"Header[{i}]"
 
-        diffs.append(SettingDiff(
-            key=f"header_{i}",
-            label=label,
-            value_a=str(val_a) if val_a is not None else None,
-            value_b=str(val_b) if val_b is not None else None,
-            changed=val_a != val_b,
-        ))
+        diffs.append(
+            SettingDiff(
+                key=f"header_{i}",
+                label=label,
+                value_a=str(val_a) if val_a is not None else None,
+                value_b=str(val_b) if val_b is not None else None,
+                changed=val_a != val_b,
+            )
+        )
 
     return diffs

@@ -3,8 +3,8 @@
 
 import asyncio
 import sys
-from bbsbot.games.tw2002.verification.trading_integration import main
 
+from bbsbot.games.tw2002.verification.trading_integration import main
 
 if __name__ == "__main__":
     exit_code = asyncio.run(main())

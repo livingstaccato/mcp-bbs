@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from bbsbot.addons.base import Addon, AddonEvent
 from pydantic import BaseModel, ConfigDict, Field
+
+from bbsbot.addons.base import AddonEvent
 
 
 def _to_int(value: str) -> int:
@@ -23,7 +24,9 @@ _PORT_RE = re.compile(
     re.IGNORECASE,
 )
 _COMMAND_RE = re.compile(r"Command\s*\[TL=(?P<tl>[0-9:]+)\]:\[(?P<sector>\d+)\]")
-_CREDITS_RE = re.compile(r"You have\s+(?P<credits>[\d,]+)\s+credits.*?(?P<holds>\d+)\s+empty cargo holds", re.IGNORECASE)
+_CREDITS_RE = re.compile(
+    r"You have\s+(?P<credits>[\d,]+)\s+credits.*?(?P<holds>\d+)\s+empty cargo holds", re.IGNORECASE
+)
 
 _COMMERCE_RE = re.compile(r"Commerce report for\s+(?P<port>[^:]+):\s+(?P<time>.+)$", re.IGNORECASE)
 _ITEM_RE = re.compile(
@@ -36,17 +39,23 @@ _HAGGLE_RESULT_RE = re.compile(
     r"(you will put me out of business|very well|you are a rogue|swine|make a real offer|we'll buy them anyway)",
     re.IGNORECASE,
 )
-_TRADE_QTY_RE = re.compile(r"How many holds of\s+(?P<item>Fuel Ore|Organics|Equipment)\s+do you want to (buy|sell)", re.IGNORECASE)
+_TRADE_QTY_RE = re.compile(
+    r"How many holds of\s+(?P<item>Fuel Ore|Organics|Equipment)\s+do you want to (buy|sell)", re.IGNORECASE
+)
 _TRADE_AGREED_QTY_RE = re.compile(r"Agreed,\s+(?P<qty>\d+)\s+units\.", re.IGNORECASE)
 _PLANETS_RE = re.compile(r"Planets?\s*:\s*(?P<planets>.+)$", re.IGNORECASE)
 _ALIEN_TRADER_RE = re.compile(
     r"Alien Tr:\s*(?P<menace>Menace\s+\d+(st|nd|rd|th)\s+Class)\s+(?P<name>[^,]+),\s*w/\s*(?P<ftrs>[\d,]+)\s+ftrs,\s*\n\s*in\s+(?P<ship>.+)$",
     re.IGNORECASE | re.MULTILINE,
 )
-_WARP_INOUT_RE = re.compile(r"^(?P<name>[A-Za-z .]+)\s+warps\s+(?P<dir>into|out of)\s+the\s+sector\.", re.IGNORECASE | re.MULTILINE)
+_WARP_INOUT_RE = re.compile(
+    r"^(?P<name>[A-Za-z .]+)\s+warps\s+(?P<dir>into|out of)\s+the\s+sector\.", re.IGNORECASE | re.MULTILINE
+)
 _SHIP_INFO_RE = re.compile(r"Ship Info\s*:\s*(?P<info>.+)$", re.IGNORECASE | re.MULTILINE)
 _SHIP_NAME_RE = re.compile(r"Ship Name\s*:\s*(?P<name>.+)$", re.IGNORECASE | re.MULTILINE)
-_RANK_RE = re.compile(r"Rank and Exp\s*:\s*(?P<exp>[\d,]+)\s+points,\s*Alignment=(?P<align>[-\d]+)\s+(?P<align_label>.+)$", re.IGNORECASE)
+_RANK_RE = re.compile(
+    r"Rank and Exp\s*:\s*(?P<exp>[\d,]+)\s+points,\s*Alignment=(?P<align>[-\d]+)\s+(?P<align_label>.+)$", re.IGNORECASE
+)
 _HOLDS_RE = re.compile(r"Total Holds\s*:\s*(?P<total>\d+)\s*-\s*(?P<holds>.+)$", re.IGNORECASE)
 _BEACON_RE = re.compile(r"Beacon\s*:\s*(?P<beacon>.+)$", re.IGNORECASE | re.MULTILINE)
 
@@ -71,16 +80,16 @@ class Tw2002Addon(BaseModel):
         if match := _COMMAND_RE.search(screen):
             events.append(
                 AddonEvent(
-                name="tw2002.command",
-                data={"sector": int(match["sector"]), "turns_left": match["tl"]},
+                    name="tw2002.command",
+                    data={"sector": int(match["sector"]), "turns_left": match["tl"]},
                 )
             )
 
         if match := _SECTOR_RE.search(screen):
             events.append(
                 AddonEvent(
-                name="tw2002.sector",
-                data={
+                    name="tw2002.sector",
+                    data={
                         "sector": int(match["sector"]),
                         "region": match["region"].strip(),
                         "unexplored": bool(match["unexplored"]),
@@ -97,8 +106,8 @@ class Tw2002Addon(BaseModel):
             self.last_port = match["name"].strip()
             events.append(
                 AddonEvent(
-                name="tw2002.port",
-                data={
+                    name="tw2002.port",
+                    data={
                         "name": self.last_port,
                         "class": int(match["class"]),
                         "type": match["type"],
@@ -110,8 +119,8 @@ class Tw2002Addon(BaseModel):
             self.last_port = match["port"].strip()
             events.append(
                 AddonEvent(
-                name="tw2002.commerce_report",
-                data={"port": self.last_port, "time": match["time"].strip()},
+                    name="tw2002.commerce_report",
+                    data={"port": self.last_port, "time": match["time"].strip()},
                 )
             )
             items: list[dict[str, Any]] = []
@@ -132,14 +141,20 @@ class Tw2002Addon(BaseModel):
             credits = _to_int(match["credits"])
             empty_holds = int(match["holds"])
             events.append(AddonEvent(name="tw2002.credits", data={"credits": credits, "empty_holds": empty_holds}))
-            if self.last_credits is not None and self.last_qty and self.last_price and self.last_item and self.last_action:
+            if (
+                self.last_credits is not None
+                and self.last_qty
+                and self.last_price
+                and self.last_item
+                and self.last_action
+            ):
                 delta = credits - self.last_credits
                 unit_price = self.last_price
                 total_value = unit_price * self.last_qty
                 events.append(
                     AddonEvent(
-                name="tw2002.ledger",
-                data={
+                        name="tw2002.ledger",
+                        data={
                             "port": self.last_port,
                             "item": self.last_item,
                             "action": self.last_action,
@@ -151,7 +166,7 @@ class Tw2002Addon(BaseModel):
                             "credits_after": credits,
                             "delta": delta,
                         },
-                )
+                    )
                 )
             self.last_credits = credits
 
@@ -160,8 +175,8 @@ class Tw2002Addon(BaseModel):
             self.last_action = match.group(2).lower()
             events.append(
                 AddonEvent(
-                name="tw2002.trade_quantity_prompt",
-                data={"item": self.last_item, "action": self.last_action},
+                    name="tw2002.trade_quantity_prompt",
+                    data={"item": self.last_item, "action": self.last_action},
                 )
             )
 
@@ -174,8 +189,8 @@ class Tw2002Addon(BaseModel):
             self.last_price = price
             events.append(
                 AddonEvent(
-                name="tw2002.haggle_price",
-                data={
+                    name="tw2002.haggle_price",
+                    data={
                         "port": self.last_port,
                         "item": self.last_item,
                         "action": self.last_action,
@@ -190,21 +205,21 @@ class Tw2002Addon(BaseModel):
                 self.last_offer = _to_int(offer)
                 events.append(
                     AddonEvent(
-                name="tw2002.haggle_offer",
-                data={
+                        name="tw2002.haggle_offer",
+                        data={
                             "port": self.last_port,
                             "item": self.last_item,
                             "action": self.last_action,
                             "offer": self.last_offer,
                         },
-                )
+                    )
                 )
 
         if _HAGGLE_RESULT_RE.search(screen):
             events.append(
                 AddonEvent(
-                name="tw2002.haggle_result",
-                data={
+                    name="tw2002.haggle_result",
+                    data={
                         "port": self.last_port,
                         "item": self.last_item,
                         "action": self.last_action,
@@ -222,8 +237,8 @@ class Tw2002Addon(BaseModel):
         if match := _ALIEN_TRADER_RE.search(screen):
             events.append(
                 AddonEvent(
-                name="tw2002.alien_trader",
-                data={
+                    name="tw2002.alien_trader",
+                    data={
                         "menace": match["menace"],
                         "name": match["name"].strip(),
                         "fighters": _to_int(match["ftrs"]),
@@ -235,8 +250,8 @@ class Tw2002Addon(BaseModel):
         for match in _WARP_INOUT_RE.finditer(screen):
             events.append(
                 AddonEvent(
-                name="tw2002.trader_warp",
-                data={"name": match["name"].strip(), "direction": match["dir"].lower()},
+                    name="tw2002.trader_warp",
+                    data={"name": match["name"].strip(), "direction": match["dir"].lower()},
                 )
             )
 
@@ -249,8 +264,8 @@ class Tw2002Addon(BaseModel):
         if match := _RANK_RE.search(screen):
             events.append(
                 AddonEvent(
-                name="tw2002.rank",
-                data={
+                    name="tw2002.rank",
+                    data={
                         "exp": _to_int(match["exp"]),
                         "alignment": int(match["align"]),
                         "alignment_label": match["align_label"].strip(),
@@ -262,8 +277,8 @@ class Tw2002Addon(BaseModel):
             holds = match["holds"].strip()
             events.append(
                 AddonEvent(
-                name="tw2002.holds",
-                data={"total": int(match["total"]), "details": holds},
+                    name="tw2002.holds",
+                    data={"total": int(match["total"]), "details": holds},
                 )
             )
 

@@ -15,10 +15,21 @@ if TYPE_CHECKING:
 # Context categories for quick checks
 SAFE_CONTEXTS = {"sector_command", "planet_command", "citadel_command", "stardock"}
 ACTION_CONTEXTS = {
-    "port_menu", "port_trading", "bank", "ship_shop", "hardware_shop",
-    "combat", "message_system", "tavern", "grimy_trader", "gambling",
-    "computer_menu", "cim_mode", "course_plotter", "underground",
-    "corporate_listings"
+    "port_menu",
+    "port_trading",
+    "bank",
+    "ship_shop",
+    "hardware_shop",
+    "combat",
+    "message_system",
+    "tavern",
+    "grimy_trader",
+    "gambling",
+    "computer_menu",
+    "cim_mode",
+    "course_plotter",
+    "underground",
+    "corporate_listings",
 }
 TRANSITION_CONTEXTS = {"pause", "more", "confirm", "port_report", "eavesdrop"}
 NAVIGATION_CONTEXTS = {"warping", "autopilot"}
@@ -62,12 +73,12 @@ def detect_context(screen: str) -> str:
         death           - Ship destroyed
         unknown         - Can't determine
     """
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
     if not lines:
         return "unknown"
 
     last_line = lines[-1].lower()
-    last_lines = '\n'.join(lines[-5:]).lower()
+    last_lines = "\n".join(lines[-5:]).lower()
     full_screen = screen.lower()
 
     # === DEATH STATE (highest priority - need to recognize immediately) ===
@@ -92,10 +103,10 @@ def detect_context(screen: str) -> str:
 
     # Alternative sector command detection - look for the prompt format pattern
     # e.g., "[123] (?=Help)?" or just "[123]" with help text
-    if re.search(r'\[\d+\]\s*\(\?', last_line):
+    if re.search(r"\[\d+\]\s*\(\?", last_line):
         return "sector_command"
     # Also check for "Command" at start of line with sector number
-    if re.search(r'command.*\[\d+\]', last_line, re.IGNORECASE):
+    if re.search(r"command.*\[\d+\]", last_line, re.IGNORECASE):
         return "sector_command"
 
     # StarDock - special facility
@@ -147,7 +158,9 @@ def detect_context(screen: str) -> str:
         return "message_system"
 
     # === COMPUTER / CIM ===
-    if "computer" in last_lines and ("navigation" in last_lines or "displays" in last_lines or "miscellaneous" in last_lines):
+    if "computer" in last_lines and (
+        "navigation" in last_lines or "displays" in last_lines or "miscellaneous" in last_lines
+    ):
         return "computer_menu"
     if "cim" in last_lines or "interrogation" in last_lines:
         return "cim_mode"
@@ -188,17 +201,17 @@ def detect_context(screen: str) -> str:
     lines_lower = [l.lower() for l in lines if l.strip()]
     if len(lines_lower) > 0:
         # Check last 3 lines for pause prompt (not in first 5 lines which could be banners)
-        last_3_lines = '\n'.join(lines_lower[-3:])
+        last_3_lines = "\n".join(lines_lower[-3:])
         if "[pause]" in last_3_lines or "[any key]" in last_3_lines:
             # Make sure it's not a game selection menu with [Pause] banner art
             # Game menus have: "trade wars", "selection", "supports up to", menu options
             is_game_menu = (
-                "enter your choice" in last_line or
-                "==--" in full_screen or
-                "trade wars" in full_screen or
-                "supports up to" in full_screen or
-                "selection (" in last_line or
-                ("t - play" in full_screen and "x - exit" in full_screen)
+                "enter your choice" in last_line
+                or "==--" in full_screen
+                or "trade wars" in full_screen
+                or "supports up to" in full_screen
+                or "selection (" in last_line
+                or ("t - play" in full_screen and "x - exit" in full_screen)
             )
             if not is_game_menu:
                 return "pause"
@@ -287,25 +300,29 @@ async def where_am_i(bot: TradingBot, timeout_ms: int = 50) -> QuickState:
             context = "sector_command" if "sector" in prompt_id or "command_generic" in prompt_id else context
 
     # Capture diagnostic data for stuck bot analysis
-    if hasattr(bot, 'diagnostic_buffer'):
+    if hasattr(bot, "diagnostic_buffer"):
         bot.diagnostic_buffer["recent_screens"].append(screen[:1000])
         if len(bot.diagnostic_buffer["recent_screens"]) > bot.diagnostic_buffer["max_history"]:
-            bot.diagnostic_buffer["recent_screens"] = bot.diagnostic_buffer["recent_screens"][-bot.diagnostic_buffer["max_history"]:]
+            bot.diagnostic_buffer["recent_screens"] = bot.diagnostic_buffer["recent_screens"][
+                -bot.diagnostic_buffer["max_history"] :
+            ]
 
         bot.diagnostic_buffer["recent_prompts"].append(f"{context}|{prompt_id}")
         if len(bot.diagnostic_buffer["recent_prompts"]) > bot.diagnostic_buffer["max_history"]:
-            bot.diagnostic_buffer["recent_prompts"] = bot.diagnostic_buffer["recent_prompts"][-bot.diagnostic_buffer["max_history"]:]
+            bot.diagnostic_buffer["recent_prompts"] = bot.diagnostic_buffer["recent_prompts"][
+                -bot.diagnostic_buffer["max_history"] :
+            ]
 
     # Extract sector from screen if possible
     sector = None
     # Try prompt format: [123] - use findall and take LAST match
     # because screen buffer may contain old sector info at top
-    sector_matches = re.findall(r'\[(\d+)\]\s*\(\?', screen)
+    sector_matches = re.findall(r"\[(\d+)\]\s*\(\?", screen)
     if sector_matches:
         sector = int(sector_matches[-1])  # Take LAST match (current prompt)
     else:
         # Try "Sector 123" format - also take last match
-        sector_matches = re.findall(r'sector\s+(\d+)', screen, re.IGNORECASE)
+        sector_matches = re.findall(r"sector\s+(\d+)", screen, re.IGNORECASE)
         if sector_matches:
             sector = int(sector_matches[-1])
 
@@ -315,9 +332,7 @@ async def where_am_i(bot: TradingBot, timeout_ms: int = 50) -> QuickState:
 
     # Suggest action based on context
     suggested_action = None
-    if context == "pause":
-        suggested_action = "send_space"
-    elif context == "more":
+    if context == "pause" or context == "more":
         suggested_action = "send_space"
     elif context == "confirm":
         suggested_action = "send_n_or_check"
@@ -363,22 +378,22 @@ async def recover_to_safe_state(
     # Recovery key sequences - avoid Enter which can trigger warps
     recovery_sequences = [
         # Gentle escapes - NO ENTER to avoid triggering warps
-        (" ", 0.3),      # Space for pause/more
-        ("Q", 0.3),      # Q to exit menus
-        ("N", 0.3),      # N for Y/N prompts
-        ("\x1b", 0.3),   # Escape key
+        (" ", 0.3),  # Space for pause/more
+        ("Q", 0.3),  # Q to exit menus
+        ("N", 0.3),  # N for Y/N prompts
+        ("\x1b", 0.3),  # Escape key
         # More aggressive
-        ("Q", 0.3),      # Q again
-        (" ", 0.3),      # Space
-        ("\x1b", 0.5),   # Escape
-        ("Q", 0.5),      # Q with longer wait
+        ("Q", 0.3),  # Q again
+        (" ", 0.3),  # Space
+        ("\x1b", 0.5),  # Escape
+        ("Q", 0.5),  # Q with longer wait
         # Really aggressive - still no Enter
         (" ", 0.5),
-        ("\x1b", 0.5),   # Multiple escapes
+        ("\x1b", 0.5),  # Multiple escapes
         ("\x1b", 0.3),
     ]
 
-    print(f"\n[Recovery] Attempting to recover to safe state...")
+    print("\n[Recovery] Attempting to recover to safe state...")
 
     last_state = None
     attempt = 0
@@ -399,7 +414,7 @@ async def recover_to_safe_state(
 
         # Handle specific contexts
         if state.context == "death":
-            print(f"  [Recovery] ✗ Ship destroyed - need to restart")
+            print("  [Recovery] ✗ Ship destroyed - need to restart")
             # Press space to acknowledge death
             await bot.session.send(" ")
             await asyncio.sleep(1.0)
@@ -411,7 +426,7 @@ async def recover_to_safe_state(
             )
 
         if state.context == "combat":
-            print(f"  [Recovery] ⚠ In combat - attempting retreat")
+            print("  [Recovery] ⚠ In combat - attempting retreat")
             # Try R for retreat
             await bot.session.send("R")
             await asyncio.sleep(0.5)
@@ -419,7 +434,7 @@ async def recover_to_safe_state(
             continue
 
         if state.context == "computer_menu":
-            print(f"  [Recovery] Exiting computer menu (Q+Enter)...")
+            print("  [Recovery] Exiting computer menu (Q+Enter)...")
             await bot.session.send("Q\r")
             await asyncio.sleep(0.5)
             attempt += 1
@@ -427,14 +442,14 @@ async def recover_to_safe_state(
 
         if state.context == "warping":
             # Mid-warp - just wait for it to complete, don't send keys that trigger more warps
-            print(f"  [Recovery] Waiting for warp to complete...")
+            print("  [Recovery] Waiting for warp to complete...")
             await asyncio.sleep(1.0)
             attempt += 1
             continue
 
         if state.context == "autopilot":
             # Autopilot engaged - try to stop it
-            print(f"  [Recovery] Autopilot engaged - trying to stop...")
+            print("  [Recovery] Autopilot engaged - trying to stop...")
             await bot.session.send("\r")  # Enter often stops autopilot
             await asyncio.sleep(1.0)
             attempt += 1
@@ -450,7 +465,7 @@ async def recover_to_safe_state(
 
         if state.context == "confirm":
             # Y/N prompt - usually N is safer
-            print(f"  [Recovery] Confirm prompt - sending N...")
+            print("  [Recovery] Confirm prompt - sending N...")
             await bot.session.send("N")
             await asyncio.sleep(0.3)
             attempt += 1
@@ -478,7 +493,7 @@ async def recover_to_safe_state(
 
         if state.context == "corporate_listings":
             # Corporate listings menu - send Q to quit
-            print(f"  [Recovery] Corporate listings - sending Q to exit...")
+            print("  [Recovery] Corporate listings - sending Q to exit...")
             await bot.session.send("Q")
             await asyncio.sleep(0.5)
             attempt += 1
@@ -489,10 +504,15 @@ async def recover_to_safe_state(
             # Don't just rely on sector=None, as in-game menus can also have unparseable sectors
             screen_lower = screen.lower() if screen else ""
             is_game_selection = (
-                state.sector is None and
-                hasattr(bot, 'last_game_letter') and bot.last_game_letter and
-                ("trade wars" in screen_lower or "supports up to" in screen_lower or
-                 "- play" in screen_lower or "game selection" in screen_lower)
+                state.sector is None
+                and hasattr(bot, "last_game_letter")
+                and bot.last_game_letter
+                and (
+                    "trade wars" in screen_lower
+                    or "supports up to" in screen_lower
+                    or "- play" in screen_lower
+                    or "game selection" in screen_lower
+                )
             )
 
             if is_game_selection:
@@ -502,7 +522,7 @@ async def recover_to_safe_state(
                 attempt += 1
                 continue
             # Generic in-game menu (or unknown menu) - try Enter to continue
-            print(f"  [Recovery] In-game menu - sending Enter to continue...")
+            print("  [Recovery] In-game menu - sending Enter to continue...")
             await bot.session.send("\r")
             await asyncio.sleep(0.5)
             attempt += 1
@@ -512,28 +532,28 @@ async def recover_to_safe_state(
             # Unknown state - be very conservative to avoid triggering warps
             # Track if we're changing sectors (which means we're navigating accidentally)
             if attempt == 0:
-                print(f"  [Recovery] Unknown state - clearing input buffer with Escape...")
+                print("  [Recovery] Unknown state - clearing input buffer with Escape...")
                 await bot.session.send("\x1b")  # Escape to clear buffer
                 await asyncio.sleep(0.5)
                 attempt += 1
                 continue
             elif attempt == 1:
                 # Try Q to exit any menu
-                print(f"  [Recovery] Trying Q to exit menu...")
+                print("  [Recovery] Trying Q to exit menu...")
                 await bot.session.send("Q")
                 await asyncio.sleep(0.5)
                 attempt += 1
                 continue
             elif attempt == 2:
                 # Try space (for pause screens)
-                print(f"  [Recovery] Trying space...")
+                print("  [Recovery] Trying space...")
                 await bot.session.send(" ")
                 await asyncio.sleep(0.5)
                 attempt += 1
                 continue
             elif attempt < 6:
                 # Wait longer - we might be in a warp or transition
-                print(f"  [Recovery] Waiting for state to settle...")
+                print("  [Recovery] Waiting for state to settle...")
                 await asyncio.sleep(1.0)
                 attempt += 1
                 continue

@@ -10,6 +10,7 @@ from time import time
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
+
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.bot import TradingBot
     from bbsbot.games.tw2002.config import BotConfig
@@ -123,10 +124,7 @@ class CombatManager:
             enemy_type=enemy_type,
             notes=notes,
         )
-        logger.warning(
-            f"Marked sector {sector} as dangerous: "
-            f"{threat_level} threat level"
-        )
+        logger.warning(f"Marked sector {sector} as dangerous: {threat_level} threat level")
 
     def clear_danger(self, sector: int) -> None:
         """Clear danger status for a sector.
@@ -221,10 +219,7 @@ class CombatManager:
         Returns:
             Safe path, or None if no safe path exists
         """
-        dangerous = {
-            s for s in self._danger_zones
-            if self.is_dangerous(s)
-        }
+        dangerous = {s for s in self._danger_zones if self.is_dangerous(s)}
 
         if not dangerous:
             return self.knowledge.find_path(start, end, max_hops)
@@ -296,9 +291,7 @@ class CombatManager:
             # If in combat, try retreat command first
             if state.context == "combat":
                 await send_input(bot, "R", "single_key")
-                input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                    bot, timeout_ms=5000
-                )
+                input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
                 if "retreat" in screen.lower() or "escaped" in screen.lower():
                     logger.info("Retreat successful")
@@ -311,14 +304,10 @@ class CombatManager:
 
             # Warp to safe sector
             await send_input(bot, "M", "single_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             await send_input(bot, str(safe_sector), "multi_key")
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
             # Handle any pause screens
             if "pause" in screen.lower() or "[any key]" in screen.lower():
@@ -373,10 +362,7 @@ class CombatManager:
         Returns:
             List of active danger zones
         """
-        return [
-            zone for zone in self._danger_zones.values()
-            if self.is_dangerous(zone.sector)
-        ]
+        return [zone for zone in self._danger_zones.values() if self.is_dangerous(zone.sector)]
 
     def get_danger_map(self) -> dict[int, int]:
         """Get map of sector -> threat level for active dangers.
@@ -385,7 +371,5 @@ class CombatManager:
             Dictionary of sector number to threat level
         """
         return {
-            zone.sector: zone.threat_level
-            for zone in self._danger_zones.values()
-            if self.is_dangerous(zone.sector)
+            zone.sector: zone.threat_level for zone in self._danger_zones.values() if self.is_dangerous(zone.sector)
         }

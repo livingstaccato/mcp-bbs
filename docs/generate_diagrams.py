@@ -100,9 +100,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, 1 for error)
     """
-    parser = argparse.ArgumentParser(
-        description="Generate diagrams from Mermaid source files"
-    )
+    parser = argparse.ArgumentParser(description="Generate diagrams from Mermaid source files")
     parser.add_argument(
         "--format",
         choices=["svg", "png", "both"],

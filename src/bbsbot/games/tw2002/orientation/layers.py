@@ -6,12 +6,13 @@ import asyncio
 from time import time
 from typing import TYPE_CHECKING
 
-from .detection import detect_context, SAFE_CONTEXTS
+from .detection import detect_context
 from .models import GameState, OrientationError
-from .parsing import parse_display_screen, parse_sector_display
+from .parsing import parse_sector_display
 
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.bot import TradingBot
+
     from .knowledge import SectorKnowledge
 
 
@@ -76,7 +77,7 @@ async def _reach_safe_state(
     gentle_keys = [" ", "\r", " ", "\r", "Q", " ", "\r", "Q", " ", "\r"]
 
     # Pre-check: is the session even connected?
-    if hasattr(bot, 'session') and hasattr(bot.session, 'is_connected'):
+    if hasattr(bot, "session") and hasattr(bot.session, "is_connected"):
         if not bot.session.is_connected():
             raise ConnectionError("Session disconnected - cannot orient")
 
@@ -103,7 +104,7 @@ async def _reach_safe_state(
             consecutive_blank += 1
             _set_orient_progress(bot, attempt + 1, max_attempts, "blank_wake")
             # After 3 blank screens, check if connection is dead
-            if consecutive_blank >= 3 and hasattr(bot, 'session') and hasattr(bot.session, 'is_connected'):
+            if consecutive_blank >= 3 and hasattr(bot, "session") and hasattr(bot.session, "is_connected"):
                 if not bot.session.is_connected():
                     raise ConnectionError("Session disconnected during orientation (blank screen)")
             # SAFE keys only - no Enter/CR which could confirm trades or trigger warps
@@ -127,13 +128,13 @@ async def _reach_safe_state(
             return context, "", screen
 
         if context == "planet_command":
-            print(f"  [Orient] On planet citadel, pressing Q to return to space...")
+            print("  [Orient] On planet citadel, pressing Q to return to space...")
             await bot.session.send("Q")
             await asyncio.sleep(0.2)
             continue
 
         if context == "pause":
-            print(f"  [Orient] Dismissing pause screen...")
+            print("  [Orient] Dismissing pause screen...")
             await bot.session.send(" ")
             await asyncio.sleep(0.8)  # Longer wait for screen to update (was 0.15s)
             continue
@@ -141,7 +142,7 @@ async def _reach_safe_state(
         if context in ("menu", "port_menu"):
             # CRITICAL FIX: If we have a stored game letter, ALWAYS try to re-enter game first
             # This handles the case where screen buffer doesn't show full menu text
-            if hasattr(bot, 'last_game_letter') and bot.last_game_letter:
+            if hasattr(bot, "last_game_letter") and bot.last_game_letter:
                 # Track menu re-entries to detect if bot is being ejected
                 bot.menu_reentry_count += 1
                 bot.last_menu_reentry_time = time()
@@ -155,8 +156,7 @@ async def _reach_safe_state(
                     )
 
                 # Try to re-enter the game using stored game letter
-                print(f"  [Orient] At menu (re-entry #{bot.menu_reentry_count}), "
-                      f"selecting game {bot.last_game_letter}")
+                print(f"  [Orient] At menu (re-entry #{bot.menu_reentry_count}), selecting game {bot.last_game_letter}")
                 await bot.session.send(bot.last_game_letter + "\r")
                 await asyncio.sleep(1.0)
                 continue
@@ -164,7 +164,7 @@ async def _reach_safe_state(
             # No game letter stored - check if this is corporate listings
             elif context == "corporate_listings":
                 # Corporate Listings menu - send Q to quit
-                print(f"  [Orient] At Corporate Listings menu, sending Q to exit...")
+                print("  [Orient] At Corporate Listings menu, sending Q to exit...")
                 await bot.session.send("Q")
                 await asyncio.sleep(0.3)
                 continue
@@ -237,26 +237,27 @@ async def _gather_state(
     # If no kv_data provided, try to get fresh semantic data from current screen
     if kv_data is None:
         from bbsbot.games.tw2002.io import wait_and_respond
+
         try:
             snap = bot.session.snapshot()
             kv_data = (snap.get("prompt_detected") or {}).get("kv_data") or {}
-            if kv_data.get('credits'):
+            if kv_data.get("credits"):
                 print(f"  [Orient] Extracted semantic data: credits={kv_data.get('credits')}")
             else:
-                print(f"  [Orient] Extracted semantic data from current screen")
+                print("  [Orient] Extracted semantic data from current screen")
         except Exception:
             kv_data = {}
 
     # Parse sector display (warps, port, etc.)
     sector_info = parse_sector_display(screen)
-    state.sector = sector_info.get('sector')
-    state.warps = sector_info.get('warps', [])
-    state.has_port = sector_info.get('has_port', False)
-    state.port_class = sector_info.get('port_class')
-    state.has_planet = sector_info.get('has_planet', False)
-    state.planet_names = sector_info.get('planet_names', [])
-    state.traders_present = sector_info.get('traders_present', [])
-    state.hostile_fighters = sector_info.get('hostile_fighters', 0)
+    state.sector = sector_info.get("sector")
+    state.warps = sector_info.get("warps", [])
+    state.has_port = sector_info.get("has_port", False)
+    state.port_class = sector_info.get("port_class")
+    state.has_planet = sector_info.get("has_planet", False)
+    state.planet_names = sector_info.get("planet_names", [])
+    state.traders_present = sector_info.get("traders_present", [])
+    state.hostile_fighters = sector_info.get("hostile_fighters", 0)
 
     # This server's `D` is "Re-Display" (sector), not "stats". We still need an
     # early, cheap stats refresh so strategies can reason about bankroll/holds.
@@ -283,7 +284,7 @@ async def _gather_state(
             )
             # Ensure semantic updates even if the waiter's callback missed the transient line.
             bot.last_semantic_data.update(extract_semantic_kv(info_screen))
-            setattr(bot, "_stats_refreshed", True)
+            bot._stats_refreshed = True
 
         # Build a best-effort snapshot from merged semantic cache.
         bot_semantic = getattr(bot, "last_semantic_data", {}) or {}

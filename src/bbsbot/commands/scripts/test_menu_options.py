@@ -2,8 +2,9 @@
 """Test different keys at the TWGS game selection menu."""
 
 import asyncio
-from bbsbot.paths import default_knowledge_root
+
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 async def test_menu_key(key_desc: str, key_sequence: str):
@@ -27,57 +28,55 @@ async def test_menu_key(key_desc: str, key_sequence: str):
         snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
 
         # We should be at TWGS menu
-        if 'Select game' not in snapshot.get('screen', ''):
-            return {'key': key_desc, 'error': 'Not at game selection menu'}
+        if "Select game" not in snapshot.get("screen", ""):
+            return {"key": key_desc, "error": "Not at game selection menu"}
 
         # Send the test key sequence
         await session.send(key_sequence)
         await asyncio.sleep(4.0)
         snapshot = await session.read(timeout_ms=2000, max_bytes=8192)
 
-        screen = snapshot.get('screen', '')
-        screen_hash = snapshot.get('screen_hash', '')[:16]
-        prompt = snapshot.get('prompt_detected', {})
+        screen = snapshot.get("screen", "")
+        screen_hash = snapshot.get("screen_hash", "")[:16]
+        prompt = snapshot.get("prompt_detected", {})
 
         # Analyze what we got
-        is_menu = 'Select game' in screen
-        is_description = '[ANY KEY]' in screen and 'No description' in screen
-        has_planet = 'planet' in screen.lower()
+        is_menu = "Select game" in screen
+        is_description = "[ANY KEY]" in screen and "No description" in screen
+        has_planet = "planet" in screen.lower()
         is_game_screen = not is_menu and not is_description and len(screen.strip()) > 50
 
         await manager.close_all_sessions()
 
         return {
-            'key': key_desc,
-            'sequence': repr(key_sequence),
-            'at_menu': is_menu,
-            'at_description': is_description,
-            'in_game': is_game_screen,
-            'has_planet': has_planet,
-            'screen_hash': screen_hash,
-            'prompt': prompt.get('prompt_id', 'None'),
-            'screen_preview': screen[:120].replace('\n', ' ').strip()
+            "key": key_desc,
+            "sequence": repr(key_sequence),
+            "at_menu": is_menu,
+            "at_description": is_description,
+            "in_game": is_game_screen,
+            "has_planet": has_planet,
+            "screen_hash": screen_hash,
+            "prompt": prompt.get("prompt_id", "None"),
+            "screen_preview": screen[:120].replace("\n", " ").strip(),
         }
     except Exception as e:
-        return {'key': key_desc, 'error': str(e)}
+        return {"key": key_desc, "error": str(e)}
 
 
 async def main():
-    print("="*80)
+    print("=" * 80)
     print("TESTING DIFFERENT KEYS AT TWGS GAME SELECTION MENU")
-    print("="*80)
+    print("=" * 80)
 
     test_cases = [
         # Try entering twice
         ("AA", "AA"),
         ("A-Enter", "A\r"),
         ("A-A-Enter", "AA\r"),
-
         # Try other letters
         ("1", "1"),
         ("E", "E"),
         ("Enter", "\r"),
-
         # Try just waiting
         ("A-Wait", "A"),  # Send A, then wait 4s
     ]
@@ -88,28 +87,28 @@ async def main():
         result = await test_menu_key(key_desc, key_sequence)
         results.append(result)
 
-        if 'error' in result:
+        if "error" in result:
             print(f"  ❌ Error: {result['error']}")
-        elif result.get('in_game'):
-            print(f"  ✅ IN GAME! Different screen!")
+        elif result.get("in_game"):
+            print("  ✅ IN GAME! Different screen!")
             print(f"     Prompt: {result['prompt']}")
             print(f"     Screen: {result['screen_preview']}")
-        elif result.get('at_description'):
-            print(f"  ⚠️  At description screen")
-        elif result.get('at_menu'):
-            print(f"  ❌ Still at menu")
+        elif result.get("at_description"):
+            print("  ⚠️  At description screen")
+        elif result.get("at_menu"):
+            print("  ❌ Still at menu")
         else:
-            print(f"  ❓ Unknown state")
+            print("  ❓ Unknown state")
             print(f"     Prompt: {result['prompt']}")
             print(f"     Screen: {result['screen_preview']}")
 
         await asyncio.sleep(1.0)
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("RESULTS SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
-    successful = [r for r in results if r.get('in_game')]
+    successful = [r for r in results if r.get("in_game")]
     if successful:
         print(f"\n✅ Found {len(successful)} working sequence(s):")
         for r in successful:
@@ -120,8 +119,8 @@ async def main():
 
     print("\nAll results:")
     for r in results:
-        if 'error' not in r:
-            status = "✅ GAME" if r.get('in_game') else "⚠️  DESC" if r.get('at_description') else "❌ MENU"
+        if "error" not in r:
+            status = "✅ GAME" if r.get("in_game") else "⚠️  DESC" if r.get("at_description") else "❌ MENU"
             print(f"  {status} {r['key']:15s} → {r['screen_hash']} ({r['prompt']})")
 
 

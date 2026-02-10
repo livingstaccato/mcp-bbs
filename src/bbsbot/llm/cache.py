@@ -69,9 +69,7 @@ class LLMCache:
         # Hash the JSON
         return hashlib.sha256(req_json.encode()).hexdigest()
 
-    def get(
-        self, request: ChatRequest | CompletionRequest
-    ) -> ChatResponse | CompletionResponse | None:
+    def get(self, request: ChatRequest | CompletionRequest) -> ChatResponse | CompletionResponse | None:
         """Get cached response if available and not expired.
 
         Args:
@@ -122,9 +120,7 @@ class LLMCache:
             self._evict_oldest()
 
         key = self._generate_key(request)
-        entry = CacheEntry(
-            response=response, created_at=time.time(), last_accessed=time.time()
-        )
+        entry = CacheEntry(response=response, created_at=time.time(), last_accessed=time.time())
         self._cache[key] = entry
 
     def _evict_oldest(self) -> None:
@@ -165,11 +161,7 @@ class LLMCache:
             Number of entries pruned
         """
         now = time.time()
-        expired_keys = [
-            key
-            for key, entry in self._cache.items()
-            if (now - entry.created_at) > self.ttl_seconds
-        ]
+        expired_keys = [key for key, entry in self._cache.items() if (now - entry.created_at) > self.ttl_seconds]
 
         for key in expired_keys:
             del self._cache[key]

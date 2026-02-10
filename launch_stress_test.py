@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import os
 import subprocess
-import time
-import yaml
 from pathlib import Path
+
+import yaml
+
 
 def launch_all_bots():
     """Launch all bot configurations in background."""
@@ -49,7 +50,7 @@ def launch_all_bots():
             pids.append((proc.pid, config_name))
 
         if (i + 1) % 10 == 0:
-            print(f"  [{i+1:3d}/{len(configs)}] Launched {len(pids)} bots...")
+            print(f"  [{i + 1:3d}/{len(configs)}] Launched {len(pids)} bots...")
 
     print(f"\n✓ All {len(configs)} bots launched!")
     print()
@@ -59,6 +60,7 @@ def launch_all_bots():
     print()
     print("Active processes:")
     subprocess.run(["ps", "aux", "|", "grep", "bbsbot tw2002", "|", "grep", "-v", "grep", "|", "wc", "-l"], shell=True)
+
 
 if __name__ == "__main__":
     launch_all_bots()

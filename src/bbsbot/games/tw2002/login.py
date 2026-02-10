@@ -14,9 +14,9 @@ import asyncio
 import os
 from pathlib import Path
 
-from bbsbot.games.tw2002.io import wait_and_respond, send_input, send_masked_password
-from bbsbot.games.tw2002.parsing import _extract_game_options, _select_trade_wars_game
+from bbsbot.games.tw2002.io import send_input, send_masked_password, wait_and_respond
 from bbsbot.games.tw2002.logging_utils import logger
+from bbsbot.games.tw2002.parsing import _extract_game_options, _select_trade_wars_game
 
 
 class GameFullError(RuntimeError):
@@ -127,12 +127,12 @@ def _get_actual_prompt(screen: str) -> str:
     Returns a prompt identifier based on last-line content, or empty string if unknown.
     """
     # Get the last 5 non-empty lines
-    lines = [l.strip() for l in screen.split('\n') if l.strip()]
+    lines = [l.strip() for l in screen.split("\n") if l.strip()]
     if not lines:
         return ""
 
     # Join last 5 lines for analysis
-    last_lines = '\n'.join(lines[-5:]).lower()
+    last_lines = "\n".join(lines[-5:]).lower()
     last_line = lines[-1].lower() if lines else ""
 
     # Check prompts in priority order (most specific first)
@@ -190,9 +190,7 @@ def _get_actual_prompt(screen: str) -> str:
 
     # Private game password prompt - MUST check before generic password prompt
     # Variations: "private game", "password is required to enter this game"
-    if ("private game" in last_lines or "required to enter this game" in last_lines) and (
-        "password" in last_line
-    ):
+    if ("private game" in last_lines or "required to enter this game" in last_lines) and ("password" in last_line):
         return "private_game_password"
 
     # Password prompt (check last line only to avoid matching completed passwords)
@@ -282,24 +280,23 @@ async def login_sequence(
             # First connection may take up to 90 seconds under heavy server load (90 bots)
             # Use longer timeout on first attempt, shorter on subsequent attempts
             timeout = 90000 if iteration == 0 else 20000
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=timeout
-            )
-        except TimeoutError as e:
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=timeout)
+        except TimeoutError:
             # Print screen on timeout for debugging
-            print(f"⚠ Timeout in Phase 1, checking screen content...")
+            print("⚠ Timeout in Phase 1, checking screen content...")
             try:
                 timeout_screen = bot.session.snapshot().get("screen", "")
-                lines = [l.strip() for l in timeout_screen.split('\n') if l.strip()]
+                lines = [l.strip() for l in timeout_screen.split("\n") if l.strip()]
                 print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
                 for line in lines[-10:]:
                     print(f"        | {line[:75]}")
 
                 # Check if we're actually at game selection screen (robust content-based detection)
                 screen_lower = timeout_screen.lower()
-                if ("selection" in screen_lower and "for menu" in screen_lower) or \
-                   ("<a>" in screen_lower and "<b>" in screen_lower and "game" in screen_lower):
-                    print(f"      ✓ Detected game selection screen by content!")
+                if ("selection" in screen_lower and "for menu" in screen_lower) or (
+                    "<a>" in screen_lower and "<b>" in screen_lower and "game" in screen_lower
+                ):
+                    print("      ✓ Detected game selection screen by content!")
                     # Set variables as if prompt was detected
                     screen = timeout_screen
                     prompt_id = "menu_selection"  # Fake prompt ID for Phase 2 compatibility
@@ -323,19 +320,19 @@ async def login_sequence(
         # Handle prompts until we reach menu_selection
         if "twgs_begin_adventure" in prompt_id:
             # Final prompt before entering game - just press Enter
-            print(f"      → Begin adventure prompt, pressing Enter")
+            print("      → Begin adventure prompt, pressing Enter")
             await bot.session.send("\r")
             await asyncio.sleep(0.3)
 
         elif "twgs_ship_selection" in prompt_id:
             # Ship/sector selection during character creation - requires Enter
-            print(f"      → Ship/sector selection prompt, choosing 1")
+            print("      → Ship/sector selection prompt, choosing 1")
             await send_input(bot, "1", input_type)
 
         elif "twgs_gender" in prompt_id:
             # Gender prompt during character creation
             # Note: TWGS needs Enter even though it seems like single_key
-            print(f"      → Gender prompt, sending M+Enter")
+            print("      → Gender prompt, sending M+Enter")
             await bot.session.send("M\r")
             await asyncio.sleep(0.3)
 
@@ -359,7 +356,7 @@ async def login_sequence(
 
         elif "character_password" in prompt_id:
             # Character password for new character
-            print(f"      → Character password prompt, sending password")
+            print("      → Character password prompt, sending password")
             await send_masked_password(bot, character_password)
             last_password_kind = "character"
 
@@ -392,21 +389,22 @@ async def login_sequence(
             #
             # If the system has a special "NEW" workflow, it should be triggered by
             # an explicit on-screen instruction, not by default heuristics.
-            print(f"      → Sending username")
+            print("      → Sending username")
             await send_input(bot, username, input_type, wait_after=0.5)
             sent_username = True
             # Give server extra time to process login and prepare next prompt
             await asyncio.sleep(0.3)
 
         elif "menu_selection" in prompt_id:
-            print(f"      ✓ Reached game selection menu!")
+            print("      ✓ Reached game selection menu!")
             break
 
         elif "sector_command" in prompt_id:
             # Already in game! Existing character logged in directly.
-            print(f"      ✓ Already in game! (existing character)")
+            print("      ✓ Already in game! (existing character)")
             # Skip to phase 3 end - parse state and return
-            from bbsbot.games.tw2002.parsing import _parse_sector_from_screen, _parse_credits_from_screen
+            from bbsbot.games.tw2002.parsing import _parse_credits_from_screen, _parse_sector_from_screen
+
             bot.current_sector = _parse_sector_from_screen(bot, screen)
             bot.current_credits = _parse_credits_from_screen(bot, screen)
             print(
@@ -428,11 +426,11 @@ async def login_sequence(
                 await bot.session.send(f"{username}\r")
                 await asyncio.sleep(0.3)
                 handled = True
-            elif ("selection" in screen_lower and "for menu" in screen_lower):
-                print(f"      ✓ [Content] Detected game selection menu!")
+            elif "selection" in screen_lower and "for menu" in screen_lower:
+                print("      ✓ [Content] Detected game selection menu!")
                 break
             elif "command" in screen_lower and ("?" in screen_lower or "tl=" in screen_lower):
-                print(f"      ✓ [Content] Detected game command prompt - already in game!")
+                print("      ✓ [Content] Detected game command prompt - already in game!")
                 return
 
             if not handled:
@@ -443,7 +441,7 @@ async def login_sequence(
     # PHASE 2: Send game selection
     print("\nSending game selection...")
     # Use configured game_letter if available, otherwise auto-detect
-    config_letter = getattr(bot.config.connection, 'game_letter', None) if hasattr(bot, 'config') else None
+    config_letter = getattr(bot.config.connection, "game_letter", None) if hasattr(bot, "config") else None
     game_letter = config_letter if config_letter else "B"  # Default to B if not configured
     original_threshold = bot.loop_detection.threshold  # Save before any modifications
 
@@ -455,7 +453,7 @@ async def login_sequence(
         # Only auto-detect if no game_letter configured
         if not config_letter:
             game_letter = _select_trade_wars_game(screen)
-        print(f"  → Sending {game_letter}" + (f" (configured)" if config_letter else " (auto-detected)"))
+        print(f"  → Sending {game_letter}" + (" (configured)" if config_letter else " (auto-detected)"))
         await bot.session.send(game_letter)
         # Save game letter to bot for data directory scoping
         bot.last_game_letter = game_letter
@@ -465,7 +463,7 @@ async def login_sequence(
         print(f"  Available games: {options}")
         if not config_letter:
             game_letter = _select_trade_wars_game(screen)
-        print(f"  → Sending {game_letter}" + (f" (configured)" if config_letter else " (auto-detected)"))
+        print(f"  → Sending {game_letter}" + (" (configured)" if config_letter else " (auto-detected)"))
         await bot.session.send(game_letter)
         bot.last_game_letter = game_letter
         # Reset state before Phase 3 to prevent loop detection false triggers
@@ -473,7 +471,7 @@ async def login_sequence(
         bot.last_prompt_id = None
         # Increase threshold for game loading phase (intro screens may repeat pause prompt)
         bot.loop_detection.threshold = 15  # Increased for complex flows
-        print(f"  ✓ Reset loop detection state")
+        print("  ✓ Reset loop detection state")
 
     # PHASE 3: Wait for game to load and reach command prompt
     # IMPORTANT: See games/tw2002/TWGS_LOGIN_FLOW.md for flow documentation
@@ -513,11 +511,11 @@ async def login_sequence(
         except RuntimeError as e:
             print(f"✗ Game load error: {e}")
             raise
-        except TimeoutError as e:
+        except TimeoutError:
             # Print screen on timeout for debugging
             try:
                 timeout_screen = bot.session.snapshot().get("screen", "")
-                lines = [l.strip() for l in timeout_screen.split('\n') if l.strip()]
+                lines = [l.strip() for l in timeout_screen.split("\n") if l.strip()]
                 print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
                 for line in lines[-10:]:
                     print(f"        | {line[:75]}")
@@ -549,7 +547,7 @@ async def login_sequence(
 
         # Debug: Show screen content periodically (more frequently now)
         if step_in_phase3 % 5 == 0 or step_in_phase3 < 10 or step_in_phase3 >= 28:
-            lines = [l.strip() for l in screen.split('\n') if l.strip()]
+            lines = [l.strip() for l in screen.split("\n") if l.strip()]
             print(f"      [DEBUG] Screen ({len(lines)} lines), last 8:")
             for line in lines[-8:]:
                 print(f"        | {line[:75]}")
@@ -583,13 +581,13 @@ async def login_sequence(
 
         if actual_prompt == "command_prompt" or actual_prompt == "planet_prompt":
             # Reached game! (either sector command or planet command for new chars)
-            print(f"      ✓ Reached game!", flush=True)
+            print("      ✓ Reached game!", flush=True)
             reached_game = True
             break
 
         elif actual_prompt == "corporate_listings":
             # Corporate listings menu during login - exit with Q
-            print(f"      → Corporate listings detected, sending Q to exit...")
+            print("      → Corporate listings detected, sending Q to exit...")
             await bot.session.send("Q")
             await asyncio.sleep(0.5)
 
@@ -632,6 +630,7 @@ async def login_sequence(
         elif actual_prompt == "alias_prompt":
             # Name was taken, need to provide a unique alias
             import uuid
+
             short_id = uuid.uuid4().hex[:6]
             alias = f"Cdx{short_id}"
             print(f"      → Alias prompt (name taken), entering: {alias}")
@@ -640,6 +639,7 @@ async def login_sequence(
         elif actual_prompt == "alias_input":
             # Some servers skip the explanatory alias prompt and go straight to input.
             import uuid
+
             short_id = uuid.uuid4().hex[:6]
             alias = f"Cdx{short_id}"
             print(f"      → Alias input prompt, entering: {alias}")
@@ -657,7 +657,7 @@ async def login_sequence(
             await send_input(bot, planet_name, "multi_key")
 
         elif actual_prompt == "name_confirm":
-            print(f"      → Confirming name/alias: Y")
+            print("      → Confirming name/alias: Y")
             await bot.session.send("Y")
             await asyncio.sleep(0.3)
 
@@ -677,7 +677,10 @@ async def login_sequence(
                 # Prefer explicit on-screen banners.
                 if "required to enter this game" in screen_lower or "private game" in screen_lower:
                     kind = "game"
-                elif "repeat password to verify" in screen_lower or "please enter a password for this game account" in screen_lower:
+                elif (
+                    "repeat password to verify" in screen_lower
+                    or "please enter a password for this game account" in screen_lower
+                ):
                     kind = "character"
                 elif not sent_username:
                     kind = "game"
@@ -720,7 +723,7 @@ async def login_sequence(
                     await send_masked_password(bot, character_password)
 
         elif actual_prompt == "private_game_password":
-            print(f"      → Private game password prompt, sending game password")
+            print("      → Private game password prompt, sending game password")
             await send_masked_password(bot, game_password)
             last_password_kind = "game"
 
@@ -753,7 +756,7 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "yes_no_prompt":
-            print(f"      → Generic Y/N prompt, answering N")
+            print("      → Generic Y/N prompt, answering N")
             await bot.session.send("N")
             await asyncio.sleep(0.3)
 
@@ -771,8 +774,7 @@ async def login_sequence(
             menu_reentries += 1
             if menu_reentries > 20:
                 raise RuntimeError(
-                    f"Returned to game menu {menu_reentries} times - "
-                    f"likely wrong game password for game {game_letter}"
+                    f"Returned to game menu {menu_reentries} times - likely wrong game password for game {game_letter}"
                 )
             print(f"      → At menu, selecting game {game_letter} (re-entry #{menu_reentries})")
             await bot.session.send(game_letter)
@@ -787,7 +789,7 @@ async def login_sequence(
         # Fallback: if actual_prompt is empty, use pattern-based detection
         elif "twgs_begin_adventure" in prompt_id:
             # This prompt says "Press ENTER to begin" - needs Enter, not space
-            print(f"      → Begin adventure prompt, pressing Enter")
+            print("      → Begin adventure prompt, pressing Enter")
             await bot.session.send("\r")
             await asyncio.sleep(0.3)
 
@@ -797,14 +799,14 @@ async def login_sequence(
             sent_username = True
 
         elif "private_game_password" in prompt_id:
-            print(f"      → Sending game password (pattern)")
+            print("      → Sending game password (pattern)")
             await send_masked_password(bot, game_password)
             last_password_kind = "game"
 
         elif "game_password" in prompt_id:
             # Some servers emit a plain `Password?` without the "private game" banner.
             # Treat this as a game password request, not a character password.
-            print(f"      → Game password prompt (pattern), sending game password")
+            print("      → Game password prompt (pattern), sending game password")
             await send_masked_password(bot, game_password)
             last_password_kind = "game"
 
@@ -819,7 +821,7 @@ async def login_sequence(
             await send_input(bot, "", input_type)
 
         else:
-            print(f"      → Unknown state, pressing space")
+            print("      → Unknown state, pressing space")
             await bot.session.send(" ")
             await asyncio.sleep(0.2)
 
@@ -828,30 +830,30 @@ async def login_sequence(
 
     # Restore threshold after game loading phase
     bot.loop_detection.threshold = original_threshold
-    print(f"  [DEBUG] Threshold restored", flush=True)
+    print("  [DEBUG] Threshold restored", flush=True)
 
     # Debug: Show what we have after exiting login loop
-    print(f"  [DEBUG] After login loop - kv_data type: {type(kv_data)}, has credits: {'credits' in kv_data if kv_data else False}", flush=True)
-    if kv_data and 'credits' in kv_data:
+    print(
+        f"  [DEBUG] After login loop - kv_data type: {type(kv_data)}, has credits: {'credits' in kv_data if kv_data else False}",
+        flush=True,
+    )
+    if kv_data and "credits" in kv_data:
         print(f"  [DEBUG] kv_data HAS CREDITS: {kv_data.get('credits')}", flush=True)
 
     # Parse initial state
-    print(f"  [DEBUG] Importing parsing...", flush=True)
-    from bbsbot.games.tw2002.parsing import _parse_sector_from_screen, _parse_credits_from_screen
-    print(f"  [DEBUG] Parsing sector...", flush=True)
+    print("  [DEBUG] Importing parsing...", flush=True)
+    from bbsbot.games.tw2002.parsing import _parse_credits_from_screen, _parse_sector_from_screen
+
+    print("  [DEBUG] Parsing sector...", flush=True)
     bot.current_sector = _parse_sector_from_screen(bot, screen)
-    print(f"  [DEBUG] Parsing credits...", flush=True)
+    print("  [DEBUG] Parsing credits...", flush=True)
     bot.current_credits = _parse_credits_from_screen(bot, screen)
 
     # Note: Bots login on planet command prompts where credits aren't visible.
     # The orient() function (called on first trading turn) will establish accurate state
     # including credits by sending D command from a sector context. Accept credits=0 here.
 
-    print(
-        f"\n✓ Login complete - Sector {bot.current_sector}, "
-        f"Credits: {bot.current_credits:,}",
-        flush=True
-    )
+    print(f"\n✓ Login complete - Sector {bot.current_sector}, Credits: {bot.current_credits:,}", flush=True)
 
 
 async def test_login(bot):
@@ -869,6 +871,7 @@ async def test_login(bot):
 
     try:
         from bbsbot.games.tw2002.connection import connect
+
         await connect(bot)
         await login_sequence(bot)
         print("\n✓ Login test PASSED")

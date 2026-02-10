@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from collections import defaultdict
+
 
 def monitor_tests():
     """Monitor all bot tests for completion."""
@@ -35,7 +35,9 @@ def monitor_tests():
         if completed > previous_count or completed % 10 == 0:
             elapsed = time.time() - start_time
             percentage = (completed / expected_configs) * 100
-            print(f"[{time.strftime('%H:%M:%S')}] Sessions completed: {completed}/{expected_configs} ({percentage:.1f}%) - Elapsed: {elapsed/3600:.1f}h")
+            print(
+                f"[{time.strftime('%H:%M:%S')}] Sessions completed: {completed}/{expected_configs} ({percentage:.1f}%) - Elapsed: {elapsed / 3600:.1f}h"
+            )
             previous_count = completed
 
         # Check if all completed
@@ -51,6 +53,7 @@ def monitor_tests():
             return True
 
         time.sleep(60)  # Check every minute
+
 
 if __name__ == "__main__":
     if monitor_tests():

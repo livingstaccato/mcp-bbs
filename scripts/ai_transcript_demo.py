@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
 import time
 
 # ── ANSI colors ──────────────────────────────────────────────────────────
@@ -28,7 +27,6 @@ def header(title: str) -> str:
 
 
 async def main() -> None:
-    from bbsbot.games.tw2002.config import AIStrategyConfig, BotConfig
     from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
     from bbsbot.games.tw2002.strategies.ai.parser import ResponseParser
     from bbsbot.games.tw2002.strategies.ai.prompts import PromptBuilder
@@ -116,7 +114,9 @@ async def main() -> None:
 
         # Build prompt
         messages = builder.build(
-            state, knowledge, {},
+            state,
+            knowledge,
+            {},
             goal_description="Maximize credits per turn through smart trading",
             goal_instructions="Focus on high-value trade routes. Avoid unnecessary combat.",
         )

@@ -1,6 +1,6 @@
 """Type definitions for LLM requests and responses."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 

@@ -57,6 +57,8 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._failed_warps: set[tuple[int, int]] = set()  # (from_sector, to_sector)
         self._last_discover_ts: float = 0.0
         self._last_known_sectors: int = 0
+        self._explore_since_profit: int = 0
+        self._replan_explore_threshold: int = 10
 
     @property
     def name(self) -> str:
@@ -153,6 +155,20 @@ class ProfitablePairsStrategy(TradingStrategy):
         if should_upgrade:
             return TradeAction.UPGRADE, {"upgrade_type": upgrade_type}
 
+        # If we keep exploring/moving without a profitable trade cycle, force
+        # pair rediscovery and reset phase. This avoids long "explore-only" runs.
+        if self._explore_since_profit >= self._replan_explore_threshold:
+            logger.info(
+                "Explore streak=%d without profitable trade; forcing pair replan",
+                self._explore_since_profit,
+            )
+            self._current_pair = None
+            self._pair_phase = "idle"
+            self._pairs_dirty = True
+            self._explore_since_profit = 0
+            # Failed warp history can become stale after map updates.
+            self._failed_warps.clear()
+
         # Refresh pairs if needed
         # Important: after a server reset, knowledge fills in gradually. If we
         # discovered 0 pairs early, we must keep re-discovering as knowledge grows.
@@ -201,8 +217,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                 return self._explore_for_ports(state)
             self._pair_phase = "going_to_buy"
             logger.info(
-                f"Selected pair: buy at {self._current_pair.buy_sector}, "
-                f"sell at {self._current_pair.sell_sector}"
+                f"Selected pair: buy at {self._current_pair.buy_sector}, sell at {self._current_pair.sell_sector}"
             )
 
         pair = self._current_pair
@@ -352,9 +367,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                         continue
 
                     # Check distance
-                    path = self.knowledge.find_path(
-                        buy_sector, sell_sector, max_hops=max_hops
-                    )
+                    path = self.knowledge.find_path(buy_sector, sell_sector, max_hops=max_hops)
                     if not path:
                         continue
 
@@ -424,10 +437,12 @@ class ProfitablePairsStrategy(TradingStrategy):
         if current is None:
             return self._pairs[0] if self._pairs else None
 
-        # Find pair with best profit/turn ratio from current position when priced,
-        # else bias toward closer pairs to discover pricing quickly.
-        best_pair = None
-        best_score = 0
+        # Find pair with best profit/turn ratio from current position.
+        # Prefer viable price-known pairs over structural unknown-price pairs.
+        best_priced_pair = None
+        best_priced_score = 0.0
+        best_unpriced_pair = None
+        best_unpriced_score = 0.0
 
         _, min_ppt = self._effective_limits(state)
         for pair in self._pairs:
@@ -450,17 +465,23 @@ class ProfitablePairsStrategy(TradingStrategy):
                     # We already know this pair is non-viable at current prices/liquidity.
                     continue
                 ppt = float(price_profit) / float(max(turns, 1))
-                if ppt < float(min_ppt):
+                # Keep strict minimum only after bankroll leaves early bootstrap.
+                if ppt < float(min_ppt) and int(state.credits or 0) >= 5_000:
                     continue
-                score = price_profit / max(turns, 1)
+                score = float(price_profit) / float(max(turns, 1))
+                if score > best_priced_score:
+                    best_priced_score = score
+                    best_priced_pair = pair
             else:
                 # Unknown pricing: explore the closest structural pair to collect prices.
-                score = 1.0 / max(turns, 1)
-            if score > best_score:
-                best_score = score
-                best_pair = pair
+                score = 1.0 / float(max(turns, 1))
+                if score > best_unpriced_score:
+                    best_unpriced_score = score
+                    best_unpriced_pair = pair
 
-        return best_pair
+        if best_priced_pair is not None:
+            return best_priced_pair
+        return best_unpriced_pair
 
     def _invalidate_pair(self, pair: PortPair) -> None:
         """Remove a pair that's no longer valid."""
@@ -484,6 +505,7 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # All unexplored are failed; try explored warps we haven't failed on
         import random
+
         viable = [w for w in state.warps if (current, w) not in self._failed_warps]
         if viable:
             target = random.choice(viable)
@@ -560,8 +582,8 @@ class ProfitablePairsStrategy(TradingStrategy):
         # Track failed warps (EXPLORE/MOVE that didn't change sector)
         if result.action in (TradeAction.EXPLORE, TradeAction.MOVE) and not result.success:
             # result should have from_sector and to_sector for tracking
-            from_sector = getattr(result, 'from_sector', None)
-            to_sector = getattr(result, 'to_sector', None)
+            from_sector = getattr(result, "from_sector", None)
+            to_sector = getattr(result, "to_sector", None)
             if from_sector and to_sector:
                 self._failed_warps.add((from_sector, to_sector))
                 logger.debug(f"Marked warp {from_sector} -> {to_sector} as failed")
@@ -572,6 +594,13 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # Successful trade - update pair timestamp
         if result.action == TradeAction.TRADE and result.success:
+            if int(getattr(result, "profit", 0) or 0) > 0:
+                self._explore_since_profit = 0
+            else:
+                self._explore_since_profit += 1
             if self._current_pair:
                 from time import time
+
                 self._current_pair.last_traded = time()
+        elif result.action in (TradeAction.EXPLORE, TradeAction.MOVE):
+            self._explore_since_profit += 1

@@ -22,11 +22,10 @@ import socket
 import sys
 from pathlib import Path
 
-# Add src to path for imports
-
-from bbsbot.games.tw2002.bot import TradingBot
 from bbsbot.games.tw2002.admin import TW2002Admin
 
+# Add src to path for imports
+from bbsbot.games.tw2002.bot import TradingBot
 
 # Docker data volume path - TW2002 game data files
 # Note: Docker volume requires sudo, so we copy files to /tmp/tw2002-data
@@ -46,7 +45,7 @@ def is_port_open(host: str, port: int) -> bool:
         result = sock.connect_ex((host, port))
         sock.close()
         return result == 0
-    except socket.error:
+    except OSError:
         return False
 
 
@@ -113,11 +112,12 @@ async def test_twerk_analysis(data_dir: Path) -> dict:
         if routes:
             print("\n  Top 5 routes by efficiency:")
             for i, route in enumerate(routes[:5]):
-                print(f"    {i + 1}. {route.commodity}: "
-                      f"sector {route.buy_sector} -> {route.sell_sector}")
-                print(f"       Distance: {route.distance} hops, "
-                      f"Profit/unit: {route.profit_per_unit:.1f}, "
-                      f"Efficiency: {route.efficiency_score:.1f}")
+                print(f"    {i + 1}. {route.commodity}: sector {route.buy_sector} -> {route.sell_sector}")
+                print(
+                    f"       Distance: {route.distance} hops, "
+                    f"Profit/unit: {route.profit_per_unit:.1f}, "
+                    f"Efficiency: {route.efficiency_score:.1f}"
+                )
     except Exception as e:
         print(f"  ERROR analyzing routes: {e}")
         routes = []
@@ -172,6 +172,7 @@ async def test_terminal_login(host: str, port: int) -> TradingBot | None:
     except Exception as e:
         print(f"  ERROR during login: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -187,10 +188,10 @@ async def test_execute_trade(bot: TradingBot, route) -> dict:
         Trade result dictionary
     """
     print("\n" + "=" * 80)
-    print(f"PHASE 3: Execute Trade Route")
+    print("PHASE 3: Execute Trade Route")
     print("=" * 80)
 
-    print(f"\n[Route Details]")
+    print("\n[Route Details]")
     print(f"  Commodity: {route.commodity}")
     print(f"  Buy at sector: {route.buy_sector}")
     print(f"  Sell at sector: {route.sell_sector}")
@@ -200,7 +201,7 @@ async def test_execute_trade(bot: TradingBot, route) -> dict:
     initial_credits = bot.current_credits
     initial_sector = bot.current_sector
 
-    print(f"\n[Starting State]")
+    print("\n[Starting State]")
     print(f"  Credits: {initial_credits:,}")
     print(f"  Sector: {initial_sector}")
 
@@ -214,7 +215,7 @@ async def test_execute_trade(bot: TradingBot, route) -> dict:
         final_sector = bot.current_sector
         profit = final_credits - initial_credits
 
-        print(f"\n[Final State]")
+        print("\n[Final State]")
         print(f"  Credits: {final_credits:,}")
         print(f"  Sector: {final_sector}")
         print(f"  Profit: {profit:,}")
@@ -231,6 +232,7 @@ async def test_execute_trade(bot: TradingBot, route) -> dict:
     except Exception as e:
         print(f"  ERROR during trade: {e}")
         import traceback
+
         traceback.print_exc()
         return {
             "success": False,
@@ -265,7 +267,7 @@ async def test_verify_consistency(
     terminal_credits = bot.current_credits
     terminal_sector = bot.current_sector
 
-    print(f"\n[Terminal State]")
+    print("\n[Terminal State]")
     print(f"  Credits: {terminal_credits:,}")
     print(f"  Sector: {terminal_sector}")
 
@@ -278,7 +280,7 @@ async def test_verify_consistency(
             file_credits = player.credits
             file_sector = player.sector
 
-            print(f"\n[File State (twerk)]")
+            print("\n[File State (twerk)]")
             print(f"  Credits: {file_credits:,}")
             print(f"  Sector: {file_sector}")
 
@@ -286,7 +288,7 @@ async def test_verify_consistency(
             credits_match = terminal_credits == file_credits
             sector_match = terminal_sector == file_sector
 
-            print(f"\n[Verification]")
+            print("\n[Verification]")
             print(f"  Credits match: {'YES' if credits_match else 'NO'}")
             print(f"  Sector match: {'YES' if sector_match else 'NO'}")
 
@@ -324,7 +326,7 @@ async def main():
     host = DEFAULT_HOST
     port = DEFAULT_PORT
 
-    print(f"\n[Configuration]")
+    print("\n[Configuration]")
     print(f"  Data directory: {data_dir}")
     print(f"  Server: {host}:{port}")
 
@@ -363,9 +365,7 @@ async def main():
             results["trade"] = {"skipped": True}
 
         # Phase 4: Verify Consistency
-        results["verification"] = await test_verify_consistency(
-            data_dir, bot, player_name="claude"
-        )
+        results["verification"] = await test_verify_consistency(data_dir, bot, player_name="claude")
 
     finally:
         # Cleanup

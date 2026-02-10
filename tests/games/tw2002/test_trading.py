@@ -7,11 +7,13 @@ Tests critical bug fixes:
 - Post-warp sector verification
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from bbsbot.games.tw2002.trading import (
-    guard_trade_port,
     extract_port_info,
+    guard_trade_port,
     is_trade_port_class,
 )
 
@@ -22,17 +24,21 @@ class TestPortClassValidation:
     def testis_trade_port_class_valid_classes(self):
         """Test that valid trade port classes are accepted."""
         valid_classes = [
-            "BBB", "BBS", "BSB", "BSS",
-            "SBB", "SBS", "SSB", "SSS",
+            "BBB",
+            "BBS",
+            "BSB",
+            "BSS",
+            "SBB",
+            "SBS",
+            "SSB",
+            "SSS",
         ]
         for port_class in valid_classes:
             assert is_trade_port_class(port_class), f"{port_class} should be valid"
 
     def testis_trade_port_class_invalid_classes(self):
         """Test that invalid port classes are rejected."""
-        invalid_classes = [
-            "ABC", "123", "BBBS", "B", "BS", "SPECIAL", "XYZ"
-        ]
+        invalid_classes = ["ABC", "123", "BBBS", "B", "BS", "SPECIAL", "XYZ"]
         for port_class in invalid_classes:
             assert not is_trade_port_class(port_class), f"{port_class} should be invalid"
 
@@ -103,7 +109,7 @@ class TestSpecialPortGuards:
         bot.game_state = None
 
         # Mock extract_port_info to return valid port
-        with patch('bbsbot.games.tw2002.trading.extract_port_info') as mock_extract:
+        with patch("bbsbot.games.tw2002.trading.extract_port_info") as mock_extract:
             mock_extract.return_value = (True, "BBS", "Trading Post")
 
             # Should not raise any exception
@@ -174,7 +180,7 @@ class TestWarpVerification:
         bot.session.send = AsyncMock()
 
         # Mock wait_and_respond to simulate warp prompt and arrival
-        with patch('bbsbot.games.tw2002.trading.navigation.wait_and_respond') as mock_wait:
+        with patch("bbsbot.games.tw2002.trading.navigation.wait_and_respond") as mock_wait:
             # First call: warp sector prompt
             # Second call: arrival at target
             mock_wait.side_effect = [
@@ -182,8 +188,8 @@ class TestWarpVerification:
                 ("single_key", "prompt.sector_command", "Sector 200 [?]:", {}),
             ]
 
-            with patch('bbsbot.games.tw2002.trading.navigation.send_input') as mock_send:
-                with patch('bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen') as mock_extract:
+            with patch("bbsbot.games.tw2002.trading.navigation.send_input") as mock_send:
+                with patch("bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen") as mock_extract:
                     mock_extract.return_value = 200
 
                     await _warp_to_sector(bot, 200)
@@ -216,15 +222,15 @@ class TestWarpVerification:
         bot.session = AsyncMock()
         bot.session.send = AsyncMock()
 
-        with patch('bbsbot.games.tw2002.trading.navigation.wait_and_respond') as mock_wait:
+        with patch("bbsbot.games.tw2002.trading.navigation.wait_and_respond") as mock_wait:
             # Simulate warp that lands at wrong sector
             mock_wait.side_effect = [
                 ("multi_key", "prompt.warp_sector", "Enter sector:", {}),
                 ("single_key", "prompt.sector_command", "Sector 150:", {}),  # Wrong sector
             ]
 
-            with patch('bbsbot.games.tw2002.trading.navigation.send_input'):
-                with patch('bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen') as mock_extract:
+            with patch("bbsbot.games.tw2002.trading.navigation.send_input"):
+                with patch("bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen") as mock_extract:
                     mock_extract.return_value = 150  # Landed at 150 instead of 200
 
                     with pytest.raises(RuntimeError, match="warp_failed:150"):
@@ -243,7 +249,7 @@ class TestWarpPromptValidation:
         bot.current_sector = 100
         bot.session = AsyncMock()
 
-        with patch('bbsbot.games.tw2002.trading.navigation.wait_and_respond') as mock_wait:
+        with patch("bbsbot.games.tw2002.trading.navigation.wait_and_respond") as mock_wait:
             # Simulate pause prompt followed by warp prompt
             mock_wait.side_effect = [
                 ("any_key", "prompt.pause_simple", "[Pause]", {}),  # Pause first
@@ -251,16 +257,17 @@ class TestWarpPromptValidation:
                 ("single_key", "prompt.sector_command", "Sector 200:", {}),
             ]
 
-            with patch('bbsbot.games.tw2002.trading.navigation.send_input') as mock_send:
-                with patch('bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen') as mock_extract:
+            with patch("bbsbot.games.tw2002.trading.navigation.send_input") as mock_send:
+                with patch("bbsbot.games.tw2002.trading.navigation.extract_sector_from_screen") as mock_extract:
                     mock_extract.return_value = 200
 
                     await _warp_to_sector(bot, 200)
 
                     # Verify send_input was called with multi_key (from warp prompt)
                     # not any_key (from pause prompt)
-                    calls = [call for call in mock_send.call_args_list
-                            if len(call[0]) > 2 and call[0][2] == "multi_key"]
+                    calls = [
+                        call for call in mock_send.call_args_list if len(call[0]) > 2 and call[0][2] == "multi_key"
+                    ]
                     assert len(calls) > 0, "Should use multi_key from warp prompt"
 
 

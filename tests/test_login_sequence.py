@@ -6,7 +6,6 @@ to verify correct handling of various prompts and flows.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -435,6 +434,5 @@ class TestLoginSequenceIntegration:
             ]
         )
 
-        with patch("bbsbot.games.tw2002.login.wait_and_respond", fake_wait):
-            with pytest.raises(GameFullError):
-                await login_sequence(bot, username="botx", character_password="pw", game_password="game")
+        with patch("bbsbot.games.tw2002.login.wait_and_respond", fake_wait), pytest.raises(GameFullError):
+            await login_sequence(bot, username="botx", character_password="pw", game_password="game")

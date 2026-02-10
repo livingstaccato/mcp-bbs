@@ -18,27 +18,26 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
-from bbsbot.paths import default_knowledge_root
 from bbsbot.core.session_manager import SessionManager
-from bbsbot.games.tw2002.config import BotConfig, load_config
+from bbsbot.games.tw2002 import login, orientation
 from bbsbot.games.tw2002.bot import TradingBot
-from bbsbot.games.tw2002.multi_character import MultiCharacterManager
 from bbsbot.games.tw2002.character import CharacterState
-from bbsbot.games.tw2002 import login, orientation, io, trading
+from bbsbot.games.tw2002.config import BotConfig, load_config
 from bbsbot.games.tw2002.sophisticated_trader import SophisticatedTrader
+from bbsbot.paths import default_knowledge_root
 
 logger = logging.getLogger(__name__)
 
 
 class BotRole(Enum):
     """Different bot roles for coordination."""
-    TRADER = "trader"           # Primary trader
-    HAULER = "hauler"          # High-capacity trader
-    BANKER = "banker"           # Trader who banks frequently
-    UPGRADER = "upgrader"       # Trader who upgrades ship
-    EXPLORER = "explorer"       # Trader who explores new routes
+
+    TRADER = "trader"  # Primary trader
+    HAULER = "hauler"  # High-capacity trader
+    BANKER = "banker"  # Trader who banks frequently
+    UPGRADER = "upgrader"  # Trader who upgrades ship
+    EXPLORER = "explorer"  # Trader who explores new routes
 
 
 @dataclass
@@ -159,11 +158,7 @@ class CoordinatedBot:
         self.bot.session = await self.session_manager.get_session(self.session_id)
 
         knowledge_root = default_knowledge_root()
-        await self.session_manager.enable_learning(
-            self.session_id,
-            knowledge_root,
-            namespace="tw2002"
-        )
+        await self.session_manager.enable_learning(self.session_id, knowledge_root, namespace="tw2002")
 
         logger.info(f"[{self.character_name}] Connected successfully")
 
@@ -185,7 +180,8 @@ class CoordinatedBot:
         logger.info(f"[{self.character_name}] Login complete")
 
         # Initialize orientation and sector knowledge
-        from bbsbot.games.tw2002.orientation import SectorKnowledge, GameState
+        from bbsbot.games.tw2002.orientation import SectorKnowledge
+
         self.bot.sector_knowledge = SectorKnowledge(self.data_dir)
 
         # Initialize game state
@@ -213,7 +209,7 @@ class CoordinatedBot:
                     self.last_coordination_check = time.time()
 
                 # Check if out of turns
-                if self.bot.game_state and hasattr(self.bot.game_state, 'turns'):
+                if self.bot.game_state and hasattr(self.bot.game_state, "turns"):
                     if self.bot.game_state.turns is not None and self.bot.game_state.turns <= 0:
                         logger.info(f"[{self.character_name}] Out of turns! Final credits: {self.bot.current_credits}")
                         break
@@ -240,7 +236,7 @@ class CoordinatedBot:
         """Coordinate with other bots via shared state."""
         # Get turns if available
         turns = None
-        if self.bot and self.bot.game_state and hasattr(self.bot.game_state, 'turns'):
+        if self.bot and self.bot.game_state and hasattr(self.bot.game_state, "turns"):
             turns = self.bot.game_state.turns
 
         # Update bot status
@@ -326,6 +322,7 @@ class MultiBotCoordinator:
 
     def setup_signal_handlers(self):
         """Setup graceful shutdown on Ctrl+C."""
+
         def signal_handler(sig, frame):
             logger.info("\n🛑 Shutdown signal received, stopping all bots...")
             self.shutdown_event.set()
@@ -382,9 +379,9 @@ class MultiBotCoordinator:
         while not self.shutdown_event.is_set():
             await asyncio.sleep(30)
 
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print("MULTI-BOT STATUS REPORT")
-            print("="*80)
+            print("=" * 80)
 
             for bot_name, status in self.shared_state.active_bots.items():
                 age = time.time() - status.get("last_seen", time.time())
@@ -400,15 +397,15 @@ class MultiBotCoordinator:
             print(f"\n  Total Trades: {self.shared_state.total_trades}")
             print(f"  Total Credits: {self.shared_state.total_credits}")
             print(f"  Sectors Mapped: {self.shared_state.sectors_mapped}")
-            print("="*80 + "\n")
+            print("=" * 80 + "\n")
 
     async def run(self):
         """Run the multi-bot system."""
         import random
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("TRADE WARS 2002 - MULTI-BOT COORDINATED GAMEPLAY")
-        print("="*80)
+        print("=" * 80)
         print(f"\nSpawning {self.num_bots} coordinated bots...")
         print(f"Connections staggered over {self.connection_window} seconds")
         print("Press Ctrl+C to stop all bots gracefully\n")
@@ -425,16 +422,13 @@ class MultiBotCoordinator:
 
         # Sort to show connection order
         sorted_delays = sorted(enumerate(connection_delays), key=lambda x: x[1])
-        print(f"Connection schedule (first 10 bots):")
+        print("Connection schedule (first 10 bots):")
         for idx, delay in sorted_delays[:10]:
             print(f"  {self.bots[idx].character_name:20s} @ {delay:5.1f}s")
         print()
 
         # Start all bots concurrently with staggered connections
-        tasks = [
-            asyncio.create_task(self.run_bot(bot, delay))
-            for bot, delay in zip(self.bots, connection_delays)
-        ]
+        tasks = [asyncio.create_task(self.run_bot(bot, delay)) for bot, delay in zip(self.bots, connection_delays)]
 
         # Add monitor task
         monitor_task = asyncio.create_task(self.monitor_and_report())
@@ -465,7 +459,7 @@ async def main():
     )
 
     # Allow override via command line
-    import sys
+
     num_bots = int(sys.argv[1]) if len(sys.argv) > 1 else 5
     connection_window = int(sys.argv[2]) if len(sys.argv) > 2 else 60
 

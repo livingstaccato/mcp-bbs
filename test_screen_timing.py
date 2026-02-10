@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+
 import pyte
+
 
 class MockTransport:
     """Mock transport that simulates BBS menu display."""
@@ -18,8 +20,10 @@ class MockTransport:
         # First read: show menu
         if not self.menu_sent:
             self.menu_sent = True
-            menu = "<A> Attack this Port\r\n<T> Trade at this Port\r\n<Q> Quit, nevermind\r\n\r\nEnter your choice [T] :"
-            return menu.encode('cp437')
+            menu = (
+                "<A> Attack this Port\r\n<T> Trade at this Port\r\n<Q> Quit, nevermind\r\n\r\nEnter your choice [T] :"
+            )
+            return menu.encode("cp437")
 
         # Subsequent reads: nothing new
         await asyncio.sleep(timeout_ms / 1000)
@@ -27,6 +31,7 @@ class MockTransport:
 
     def is_connected(self):
         return True
+
 
 class MockEmulator:
     """Mock emulator that uses pyte."""
@@ -36,7 +41,7 @@ class MockEmulator:
         self._stream = pyte.Stream(self._screen)
 
     def process(self, data: bytes):
-        text = data.decode('cp437', errors='replace')
+        text = data.decode("cp437", errors="replace")
         self._stream.feed(text)
 
     def get_snapshot(self):
@@ -50,6 +55,7 @@ class MockEmulator:
     def get_screen(self):
         """Direct screen access - no I/O."""
         return "\n".join(self._screen.display)
+
 
 async def test_timing_issue():
     """Test the timing issue between get_screen() and read()."""
@@ -106,6 +112,7 @@ async def test_timing_issue():
     emulator3.process(data)
     screen_fresh = emulator3.get_screen()
     print(screen_fresh[:200])
+
 
 if __name__ == "__main__":
     asyncio.run(test_timing_issue())

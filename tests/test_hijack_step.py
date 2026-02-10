@@ -33,4 +33,3 @@ async def test_hijack_step_tokens_allow_two_checkpoints_then_block() -> None:
 
     await bot.set_hijacked(False)
     await asyncio.wait_for(bot.await_if_hijacked(), timeout=0.05)
-

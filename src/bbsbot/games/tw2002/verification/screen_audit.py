@@ -219,7 +219,9 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines.append("## Next Actions")
     lines.append("")
     lines.append("- Add/adjust rules in `games/tw2002/rules.json` for the top unmatched hashes above.")
-    lines.append("- If a screen is a data display (not an input prompt), add `expect_cursor_at_end: false` patterns or exclude it explicitly.")
+    lines.append(
+        "- If a screen is a data display (not an input prompt), add `expect_cursor_at_end: false` patterns or exclude it explicitly."
+    )
     lines.append("- Rerun this audit after changes to confirm coverage improved.")
     lines.append("")
 

@@ -1,6 +1,5 @@
 """Tests for themed name generator."""
 
-import pytest
 
 from bbsbot.games.tw2002.name_generator import NameGenerator
 
@@ -76,8 +75,28 @@ class TestNameGenerator:
         parts = ship.split()
         assert len(parts) == 3  # Descriptor + Concept + Numeral
         # Last part should be roman numeral
-        assert parts[2] in ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-                           "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"]
+        assert parts[2] in [
+            "I",
+            "II",
+            "III",
+            "IV",
+            "V",
+            "VI",
+            "VII",
+            "VIII",
+            "IX",
+            "X",
+            "XI",
+            "XII",
+            "XIII",
+            "XIV",
+            "XV",
+            "XVI",
+            "XVII",
+            "XVIII",
+            "XIX",
+            "XX",
+        ]
 
     def test_ship_names_are_unique(self):
         """Test that generated ship names are unique."""

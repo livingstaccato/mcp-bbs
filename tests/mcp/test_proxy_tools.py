@@ -10,7 +10,6 @@ from bbsbot.mcp.registry import get_manager
 def test_debug_proxy_tool_exists() -> None:
     """Test that the tw2002_debug proxy tool is registered."""
     # Import to trigger registration
-    from bbsbot.games.tw2002 import mcp_tools
 
     manager = get_manager()
     tw2002_registry = manager.get_registry("tw2002")
@@ -29,7 +28,6 @@ def test_debug_proxy_tool_exists() -> None:
 async def test_debug_proxy_tool_structure() -> None:
     """Test that the debug proxy tool has the expected structure."""
     # Import to trigger registration
-    from bbsbot.games.tw2002 import mcp_tools
 
     manager = get_manager()
     tw2002_registry = manager.get_registry("tw2002")
@@ -49,7 +47,6 @@ async def test_debug_proxy_tool_structure() -> None:
 
 def test_debug_proxy_tool_commands() -> None:
     """Test that debug proxy tool documents expected commands."""
-    from bbsbot.games.tw2002 import mcp_tools
 
     manager = get_manager()
     tw2002_registry = manager.get_registry("tw2002")

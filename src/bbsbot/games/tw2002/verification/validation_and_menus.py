@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 # Add src to path
-
 from bbsbot.games.tw2002 import TradingBot
 from bbsbot.learning.rules import RuleSet
 
@@ -32,6 +31,7 @@ async def test_menu_exploration():
         # Step 1: Connect
         print("\n[1/5] Connecting to server...")
         from bbsbot.games.tw2002.connection import connect
+
         await connect(bot)
         print(f"✓ Connected: {bot.session.host}:{bot.session.port}")
 
@@ -51,8 +51,7 @@ async def test_menu_exploration():
         print("     Tracking: prompt_id, kv_data presence, validation status")
         print()
 
-        from bbsbot.games.tw2002.io import wait_and_respond, send_input
-        from bbsbot.games.tw2002.login import _check_kv_validation
+        from bbsbot.games.tw2002.io import send_input, wait_and_respond
 
         login_prompts = []
         step = 0
@@ -65,9 +64,7 @@ async def test_menu_exploration():
         for _ in range(50):
             step += 1
             try:
-                input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                    bot, timeout_ms=5000
-                )
+                input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
 
                 # Track this prompt
                 has_kv = kv_data is not None
@@ -80,22 +77,22 @@ async def test_menu_exploration():
                 status = f"KV: {has_kv} | {validation_msg}" if has_kv else "KV: None"
                 print(f"  [{step:2d}] {prompt_id:30s} | {status}")
 
-                login_prompts.append({
-                    "step": step,
-                    "prompt_id": prompt_id,
-                    "input_type": input_type,
-                    "has_kv": has_kv,
-                    "kv_data": kv_data,
-                })
+                login_prompts.append(
+                    {
+                        "step": step,
+                        "prompt_id": prompt_id,
+                        "input_type": input_type,
+                        "has_kv": has_kv,
+                        "kv_data": kv_data,
+                    }
+                )
 
                 # Handle prompts
                 if "login_name" in prompt_id:
                     await send_input(bot, username, input_type)
                 elif "login_password" in prompt_id or "character_password" in prompt_id:
                     await send_input(bot, char_password, input_type)
-                elif "private_game_password" in prompt_id:
-                    await send_input(bot, game_password, input_type)
-                elif "game_password" in prompt_id:
+                elif "private_game_password" in prompt_id or "game_password" in prompt_id:
                     await send_input(bot, game_password, input_type)
                 elif "use_ansi_graphics" in prompt_id:
                     await bot.session.send("y\r")
@@ -122,26 +119,24 @@ async def test_menu_exploration():
                 print(f"  ✗ Error: {e}")
                 break
             except TimeoutError:
-                print(f"  ✗ Timeout")
+                print("  ✗ Timeout")
                 break
 
         # Step 4: Verify K/V extraction in game menu
         print("\n[4/5] Verifying K/V extraction in game menu...")
-        print(f"✓ Reached sector command prompt")
+        print("✓ Reached sector command prompt")
 
-        input_type, prompt_id, screen, kv_data = await wait_and_respond(
-            bot, timeout_ms=3000
-        )
+        input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=3000)
 
         if kv_data:
-            print(f"✓ K/V data extracted:")
+            print("✓ K/V data extracted:")
             for key, value in kv_data.items():
                 if key != "_validation":
                     print(f"  - {key}: {value}")
 
             validation = kv_data.get("_validation", {})
             if validation.get("valid"):
-                print(f"✓ Validation: PASSED")
+                print("✓ Validation: PASSED")
                 # Extract state
                 sector = kv_data.get("sector")
                 credits = kv_data.get("credits")
@@ -150,7 +145,7 @@ async def test_menu_exploration():
                 errors = validation.get("errors", [])
                 print(f"✗ Validation: FAILED - {errors}")
         else:
-            print(f"⚠️  No K/V data extracted for sector_command")
+            print("⚠️  No K/V data extracted for sector_command")
 
         # Step 5: Summary
         print("\n[5/5] Test Summary")
@@ -166,6 +161,7 @@ async def test_menu_exploration():
     except Exception as e:
         print(f"\n✗ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -182,8 +178,8 @@ async def test_extraction_accuracy():
     print("EXTRACTION ACCURACY TEST")
     print("=" * 80)
 
-    from bbsbot.learning.rules import RuleSet
     from bbsbot.learning.extractor import KVExtractor
+    from bbsbot.learning.rules import RuleSet
 
     rules = RuleSet.from_json_file(Path("games/tw2002/rules.json"))
 
@@ -240,9 +236,7 @@ async def test_extraction_accuracy():
             continue
 
         # Check expected fields
-        fields_match = all(
-            result.get(k) == v for k, v in test["expected_fields"].items()
-        )
+        fields_match = all(result.get(k) == v for k, v in test["expected_fields"].items())
 
         # Check validation
         validation = result.get("_validation", {})
@@ -259,9 +253,7 @@ async def test_extraction_accuracy():
             if not fields_match:
                 print(f"  Fields mismatch: expected {test['expected_fields']}, got {result}")
             if not validation_match:
-                print(
-                    f"  Validation mismatch: expected {test['should_validate']}, got {is_valid}"
-                )
+                print(f"  Validation mismatch: expected {test['should_validate']}, got {is_valid}")
             print(f"  Errors: {validation.get('errors', [])}")
             failed += 1
 
@@ -271,7 +263,7 @@ async def test_extraction_accuracy():
     if failed == 0:
         print("✅ EXTRACTION ACCURACY TEST PASSED")
     else:
-        print(f"✗ EXTRACTION ACCURACY TEST FAILED")
+        print("✗ EXTRACTION ACCURACY TEST FAILED")
 
     return failed == 0
 

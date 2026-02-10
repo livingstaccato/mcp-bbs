@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import itertools
 from pathlib import Path
+
 import yaml
 
 # Test dimensions
@@ -18,6 +19,7 @@ INTERVENTION_OPTIONS = [
     {"enabled": True, "auto_apply": False},
     {"enabled": True, "auto_apply": True},
 ]
+
 
 def create_opportunistic_config(game: str, turns: int, explore: float, banking: bool) -> dict:
     """Create opportunistic strategy config."""
@@ -47,9 +49,8 @@ def create_opportunistic_config(game: str, turns: int, explore: float, banking: 
         },
     }
 
-def create_ai_config(
-    game: str, turns: int, intervention: dict, banking: bool
-) -> dict:
+
+def create_ai_config(game: str, turns: int, intervention: dict, banking: bool) -> dict:
     """Create AI strategy config."""
     config = {
         "connection": {
@@ -89,20 +90,23 @@ def create_ai_config(
 
     # Add intervention thresholds if enabled
     if intervention.get("enabled"):
-        config["trading"]["ai_strategy"]["intervention"].update({
-            "min_priority": "low",
-            "cooldown_turns": 3,
-            "max_per_session": 20,
-            "loop_action_threshold": 2,
-            "loop_sector_threshold": 3,
-            "stagnation_turns": 8,
-            "profit_decline_ratio": 0.5,
-            "turn_waste_threshold": 0.3,
-            "analysis_temperature": 0.3,
-            "analysis_max_tokens": 800,
-        })
+        config["trading"]["ai_strategy"]["intervention"].update(
+            {
+                "min_priority": "low",
+                "cooldown_turns": 3,
+                "max_per_session": 20,
+                "loop_action_threshold": 2,
+                "loop_sector_threshold": 3,
+                "stagnation_turns": 8,
+                "profit_decline_ratio": 0.5,
+                "turn_waste_threshold": 0.3,
+                "analysis_temperature": 0.3,
+                "analysis_max_tokens": 800,
+            }
+        )
 
     return config
+
 
 def generate_all_configs():
     """Generate all test configuration files."""
@@ -112,18 +116,17 @@ def generate_all_configs():
     test_num = 0
 
     # Generate opportunistic configs
-    for game, turns, explore, banking in itertools.product(
-        GAMES, TURN_LIMITS, EXPLORATION_LEVELS, BANKING_OPTIONS
-    ):
+    for game, turns, explore, banking in itertools.product(GAMES, TURN_LIMITS, EXPLORATION_LEVELS, BANKING_OPTIONS):
         test_num += 1
         config = create_opportunistic_config(game, turns, explore, banking)
 
-        filename = f"{test_num:02d}_game{game}_opp_t{turns}_e{int(explore*10)}_b{int(banking)}.yaml"
+        filename = f"{test_num:02d}_game{game}_opp_t{turns}_e{int(explore * 10)}_b{int(banking)}.yaml"
         filepath = output_dir / filename
 
         with open(filepath, "w") as f:
-            f.write(f"# Test {test_num}: Game {game}, Opportunistic, "
-                   f"{turns} turns, explore={explore}, banking={banking}\n")
+            f.write(
+                f"# Test {test_num}: Game {game}, Opportunistic, {turns} turns, explore={explore}, banking={banking}\n"
+            )
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
         print(f"Created: {filename}")
@@ -136,21 +139,23 @@ def generate_all_configs():
         config = create_ai_config(game, turns, intervention, banking)
 
         intervention_str = (
-            "no_int" if not intervention["enabled"]
-            else f"int_auto{int(intervention.get('auto_apply', False))}"
+            "no_int" if not intervention["enabled"] else f"int_auto{int(intervention.get('auto_apply', False))}"
         )
         filename = f"{test_num:02d}_game{game}_ai_t{turns}_{intervention_str}_b{int(banking)}.yaml"
         filepath = output_dir / filename
 
         with open(filepath, "w") as f:
-            f.write(f"# Test {test_num}: Game {game}, AI Strategy, "
-                   f"{turns} turns, intervention={intervention_str}, banking={banking}\n")
+            f.write(
+                f"# Test {test_num}: Game {game}, AI Strategy, "
+                f"{turns} turns, intervention={intervention_str}, banking={banking}\n"
+            )
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
         print(f"Created: {filename}")
 
     print(f"\n✓ Generated {test_num} test configurations in {output_dir}")
     return test_num
+
 
 if __name__ == "__main__":
     total = generate_all_configs()

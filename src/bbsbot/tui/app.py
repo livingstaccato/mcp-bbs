@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import base64
+import contextlib
 import json
 import os
 import signal
@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 import pyte
-
 
 ANSI_RESET = "\x1b[0m"
 ANSI_HIDE_CURSOR = "\x1b[?25l"
@@ -418,7 +417,7 @@ class SpyTui:
             "REPLAY",
             f"playing: {'yes' if self._replay_playing else 'no'}",
             f"speed: {self._replay_speed:.2f}x",
-            f"index: {self._replay_index}/{max(len(self._events)-1, 0)}",
+            f"index: {self._replay_index}/{max(len(self._events) - 1, 0)}",
             "keys: space play/pause",
             "[ / ] step",
             "+ / - speed",
@@ -432,7 +431,7 @@ class SpyTui:
         for idx, info in enumerate(sorted(self._sessions.values(), key=lambda s: s.last_seen, reverse=True), 1):
             if len(lines) >= height - 1:
                 break
-            line = f"{idx:>2} {info.session_id[:6]} cur:{info.cursor.get('x',0)},{info.cursor.get('y',0)}"
+            line = f"{idx:>2} {info.session_id[:6]} cur:{info.cursor.get('x', 0)},{info.cursor.get('y', 0)}"
             lines.append(line)
         if not self._sessions:
             lines.append("(no sessions)")
@@ -465,7 +464,7 @@ class SpyTui:
         input_type = prompt.get("input_type", "")
         line1 = (
             f"session:{session_id} prompt:{prompt_id} input:{input_type} "
-            f"cursor:{cursor.get('x',0)},{cursor.get('y',0)}"
+            f"cursor:{cursor.get('x', 0)},{cursor.get('y', 0)}"
         )
         line2 = f"hash:{screen_hash} size:{cols}x{rows}"
         return [

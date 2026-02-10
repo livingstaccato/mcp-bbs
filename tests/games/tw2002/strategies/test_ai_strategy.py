@@ -1,7 +1,8 @@
 """Tests for AI strategy."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from bbsbot.games.tw2002.config import AIStrategyConfig, BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
@@ -145,14 +146,10 @@ async def test_ai_strategy_logs_llm_decision(ai_strategy, game_state):
 def test_ai_strategy_validate_move_decision(ai_strategy, game_state):
     """Test validation of MOVE decision."""
     # Valid move
-    assert ai_strategy._validate_decision(
-        TradeAction.MOVE, {"target_sector": 2}, game_state
-    )
+    assert ai_strategy._validate_decision(TradeAction.MOVE, {"target_sector": 2}, game_state)
 
     # Invalid move - target not in warps
-    assert not ai_strategy._validate_decision(
-        TradeAction.MOVE, {"target_sector": 99}, game_state
-    )
+    assert not ai_strategy._validate_decision(TradeAction.MOVE, {"target_sector": 99}, game_state)
 
     # Invalid move - no target
     assert not ai_strategy._validate_decision(TradeAction.MOVE, {}, game_state)
@@ -169,28 +166,18 @@ def test_ai_strategy_validate_trade_decision(ai_strategy, game_state):
         sector=1,
         has_port=False,
     )
-    assert not ai_strategy._validate_decision(
-        TradeAction.TRADE, {}, game_state_no_port
-    )
+    assert not ai_strategy._validate_decision(TradeAction.TRADE, {}, game_state_no_port)
 
 
 def test_ai_strategy_validate_upgrade_decision(ai_strategy, game_state):
     """Test validation of UPGRADE decision."""
     # Valid upgrade types
-    assert ai_strategy._validate_decision(
-        TradeAction.UPGRADE, {"upgrade_type": "holds"}, game_state
-    )
-    assert ai_strategy._validate_decision(
-        TradeAction.UPGRADE, {"upgrade_type": "fighters"}, game_state
-    )
-    assert ai_strategy._validate_decision(
-        TradeAction.UPGRADE, {"upgrade_type": "shields"}, game_state
-    )
+    assert ai_strategy._validate_decision(TradeAction.UPGRADE, {"upgrade_type": "holds"}, game_state)
+    assert ai_strategy._validate_decision(TradeAction.UPGRADE, {"upgrade_type": "fighters"}, game_state)
+    assert ai_strategy._validate_decision(TradeAction.UPGRADE, {"upgrade_type": "shields"}, game_state)
 
     # Invalid upgrade type
-    assert not ai_strategy._validate_decision(
-        TradeAction.UPGRADE, {"upgrade_type": "invalid"}, game_state
-    )
+    assert not ai_strategy._validate_decision(TradeAction.UPGRADE, {"upgrade_type": "invalid"}, game_state)
 
 
 def test_ai_strategy_find_opportunities(ai_strategy, game_state):

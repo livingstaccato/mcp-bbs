@@ -14,23 +14,24 @@ Now supports configuration via YAML file and the new systems:
 - D command optimization (only scan new sectors)
 - Banking, upgrades, and combat avoidance
 """
+
 import argparse
 import asyncio
 import random
 import re
-import sys
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from bbsbot.games.tw2002.bot import TradingBot
+from bbsbot.games.tw2002.character import CharacterState
 from bbsbot.games.tw2002.config import BotConfig, load_config
-from bbsbot.games.tw2002.character import CharacterManager, CharacterState
 from bbsbot.games.tw2002.multi_character import MultiCharacterManager
 
 
 class PortInfo(BaseModel):
     """Information about a port."""
+
     sector: int
     buying: list[str] = Field(default_factory=list)  # What port buys (we can sell)
     selling: list[str] = Field(default_factory=list)  # What port sells (we can buy)
@@ -41,6 +42,7 @@ class PortInfo(BaseModel):
 
 class GameSession(BaseModel):
     """Track game session state."""
+
     credits: int = 0
     turns_left: int = 0
     sector: int = 0
@@ -83,6 +85,7 @@ class TradeWarPlayer:
         # Initialize multi-character manager if not done
         if self.multi_char is None:
             from bbsbot.paths import default_knowledge_root
+
             knowledge_root = default_knowledge_root()
             data_dir = knowledge_root / "tw2002" / f"{self.host}_{self.port}"
             self.multi_char = MultiCharacterManager(
@@ -143,6 +146,7 @@ class TradeWarPlayer:
         except Exception as e:
             print(f"  ERROR: {e}", flush=True)
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -206,22 +210,22 @@ class TradeWarPlayer:
             await asyncio.sleep(0.3)
 
         # Parse credits
-        credit_match = re.search(r'Credits\s*:?\s*([\d,]+)', full_screen, re.IGNORECASE)
+        credit_match = re.search(r"Credits\s*:?\s*([\d,]+)", full_screen, re.IGNORECASE)
         if credit_match:
-            self.session.credits = int(credit_match.group(1).replace(',', ''))
+            self.session.credits = int(credit_match.group(1).replace(",", ""))
 
         # Parse turns
-        turn_match = re.search(r'Turns\s+[Ll]eft\s*:?\s*(\d+)', full_screen)
+        turn_match = re.search(r"Turns\s+[Ll]eft\s*:?\s*(\d+)", full_screen)
         if turn_match:
             self.session.turns_left = int(turn_match.group(1))
 
         # Parse holds
-        hold_match = re.search(r'Holds\s*:?\s*(\d+)', full_screen, re.IGNORECASE)
+        hold_match = re.search(r"Holds\s*:?\s*(\d+)", full_screen, re.IGNORECASE)
         if hold_match:
             self.session.holds = int(hold_match.group(1))
 
         # Parse current sector
-        sector_match = re.search(r'Sector\s*:?\s*(\d+)', full_screen, re.IGNORECASE)
+        sector_match = re.search(r"Sector\s*:?\s*(\d+)", full_screen, re.IGNORECASE)
         if sector_match:
             self.session.sector = int(sector_match.group(1))
 
@@ -276,9 +280,7 @@ class TradeWarPlayer:
         # Check for port - look for "Commerce" which indicates a trading port
         # or "Class X" port type (but not "no port" or "isn't a port")
         screen_lower = screen.lower()
-        if ("commerce" in screen_lower or
-            re.search(r'class\s+[1-9]', screen_lower) or
-            "trading port" in screen_lower):
+        if "commerce" in screen_lower or re.search(r"class\s+[1-9]", screen_lower) or "trading port" in screen_lower:
             if "no port" not in screen_lower and "isn't a port" not in screen_lower:
                 info["has_port"] = True
 
@@ -287,10 +289,10 @@ class TradeWarPlayer:
             info["has_planet"] = True
 
         # Parse warps
-        warp_match = re.search(r'Warps to Sector\(s\)\s*:\s*([\d\s\(\)\-]+)', screen)
+        warp_match = re.search(r"Warps to Sector\(s\)\s*:\s*([\d\s\(\)\-]+)", screen)
         if warp_match:
             warp_text = warp_match.group(1)
-            info["warps"] = [int(x) for x in re.findall(r'\d+', warp_text)]
+            info["warps"] = [int(x) for x in re.findall(r"\d+", warp_text)]
 
         # Record the observation to store warps, port, planet info
         # LLM HINT: Use record_observation() with a GameState to store sector info properly.
@@ -298,6 +300,7 @@ class TradeWarPlayer:
         # GameState requires 'context' argument even if we only need sector data.
         if sector and self.bot.sector_knowledge:
             from bbsbot.games.tw2002.orientation import GameState
+
             state = GameState(
                 context="sector_command",  # Required field
                 sector=sector,
@@ -351,7 +354,7 @@ class TradeWarPlayer:
                 port.selling.append("equipment")
 
         # Determine port type from class
-        type_match = re.search(r'Class\s*(\d+)', screen)
+        type_match = re.search(r"Class\s*(\d+)", screen)
         if type_match:
             port.port_type = f"Class {type_match.group(1)}"
 
@@ -414,7 +417,7 @@ class TradeWarPlayer:
             if screen == last_screen:
                 stuck_count += 1
                 if stuck_count >= 3:
-                    print(f"    [Stuck at same screen, breaking out]", flush=True)
+                    print("    [Stuck at same screen, breaking out]", flush=True)
                     break
             else:
                 stuck_count = 0
@@ -422,7 +425,7 @@ class TradeWarPlayer:
 
             # Check if back at sector command (done) - check LAST LINE for actual prompt
             # Only check after we've done at least 1 trade to avoid premature exit
-            lines = [l.strip() for l in screen.split('\n') if l.strip()]
+            lines = [l.strip() for l in screen.split("\n") if l.strip()]
             if lines and trades_made > 0:
                 last_line = lines[-1].lower()
                 # Sector command prompt format: "Command [TL=00:00:00]:[123] (?=Help)? :"
@@ -445,7 +448,7 @@ class TradeWarPlayer:
                     print(f"    [Max transactions reached ({trades_made}), exiting]")
                     break
                 # Extract max amount if shown
-                max_match = re.search(r'you can afford\s+(\d+)', screen_lower)
+                max_match = re.search(r"you can afford\s+(\d+)", screen_lower)
                 if max_match:
                     amount = int(max_match.group(1))
                 else:
@@ -458,7 +461,7 @@ class TradeWarPlayer:
                     print(f"    Buying/selling {amount} units...", flush=True)
                 else:
                     pending_trade = False
-                    print(f"    Skipping (0 units)...", flush=True)
+                    print("    Skipping (0 units)...", flush=True)
 
                 await self.bot.session.send(f"{amount}\r")
                 await asyncio.sleep(0.5)
@@ -475,9 +478,9 @@ class TradeWarPlayer:
             # Handle price offers - look for credit amounts > 100
             # LLM HINT: Only accept prices if pending_trade is True.
             # This prevents accepting offers for commodities we skipped (entered 0).
-            price_match = re.search(r'(\d{3,}[\d,]*)\s*credits', screen, re.IGNORECASE)
+            price_match = re.search(r"(\d{3,}[\d,]*)\s*credits", screen, re.IGNORECASE)
             if price_match and pending_trade:
-                offered_price = int(price_match.group(1).replace(',', ''))
+                offered_price = int(price_match.group(1).replace(",", ""))
                 if offered_price > 100:  # Actual price, not holds count
                     # Accept the offer (Y)
                     print(f"    Price: {offered_price:,} credits - accepting...", flush=True)
@@ -488,7 +491,7 @@ class TradeWarPlayer:
                     continue
             elif price_match and not pending_trade:
                 # LLM HINT: We see a price but didn't enter quantity. Skip it.
-                print(f"    [Skipping price offer - no pending trade]", flush=True)
+                print("    [Skipping price offer - no pending trade]", flush=True)
                 await asyncio.sleep(0.3)
                 continue
 
@@ -501,7 +504,7 @@ class TradeWarPlayer:
                 continue
 
             # Handle single-letter menu choices (common port prompts)
-            if re.search(r'\[.\]\s*\w+', screen):
+            if re.search(r"\[.\]\s*\w+", screen):
                 # Menu with options - check what's available
                 await asyncio.sleep(0.3)
                 continue
@@ -574,7 +577,7 @@ class TradeWarPlayer:
             screen_lower = screen.lower()
 
             # Debug: show last line of screen
-            lines = [l.strip() for l in screen.split('\n') if l.strip()]
+            lines = [l.strip() for l in screen.split("\n") if l.strip()]
             if lines and i < 3:
                 print(f"      [warp debug {i}] last line: {lines[-1][:60]}", flush=True)
 
@@ -658,8 +661,10 @@ class TradeWarPlayer:
             # Clear loop detection at start of each turn
             self.bot.loop_detection.reset()
 
-            print(f"\n[Turn {moves}] Sector {self.session.sector}, " +
-                  f"Credits: {self.session.credits:,}, Turns: {self.session.turns_left}")
+            print(
+                f"\n[Turn {moves}] Sector {self.session.sector}, "
+                + f"Credits: {self.session.credits:,}, Turns: {self.session.turns_left}"
+            )
 
             # Check if we hit target
             if self.session.credits >= target_credits:
@@ -693,8 +698,7 @@ class TradeWarPlayer:
             # Choose next sector
             if sector_info["warps"]:
                 # Pick a warp - prefer unexplored or random
-                unexplored = [w for w in sector_info["warps"]
-                              if w not in self.session.known_ports]
+                unexplored = [w for w in sector_info["warps"] if w not in self.session.known_ports]
                 if unexplored and consecutive_no_trade < 3:
                     next_sector = random.choice(unexplored)
                 else:
@@ -745,6 +749,7 @@ class TradeWarPlayer:
             except Exception as e:
                 print(f"\nError during gameplay: {e}", flush=True)
                 import traceback
+
                 traceback.print_exc()
 
             # Check if died or need to restart
@@ -810,11 +815,10 @@ class TradeWarPlayer:
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Play TW2002 to win - automated trading bot"
-    )
+    parser = argparse.ArgumentParser(description="Play TW2002 to win - automated trading bot")
     parser.add_argument(
-        "-c", "--config",
+        "-c",
+        "--config",
         type=Path,
         help="Path to YAML configuration file",
     )

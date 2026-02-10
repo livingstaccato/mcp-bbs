@@ -115,60 +115,42 @@ class KVExtractor:
             # Type validation
             if field_type == "int":
                 if not isinstance(value, int):
-                    errors.append(
-                        f"{field}: expected int, got {type(value).__name__}"
-                    )
+                    errors.append(f"{field}: expected int, got {type(value).__name__}")
                     continue
 
                 # Check min/max constraints
                 if "min" in validate_rules and value < validate_rules["min"]:
-                    errors.append(
-                        f"{field}: value {value} below min {validate_rules['min']}"
-                    )
+                    errors.append(f"{field}: value {value} below min {validate_rules['min']}")
                 if "max" in validate_rules and value > validate_rules["max"]:
-                    errors.append(
-                        f"{field}: value {value} exceeds max {validate_rules['max']}"
-                    )
+                    errors.append(f"{field}: value {value} exceeds max {validate_rules['max']}")
 
             elif field_type == "float":
                 if not isinstance(value, float):
-                    errors.append(
-                        f"{field}: expected float, got {type(value).__name__}"
-                    )
+                    errors.append(f"{field}: expected float, got {type(value).__name__}")
                     continue
 
                 # Check min/max constraints
                 if "min" in validate_rules and value < validate_rules["min"]:
-                    errors.append(
-                        f"{field}: value {value} below min {validate_rules['min']}"
-                    )
+                    errors.append(f"{field}: value {value} below min {validate_rules['min']}")
                 if "max" in validate_rules and value > validate_rules["max"]:
-                    errors.append(
-                        f"{field}: value {value} exceeds max {validate_rules['max']}"
-                    )
+                    errors.append(f"{field}: value {value} exceeds max {validate_rules['max']}")
 
             elif field_type == "string":
                 if not isinstance(value, str):
-                    errors.append(
-                        f"{field}: expected string, got {type(value).__name__}"
-                    )
+                    errors.append(f"{field}: expected string, got {type(value).__name__}")
                     continue
 
                 # Check pattern constraint if present
                 if "pattern" in validate_rules:
                     pattern = validate_rules["pattern"]
                     if not re.match(pattern, value):
-                        errors.append(
-                            f"{field}: value '{value}' does not match pattern {pattern}"
-                        )
+                        errors.append(f"{field}: value '{value}' does not match pattern {pattern}")
 
                 # Check allowed values
                 if "allowed_values" in validate_rules:
                     allowed = validate_rules["allowed_values"]
                     if value not in allowed:
-                        errors.append(
-                            f"{field}: value '{value}' not in allowed values {allowed}"
-                        )
+                        errors.append(f"{field}: value '{value}' not in allowed values {allowed}")
 
         return {"valid": len(errors) == 0, "errors": errors}
 

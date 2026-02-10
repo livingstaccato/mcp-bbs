@@ -89,9 +89,7 @@ async def get_bot_health() -> dict[str, Any]:
             "turns_left": turns_left,
             "total_turns_estimate": turns_completed + turns_left,
             "percent_complete": (
-                (turns_completed / (turns_completed + turns_left) * 100)
-                if (turns_completed + turns_left) > 0
-                else 0
+                (turns_completed / (turns_completed + turns_left) * 100) if (turns_completed + turns_left) > 0 else 0
             ),
         }
     else:
@@ -112,9 +110,7 @@ async def get_bot_health() -> dict[str, Any]:
         # Trades and profit tracking
         result["trades"] = {
             "executed": len(getattr(bot, "trade_history", [])),
-            "total_profit": sum(
-                t.get("profit", 0) for t in getattr(bot, "trade_history", [])
-            ),
+            "total_profit": sum(t.get("profit", 0) for t in getattr(bot, "trade_history", [])),
         }
     else:
         result["strategy"] = {
@@ -470,10 +466,7 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
             case _:
                 return {
                     "success": False,
-                    "error": (
-                        f"Unknown action: {action}. "
-                        f"Valid options: warp, dock, scan, trade, bank"
-                    ),
+                    "error": (f"Unknown action: {action}. Valid options: warp, dock, scan, trade, bank"),
                 }
 
     except Exception as e:
@@ -529,10 +522,7 @@ async def ask_strategy(
     if not hasattr(strategy, "ask_llm"):
         return {
             "success": False,
-            "error": (
-                f"Strategy '{getattr(strategy, 'name', 'unknown')}' "
-                f"does not support LLM delegation"
-            ),
+            "error": (f"Strategy '{getattr(strategy, 'name', 'unknown')}' does not support LLM delegation"),
             "hint": "Use AI-based strategy (e.g., ai_strategy) to enable LLM advice",
         }
 

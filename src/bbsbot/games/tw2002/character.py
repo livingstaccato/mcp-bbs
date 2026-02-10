@@ -13,6 +13,7 @@ from time import time
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
+
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 
@@ -251,10 +252,7 @@ class CharacterManager:
         Returns:
             List of character names with state files
         """
-        return [
-            p.stem.replace("_state", "")
-            for p in self.data_dir.glob("*_state.json")
-        ]
+        return [p.stem.replace("_state", "") for p in self.data_dir.glob("*_state.json")]
 
     def delete(self, name: str) -> bool:
         """Delete character state file.
@@ -387,10 +385,7 @@ class CharacterKnowledge:
             Path avoiding dangerous sectors, or None if no safe path
         """
         # Get dangerous sectors
-        dangerous = {
-            s for s in self.character.danger_zones
-            if self.is_dangerous(s, cooldown_minutes)
-        }
+        dangerous = {s for s in self.character.danger_zones if self.is_dangerous(s, cooldown_minutes)}
 
         if not dangerous:
             return self.base.find_path(start, end, max_hops)

@@ -134,10 +134,10 @@ CURRENT GOAL: {goal_description}
     def _format_current_situation(self, state: GameState) -> str:
         """Format current situation section."""
         return f"""CURRENT SITUATION:
-Location: Sector {state.sector if state.sector else 'Unknown'}
+Location: Sector {state.sector if state.sector else "Unknown"}
 Context: {state.context}
-Credits: {state.credits if state.credits is not None else 'Unknown'}
-Turns Left: {state.turns_left if state.turns_left is not None else 'Unknown'}"""
+Credits: {state.credits if state.credits is not None else "Unknown"}
+Turns Left: {state.turns_left if state.turns_left is not None else "Unknown"}"""
 
     def _format_ship_status(self, state: GameState) -> str:
         """Format ship status section."""
@@ -147,9 +147,9 @@ Turns Left: {state.turns_left if state.turns_left is not None else 'Unknown'}"""
 
         return f"""Ship Status:
   Holds: {holds_info}
-  Fighters: {state.fighters if state.fighters is not None else 'Unknown'}
-  Shields: {state.shields if state.shields is not None else 'Unknown'}
-  Type: {state.ship_type or 'Unknown'}"""
+  Fighters: {state.fighters if state.fighters is not None else "Unknown"}
+  Shields: {state.shields if state.shields is not None else "Unknown"}
+  Type: {state.ship_type or "Unknown"}"""
 
     def _format_current_sector(self, state: GameState) -> str:
         """Format current sector information."""
@@ -199,7 +199,7 @@ Turns Left: {state.turns_left if state.turns_left is not None else 'Unknown'}"""
     def _format_stats(self, stats: dict) -> str:
         """Format strategy statistics."""
         return f"""Strategy Stats:
-  Trades: {stats.get('trades_executed', 0)}
-  Total Profit: {stats.get('total_profit', 0)}
-  Profit/Turn: {stats.get('profit_per_turn', 0.0):.1f}
-  Turns Used: {stats.get('turns_used', 0)}"""
+  Trades: {stats.get("trades_executed", 0)}
+  Total Profit: {stats.get("total_profit", 0)}
+  Profit/Turn: {stats.get("profit_per_turn", 0.0):.1f}
+  Turns Used: {stats.get("turns_used", 0)}"""

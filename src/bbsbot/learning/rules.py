@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import json
 import re
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -144,7 +144,7 @@ class RuleSet(BaseModel):
         return patterns
 
     @classmethod
-    def from_json_file(cls, path: Path) -> "RuleSet":
+    def from_json_file(cls, path: Path) -> RuleSet:
         data = json.loads(path.read_text())
         return cls.model_validate(data)
 

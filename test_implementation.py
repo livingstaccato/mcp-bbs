@@ -7,9 +7,9 @@ Tests:
 3. Bot registration works
 4. AI strategy feedback configuration loads
 """
+
 import subprocess
 import sys
-from pathlib import Path
 
 
 def test_health_check():
@@ -47,7 +47,7 @@ def test_config_generation():
             print("  ✓ Config generation includes feedback settings")
             return True
         else:
-            print(f"  ✗ Config generation failed or missing feedback settings")
+            print("  ✗ Config generation failed or missing feedback settings")
             print(f"  Output preview: {result.stdout[:200]}")
             return False
     except Exception as e:
@@ -64,13 +64,13 @@ def test_bot_registration():
         manager = SessionManager()
 
         # Check methods exist
-        if not hasattr(manager, 'register_bot'):
+        if not hasattr(manager, "register_bot"):
             print("  ✗ Missing register_bot method")
             return False
-        if not hasattr(manager, 'get_bot'):
+        if not hasattr(manager, "get_bot"):
             print("  ✗ Missing get_bot method")
             return False
-        if not hasattr(manager, 'unregister_bot'):
+        if not hasattr(manager, "unregister_bot"):
             print("  ✗ Missing unregister_bot method")
             return False
 
@@ -90,20 +90,20 @@ def test_ai_strategy_config():
         config = AIStrategyConfig()
 
         # Check feedback fields exist
-        if not hasattr(config, 'feedback_enabled'):
+        if not hasattr(config, "feedback_enabled"):
             print("  ✗ Missing feedback_enabled")
             return False
-        if not hasattr(config, 'feedback_interval_turns'):
+        if not hasattr(config, "feedback_interval_turns"):
             print("  ✗ Missing feedback_interval_turns")
             return False
-        if not hasattr(config, 'feedback_lookback_turns'):
+        if not hasattr(config, "feedback_lookback_turns"):
             print("  ✗ Missing feedback_lookback_turns")
             return False
-        if not hasattr(config, 'feedback_max_tokens'):
+        if not hasattr(config, "feedback_max_tokens"):
             print("  ✗ Missing feedback_max_tokens")
             return False
 
-        print(f"  ✓ Feedback configuration present")
+        print("  ✓ Feedback configuration present")
         print(f"    - feedback_enabled: {config.feedback_enabled}")
         print(f"    - feedback_interval_turns: {config.feedback_interval_turns}")
         print(f"    - feedback_lookback_turns: {config.feedback_lookback_turns}")
@@ -118,10 +118,11 @@ def test_ai_strategy_methods():
     """Test AI strategy has feedback loop methods."""
     print("\n[Test 5] AI strategy feedback methods...")
     try:
-        from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
+        from pathlib import Path
+
         from bbsbot.games.tw2002.config import BotConfig
         from bbsbot.games.tw2002.orientation import SectorKnowledge
-        from pathlib import Path
+        from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
 
         # Create minimal instances
         config = BotConfig()
@@ -132,19 +133,19 @@ def test_ai_strategy_methods():
         strategy = AIStrategy(config, knowledge)
 
         # Check methods exist
-        if not hasattr(strategy, 'set_session_logger'):
+        if not hasattr(strategy, "set_session_logger"):
             print("  ✗ Missing set_session_logger method")
             return False
-        if not hasattr(strategy, '_periodic_feedback'):
+        if not hasattr(strategy, "_periodic_feedback"):
             print("  ✗ Missing _periodic_feedback method")
             return False
-        if not hasattr(strategy, '_build_feedback_prompt'):
+        if not hasattr(strategy, "_build_feedback_prompt"):
             print("  ✗ Missing _build_feedback_prompt method")
             return False
-        if not hasattr(strategy, '_log_feedback'):
+        if not hasattr(strategy, "_log_feedback"):
             print("  ✗ Missing _log_feedback method")
             return False
-        if not hasattr(strategy, '_recent_events'):
+        if not hasattr(strategy, "_recent_events"):
             print("  ✗ Missing _recent_events buffer")
             return False
 
@@ -153,15 +154,16 @@ def test_ai_strategy_methods():
     except Exception as e:
         print(f"  ✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def main():
     """Run all tests."""
-    print("="*60)
+    print("=" * 60)
     print("TW2002 DEBUGGING IMPLEMENTATION TESTS")
-    print("="*60)
+    print("=" * 60)
 
     tests = [
         test_health_check,
@@ -179,9 +181,9 @@ def main():
             print(f"\n  ✗ Test crashed: {e}")
             results.append(False)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"RESULTS: {sum(results)}/{len(results)} tests passed")
-    print("="*60)
+    print("=" * 60)
 
     if all(results):
         print("\n✓ All tests passed!")

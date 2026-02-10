@@ -2,14 +2,11 @@
 """Debug what happens after game selection."""
 
 import asyncio
-import sys
 import time
-from pathlib import Path
-
 
 from bbsbot.games.tw2002 import TradingBot
 from bbsbot.games.tw2002.connection import connect
-from bbsbot.games.tw2002.io import wait_and_respond, send_input
+from bbsbot.games.tw2002.io import send_input, wait_and_respond
 
 
 async def debug_game_selection():
@@ -28,13 +25,11 @@ async def debug_game_selection():
         # Navigate to game selection menu
         print("\nPhase 1: Navigate to menu_selection prompt...")
         for step in range(5):
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=5000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=5000)
             print(f"  Step {step}: {prompt_id}")
 
             if "menu_selection" in prompt_id:
-                print(f"✓ Found menu_selection prompt")
+                print("✓ Found menu_selection prompt")
                 print(f"  Input type: {input_type}")
                 print(f"  Screen preview: {screen[:200]}")
                 break
@@ -86,9 +81,7 @@ async def debug_game_selection():
                     input_type = detected.get("input_type")
 
                     status = "✓ IDLE" if is_idle else "⏳ BUSY"
-                    print(
-                        f"{status} | prompt={prompt_id:25s} | input={input_type:10s} | len={screen_len}"
-                    )
+                    print(f"{status} | prompt={prompt_id:25s} | input={input_type:10s} | len={screen_len}")
 
                     if prompt_id != last_prompt_id:
                         print(f"             Screen first 150 chars: {screen[:150]}")
@@ -103,9 +96,7 @@ async def debug_game_selection():
                         break
 
                 else:
-                    print(
-                        f"⚠️  NO PROMPT | screen_len={screen_len} | changed={screen_changed}"
-                    )
+                    print(f"⚠️  NO PROMPT | screen_len={screen_len} | changed={screen_changed}")
 
                 last_screen = screen
 
@@ -116,9 +107,9 @@ async def debug_game_selection():
             await asyncio.sleep(0.05)  # Small delay between reads
 
         if not last_is_idle:
-            print(f"\n✗ TIMEOUT: Never reached idle state in 15 seconds")
+            print("\n✗ TIMEOUT: Never reached idle state in 15 seconds")
             print(f"  Last prompt detected: {last_prompt_id}")
-            print(f"  Last screen (first 500 chars):")
+            print("  Last screen (first 500 chars):")
             print(f"  {last_screen[:500]}")
 
     except Exception as e:

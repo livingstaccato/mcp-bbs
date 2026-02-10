@@ -1,7 +1,9 @@
 """Tests for LLM caching and token tracking."""
 
-import pytest
 import time
+
+import pytest
+
 from bbsbot.llm.cache import LLMCache
 from bbsbot.llm.types import (
     ChatMessage,
@@ -20,9 +22,7 @@ class TestLLMCache:
     def test_cache_miss(self):
         """Test cache miss returns None."""
         cache = LLMCache()
-        request = ChatRequest(
-            messages=[ChatMessage(role="user", content="Hello")], model="test-model"
-        )
+        request = ChatRequest(messages=[ChatMessage(role="user", content="Hello")], model="test-model")
 
         result = cache.get(request)
         assert result is None
@@ -30,12 +30,8 @@ class TestLLMCache:
     def test_cache_hit(self):
         """Test cache hit returns cached response."""
         cache = LLMCache()
-        request = ChatRequest(
-            messages=[ChatMessage(role="user", content="Hello")], model="test-model"
-        )
-        response = ChatResponse(
-            message=ChatMessage(role="assistant", content="Hi there!"), model="test-model"
-        )
+        request = ChatRequest(messages=[ChatMessage(role="user", content="Hello")], model="test-model")
+        response = ChatResponse(message=ChatMessage(role="assistant", content="Hi there!"), model="test-model")
 
         # Store in cache
         cache.set(request, response)
@@ -70,12 +66,8 @@ class TestLLMCache:
         """Test that different content produces different cache keys."""
         cache = LLMCache()
 
-        request1 = ChatRequest(
-            messages=[ChatMessage(role="user", content="Hello")], model="test"
-        )
-        request2 = ChatRequest(
-            messages=[ChatMessage(role="user", content="Goodbye")], model="test"
-        )
+        request1 = ChatRequest(messages=[ChatMessage(role="user", content="Hello")], model="test")
+        request2 = ChatRequest(messages=[ChatMessage(role="user", content="Goodbye")], model="test")
 
         key1 = cache._generate_key(request1)
         key2 = cache._generate_key(request2)
@@ -86,12 +78,8 @@ class TestLLMCache:
         """Test that cache entries expire after TTL."""
         cache = LLMCache(ttl_seconds=1)  # 1 second TTL
 
-        request = ChatRequest(
-            messages=[ChatMessage(role="user", content="Hello")], model="test"
-        )
-        response = ChatResponse(
-            message=ChatMessage(role="assistant", content="Hi"), model="test"
-        )
+        request = ChatRequest(messages=[ChatMessage(role="user", content="Hello")], model="test")
+        response = ChatResponse(message=ChatMessage(role="assistant", content="Hi"), model="test")
 
         cache.set(request, response)
 
@@ -110,9 +98,7 @@ class TestLLMCache:
 
         # Add 3 entries (should evict oldest)
         for i in range(3):
-            request = ChatRequest(
-                messages=[ChatMessage(role="user", content=f"Message {i}")], model="test"
-            )
+            request = ChatRequest(messages=[ChatMessage(role="user", content=f"Message {i}")], model="test")
             response = ChatResponse(
                 message=ChatMessage(role="assistant", content=f"Response {i}"),
                 model="test",
@@ -127,12 +113,8 @@ class TestLLMCache:
         """Test cache statistics tracking."""
         cache = LLMCache()
 
-        request = ChatRequest(
-            messages=[ChatMessage(role="user", content="Hello")], model="test"
-        )
-        response = ChatResponse(
-            message=ChatMessage(role="assistant", content="Hi"), model="test"
-        )
+        request = ChatRequest(messages=[ChatMessage(role="user", content="Hello")], model="test")
+        response = ChatResponse(message=ChatMessage(role="assistant", content="Hi"), model="test")
 
         cache.set(request, response)
 

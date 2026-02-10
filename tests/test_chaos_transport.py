@@ -55,4 +55,3 @@ async def test_chaos_timeout_every_n_receives_returns_empty() -> None:
     data = await transport.receive(1024, 1)
     assert data == b""
     assert inner.is_connected()
-

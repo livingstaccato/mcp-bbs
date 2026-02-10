@@ -112,7 +112,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
     stuck_action: str | None = None
     if (
         len(strategy._recent_actions) >= strategy._stuck_threshold
-        and len(set(strategy._recent_actions[-strategy._stuck_threshold:])) == 1
+        and len(set(strategy._recent_actions[-strategy._stuck_threshold :])) == 1
     ):
         stuck_action = strategy._recent_actions[-1]
         logger.warning(f"ai_stuck_detected: {stuck_action} x{strategy._stuck_threshold}")
@@ -134,7 +134,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
             # Track action for stuck detection
             strategy._recent_actions.append(action.name)
             if len(strategy._recent_actions) > strategy._stuck_threshold + 2:
-                strategy._recent_actions = strategy._recent_actions[-(strategy._stuck_threshold + 2):]
+                strategy._recent_actions = strategy._recent_actions[-(strategy._stuck_threshold + 2) :]
 
             # If we were stuck AND the LLM returned the same action again, force fallback
             if stuck_action and action.name == stuck_action:

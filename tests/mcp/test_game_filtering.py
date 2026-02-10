@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import pytest
-
-from bbsbot.mcp.server import _normalize_tool_prefixes
-from bbsbot.mcp.server import _register_game_tools
-from bbsbot.mcp.registry import get_manager
 from fastmcp import FastMCP
+
+from bbsbot.mcp.registry import get_manager
+from bbsbot.mcp.server import _normalize_tool_prefixes, _register_game_tools
 
 
 @pytest.mark.asyncio

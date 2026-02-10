@@ -19,9 +19,7 @@ async def test_session_manager_create_session() -> None:
         manager = SessionManager()
 
         # Create session
-        session_id = await manager.create_session(
-            "127.0.0.1", server.port, cols=80, rows=25, term="ANSI"
-        )
+        session_id = await manager.create_session("127.0.0.1", server.port, cols=80, rows=25, term="ANSI")
         assert session_id is not None
 
         # Get session
@@ -43,14 +41,10 @@ async def test_session_manager_reuse_session() -> None:
         manager = SessionManager()
 
         # Create first session
-        sid1 = await manager.create_session(
-            "127.0.0.1", server.port, cols=80, rows=25, reuse=False
-        )
+        sid1 = await manager.create_session("127.0.0.1", server.port, cols=80, rows=25, reuse=False)
 
         # Try to create another session with reuse=True
-        sid2 = await manager.create_session(
-            "127.0.0.1", server.port, cols=80, rows=25, reuse=True
-        )
+        sid2 = await manager.create_session("127.0.0.1", server.port, cols=80, rows=25, reuse=True)
 
         # Should reuse the same session
         assert sid1 == sid2
@@ -61,26 +55,25 @@ async def test_session_manager_reuse_session() -> None:
 @pytest.mark.asyncio
 async def test_session_manager_multiple_sessions() -> None:
     """Test managing multiple sessions."""
-    async with MockBBS(["\r\nServer 1\r\n"]) as server1:
-        async with MockBBS(["\r\nServer 2\r\n"]) as server2:
-            manager = SessionManager()
+    async with MockBBS(["\r\nServer 1\r\n"]) as server1, MockBBS(["\r\nServer 2\r\n"]) as server2:
+        manager = SessionManager()
 
-            # Create two sessions
-            sid1 = await manager.create_session("127.0.0.1", server1.port)
-            sid2 = await manager.create_session("127.0.0.1", server2.port)
+        # Create two sessions
+        sid1 = await manager.create_session("127.0.0.1", server1.port)
+        sid2 = await manager.create_session("127.0.0.1", server2.port)
 
-            assert sid1 != sid2
+        assert sid1 != sid2
 
-            # Verify both sessions exist
-            session1 = await manager.get_session(sid1)
-            session2 = await manager.get_session(sid2)
+        # Verify both sessions exist
+        session1 = await manager.get_session(sid1)
+        session2 = await manager.get_session(sid2)
 
-            assert session1.port == server1.port
-            assert session2.port == server2.port
+        assert session1.port == server1.port
+        assert session2.port == server2.port
 
-            # Close both
-            await manager.close_session(sid1)
-            await manager.close_session(sid2)
+        # Close both
+        await manager.close_session(sid1)
+        await manager.close_session(sid2)
 
 
 @pytest.mark.asyncio

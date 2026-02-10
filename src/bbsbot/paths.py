@@ -7,7 +7,6 @@ from pathlib import Path
 
 from platformdirs import user_data_dir
 
-
 ENV_KNOWLEDGE_ROOT = "BBSBOT_KNOWLEDGE_ROOT"
 
 

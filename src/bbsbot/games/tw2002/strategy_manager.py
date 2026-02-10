@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
+from bbsbot.games.tw2002.strategies.base import TradeResult
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
@@ -134,13 +134,15 @@ class StrategyManager:
         )
 
         # Record rotation
-        self._rotation_history.append({
-            "turn": self._total_turns,
-            "from": self._current_strategy_name,
-            "to": next_strategy_name,
-            "failures": self._consecutive_failures,
-            "turns": self._turns_on_current_strategy,
-        })
+        self._rotation_history.append(
+            {
+                "turn": self._total_turns,
+                "from": self._current_strategy_name,
+                "to": next_strategy_name,
+                "failures": self._consecutive_failures,
+                "turns": self._turns_on_current_strategy,
+            }
+        )
 
         # Switch to new strategy
         self._current_strategy_name = next_strategy_name

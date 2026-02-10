@@ -107,9 +107,7 @@ def extract_port_info(bot, screen: str) -> tuple[bool, str | None, str | None]:
             break
 
     if not port_class:
-        if class_match := _PORT_CLASS_INLINE_RE.search(screen):
-            port_class = class_match.group(1).strip().upper()
-        elif class_match := _PORT_CLASS_NAME_RE.search(screen):
+        if (class_match := _PORT_CLASS_INLINE_RE.search(screen)) or (class_match := _PORT_CLASS_NAME_RE.search(screen)):
             port_class = class_match.group(1).strip().upper()
         elif port_line:
             if class_match := re.search(r"\(([A-Z]{3})\)", port_line):

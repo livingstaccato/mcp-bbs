@@ -8,10 +8,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.visualization.colors import (
-    Colors,
-    Icons,
     STATUS_COLORS,
     STATUS_ICONS,
+    Colors,
+    Icons,
     colorize,
     get_goal_color,
 )
@@ -43,9 +43,7 @@ class GoalSummaryReport:
         lines = []
 
         # Header
-        completed_turns = max(
-            p.end_turn for p in self.phases if p.end_turn is not None
-        ) if self.phases else 0
+        completed_turns = max(p.end_turn for p in self.phases if p.end_turn is not None) if self.phases else 0
 
         header = f"GOAL SESSION SUMMARY - {completed_turns}/{self.max_turns} turns completed"
         lines.append("")
@@ -86,10 +84,7 @@ class GoalSummaryReport:
         lines = []
 
         # Header
-        header = (
-            f"  {'#':<3} {'Turns':<12} {'Goal':<14} {'Status':<10} "
-            f"{'Type':<8} {'Reason':<30}"
-        )
+        header = f"  {'#':<3} {'Turns':<12} {'Goal':<14} {'Status':<10} {'Type':<8} {'Reason':<30}"
         lines.append(colorize(header, Colors.FG_WHITE, bold=True))
         lines.append("  " + "─" * 77)
 

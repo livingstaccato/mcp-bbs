@@ -1,11 +1,10 @@
 """Tests for learning engine."""
 
-import pytest
 import json
-import asyncio
-from pathlib import Path
-from bbsbot.learning.engine import LearningEngine, _build_prompt_body, _build_menu_body
-from bbsbot.learning.detector import PromptDetection
+
+import pytest
+
+from bbsbot.learning.engine import LearningEngine, _build_menu_body, _build_prompt_body
 
 
 @pytest.fixture
@@ -449,9 +448,7 @@ class TestRuleLoading:
         rules_data = {
             "game": "tw2002",
             "version": "1.0",
-            "prompts": [
-                {"prompt_id": "test", "regex": r"Test", "input_type": "line"}
-            ],
+            "prompts": [{"prompt_id": "test", "regex": r"Test", "input_type": "line"}],
         }
         rules_file.write_text(json.dumps(rules_data))
 
@@ -459,9 +456,7 @@ class TestRuleLoading:
         def mock_find_repo_games_root():
             return repo_root
 
-        monkeypatch.setattr(
-            "bbsbot.learning.engine.find_repo_games_root", mock_find_repo_games_root
-        )
+        monkeypatch.setattr("bbsbot.learning.engine.find_repo_games_root", mock_find_repo_games_root)
 
         # Create engine - should load from repo
         engine = LearningEngine(knowledge_root=temp_knowledge_dir, namespace="tw2002")
@@ -479,9 +474,7 @@ class TestRuleLoading:
         rules_data = {
             "game": "tw2002",
             "version": "1.0",
-            "prompts": [
-                {"prompt_id": "test", "regex": r"Test", "input_type": "line"}
-            ],
+            "prompts": [{"prompt_id": "test", "regex": r"Test", "input_type": "line"}],
         }
         rules_file.write_text(json.dumps(rules_data))
 

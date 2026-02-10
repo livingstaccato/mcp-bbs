@@ -6,8 +6,9 @@ import re
 import time
 from pathlib import Path
 
-from bbsbot.core.session_manager import SessionManager
 from pydantic import BaseModel
+
+from bbsbot.core.session_manager import SessionManager
 
 
 class Step(BaseModel):

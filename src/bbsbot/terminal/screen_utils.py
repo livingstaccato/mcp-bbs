@@ -27,9 +27,7 @@ def clean_screen_for_display(screen: str, max_lines: int = 30) -> list[str]:
     return lines
 
 
-def extract_menu_options(
-    screen: str, pattern: str | None = None
-) -> list[tuple[str, str]]:
+def extract_menu_options(screen: str, pattern: str | None = None) -> list[tuple[str, str]]:
     """Extract menu options from screen text.
 
     Supports common menu formats like:
@@ -60,9 +58,7 @@ def extract_menu_options(
     return options
 
 
-def extract_numbered_list(
-    screen: str, pattern: str | None = None
-) -> list[tuple[str, str]]:
+def extract_numbered_list(screen: str, pattern: str | None = None) -> list[tuple[str, str]]:
     """Extract numbered lists from screen text.
 
     Supports common numbered formats like:
@@ -94,9 +90,7 @@ def extract_numbered_list(
     return options
 
 
-def extract_key_value_pairs(
-    screen: str, patterns: dict[str, str]
-) -> dict[str, str | int]:
+def extract_key_value_pairs(screen: str, patterns: dict[str, str]) -> dict[str, str | int]:
     """Extract key-value pairs from screen text using provided patterns.
 
     Args:

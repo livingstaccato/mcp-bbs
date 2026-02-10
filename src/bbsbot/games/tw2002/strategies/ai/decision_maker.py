@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from bbsbot.games.tw2002.orientation import GameState
     from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
     from bbsbot.llm.manager import LLMManager
-    from bbsbot.llm.types import ChatResponse
 
 logger = get_logger(__name__)
 
@@ -122,7 +121,7 @@ async def make_llm_decision(
                 ChatMessage(
                     role="user",
                     content=(
-                        'Your response was not valid JSON. Respond with ONLY a JSON object like: '
+                        "Your response was not valid JSON. Respond with ONLY a JSON object like: "
                         '{"action": "TRADE", "reasoning": "...", "parameters": {}}'
                     ),
                 ),
@@ -156,17 +155,12 @@ async def make_llm_decision(
 
     # Append this exchange to conversation history (compact summary + response)
     compact_state = (
-        f"Turn {strategy._current_turn}: Sector {state.sector}, "
-        f"Credits {state.credits}, Turns left {state.turns_left}"
+        f"Turn {strategy._current_turn}: Sector {state.sector}, Credits {state.credits}, Turns left {state.turns_left}"
     )
     if state.has_port:
         compact_state += f", Port {state.port_class}"
-    strategy._conversation_history.append(
-        ChatMessage(role="user", content=compact_state)
-    )
-    strategy._conversation_history.append(
-        ChatMessage(role="assistant", content=response.message.content)
-    )
+    strategy._conversation_history.append(ChatMessage(role="user", content=compact_state))
+    strategy._conversation_history.append(ChatMessage(role="assistant", content=response.message.content))
 
     # Trim history to max length (each exchange = 2 messages)
     max_messages = strategy._max_history_turns * 2

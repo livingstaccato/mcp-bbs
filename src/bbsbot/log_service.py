@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import mmap
-import os
 from collections import deque
 from pathlib import Path
 
@@ -39,9 +38,7 @@ class LogService:
         """Check if a log file exists for the given bot."""
         return self.log_path(bot_id).is_file()
 
-    def read_logs(
-        self, bot_id: str, offset: int = 0, limit: int = 100
-    ) -> dict:
+    def read_logs(self, bot_id: str, offset: int = 0, limit: int = 100) -> dict:
         """Read paginated log lines from a bot's log file.
 
         Args:
@@ -91,41 +88,38 @@ class LogService:
             "has_more": end < total,
         }
 
-    def _read_with_mmap(
-        self, path: Path, offset: int, limit: int
-    ) -> dict:
+    def _read_with_mmap(self, path: Path, offset: int, limit: int) -> dict:
         """Read lines from large file using mmap."""
-        with open(path, "rb") as f:
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                lines: list[str] = []
-                line_num = 0
-                pos = 0
+        with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+            lines: list[str] = []
+            line_num = 0
+            pos = 0
 
-                while pos < mm.size():
-                    end = mm.find(b"\n", pos)
-                    if end == -1:
-                        end = mm.size()
+            while pos < mm.size():
+                end = mm.find(b"\n", pos)
+                if end == -1:
+                    end = mm.size()
 
-                    if line_num >= offset:
-                        raw = mm[pos:end]
-                        lines.append(raw.decode("utf-8", errors="replace"))
-                        if len(lines) >= limit:
-                            line_num += 1
-                            break
+                if line_num >= offset:
+                    raw = mm[pos:end]
+                    lines.append(raw.decode("utf-8", errors="replace"))
+                    if len(lines) >= limit:
+                        line_num += 1
+                        break
 
-                    pos = end + 1
-                    line_num += 1
+                pos = end + 1
+                line_num += 1
 
-                # Count remaining lines approximately
-                remaining = mm[pos:].count(b"\n") if pos < mm.size() else 0
+            # Count remaining lines approximately
+            remaining = mm[pos:].count(b"\n") if pos < mm.size() else 0
 
-                return {
-                    "lines": lines,
-                    "offset": offset,
-                    "limit": limit,
-                    "total_lines": offset + len(lines) + remaining,
-                    "has_more": remaining > 0,
-                }
+            return {
+                "lines": lines,
+                "offset": offset,
+                "limit": limit,
+                "total_lines": offset + len(lines) + remaining,
+                "has_more": remaining > 0,
+            }
 
     def tail_logs(self, bot_id: str, lines: int = 50) -> dict:
         """Read the last N lines from a bot's log file.
@@ -168,9 +162,7 @@ class LogService:
             websocket: Connected WebSocket
         """
         if len(self._active_streams) >= MAX_CONCURRENT_STREAMS:
-            await websocket.send_json(
-                {"error": "Too many active log streams"}
-            )
+            await websocket.send_json({"error": "Too many active log streams"})
             return
 
         stream_key = f"{bot_id}:{id(websocket)}"
@@ -182,15 +174,19 @@ class LogService:
             # Send initial tail
             if path.is_file():
                 tail = self.tail_logs(bot_id, lines=50)
-                await websocket.send_json({
-                    "type": "initial",
-                    "lines": tail["lines"],
-                })
+                await websocket.send_json(
+                    {
+                        "type": "initial",
+                        "lines": tail["lines"],
+                    }
+                )
             else:
-                await websocket.send_json({
-                    "type": "initial",
-                    "lines": ["[Waiting for log file...]"],
-                })
+                await websocket.send_json(
+                    {
+                        "type": "initial",
+                        "lines": ["[Waiting for log file...]"],
+                    }
+                )
 
             # Stream new lines
             last_size = path.stat().st_size if path.is_file() else 0
@@ -206,10 +202,12 @@ class LogService:
                     if current_size < last_size:
                         # File was truncated (bot restarted)
                         last_size = 0
-                        await websocket.send_json({
-                            "type": "truncated",
-                            "lines": ["[Log file reset - bot restarted]"],
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "truncated",
+                                "lines": ["[Log file reset - bot restarted]"],
+                            }
+                        )
                     continue
 
                 # Read new content
@@ -222,10 +220,12 @@ class LogService:
                 last_size = current_size
 
                 if new_lines:
-                    await websocket.send_json({
-                        "type": "append",
-                        "lines": new_lines,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "append",
+                            "lines": new_lines,
+                        }
+                    )
 
         except WebSocketDisconnect:
             logger.debug(f"Log stream disconnected for {bot_id}")

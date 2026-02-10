@@ -2,8 +2,9 @@
 """Test if there are different TWGS commands besides just 'A'."""
 
 import asyncio
-from bbsbot.paths import default_knowledge_root
+
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 async def test_command(desc: str, menu_command: str):
@@ -31,28 +32,28 @@ async def test_command(desc: str, menu_command: str):
         await session.wait_for_update(timeout_ms=2000)
         snapshot = session.snapshot()
 
-        screen = snapshot.get('screen', '')
-        is_menu = 'Select game' in screen
-        is_log_prompt = 'name (ENTER' in screen.lower()
-        has_command_prompt = 'Command' in screen
+        screen = snapshot.get("screen", "")
+        is_menu = "Select game" in screen
+        is_log_prompt = "name (ENTER" in screen.lower()
+        has_command_prompt = "Command" in screen
 
         await manager.close_all_sessions()
 
         return {
-            'command': repr(menu_command),
-            'at_menu': is_menu,
-            'at_login': is_log_prompt,
-            'has_prompt': has_command_prompt,
-            'screen_first_100': screen[:100].replace('\n', ' ')
+            "command": repr(menu_command),
+            "at_menu": is_menu,
+            "at_login": is_log_prompt,
+            "has_prompt": has_command_prompt,
+            "screen_first_100": screen[:100].replace("\n", " "),
         }
     except Exception as e:
-        return {'command': repr(menu_command), 'error': str(e)}
+        return {"command": repr(menu_command), "error": str(e)}
 
 
 async def main():
-    print("="*80)
+    print("=" * 80)
     print("TESTING DIFFERENT TWGS MENU COMMANDS")
-    print("="*80)
+    print("=" * 80)
     print("Maybe 'A' shows description, but we need a different command to ENTER?")
     print()
 
@@ -75,13 +76,13 @@ async def main():
         print(f"Testing {desc:15s}...", end=" ")
         result = await test_command(desc, command)
 
-        if 'error' in result:
+        if "error" in result:
             print(f"❌ Error: {result['error']}")
-        elif not result.get('at_menu') and not result.get('at_login'):
-            print(f"✅ DIFFERENT SCREEN!")
+        elif not result.get("at_menu") and not result.get("at_login"):
+            print("✅ DIFFERENT SCREEN!")
             print(f"   Screen: {result['screen_first_100']}")
         else:
-            status = "MENU" if result.get('at_menu') else "LOGIN"
+            status = "MENU" if result.get("at_menu") else "LOGIN"
             print(f"⚠️  Still at {status}")
 
         await asyncio.sleep(1.0)

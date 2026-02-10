@@ -9,13 +9,13 @@ from typing import Any, cast
 from fastmcp import FastMCP
 
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.games.tw2002.resume import as_dict as _resume_as_dict
+from bbsbot.games.tw2002.resume import list_resumable_tw2002
 from bbsbot.learning.discovery import discover_menu
 from bbsbot.learning.knowledge import append_md
 from bbsbot.logging import configure_logging, get_logger
 from bbsbot.paths import find_repo_games_root, validate_knowledge_root
 from bbsbot.settings import Settings
-from bbsbot.games.tw2002.resume import as_dict as _resume_as_dict
-from bbsbot.games.tw2002.resume import list_resumable_tw2002
 from bbsbot.watch import WatchManager, watch_settings
 
 # Configure logging once at module import
@@ -42,8 +42,7 @@ def _normalize_tool_prefixes(tool_prefixes: str | None) -> set[str] | None:
     if invalid:
         bad = ", ".join(repr(p) for p in invalid)
         raise ValueError(
-            f"Invalid --tools value(s): {bad}. Tool namespaces must not end with '_' "
-            "(use e.g. 'bbs,tw2002')."
+            f"Invalid --tools value(s): {bad}. Tool namespaces must not end with '_' (use e.g. 'bbs,tw2002')."
         )
 
     return {f"{p}_" for p in parts}
@@ -100,7 +99,6 @@ def _register_game_tools(mcp_app: FastMCP, tool_prefixes: str | None = None) -> 
         from fastmcp.tools.tool import FunctionTool
 
         # Import TW2002 tools (triggers registration)
-        from bbsbot.games.tw2002 import mcp_tools as tw2002_tools
         from bbsbot.mcp.registry import get_manager
 
         # Get all registered tools from the registry manager
@@ -140,6 +138,7 @@ def decode_escape_sequences(s: str) -> str:
 
     This is needed because MCP JSON transport may not decode escape sequences.
     """
+
     # Use a regex to find and replace escape sequences
     def replace_escape(match: re.Match[str]) -> str:
         seq = match.group(0)
@@ -334,7 +333,7 @@ async def bbs_read(timeout_ms: int = 250, max_bytes: int = 8192) -> dict[str, An
     _require_knowledge_root()
     _, session = await _get_session()
     await session.wait_for_update(timeout_ms=timeout_ms)
-    return cast(dict[str, Any], session.snapshot())
+    return cast("dict[str, Any]", session.snapshot())
 
 
 @app.tool()
@@ -415,7 +414,7 @@ async def bbs_read_until_pattern(
         return last_snapshot
 
     await session.wait_for_update(timeout_ms=interval_ms)
-    result = cast(dict[str, Any], session.snapshot())
+    result = cast("dict[str, Any]", session.snapshot())
     result["matched"] = False
     return result
 
@@ -791,9 +790,7 @@ async def bbs_save_prompt_pattern(pattern_json: str) -> dict[str, Any]:
 
         # Save back to file
         patterns_file.parent.mkdir(parents=True, exist_ok=True)
-        patterns_file.write_text(
-            json.dumps({"prompts": patterns, "metadata": metadata}, indent=2) + "\n"
-        )
+        patterns_file.write_text(json.dumps({"prompts": patterns, "metadata": metadata}, indent=2) + "\n")
 
         # Reload patterns in detector
         if learning._prompt_detector:
@@ -919,9 +916,7 @@ async def bbs_debug_learning_state() -> dict[str, Any]:
             "size": len(buffer_mgr._buffer),
             "max_size": buffer_mgr._buffer.maxlen,
             "is_idle": buffer_mgr.detect_idle_state() if recent_screens else False,
-            "last_change_seconds_ago": (
-                recent_screens[0].time_since_last_change if recent_screens else 0.0
-            ),
+            "last_change_seconds_ago": (recent_screens[0].time_since_last_change if recent_screens else 0.0),
         }
 
     # Screen saver info
@@ -1024,7 +1019,7 @@ async def bbs_debug_session_events(
     events: list[dict[str, Any]] = []
 
     try:
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -1083,9 +1078,7 @@ async def bbs_status() -> dict[str, Any]:
                     "size": len(buffer_mgr._buffer),
                     "max_size": buffer_mgr._buffer.maxlen,
                     "is_idle": buffer_mgr.detect_idle_state() if recent_screens else False,
-                    "last_change_seconds_ago": (
-                        recent_screens[0].time_since_last_change if recent_screens else 0.0
-                    ),
+                    "last_change_seconds_ago": (recent_screens[0].time_since_last_change if recent_screens else 0.0),
                 }
 
             # Add screen saver info
@@ -1111,8 +1104,7 @@ async def bbs_status() -> dict[str, Any]:
 
                 if cache_stats and usage_stats:
                     total_tokens = sum(
-                        model_stats["total_tokens"]
-                        for model_stats in usage_stats.get("by_model", {}).values()
+                        model_stats["total_tokens"] for model_stats in usage_stats.get("by_model", {}).values()
                     )
                     debug_info["llm"] = {
                         "cache_hit_rate": cache_stats.get("hit_rate", 0.0),
@@ -1124,9 +1116,7 @@ async def bbs_status() -> dict[str, Any]:
             if session.learning:
                 learning_summary = {
                     "patterns_loaded": (
-                        len(session.learning._prompt_detector._patterns)
-                        if session.learning._prompt_detector
-                        else 0
+                        len(session.learning._prompt_detector._patterns) if session.learning._prompt_detector else 0
                     ),
                 }
                 if session.learning._buffer_manager:
@@ -1174,7 +1164,7 @@ async def bbs_set_context(context_json: str) -> str:
 async def bbs_keepalive(interval_s: float | None = 30.0, keys: str = "\r") -> str:
     """Configure keepalive interval in seconds (<=0 disables)."""
     sid, session = await _get_session()
-    result = cast(str, await session.keepalive.configure(interval_s, keys))
+    result = cast("str", await session.keepalive.configure(interval_s, keys))
     log.info("keepalive_configured", session_id=sid, interval_s=interval_s, keys=repr(keys))
     return result
 
@@ -1207,7 +1197,7 @@ async def bbs_wake(
     sequence = [item for item in keys_sequence.split("|") if item]
 
     await session.wait_for_update(timeout_ms=interval_ms)
-    last_snapshot = cast(dict[str, Any], session.snapshot())
+    last_snapshot = cast("dict[str, Any]", session.snapshot())
     last_hash = last_snapshot.get("screen_hash", "")
     last_change_seq = session.screen_change_seq()
 

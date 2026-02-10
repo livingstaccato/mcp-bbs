@@ -388,6 +388,5 @@ async def debug(command: str, limit: int | None = None) -> dict[str, Any]:
             return await bbs_debug_session_events()
         case _:
             raise ValueError(
-                f"Unknown command: {command}. "
-                f"Valid options: bot_state, learning_state, llm_stats, session_events"
+                f"Unknown command: {command}. Valid options: bot_state, learning_state, llm_stats, session_events"
             )

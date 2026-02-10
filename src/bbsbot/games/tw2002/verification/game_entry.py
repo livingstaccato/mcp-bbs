@@ -2,21 +2,20 @@
 """Test complete game entry sequence step-by-step."""
 
 import asyncio
-from bbsbot.paths import default_knowledge_root
+
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 async def main():
     manager = SessionManager()
     knowledge_root = default_knowledge_root()
 
-    print("="*80)
+    print("=" * 80)
     print("TESTING COMPLETE GAME ENTRY SEQUENCE")
-    print("="*80)
+    print("=" * 80)
 
-    session_id = await manager.create_session(
-        host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0
-    )
+    session_id = await manager.create_session(host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0)
     session = await manager.get_session(session_id)
     await manager.enable_learning(session_id, knowledge_root, namespace="tw2002")
 
@@ -65,7 +64,7 @@ async def main():
     print("\n5. Keeping connection alive for 20 seconds...")
     for i in range(4):
         await asyncio.sleep(5)
-        print(f"  {(i+1)*5}s - still connected")
+        print(f"  {(i + 1) * 5}s - still connected")
 
     await manager.close_all_sessions()
     print("\n✓ Test complete")

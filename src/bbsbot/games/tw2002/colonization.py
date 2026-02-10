@@ -9,6 +9,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
+
 if TYPE_CHECKING:
     from bbsbot.games.tw2002.bot import TradingBot
     from bbsbot.games.tw2002.config import BotConfig

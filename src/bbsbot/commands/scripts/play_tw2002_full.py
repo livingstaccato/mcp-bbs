@@ -7,8 +7,8 @@ import os
 import time
 from pathlib import Path
 
-from bbsbot.paths import default_knowledge_root
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 class CompleteTW2002Player:
@@ -54,26 +54,26 @@ class CompleteTW2002Player:
         snapshot = await self.session.read(timeout_ms=1000, max_bytes=8192)
 
         self.step_counter += 1
-        print(f"\n{'─'*80}")
+        print(f"\n{'─' * 80}")
         print(f"STEP {self.step_counter}")
-        print(f"{'─'*80}")
+        print(f"{'─' * 80}")
 
         # Show prompt detection
         if "prompt_detected" in snapshot:
             detected = snapshot["prompt_detected"]
             print(f"🎯 PROMPT: {detected['prompt_id']} ({detected['input_type']})")
-            self.discovered_prompts.append(detected['prompt_id'])
+            self.discovered_prompts.append(detected["prompt_id"])
         else:
-            print(f"📄 Screen (no prompt detected)")
+            print("📄 Screen (no prompt detected)")
 
         # Show screen
-        lines = snapshot.get('screen', '').split('\n')
+        lines = snapshot.get("screen", "").split("\n")
         for i, line in enumerate(lines[:max_lines]):
-            print(f"{i+1:2d}│ {line}")
+            print(f"{i + 1:2d}│ {line}")
         if len(lines) > max_lines:
             print(f"   │ ... ({len(lines) - max_lines} more lines)")
 
-        print(f"{'─'*80}\n")
+        print(f"{'─' * 80}\n")
         return snapshot
 
     def _is_game_prompt(self, screen_lower: str) -> bool:
@@ -131,8 +131,10 @@ class CompleteTW2002Player:
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
                 continue
 
-            if "is what you want" in screen_lower and "ship" not in tail and (
-                "alias" in screen_lower or "commander" in screen_lower
+            if (
+                "is what you want" in screen_lower
+                and "ship" not in tail
+                and ("alias" in screen_lower or "commander" in screen_lower)
             ):
                 await self.send("Y\r", "Confirm alias")
                 snapshot = await self.read_and_show(pause=1.0, max_lines=25)
@@ -228,7 +230,7 @@ class CompleteTW2002Player:
             return
 
         # If we're on a planet prompt, exit to sector command before running commands.
-        screen_text = snapshot.get('screen', '').lower()
+        screen_text = snapshot.get("screen", "").lower()
         if "planet command" in screen_text:
             await self.send("Q\r", "Leave planet prompt")
             await self.read_and_show(pause=1.0, max_lines=25)
@@ -264,7 +266,7 @@ class CompleteTW2002Player:
         snapshot = await self.read_and_show(pause=1.0)
 
         # May ask which sector
-        if 'sector' in snapshot.get('screen', '').lower():
+        if "sector" in snapshot.get("screen", "").lower():
             await self.send("2\r", "Move to sector 2")
             await self.read_and_show(pause=2.0)
 
@@ -277,9 +279,9 @@ class CompleteTW2002Player:
         snapshot = await self.read_and_show(pause=1.0)
 
         # Quit game
-        print("\n\n" + "="*80)
+        print("\n\n" + "=" * 80)
         print("ENDING GAME SESSION")
-        print("="*80 + "\n")
+        print("=" * 80 + "\n")
 
         await self.send("Q\r", "Quit game")
         snapshot = await self.read_and_show(pause=1.0, max_lines=15)
@@ -293,28 +295,28 @@ class CompleteTW2002Player:
 
     async def show_stats(self):
         """Show final statistics."""
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("PLAYTHROUGH COMPLETE - STATISTICS")
-        print("="*80)
+        print("=" * 80)
 
         saver_status = self.session.learning.get_screen_saver_status()
         buffer_mgr = self.session.learning._buffer_manager
 
-        print(f"\n📊 Statistics:")
+        print("\n📊 Statistics:")
         print(f"  - Steps executed: {self.step_counter}")
         print(f"  - Unique screens saved: {saver_status['saved_count']}")
         print(f"  - Screens buffered: {len(buffer_mgr._buffer)}/50")
         print(f"  - Prompts discovered: {len(set(self.discovered_prompts))}")
 
-        print(f"\n🎯 Prompts detected during playthrough:")
+        print("\n🎯 Prompts detected during playthrough:")
         for i, prompt_id in enumerate(set(self.discovered_prompts), 1):
             print(f"  {i}. {prompt_id}")
 
-        print(f"\n💾 Saved screens location:")
+        print("\n💾 Saved screens location:")
         print(f"  {saver_status['screens_dir']}")
 
         # List some saved screens
-        screens_dir = Path(saver_status['screens_dir'])
+        screens_dir = Path(saver_status["screens_dir"])
         if screens_dir.exists():
             screens = sorted(screens_dir.glob("*.txt"))
             print(f"\n📁 Screen files ({len(screens)} total):")
@@ -333,20 +335,24 @@ class CompleteTW2002Player:
 
         # Save JSON
         json_file.parent.mkdir(exist_ok=True)
-        with open(json_file, 'w') as f:
-            json.dump({
-                "session_id": self.session_id,
-                "timestamp": timestamp,
-                "steps": self.step_counter,
-                "prompts_discovered": list(set(self.discovered_prompts)),
-                "screens_saved": self.session.learning.get_screen_saver_status()['saved_count'],
-            }, f, indent=2)
+        with open(json_file, "w") as f:
+            json.dump(
+                {
+                    "session_id": self.session_id,
+                    "timestamp": timestamp,
+                    "steps": self.step_counter,
+                    "prompts_discovered": list(set(self.discovered_prompts)),
+                    "screens_saved": self.session.learning.get_screen_saver_status()["saved_count"],
+                },
+                f,
+                indent=2,
+            )
 
         # Save Markdown
         saver_status = self.session.learning.get_screen_saver_status()
-        screens_dir = Path(saver_status['screens_dir'])
+        screens_dir = Path(saver_status["screens_dir"])
 
-        with open(md_file, 'w') as f:
+        with open(md_file, "w") as f:
             f.write("# Trade Wars 2002 - Complete Playthrough Documentation\n\n")
             f.write(f"**Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"**Session**: {self.session_id}\n")
@@ -356,7 +362,7 @@ class CompleteTW2002Player:
             for prompt_id in set(self.discovered_prompts):
                 f.write(f"- `{prompt_id}`\n")
 
-            f.write(f"\n## Screens Saved\n\n")
+            f.write("\n## Screens Saved\n\n")
             f.write(f"Total unique screens: {saver_status['saved_count']}\n\n")
             f.write(f"Location: `{saver_status['screens_dir']}`\n\n")
 
@@ -365,7 +371,7 @@ class CompleteTW2002Player:
                 for screen_file in sorted(screens_dir.glob("*.txt")):
                     f.write(f"- `{screen_file.name}`\n")
 
-        print(f"\n📄 Documentation saved:")
+        print("\n📄 Documentation saved:")
         print(f"  - JSON: {json_file}")
         print(f"  - Markdown: {md_file}")
         print()
@@ -384,6 +390,7 @@ class CompleteTW2002Player:
         except Exception as e:
             print(f"\n\n❌ Error: {e}")
             import traceback
+
             traceback.print_exc()
         finally:
             print("\nDisconnecting...")

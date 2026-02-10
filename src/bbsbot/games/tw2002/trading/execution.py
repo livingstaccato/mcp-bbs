@@ -9,6 +9,7 @@ from bbsbot.games.tw2002 import cli_impl
 from bbsbot.games.tw2002.io import wait_and_respond
 from bbsbot.games.tw2002.parsing import _parse_credits_from_screen, _parse_sector_from_screen
 from bbsbot.logging import get_logger
+
 from .navigation import resolve_paths, warp_to_sector
 from .operations import dock_and_trade
 
@@ -102,7 +103,7 @@ async def execute_route(
 
             # NAVIGATE to sell sector
             if path_buy_to_sell and len(path_buy_to_sell) > 1:
-                print(f"\n🚀 NAVIGATE via route path")
+                print("\n🚀 NAVIGATE via route path")
                 success = await cli_impl.warp_along_path(bot, path_buy_to_sell)
                 if not success:
                     raise RuntimeError("path_navigation_failed")
@@ -156,12 +157,12 @@ async def execute_route(
                     pass
 
             elif "out_of_turns" in error_msg or "ship_destroyed" in error_msg:
-                print(f"  ✗ Fatal error - stopping")
+                print("  ✗ Fatal error - stopping")
                 result["error"] = error_msg
                 return result
 
             if attempt < max_retries:
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 print(f"  → Retrying in {wait_time}s...")
                 await asyncio.sleep(wait_time)
             else:
@@ -184,9 +185,7 @@ async def execute_route(
     return result
 
 
-async def single_trading_cycle(
-    bot, start_sector: int = 499, max_retries: int = 2
-) -> None:
+async def single_trading_cycle(bot, start_sector: int = 499, max_retries: int = 2) -> None:
     """Execute one complete trading cycle (buy→sell) with error recovery.
 
     Args:
@@ -211,16 +210,11 @@ async def single_trading_cycle(
             if bot.current_sector is None:
                 await bot.orient()
             if bot.current_sector != buy_sector:
-                print(
-                    f"\n🚀 WARPING to buy sector {buy_sector} "
-                    f"(current {bot.current_sector})"
-                )
+                print(f"\n🚀 WARPING to buy sector {buy_sector} (current {bot.current_sector})")
                 await warp_to_sector(bot, buy_sector)
                 # Verify we arrived at the correct sector
                 if bot.current_sector != buy_sector:
-                    raise RuntimeError(
-                        f"warp_verification_failed:expected_{buy_sector}_got_{bot.current_sector}"
-                    )
+                    raise RuntimeError(f"warp_verification_failed:expected_{buy_sector}_got_{bot.current_sector}")
 
             # BUY PHASE
             print(f"\n📍 BUY PHASE (Sector {buy_sector})")
@@ -240,9 +234,7 @@ async def single_trading_cycle(
             await warp_to_sector(bot, sell_sector)
             # Verify we arrived at the correct sector
             if bot.current_sector != sell_sector:
-                raise RuntimeError(
-                    f"warp_verification_failed:expected_{sell_sector}_got_{bot.current_sector}"
-                )
+                raise RuntimeError(f"warp_verification_failed:expected_{sell_sector}_got_{bot.current_sector}")
 
             # SELL PHASE
             print(f"\n📍 SELL PHASE (Sector {sell_sector})")
@@ -278,11 +270,11 @@ async def single_trading_cycle(
 
             # Other errors - retry if we have attempts left
             if attempt < max_retries:
-                wait_time = 2 ** attempt  # Exponential backoff
+                wait_time = 2**attempt  # Exponential backoff
                 print(f"  → Retrying in {wait_time}s...")
                 await asyncio.sleep(wait_time)
             else:
-                print(f"  ✗ Max retries reached")
+                print("  ✗ Max retries reached")
                 raise
 
         except TimeoutError as e:

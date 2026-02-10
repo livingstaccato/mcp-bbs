@@ -2,8 +2,9 @@
 """Connect to TW2002, login, and wait idle."""
 
 import asyncio
-from bbsbot.paths import default_knowledge_root
+
 from bbsbot.core.session_manager import SessionManager
+from bbsbot.paths import default_knowledge_root
 
 
 async def main():
@@ -11,9 +12,7 @@ async def main():
     knowledge_root = default_knowledge_root()
 
     print("Connecting to localhost:2002...")
-    session_id = await manager.create_session(
-        host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0
-    )
+    session_id = await manager.create_session(host="localhost", port=2002, cols=80, rows=25, term="ANSI", timeout=10.0)
     session = await manager.get_session(session_id)
     await manager.enable_learning(session_id, knowledge_root, namespace="tw2002")
 
@@ -31,8 +30,8 @@ async def main():
     snapshot = await session.read(timeout_ms=1000, max_bytes=8192)
 
     # Check if need to create new player
-    screen_text = snapshot.get('screen', '').lower()
-    if 'new player' in screen_text or 'create' in screen_text:
+    screen_text = snapshot.get("screen", "").lower()
+    if "new player" in screen_text or "create" in screen_text:
         print("  Creating new player...")
         await session.send("Y\r")
         await asyncio.sleep(1.0)
@@ -48,7 +47,7 @@ async def main():
         # Just wait forever, keeping connection alive
         while True:
             await asyncio.sleep(60)
-            print(f"  Still connected...")
+            print("  Still connected...")
     except KeyboardInterrupt:
         print("\n\nDisconnecting...")
         await manager.close_all_sessions()

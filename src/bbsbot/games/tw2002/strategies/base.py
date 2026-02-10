@@ -11,8 +11,8 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
+
 if TYPE_CHECKING:
-    from bbsbot.games.tw2002.bot import TradingBot
     from bbsbot.games.tw2002.config import BotConfig
     from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
 
@@ -63,7 +63,7 @@ class TradeResult(BaseModel):
     new_sector: int | None = None
     turns_used: int = 0
     from_sector: int | None = None  # For tracking failed warps
-    to_sector: int | None = None    # For tracking failed warps
+    to_sector: int | None = None  # For tracking failed warps
 
     model_config = ConfigDict(extra="ignore")
 
@@ -248,7 +248,5 @@ class TradingStrategy(ABC):
             "trades_executed": self._trades_executed,
             "total_profit": self._total_profit,
             "turns_used": self._turns_used,
-            "profit_per_turn": (
-                self._total_profit / self._turns_used if self._turns_used > 0 else 0
-            ),
+            "profit_per_turn": (self._total_profit / self._turns_used if self._turns_used > 0 else 0),
         }

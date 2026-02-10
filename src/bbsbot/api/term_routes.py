@@ -167,7 +167,9 @@ class TermHub:
                     if mtype == "term":
                         data = msg.get("data", "")
                         if data:
-                            await self._broadcast(bot_id, {"type": "term", "data": data, "ts": msg.get("ts", time.time())})
+                            await self._broadcast(
+                                bot_id, {"type": "term", "data": data, "ts": msg.get("ts", time.time())}
+                            )
                     elif mtype == "snapshot":
                         # Store last snapshot for new browser clients and forward to all current watchers.
                         snapshot = {
@@ -234,7 +236,9 @@ class TermHub:
                     ensure_ascii=True,
                 )
             )
-            await websocket.send_text(json.dumps(await self._hijack_state_msg_for(bot_id, websocket), ensure_ascii=True))
+            await websocket.send_text(
+                json.dumps(await self._hijack_state_msg_for(bot_id, websocket), ensure_ascii=True)
+            )
 
             # Best-effort snapshot: last known or request from worker.
             if st.last_snapshot is not None:
@@ -258,23 +262,67 @@ class TermHub:
                         st_now = await self._get(bot_id)
                         if st_now.hijack_owner is None:
                             await self._set_hijack_owner(bot_id, websocket)
-                            ok = await self._send_worker(bot_id, {"type": "control", "action": "pause", "owner": "dashboard", "lease_s": 0, "ts": time.time()})
+                            ok = await self._send_worker(
+                                bot_id,
+                                {
+                                    "type": "control",
+                                    "action": "pause",
+                                    "owner": "dashboard",
+                                    "lease_s": 0,
+                                    "ts": time.time(),
+                                },
+                            )
                             if not ok:
                                 await self._set_hijack_owner(bot_id, None)
-                                await websocket.send_text(json.dumps({"type": "error", "message": "No worker connected for this bot."}, ensure_ascii=True))
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {"type": "error", "message": "No worker connected for this bot."},
+                                        ensure_ascii=True,
+                                    )
+                                )
                             await self._broadcast_hijack_state(bot_id)
                         else:
-                            await websocket.send_text(json.dumps({"type": "error", "message": "Already hijacked by another client."}, ensure_ascii=True))
-                            await websocket.send_text(json.dumps(await self._hijack_state_msg_for(bot_id, websocket), ensure_ascii=True))
+                            await websocket.send_text(
+                                json.dumps(
+                                    {"type": "error", "message": "Already hijacked by another client."},
+                                    ensure_ascii=True,
+                                )
+                            )
+                            await websocket.send_text(
+                                json.dumps(await self._hijack_state_msg_for(bot_id, websocket), ensure_ascii=True)
+                            )
                     elif mtype == "hijack_step":
                         if await self._is_owner(bot_id, websocket):
-                            ok = await self._send_worker(bot_id, {"type": "control", "action": "step", "owner": "dashboard", "lease_s": 0, "ts": time.time()})
+                            ok = await self._send_worker(
+                                bot_id,
+                                {
+                                    "type": "control",
+                                    "action": "step",
+                                    "owner": "dashboard",
+                                    "lease_s": 0,
+                                    "ts": time.time(),
+                                },
+                            )
                             if not ok:
-                                await websocket.send_text(json.dumps({"type": "error", "message": "No worker connected for this bot."}, ensure_ascii=True))
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {"type": "error", "message": "No worker connected for this bot."},
+                                        ensure_ascii=True,
+                                    )
+                                )
                     elif mtype == "hijack_release":
                         if await self._is_owner(bot_id, websocket):
                             await self._set_hijack_owner(bot_id, None)
-                            await self._send_worker(bot_id, {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()})
+                            await self._send_worker(
+                                bot_id,
+                                {
+                                    "type": "control",
+                                    "action": "resume",
+                                    "owner": "dashboard",
+                                    "lease_s": 0,
+                                    "ts": time.time(),
+                                },
+                            )
                             await self._broadcast_hijack_state(bot_id)
                     elif mtype == "input":
                         if await self._is_owner(bot_id, websocket):
@@ -282,7 +330,11 @@ class TermHub:
                             if data:
                                 ok = await self._send_worker(bot_id, {"type": "input", "data": data, "ts": time.time()})
                                 if not ok:
-                                    await websocket.send_text(json.dumps({"type": "error", "message": "Worker connection lost."}, ensure_ascii=True))
+                                    await websocket.send_text(
+                                        json.dumps(
+                                            {"type": "error", "message": "Worker connection lost."}, ensure_ascii=True
+                                        )
+                                    )
                         else:
                             # Ignore input from non-owner.
                             continue
@@ -300,7 +352,10 @@ class TermHub:
                         if was_owner and st3.hijack_owner is websocket:
                             st3.hijack_owner = None
                 if was_owner:
-                    await self._send_worker(bot_id, {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()})
+                    await self._send_worker(
+                        bot_id,
+                        {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
+                    )
                     await self._broadcast_hijack_state(bot_id)
 
         return router
@@ -311,5 +366,5 @@ def setup(manager: Any) -> APIRouter:
     hub = getattr(manager, "term_hub", None)
     if hub is None:
         hub = TermHub()
-        setattr(manager, "term_hub", hub)
+        manager.term_hub = hub
     return hub.create_router()

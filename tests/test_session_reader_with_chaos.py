@@ -25,4 +25,3 @@ async def test_session_reader_disconnect_injected_notifies_waiters() -> None:
         assert snap.get("disconnected") is True
 
         await manager.close_session(sid)
-

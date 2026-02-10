@@ -13,10 +13,9 @@ Tests:
 9. Ship status
 10. Recovery from any state
 """
+
 import asyncio
 import sys
-from pathlib import Path
-
 
 from bbsbot.games.tw2002.bot import TradingBot
 
@@ -42,11 +41,12 @@ async def test_navigation(bot: TradingBot) -> dict:
 
     # Parse warps from screen
     import re
-    warp_match = re.search(r'Warps to Sector\(s\)\s*:\s*([\d\s\(\)\-]+)', screen)
+
+    warp_match = re.search(r"Warps to Sector\(s\)\s*:\s*([\d\s\(\)\-]+)", screen)
     warps = []
     if warp_match:
         warp_text = warp_match.group(1)
-        warps = [int(x) for x in re.findall(r'\d+', warp_text)]
+        warps = [int(x) for x in re.findall(r"\d+", warp_text)]
 
     print(f"  Available warps: {warps}")
 
@@ -125,8 +125,8 @@ async def test_port_trading(bot: TradingBot) -> dict:
         results["tests"].append(("port_access", True))
 
         # Check port type
-        lines = [l.strip() for l in screen.split('\n') if l.strip()]
-        print(f"  Port info (last 5 lines):")
+        lines = [l.strip() for l in screen.split("\n") if l.strip()]
+        print("  Port info (last 5 lines):")
         for line in lines[-5:]:
             print(f"    {line[:70]}")
 
@@ -273,7 +273,7 @@ async def test_ship_status(bot: TradingBot) -> dict:
         results["tests"].append(("ship_info", True))
 
         # Show some details
-        lines = [l.strip() for l in screen.split('\n') if l.strip()]
+        lines = [l.strip() for l in screen.split("\n") if l.strip()]
         print("  Ship details:")
         for line in lines[-10:]:
             if any(x in line.lower() for x in ship_indicators):
@@ -427,7 +427,7 @@ async def test_help_system(bot: TradingBot) -> dict:
         results["tests"].append(("help_system", True))
 
         # Show help content
-        lines = [l.strip() for l in screen.split('\n') if l.strip()]
+        lines = [l.strip() for l in screen.split("\n") if l.strip()]
         print("  Help preview:")
         for line in lines[:8]:
             print(f"    {line[:70]}")
@@ -573,6 +573,7 @@ async def main():
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:

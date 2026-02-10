@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 __all__ = ["get_logger", "configure_logging"]
 
 
-def configure_logging(settings: "Settings | None" = None) -> None:
+def configure_logging(settings: Settings | None = None) -> None:
     """Configure structlog for bbsbot.
 
     This should be called once at application startup.
@@ -31,6 +31,7 @@ def configure_logging(settings: "Settings | None" = None) -> None:
     """
     if settings is None:
         from bbsbot.settings import Settings
+
         settings = Settings()
 
     log_level = getattr(logging, settings.log_level.upper(), logging.WARNING)

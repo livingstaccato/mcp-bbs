@@ -17,22 +17,20 @@ from bbsbot.games.tw2002.config import BotConfig, GoalPhase
 from bbsbot.games.tw2002.interventions.advisor import InterventionAdvisor
 from bbsbot.games.tw2002.interventions.trigger import InterventionTrigger
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
+from bbsbot.games.tw2002.strategies.ai import (
+    decision_maker,
+    goals,
+    orchestration,
+    validator,
+)
+from bbsbot.games.tw2002.strategies.ai.parser import ResponseParser
+from bbsbot.games.tw2002.strategies.ai.prompts import PromptBuilder
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
     TradeOpportunity,
     TradingStrategy,
 )
-from bbsbot.games.tw2002.strategies.ai.parser import ResponseParser
-from bbsbot.games.tw2002.strategies.ai.prompts import PromptBuilder
-from bbsbot.games.tw2002.strategies.ai import (
-    decision_maker,
-    feedback_loop,
-    goals,
-    orchestration,
-    validator,
-)
 from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
-from bbsbot.llm.exceptions import LLMError
 from bbsbot.llm.manager import LLMManager
 from bbsbot.llm.types import ChatMessage
 from bbsbot.logging import get_logger
@@ -202,7 +200,6 @@ class AIStrategy(TradingStrategy):
             stuck_action=stuck_action,
         )
 
-
     def _validate_decision(
         self,
         action: TradeAction,
@@ -267,7 +264,6 @@ class AIStrategy(TradingStrategy):
                 **data,
             }
         )
-
 
     def record_action_result(
         self,
@@ -465,7 +461,9 @@ class AIStrategy(TradingStrategy):
         """Get current goal ID."""
         return goals.get_current_goal(self)
 
-    def set_goal(self, goal_id: str, duration_turns: int = 0, state: GameState | None = None, trigger_type: str = "") -> None:
+    def set_goal(
+        self, goal_id: str, duration_turns: int = 0, state: GameState | None = None, trigger_type: str = ""
+    ) -> None:
         """Manually set current goal."""
         goals.set_goal(self, goal_id, duration_turns, state)
 

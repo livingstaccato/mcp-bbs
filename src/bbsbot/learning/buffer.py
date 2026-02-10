@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import time
 from collections import deque
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel
-
-if TYPE_CHECKING:
-    pass
 
 
 class ScreenBuffer(BaseModel):

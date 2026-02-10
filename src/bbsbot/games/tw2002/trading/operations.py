@@ -8,6 +8,7 @@ from typing import Literal
 
 from bbsbot.games.tw2002.io import send_input, wait_and_respond
 from bbsbot.logging import get_logger
+
 from .validation import guard_trade_port, validate_kv_data
 
 logger = get_logger(__name__)
@@ -82,9 +83,7 @@ async def dock_and_trade(
     action_attempts = 0
     for attempt in range(10):
         try:
-            input_type, prompt_id, screen, kv_data = await wait_and_respond(
-                bot, timeout_ms=3000
-            )
+            input_type, prompt_id, screen, kv_data = await wait_and_respond(bot, timeout_ms=3000)
             print(f"    → {prompt_id} ({input_type})")
 
             # Validate extracted data before using

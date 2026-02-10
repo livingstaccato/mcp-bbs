@@ -168,8 +168,7 @@ def extract_semantic_kv(screen: str) -> dict:
     # Rows:
     # "Fuel Ore   Buying     820    100%       0"
     port_header_seen = any(
-        re.search(r"(?i)\bitems\b.*\bstatus\b.*\btrading\b.*%\s*of\s*max\b.*\bonboard\b", l)
-        for l in iter_lines
+        re.search(r"(?i)\bitems\b.*\bstatus\b.*\btrading\b.*%\s*of\s*max\b.*\bonboard\b", l) for l in iter_lines
     )
     if port_header_seen:
         data["has_port"] = True

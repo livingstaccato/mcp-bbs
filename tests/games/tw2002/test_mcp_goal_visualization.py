@@ -106,4 +106,3 @@ def test_mcp_get_goal_phases(monkeypatch):
     assert result["success"] is True
     assert result["current_turn"] == 5
     assert result["phases"][0]["goal_id"] == "profit"
-

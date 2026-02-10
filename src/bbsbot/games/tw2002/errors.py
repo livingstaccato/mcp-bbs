@@ -2,7 +2,7 @@
 
 import asyncio
 
-from bbsbot.core.error_detection import BaseErrorDetector, LoopDetector
+from bbsbot.core.error_detection import BaseErrorDetector
 from bbsbot.games.tw2002.logging_utils import logger
 
 
@@ -23,7 +23,9 @@ def _check_for_loop(bot, prompt_id: str) -> bool:
     if is_loop:
         logger.warning("loop_detected", prompt_id=prompt_id, count=count, threshold=bot.loop_detection.threshold)
     elif count > 0:
-        logger.debug("loop_detection_tracking", prompt_id=prompt_id, count=count, threshold=bot.loop_detection.threshold)
+        logger.debug(
+            "loop_detection_tracking", prompt_id=prompt_id, count=count, threshold=bot.loop_detection.threshold
+        )
 
     return is_loop
 

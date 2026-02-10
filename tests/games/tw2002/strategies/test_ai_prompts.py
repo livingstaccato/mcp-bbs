@@ -51,9 +51,7 @@ def stats():
     }
 
 
-def test_prompt_builder_builds_messages(
-    prompt_builder, game_state, sector_knowledge, stats
-):
+def test_prompt_builder_builds_messages(prompt_builder, game_state, sector_knowledge, stats):
     """Test building chat messages."""
     messages = prompt_builder.build(game_state, sector_knowledge, stats)
 
@@ -72,9 +70,7 @@ def test_prompt_builder_builds_messages(
     assert "100" in messages[1].content  # turns
 
 
-def test_prompt_builder_includes_adjacent_sectors(
-    prompt_builder, game_state, sector_knowledge, stats
-):
+def test_prompt_builder_includes_adjacent_sectors(prompt_builder, game_state, sector_knowledge, stats):
     """Test including adjacent sector info."""
     messages = prompt_builder.build(game_state, sector_knowledge, stats)
     user_prompt = messages[1].content

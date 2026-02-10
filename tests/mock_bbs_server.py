@@ -34,9 +34,7 @@ class MockBBSServer:
 
     async def start(self) -> None:
         """Start the mock BBS server."""
-        self.server = await asyncio.start_server(
-            self._handle_client, self.host, self.port
-        )
+        self.server = await asyncio.start_server(self._handle_client, self.host, self.port)
         # Update port to actual assigned port
         addr = self.server.sockets[0].getsockname()
         self.port = addr[1]
@@ -51,9 +49,7 @@ class MockBBSServer:
             await writer.wait_closed()
         self.clients.clear()
 
-    async def _handle_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Handle a client connection."""
         self.clients.append((reader, writer))
 
@@ -93,9 +89,7 @@ class MockBBSServer:
 class MockBBS:
     """Context manager for mock BBS server."""
 
-    def __init__(
-        self, responses: list[str] | None = None, replay_log: Path | str | None = None
-    ) -> None:
+    def __init__(self, responses: list[str] | None = None, replay_log: Path | str | None = None) -> None:
         """Initialize mock BBS.
 
         Args:

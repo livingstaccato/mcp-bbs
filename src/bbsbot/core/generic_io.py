@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 
 class Session(Protocol):
@@ -85,7 +86,7 @@ class PromptWaiter:
                 # The owning bot disconnected and cleared its session reference.
                 # Treat as a recoverable network failure so the worker can reconnect.
                 raise ConnectionError("Session is None")
-            if hasattr(self.session, "is_connected") and not getattr(self.session, "is_connected")():
+            if hasattr(self.session, "is_connected") and not self.session.is_connected():
                 raise ConnectionError("Session disconnected")
 
             snapshot = self.session.snapshot()
@@ -174,7 +175,7 @@ class InputSender:
         """
         if self.session is None:
             raise ConnectionError("Session is None")
-        if hasattr(self.session, "is_connected") and not getattr(self.session, "is_connected")():
+        if hasattr(self.session, "is_connected") and not self.session.is_connected():
             raise ConnectionError("Session disconnected")
 
         if input_type == "single_key":

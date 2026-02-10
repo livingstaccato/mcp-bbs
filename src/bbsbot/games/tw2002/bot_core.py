@@ -8,15 +8,15 @@ from typing import TYPE_CHECKING
 
 from bbsbot.core.error_detection import LoopDetector
 from bbsbot.core.session_manager import SessionManager
-from bbsbot.paths import default_knowledge_root
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge
+from bbsbot.paths import default_knowledge_root
 
 if TYPE_CHECKING:
-    from bbsbot.games.tw2002.strategies.base import TradingStrategy
     from bbsbot.games.tw2002.banking import BankingManager
-    from bbsbot.games.tw2002.upgrades import UpgradeManager
     from bbsbot.games.tw2002.combat import CombatManager
+    from bbsbot.games.tw2002.strategies.base import TradingStrategy
+    from bbsbot.games.tw2002.upgrades import UpgradeManager
     from bbsbot.watch.manager import WatchManager
 
 
@@ -42,8 +42,7 @@ class TradingBot:
         self.game_state: GameState | None = None
         self.sector_knowledge: SectorKnowledge | None = None
         self.twerk_data_dir = twerk_data_dir or (
-            Path(self.config.trading.twerk_optimized.data_dir)
-            if self.config.trading.twerk_optimized.data_dir else None
+            Path(self.config.trading.twerk_optimized.data_dir) if self.config.trading.twerk_optimized.data_dir else None
         )
 
         # Strategy system
@@ -114,6 +113,7 @@ class TradingBot:
         """Get the banking manager."""
         if self._banking is None:
             from bbsbot.games.tw2002.banking import BankingManager
+
             self._banking = BankingManager(self.config, self.sector_knowledge)
         return self._banking
 
@@ -122,6 +122,7 @@ class TradingBot:
         """Get the upgrade manager."""
         if self._upgrades is None:
             from bbsbot.games.tw2002.upgrades import UpgradeManager
+
             self._upgrades = UpgradeManager(self.config, self.sector_knowledge)
         return self._upgrades
 
@@ -130,6 +131,7 @@ class TradingBot:
         """Get the combat manager."""
         if self._combat is None:
             from bbsbot.games.tw2002.combat import CombatManager
+
             self._combat = CombatManager(self.config, self.sector_knowledge)
         return self._combat
 
@@ -145,20 +147,22 @@ class TradingBot:
         # CRITICAL: Ensure knowledge is initialized before creating strategy
         if self.sector_knowledge is None:
             raise RuntimeError(
-                "Cannot initialize strategy: sector_knowledge is None. "
-                "Call init_knowledge() before init_strategy()"
+                "Cannot initialize strategy: sector_knowledge is None. Call init_knowledge() before init_strategy()"
             )
 
         strategy_name = self.config.trading.strategy
 
         if strategy_name == "profitable_pairs":
             from bbsbot.games.tw2002.strategies.profitable_pairs import ProfitablePairsStrategy
+
             self._strategy = ProfitablePairsStrategy(self.config, self.sector_knowledge)
         elif strategy_name == "twerk_optimized":
             from bbsbot.games.tw2002.strategies.twerk_optimized import TwerkOptimizedStrategy
+
             self._strategy = TwerkOptimizedStrategy(self.config, self.sector_knowledge)
         elif strategy_name == "ai_strategy":
             from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
+
             self._strategy = AIStrategy(self.config, self.sector_knowledge)
             # Inject session logger for feedback loop
             if self.session and self.session.logger:
@@ -167,9 +171,10 @@ class TradingBot:
             try:
                 self._strategy.set_viz_emitter(self.emit_viz)  # type: ignore[attr-defined]
             except Exception:
-                setattr(self._strategy, "_viz_emit", self.emit_viz)
+                self._strategy._viz_emit = self.emit_viz
         else:  # Default to opportunistic
             from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
+
             self._strategy = OpportunisticStrategy(self.config, self.sector_knowledge)
 
         print(f"  [Strategy] Initialized: {self._strategy.name}")
