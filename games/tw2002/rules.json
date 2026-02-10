@@ -188,7 +188,7 @@
       "kind": "menu",
       "input_type": "single_key",
       "match": {
-        "pattern": "(?i)enter your choice\\s*:?\\s*$",
+        "pattern": "(?i)enter\\s+your\\s+choice\\s*:?\\s*(?:[A-Za-z])?\\s*$",
         "match_mode": "regex"
       },
       "screen": {
