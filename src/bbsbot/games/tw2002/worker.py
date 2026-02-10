@@ -192,6 +192,7 @@ class WorkerBot(TradingBot):
             screen_lower = ""
             is_command_prompt = False
             screen_phase: str | None = None
+            in_game_now = False
 
             # Get current screen from session
             if hasattr(self, 'session') and self.session:
@@ -210,6 +211,12 @@ class WorkerBot(TradingBot):
             screen_lower = (current_screen or "").lower()
             # This is the only reliable "in game" indicator on this server.
             is_command_prompt = "command [tl=" in screen_lower
+            in_game_now = bool(
+                is_command_prompt
+                or (self.current_sector and int(self.current_sector) > 0)
+                or (self.game_state and getattr(self.game_state, "sector", 0))
+                or (self.turns_used > 0)
+            )
 
             def _screen_phase(s: str) -> str | None:
                 """Best-effort phase classification from raw screen text."""
@@ -264,7 +271,7 @@ class WorkerBot(TradingBot):
                     activity = "ON_PLANET"
                 elif current_context == "menu":
                     # Check if it's game selection menu (sector is None means not in game yet)
-                    if not self.current_sector or self.current_sector == 0:
+                    if not in_game_now:
                         activity = "GAME_SELECTION_MENU"
                     else:
                         activity = "IN_GAME_MENU"
@@ -272,15 +279,18 @@ class WorkerBot(TradingBot):
                     # Keep Activity stable; show PAUSED in Status instead.
                     activity = self._last_activity_context or ("IN_GAME" if (self.current_sector and self.current_sector > 0) else "LOGGING_IN")
                 elif current_context == "unknown":
-                    # Fallback: only treat as in-game if we actually see the command prompt.
-                    activity = "IN_GAME" if is_command_prompt else "LOGGING_IN"
+                    # Ambiguous snapshot: keep last known in-game activity when possible.
+                    if in_game_now:
+                        activity = self._last_activity_context or "IN_GAME"
+                    else:
+                        activity = "LOGGING_IN"
                 else:
                     # Any other context, show it verbatim
                     activity = current_context.upper()
             else:
                 # No screen content - must be connecting/disconnected
                 if hasattr(self, 'session') and self.session and self.session.is_connected():
-                    activity = "CONNECTING"
+                    activity = (self._last_activity_context or "IN_GAME") if in_game_now else "CONNECTING"
                 else:
                     activity = "DISCONNECTED"
 
@@ -289,7 +299,7 @@ class WorkerBot(TradingBot):
             if screen_phase:
                 status_detail = screen_phase
                 # Avoid mislabeling stale sector-derived states as "IN_GAME".
-                if not is_command_prompt:
+                if not is_command_prompt and not in_game_now:
                     activity = "LOGGING_IN"
 
             prompt_to_status = {
@@ -329,8 +339,19 @@ class WorkerBot(TradingBot):
                 "prompt.pause_simple": "PAUSED",
                 "prompt.pause_space_or_enter": "PAUSED",
             }
+            login_statuses = {
+                "USERNAME",
+                "GAME_PASSWORD",
+                "GAME_SELECTION",
+                "CREATING_CHARACTER",
+                "CHOOSING_PASSWORD",
+            }
             if prompt_id:
-                status_detail = status_detail or prompt_to_status.get(prompt_id)
+                mapped = prompt_to_status.get(prompt_id)
+                if mapped and not status_detail:
+                    # Once in-game, do not regress status back to login phases.
+                    if not (in_game_now and mapped in login_statuses):
+                        status_detail = mapped
 
             # If the password prompt is happening while already in-game, it's not password *selection*.
             if prompt_id == "prompt.character_password":
@@ -345,6 +366,10 @@ class WorkerBot(TradingBot):
             # Pause screens should show as Status, not Activity.
             if current_context == "pause":
                 status_detail = "PAUSED"
+
+            # Final safety: if we already know we're in-game, don't present LOGGING_IN.
+            if in_game_now and activity in ("LOGGING_IN", "CONNECTING"):
+                activity = self._last_activity_context or "IN_GAME"
 
             # Orient progress tracking for debugging (Status, not Activity).
             orient_step = getattr(self, '_orient_step', 0)
@@ -433,10 +458,26 @@ class WorkerBot(TradingBot):
                 status_detail = self.ai_activity
                 self.ai_activity = None  # Clear after reporting
 
+            # Preserve last known sector across non-command screens (ports, menus, haggles).
+            # Before first in-game detection this remains 0, which is expected.
+            sector_out = 0
+            try:
+                if self.current_sector and int(self.current_sector) > 0:
+                    sector_out = int(self.current_sector)
+                elif self.game_state and getattr(self.game_state, "sector", None):
+                    gs_sector = int(getattr(self.game_state, "sector"))
+                    if gs_sector > 0:
+                        sector_out = gs_sector
+                elif sem.get("sector") is not None:
+                    sem_sector = int(sem.get("sector"))
+                    if sem_sector > 0:
+                        sector_out = sem_sector
+            except Exception:
+                sector_out = 0
+
             # Build status update dict
             status_data = {
-                # Sector is unreliable/stale during login/character creation screens.
-                "sector": (self.current_sector or 0) if is_command_prompt else 0,
+                "sector": sector_out,
                 "turns_executed": self.turns_used,
                 "turns_max": turns_max,
                 "state": actual_state,

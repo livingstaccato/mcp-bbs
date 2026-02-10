@@ -44,9 +44,12 @@ def _update_semantic_relationships(bot, data: dict) -> None:
     info = knowledge._sectors.get(sector) or SectorInfo()
     if data.get("warps"):
         info.warps = data["warps"]
-    if data.get("has_port") is True:
-        info.has_port = True
-        info.port_class = data.get("port_class")
+    if "has_port" in data:
+        info.has_port = bool(data.get("has_port"))
+        if info.has_port:
+            info.port_class = data.get("port_class")
+        else:
+            info.port_class = None
     if data.get("has_planet") is True:
         info.has_planet = True
         info.planet_names = data.get("planet_names", [])

@@ -6,18 +6,47 @@ from bbsbot.games.tw2002.logging_utils import logger
 from bbsbot.terminal.screen_utils import clean_screen_for_display, extract_menu_options
 
 
+def _tail_for_current_prompt(screen: str) -> str:
+    """Return a tail slice of the screen anchored near the *current* prompt/sector block.
+
+    TW2002 screens often include scrollback from previous sectors. If we regex the entire
+    buffer, we can accidentally "learn" stale `Ports:` lines and poison knowledge.
+    Anchoring near the last prompt/sector line keeps extraction aligned with what the
+    player is currently seeing.
+    """
+    if not screen:
+        return ""
+
+    anchors: list[int] = []
+    for pat in (
+        r"(?im)^\s*Command\s*\[TL=.*\]:\[\d+\]\s*\(\?=Help\)\?\s*:\s*$",
+        r"(?im)^\s*Sector\s*:\s*\d+",
+    ):
+        for m in re.finditer(pat, screen):
+            anchors.append(m.start())
+
+    if not anchors:
+        return screen
+
+    anchor = max(anchors)
+    # Include a little context before the anchor line in case `Ports:` is printed
+    # just above the prompt/sector line.
+    return screen[max(0, anchor - 900) :]
+
+
 def extract_semantic_kv(screen: str) -> dict:
     """Extract semantic key/value data from a screen snapshot."""
     data: dict = {}
+    tail = _tail_for_current_prompt(screen)
 
     # Sector
-    sector_matches = re.findall(r"[Ss]ector\s*:\s*(\d+)", screen)
+    sector_matches = re.findall(r"[Ss]ector\s*:\s*(\d+)", tail)
     if sector_matches:
         data["sector"] = int(sector_matches[-1])
 
     # Warps
     warp_line = None
-    for line in screen.splitlines():
+    for line in tail.splitlines():
         if "Warps to Sector" in line:
             warp_line = line
     if warp_line:
@@ -26,15 +55,41 @@ def extract_semantic_kv(screen: str) -> dict:
             data["warps"] = warps
 
     # Ports
-    port_match = re.search(r"Ports?\s*:\s*([^,]+),\s*Class\s*\d+\s*\(([^)]+)\)", screen)
-    if port_match:
-        data["has_port"] = True
-        data["port_name"] = port_match.group(1).strip()
-        data["port_class"] = port_match.group(2).strip()
+    tail_lower = tail.lower()
+    # Explicit negative signal (e.g. after sending 'P' in an empty sector)
+    if "no port in this sector" in tail_lower:
+        data["has_port"] = False
+        data["port_name"] = None
+        data["port_class"] = None
+    else:
+        # Prefer the last Ports: line near the current prompt; older ports in scrollback
+        # should not be considered relevant to the current sector.
+        port_value: str | None = None
+        for line in tail.splitlines():
+            if re.search(r"(?i)^\s*ports?\s*:", line):
+                port_value = line.split(":", 1)[-1].strip()
+        if port_value is not None:
+            if not port_value or port_value.strip().lower() in ("none", "-"):
+                data["has_port"] = False
+                data["port_name"] = None
+                data["port_class"] = None
+            else:
+                data["has_port"] = True
+                # Common formats:
+                # - "Trading Port (BBS)"
+                # - "<Name>, Class 5 (SBB)"
+                # - "<Name> (BBS)"
+                if class_match := re.search(r"\(([A-Z]{3})\)", port_value):
+                    data["port_class"] = class_match.group(1).strip().upper()
+                # Name heuristics: strip trailing ", Class ..." and "(BBS)".
+                name = re.sub(r",\s*Class\s*\d+\s*\([A-Z]{3}\)\s*$", "", port_value, flags=re.IGNORECASE)
+                name = re.sub(r"\s*\([A-Z]{3}\)\s*$", "", name).strip()
+                if name:
+                    data["port_name"] = name
 
     # Planets
     planet_line = None
-    for line in screen.splitlines():
+    for line in tail.splitlines():
         if line.strip().startswith("Planets"):
             planet_line = line
     if planet_line:
@@ -117,6 +172,7 @@ def extract_semantic_kv(screen: str) -> dict:
         for l in iter_lines
     )
     if port_header_seen:
+        data["has_port"] = True
         row_re = re.compile(
             r"^(Fuel\s+Ore|Organics|Equipment)\s+(Buying|Selling)\s+([\d,]+)\s+(\d+)%\s+([\d,]+)\s*$",
             re.IGNORECASE,

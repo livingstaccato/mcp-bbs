@@ -192,15 +192,21 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
                     bot.game_state.warps = list(merged_kv.get("warps") or [])
             except Exception:
                 pass
-            # Fill in from knowledge if available
+            # Fill in from knowledge if available, but do not overwrite explicit
+            # observations from the current screen.
             if bot.sector_knowledge and quick_state.sector:
                 info = bot.sector_knowledge.get_sector_info(quick_state.sector)
                 if info:
-                    bot.game_state.warps = info.warps
-                    bot.game_state.has_port = info.has_port
-                    bot.game_state.port_class = info.port_class
-                    bot.game_state.has_planet = info.has_planet
-                    bot.game_state.planet_names = info.planet_names
+                    if not bot.game_state.warps:
+                        bot.game_state.warps = info.warps
+                    if merged_kv.get("has_port") is None:
+                        bot.game_state.has_port = info.has_port
+                    if merged_kv.get("port_class") is None:
+                        bot.game_state.port_class = info.port_class
+                    if merged_kv.get("has_planet") is None:
+                        bot.game_state.has_planet = info.has_planet
+                    if merged_kv.get("planet_names") is None:
+                        bot.game_state.planet_names = info.planet_names
 
             # Persist what we observed, plus port market signals, even in fast path.
             if bot.sector_knowledge and bot.game_state.sector:
