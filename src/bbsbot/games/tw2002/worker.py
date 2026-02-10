@@ -187,6 +187,9 @@ class WorkerBot(TradingBot):
             current_screen = ""
             current_context = "unknown"
             prompt_id: str | None = None
+            screen_lower = ""
+            is_command_prompt = False
+            screen_phase: str | None = None
 
             # Get current screen from session
             if hasattr(self, 'session') and self.session:
@@ -201,6 +204,43 @@ class WorkerBot(TradingBot):
                         prompt_id = pd.get("prompt_id")
                 except Exception:
                     prompt_id = None
+
+            screen_lower = (current_screen or "").lower()
+            # This is the only reliable "in game" indicator on this server.
+            is_command_prompt = "command [tl=" in screen_lower
+
+            def _screen_phase(s: str) -> str | None:
+                """Best-effort phase classification from raw screen text."""
+                if not s:
+                    return None
+                # Character creation
+                if "use (n)ew name or (b)bs name" in s:
+                    return "CREATING_CHARACTER"
+                if "what do you want to name your ship" in s:
+                    return "CREATING_CHARACTER"
+                if "name your home planet" in s:
+                    return "CREATING_CHARACTER"
+                if "press enter to begin your adventure" in s:
+                    return "CREATING_CHARACTER"
+                if "gender (m/f)" in s:
+                    return "CREATING_CHARACTER"
+                if "please enter your name" in s and "enter for none" in s:
+                    return "CREATING_CHARACTER"
+                if "create new character" in s or "start a new character" in s:
+                    return "CREATING_CHARACTER"
+                # Password-related
+                if "repeat password to verify" in s:
+                    return "CHOOSING_PASSWORD"
+                if "required to enter this game" in s or "private game" in s:
+                    return "GAME_PASSWORD"
+                if "password" in s and not is_command_prompt:
+                    return "CHOOSING_PASSWORD"
+                # Username/login
+                if "login name" in s or "what is your name" in s:
+                    return "USERNAME"
+                return None
+
+            screen_phase = _screen_phase(screen_lower)
 
             # Detect REAL-TIME context from current screen
             if current_screen.strip():
@@ -230,9 +270,8 @@ class WorkerBot(TradingBot):
                     # Keep Activity stable; show PAUSED in Status instead.
                     activity = self._last_activity_context or ("IN_GAME" if (self.current_sector and self.current_sector > 0) else "LOGGING_IN")
                 elif current_context == "unknown":
-                    # Fallback: check if in game
-                    in_game = self.current_sector and self.current_sector > 0
-                    activity = "IN_GAME" if in_game else "LOGGING_IN"
+                    # Fallback: only treat as in-game if we actually see the command prompt.
+                    activity = "IN_GAME" if is_command_prompt else "LOGGING_IN"
                 else:
                     # Any other context, show it verbatim
                     activity = current_context.upper()
@@ -245,6 +284,12 @@ class WorkerBot(TradingBot):
 
             # Prefer a concise "Status" field for phase/prompt detail, separate from activity.
             status_detail: str | None = None
+            if screen_phase:
+                status_detail = screen_phase
+                # Avoid mislabeling stale sector-derived states as "IN_GAME".
+                if not is_command_prompt:
+                    activity = "LOGGING_IN"
+
             prompt_to_status = {
                 # Login flows
                 "prompt.login_name": "USERNAME",
@@ -283,7 +328,7 @@ class WorkerBot(TradingBot):
                 "prompt.pause_space_or_enter": "PAUSED",
             }
             if prompt_id:
-                status_detail = prompt_to_status.get(prompt_id)
+                status_detail = status_detail or prompt_to_status.get(prompt_id)
 
             # If the password prompt is happening while already in-game, it's not password *selection*.
             if prompt_id == "prompt.character_password":
@@ -388,7 +433,8 @@ class WorkerBot(TradingBot):
 
             # Build status update dict
             status_data = {
-                "sector": self.current_sector or 0,
+                # Sector is unreliable/stale during login/character creation screens.
+                "sector": (self.current_sector or 0) if is_command_prompt else 0,
                 "turns_executed": self.turns_used,
                 "turns_max": turns_max,
                 "state": actual_state,
