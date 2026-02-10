@@ -355,22 +355,26 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 commodity = opportunity.commodity if opportunity else params.get("commodity")
 
                 if commodity:
-                    print(f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})")
-                    profit = await execute_port_trade(bot, commodity=commodity)
+                    print(
+                        f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})"
+                    )
+                    profit = await execute_port_trade(bot, commodity=commodity, trade_action=trade_action)
                     if profit != 0:
                         char_state.record_trade(profit)
                         print(f"  Result: {profit:+,} credits")
                     else:
-                        print(f"  No trade executed")
+                        print("  No trade executed")
                         success = False
                 else:
-                    print(f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})")
+                    print(
+                        f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})"
+                    )
                     profit = await execute_port_trade(bot, commodity=None)
                     if profit != 0:
                         char_state.record_trade(profit)
                         print(f"  Result: {profit:+,} credits")
                     else:
-                        print(f"  No trade executed")
+                        print("  No trade executed")
                         success = False
 
             elif action == TradeAction.MOVE:
@@ -470,6 +474,7 @@ async def execute_port_trade(
     bot,
     commodity: str | None = None,
     max_quantity: int = 0,
+    trade_action: str | None = None,  # "buy" | "sell" (best-effort)
 ) -> int:
     """Execute a trade at the current port.
 
@@ -484,6 +489,7 @@ async def execute_port_trade(
         bot: TradingBot instance
         commodity: Target commodity ("fuel_ore", "organics", "equipment") or None for all
         max_quantity: Max quantity to trade (0 = accept game default/max)
+        trade_action: If set, only act on prompts matching this action ("buy" or "sell")
 
     Returns:
         Credit change (positive = profit, negative = loss)
@@ -501,6 +507,21 @@ async def execute_port_trade(
     last_trade_commodity: str | None = None
     last_trade_is_buy: bool | None = None  # True when we are buying from port (port sells)
     last_trade_qty: int | None = None
+
+    # If strategy asked us to sell but we have nothing, skip early to avoid wasting turns.
+    if trade_action == "sell" and commodity:
+        try:
+            snap0 = bot.session.snapshot() if bot.session else {}
+            kv0 = (snap0.get("prompt_detected") or {}).get("kv_data") or {}
+        except Exception:
+            kv0 = {}
+        cargo_key = {
+            "fuel_ore": "cargo_fuel_ore",
+            "organics": "cargo_organics",
+            "equipment": "cargo_equipment",
+        }.get(commodity)
+        if cargo_key and int((kv0.get(cargo_key) or 0)) <= 0:
+            return 0
 
     # Guardrails for haggle loops when the bot doesn't have enough credits.
     offered_all_credits: bool = False
@@ -592,6 +613,21 @@ async def execute_port_trade(
                 is_target = bool(target_re.search(prompt_line))
                 if is_target:
                     target_seen = True
+
+                    # If the caller specified buy/sell, enforce it.
+                    if trade_action == "buy" and not is_buy:
+                        await bot.session.send("0\r")
+                        pending_trade = False
+                        logger.debug("Skipping target commodity due to action mismatch (wanted=buy)")
+                        await asyncio.sleep(0.3)
+                        continue
+                    if trade_action == "sell" and not is_sell:
+                        await bot.session.send("0\r")
+                        pending_trade = False
+                        logger.debug("Skipping target commodity due to action mismatch (wanted=sell)")
+                        await asyncio.sleep(0.3)
+                        continue
+
                     if max_quantity > 0:
                         # If we are buying and credits are unknown/low, never accept a large max_quantity.
                         if is_buy and (credits_available is None or credits_available < 1000):
