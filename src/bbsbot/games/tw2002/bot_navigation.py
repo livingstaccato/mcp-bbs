@@ -155,6 +155,37 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
                 fighters=merged_kv.get('fighters'),
                 shields=merged_kv.get('shields'),
             )
+            # Pull additional state from semantic extraction when present. This keeps
+            # our SectorKnowledge fresh even when we skip the full D-driven orient().
+            try:
+                if merged_kv.get("holds_total") is not None:
+                    bot.game_state.holds_total = int(merged_kv.get("holds_total"))
+                if merged_kv.get("holds_free") is not None:
+                    bot.game_state.holds_free = int(merged_kv.get("holds_free"))
+            except Exception:
+                pass
+            try:
+                if merged_kv.get("cargo_fuel_ore") is not None:
+                    bot.game_state.cargo_fuel_ore = int(merged_kv.get("cargo_fuel_ore"))
+                if merged_kv.get("cargo_organics") is not None:
+                    bot.game_state.cargo_organics = int(merged_kv.get("cargo_organics"))
+                if merged_kv.get("cargo_equipment") is not None:
+                    bot.game_state.cargo_equipment = int(merged_kv.get("cargo_equipment"))
+            except Exception:
+                pass
+            try:
+                if merged_kv.get("has_port") is not None:
+                    bot.game_state.has_port = bool(merged_kv.get("has_port"))
+                if merged_kv.get("port_class") is not None:
+                    bot.game_state.port_class = str(merged_kv.get("port_class"))
+                if merged_kv.get("has_planet") is not None:
+                    bot.game_state.has_planet = bool(merged_kv.get("has_planet"))
+                if merged_kv.get("planet_names") is not None:
+                    bot.game_state.planet_names = list(merged_kv.get("planet_names") or [])
+                if merged_kv.get("warps") is not None:
+                    bot.game_state.warps = list(merged_kv.get("warps") or [])
+            except Exception:
+                pass
             # Fill in from knowledge if available
             if bot.sector_knowledge and quick_state.sector:
                 info = bot.sector_knowledge.get_sector_info(quick_state.sector)
@@ -164,6 +195,29 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
                     bot.game_state.port_class = info.port_class
                     bot.game_state.has_planet = info.has_planet
                     bot.game_state.planet_names = info.planet_names
+
+            # Persist what we observed, plus port market signals, even in fast path.
+            if bot.sector_knowledge and bot.game_state.sector:
+                try:
+                    bot.sector_knowledge.record_observation(bot.game_state)
+                except Exception:
+                    pass
+                try:
+                    for comm in ("fuel_ore", "organics", "equipment"):
+                        st = merged_kv.get(f"port_{comm}_status")
+                        tu = merged_kv.get(f"port_{comm}_trading_units")
+                        pm = merged_kv.get(f"port_{comm}_pct_max")
+                        if st is None and tu is None and pm is None:
+                            continue
+                        bot.sector_knowledge.record_port_market(
+                            bot.game_state.sector,
+                            comm,
+                            status=st,
+                            trading_units=tu,
+                            pct_max=pm,
+                        )
+                except Exception:
+                    pass
             fast_ms = (_time() - t0) * 1000
             print(f"  [Orient] Fast path: {bot.game_state.summary()} [{fast_ms:.0f}ms]")
         else:
