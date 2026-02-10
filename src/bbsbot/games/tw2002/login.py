@@ -589,6 +589,21 @@ async def login_sequence(
                 print("      → Password prompt, sending character password")
                 await send_masked_password(bot, character_password)
                 last_password_kind = "character"
+                # Some TWGS variants (or high-latency telnet bursts) can render both the initial
+                # "Password?" and the "Repeat password to verify. Password?" prompt in one buffer.
+                # If we only submit once, the server treats it as the *repeat* and the initial is blank,
+                # yielding "Passwords didn't match".
+                if "repeat password to verify" in screen_lower:
+                    try:
+                        # Wait for the follow-up prompt to actually be ready.
+                        await bot.session.wait_for_update(timeout_ms=1200)
+                        follow = (bot.session.snapshot().get("screen", "") or "").lower()
+                        # If we're still at a password prompt after the first submission, send again.
+                        if "password?" in follow and "didn't match" not in follow:
+                            print("      → Verify password prompt detected, sending character password again")
+                            await send_masked_password(bot, character_password)
+                    except Exception:
+                        pass
 
         elif actual_prompt == "private_game_password":
             print(f"      → Private game password prompt, sending game password")
