@@ -91,6 +91,14 @@ def _get_actual_prompt(screen: str) -> str:
     if "alias" in last_line and ("want to use" in last_line or "do you want" in last_line):
         return "alias_prompt"
 
+    # Ship/planet naming prompts (new character creation).
+    # IMPORTANT: these screens can retain stale "(N)ew Name or (B)BS Name" text
+    # at the bottom of the buffer. Prefer the explicit ship/planet prompt text.
+    if "what do you want to name your ship" in last_lines:
+        return "ship_name_prompt"
+    if "what do you want to name your home planet" in last_lines:
+        return "planet_name_prompt"
+
     # Name selection (new character) - only if it's the actual prompt on last line
     # Check last_line first to avoid matching stale buffer content
     if "(n)ew name or (b)bs name" in last_line:
@@ -137,14 +145,6 @@ def _get_actual_prompt(screen: str) -> str:
     # Use ANSI graphics?
     if "use ansi graphics" in last_line:
         return "use_ansi"
-
-    # Ship naming prompt (new character creation) - check last few lines since partial input may be on last line
-    if "what do you want to name your ship" in last_lines:
-        return "ship_name_prompt"
-
-    # Planet naming prompt (new character with home planet)
-    if "what do you want to name your home planet" in last_lines:
-        return "planet_name_prompt"
 
     # [ANY KEY] style prompts
     if "[any key]" in last_line:
@@ -429,6 +429,15 @@ async def login_sequence(
         # CRITICAL: Use last-line analysis to determine ACTUAL prompt
         # The pattern matcher may match stale text (like old [Pause]) anywhere in buffer
         actual_prompt = _get_actual_prompt(screen)
+
+        # If the prompt detector matched a very specific prompt, trust it over
+        # last-line heuristics (the screen buffer frequently contains stale text).
+        if prompt_id == "prompt.ship_name":
+            actual_prompt = "ship_name_prompt"
+        elif prompt_id == "prompt.planet_name":
+            actual_prompt = "planet_name_prompt"
+        elif prompt_id == "prompt.name_or_bbs":
+            actual_prompt = "name_selection"
 
         print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}", flush=True)
 
