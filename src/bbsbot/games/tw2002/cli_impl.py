@@ -959,6 +959,17 @@ async def warp_to_sector(bot, target: int) -> bool:
     if state.sector == target:
         return True
 
+    # Orientation can occasionally read a stale sector immediately after warp.
+    # Re-check using quick prompt detection before declaring failure.
+    from bbsbot.games.tw2002 import orientation
+
+    for _ in range(2):
+        await asyncio.sleep(0.35)
+        quick = await orientation.where_am_i(bot)
+        if quick.context == "sector_command" and quick.sector == target:
+            logger.debug("Warp settled after delayed recheck: target=%d", target)
+            return True
+
     logger.warning("Warp failed: wanted %d, at %s", target, state.sector)
     return False
 

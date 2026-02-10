@@ -62,14 +62,28 @@ class ProfitablePairsStrategy(TradingStrategy):
     def name(self) -> str:
         return "profitable_pairs"
 
-    def _effective_limits(self) -> tuple[int, int]:
-        """Return (max_hops, min_profit_per_turn) adjusted by policy."""
+    def _effective_limits(self, state: GameState | None = None) -> tuple[int, int]:
+        """Return (max_hops, min_profit_per_turn) adjusted by policy and bankroll."""
         max_hops = int(getattr(self._settings, "max_hop_distance", 2))
         min_ppt = int(getattr(self._settings, "min_profit_per_turn", 100))
         if self.policy == "conservative":
-            return max(1, min(max_hops, 1)), max(min_ppt, 250)
-        if self.policy == "aggressive":
-            return max(max_hops, 3), max(50, min_ppt // 2)
+            max_hops, min_ppt = max(1, min(max_hops, 1)), max(min_ppt, 250)
+        elif self.policy == "aggressive":
+            max_hops, min_ppt = max(max_hops, 3), max(50, min_ppt // 2)
+        else:
+            max_hops, min_ppt = max_hops, min_ppt
+
+        # Early-game bots (300-2k credits) can't satisfy high absolute profit/turn
+        # gates with tiny position sizes. Relax threshold so they can bootstrap.
+        if state is not None:
+            credits = int(state.credits or 0)
+            if credits < 1_000:
+                min_ppt = min(min_ppt, 5)
+            elif credits < 5_000:
+                min_ppt = min(min_ppt, 20)
+            elif credits < 20_000:
+                min_ppt = min(min_ppt, 60)
+
         return max_hops, min_ppt
 
     def _recommended_buy_qty(self, state: GameState, pair: PortPair) -> int:
@@ -92,7 +106,7 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         profit_per_unit = int(sell_unit) - int(buy_unit)
         if profit_per_unit <= 0:
-            return 1
+            return 0
 
         max_affordable = max(0, int(credits // int(buy_unit)))
         qty = min(holds_free, max_affordable)
@@ -153,8 +167,18 @@ class ProfitablePairsStrategy(TradingStrategy):
             self._pairs_dirty = True
 
         if self._pairs_dirty:
-            max_hops, _ = self._effective_limits()
+            max_hops, _ = self._effective_limits(state)
             self._discover_pairs(max_hops=max_hops)
+            # Bootstrap mode: with sparse early-game knowledge, nearby-pair constraints
+            # can yield zero candidates for a long time. Widen the search to escape
+            # pure exploration loops.
+            if not self._pairs:
+                for widened in (max_hops + 2, max_hops + 4, 8):
+                    if widened <= max_hops:
+                        continue
+                    self._discover_pairs(max_hops=min(8, int(widened)))
+                    if self._pairs:
+                        break
             self._last_discover_ts = time()
             self._last_known_sectors = known_now
 
@@ -167,7 +191,8 @@ class ProfitablePairsStrategy(TradingStrategy):
         if self._current_pair is None:
             self._current_pair = self._select_best_pair(state)
             if self._current_pair is None:
-                return TradeAction.WAIT, {}
+                logger.info("No reachable/viable pair selected, exploring")
+                return self._explore_for_ports(state)
             self._pair_phase = "going_to_buy"
             logger.info(
                 f"Selected pair: buy at {self._current_pair.buy_sector}, "
@@ -192,6 +217,16 @@ class ProfitablePairsStrategy(TradingStrategy):
                     path_to_sell=pair.path,
                 )
                 buy_qty = self._recommended_buy_qty(state, pair)
+                if buy_qty <= 0:
+                    logger.debug(
+                        "Skipping pair due to non-viable buy qty (pair=%s->%s %s)",
+                        pair.buy_sector,
+                        pair.sell_sector,
+                        pair.commodity,
+                    )
+                    self._invalidate_pair(pair)
+                    self._pair_phase = "idle"
+                    return self._explore_for_ports(state)
                 return TradeAction.TRADE, {"opportunity": opp, "action": "buy", "max_quantity": buy_qty}
             else:
                 # Navigate to buy port
@@ -204,7 +239,8 @@ class ProfitablePairsStrategy(TradingStrategy):
                 else:
                     # Can't reach buy port, try another pair
                     self._invalidate_pair(pair)
-                    return TradeAction.WAIT, {}
+                    self._pair_phase = "idle"
+                    return self._explore_for_ports(state)
 
         elif self._pair_phase == "going_to_sell":
             if current == pair.sell_sector:
@@ -232,14 +268,14 @@ class ProfitablePairsStrategy(TradingStrategy):
                     self._invalidate_pair(pair)
                     self._pair_phase = "idle"
                     self._current_pair = None
-                    return TradeAction.WAIT, {}
+                    return self._explore_for_ports(state)
 
         return TradeAction.WAIT, {}
 
     def find_opportunities(self, state: GameState) -> list[TradeOpportunity]:
         """Find trading opportunities from profitable pairs."""
         if self._pairs_dirty:
-            max_hops, _ = self._effective_limits()
+            max_hops, _ = self._effective_limits(state)
             self._discover_pairs(max_hops=max_hops)
 
         opportunities = []
@@ -387,8 +423,8 @@ class ProfitablePairsStrategy(TradingStrategy):
         best_pair = None
         best_score = 0
 
-        _, min_ppt = self._effective_limits()
-        for pair in self._pairs[:20]:  # Check top 20
+        _, min_ppt = self._effective_limits(state)
+        for pair in self._pairs:
             path = self.knowledge.find_path(current, pair.buy_sector)
             if not path:
                 continue
@@ -396,12 +432,24 @@ class ProfitablePairsStrategy(TradingStrategy):
             total_distance = len(path) - 1 + pair.distance
             turns = total_distance + 2  # +2 for buy/sell actions
 
+            buy_info = self.knowledge.get_sector_info(pair.buy_sector)
+            sell_info = self.knowledge.get_sector_info(pair.sell_sector)
+            buy_unit = ((buy_info.port_prices or {}).get(pair.commodity) or {}).get("sell") if buy_info else None
+            sell_unit = ((sell_info.port_prices or {}).get(pair.commodity) or {}).get("buy") if sell_info else None
+            has_prices = bool(buy_unit and sell_unit)
+
             price_profit = self._estimate_profit_for_pair(state, pair)
-            if price_profit > 0:
+            if has_prices:
+                if price_profit <= 0:
+                    # We already know this pair is non-viable at current prices/liquidity.
+                    continue
                 ppt = float(price_profit) / float(max(turns, 1))
                 if ppt < float(min_ppt):
                     continue
-            score = (price_profit / max(turns, 1)) if price_profit > 0 else (1.0 / max(turns, 1))
+                score = price_profit / max(turns, 1)
+            else:
+                # Unknown pricing: explore the closest structural pair to collect prices.
+                score = 1.0 / max(turns, 1)
             if score > best_score:
                 best_score = score
                 best_pair = pair
