@@ -143,11 +143,12 @@ class WorkerBot(TradingBot):
         try:
             # Always prefer game_state credits (source of truth) over cached current_credits
             # Fallback to current_credits only if game_state unavailable
-            credits = 0
-            if self.game_state and self.game_state.credits:
-                credits = self.game_state.credits
-            elif self.current_credits:
-                credits = self.current_credits
+            credits: int | None = None
+            if self.game_state and self.game_state.credits is not None:
+                credits = int(self.game_state.credits)
+            elif getattr(self, "current_credits", 0) and int(self.current_credits) > 0:
+                # current_credits defaults to 0; avoid claiming "0 credits" unless observed.
+                credits = int(self.current_credits)
             else:
                 # Fallback: semantic extraction from live screens (updated by session watcher / wait_and_respond).
                 sem = getattr(self, "last_semantic_data", {}) or {}
@@ -156,7 +157,8 @@ class WorkerBot(TradingBot):
                     if sem_credits is not None:
                         credits = int(sem_credits)
                 except Exception:
-                    pass
+                    credits = None
+            credits_out = int(credits) if credits is not None else -1
             sem = getattr(self, "last_semantic_data", {}) or {}
             try:
                 # Default to 0 so the dashboard/TUI show stable numeric columns even
@@ -459,7 +461,7 @@ class WorkerBot(TradingBot):
                 self._last_activity_context = activity
 
             # Always send credits, even if 0 (only skip if negative sentinel)
-            status_data["credits"] = max(0, credits)  # Never send -1
+            status_data["credits"] = credits_out
 
             # Only include username/ship_level/ship_name if they have values
             # This preserves previously-known values in the manager

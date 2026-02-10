@@ -528,10 +528,10 @@ async def execute_port_trade(
 
         # Keep a running credits estimate from the live screen. This is more
         # reliable than cached state during login/orientation/trade screens.
-        m_credits = re.search(r"\byou (?:only )?have\s+(\d+)\s+credits\b", screen_lower)
+        m_credits = re.search(r"\byou (?:only )?have\s+([\d,]+)\s+credits\b", screen_lower)
         if m_credits:
             try:
-                credits_available = int(m_credits.group(1))
+                credits_available = int(m_credits.group(1).replace(",", ""))
             except Exception:
                 pass
 
@@ -585,10 +585,18 @@ async def execute_port_trade(
                 if is_target:
                     target_seen = True
                     if max_quantity > 0:
-                        qty_str = str(max_quantity)
+                        # If we are buying and credits are unknown/low, never accept a large max_quantity.
+                        if is_buy and (credits_available is None or credits_available < 1000):
+                            qty_str = "1"
+                        else:
+                            qty_str = str(max_quantity)
                     else:
-                        # If we have low credits, don't accept the default (often too large).
-                        qty_str = "1" if (is_buy and credits_available is not None and credits_available < 1000) else ""
+                        # If we are buying and credits are unknown/low, do not accept the game's default.
+                        # Default quantities frequently lead to "Your offer [X] ?" loops when broke.
+                        if is_buy and (credits_available is None or credits_available < 1000):
+                            qty_str = "1"
+                        else:
+                            qty_str = ""
                     await bot.session.send(f"{qty_str}\r")
                     pending_trade = True
                     logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
@@ -601,10 +609,13 @@ async def execute_port_trade(
             else:
                 # Trade all: avoid buys when credits are very low; still allow sells.
                 if max_quantity > 0:
-                    await bot.session.send(f"{max_quantity}\r")
+                    if is_buy and (credits_available is None or credits_available < 1000):
+                        await bot.session.send("1\r")
+                    else:
+                        await bot.session.send(f"{max_quantity}\r")
                 else:
-                    # If we have low credits, don't accept the default (often too large).
-                    qty_str = "1" if (is_buy and credits_available is not None and credits_available < 1000) else ""
+                    # If we are buying and credits are unknown/low, do not accept the default.
+                    qty_str = "1" if (is_buy and (credits_available is None or credits_available < 1000)) else ""
                     await bot.session.send(f"{qty_str}\r")
                 pending_trade = True
 
@@ -661,7 +672,9 @@ async def execute_port_trade(
                         default_offer,
                         credits_available,
                     )
-                    await bot.session.send("Q\r")
+                    # At "Your offer [X] ?" many servers only accept a number.
+                    # Sending 0 is a safe, numeric abort that exits the negotiation on most TW variants.
+                    await bot.session.send("0\r")
                     pending_trade = False
                     await asyncio.sleep(0.7)
                     continue

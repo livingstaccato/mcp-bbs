@@ -93,6 +93,33 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
             merged_kv = dict(bot.last_semantic_data)
             merged_kv.update({k: v for k, v in kv_data.items() if v is not None})
 
+            # End-state: always learn core stats immediately after entering game.
+            # On this server, "D" is re-display sector, not a stats screen. "i" reliably prints credits
+            # and (often) holds, and can appear even without leaving the command context.
+            needs_stats = (
+                merged_kv.get("credits") is None
+                or merged_kv.get("holds_total") is None
+                or merged_kv.get("holds_free") is None
+            )
+            if needs_stats and bot.session:
+                try:
+                    print("  [Orient] Refreshing stats via 'i' (credits/holds)...")
+                    before = bot.session.screen_change_seq()
+                    await bot.session.send("i")
+                    # Wait for bytes to arrive (the info line often prints without a full screen redraw).
+                    await bot.session.wait_for_update(timeout_ms=2500)
+                    # If the screen did change, wait until it's idle to avoid parsing mid-render.
+                    changed = await bot.session.wait_for_screen_change(timeout_ms=1200, since=before)
+                    if changed:
+                        await bot.session.wait_for_update(timeout_ms=800)
+                    snap2 = bot.session.snapshot()
+                    kv2 = (snap2.get("prompt_detected") or {}).get("kv_data") or {}
+                    merged_kv.update({k: v for k, v in kv2.items() if v is not None})
+                    # Also merge any semantic watch updates that arrived from the info line.
+                    merged_kv.update({k: v for k, v in dict(bot.last_semantic_data).items() if v is not None})
+                except Exception:
+                    pass
+
             # Use cached knowledge
             from bbsbot.games.tw2002.orientation import GameState
             bot.game_state = GameState(

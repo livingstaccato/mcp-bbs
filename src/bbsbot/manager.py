@@ -296,7 +296,8 @@ class SwarmManager:
             # still be counted as an "error" metric for dashboard visibility.
             errors=sum(1 for b in bots if b.state in ("error", "disconnected", "blocked")),
             stopped=sum(1 for b in bots if b.state == "stopped"),
-            total_credits=sum(b.credits for b in bots),
+            # credits=-1 means "unknown/uninitialized"; don't let it poison totals.
+            total_credits=sum(max(0, b.credits) for b in bots),
             total_turns=sum(b.turns_executed for b in bots),
             uptime_seconds=time.time() - self.start_time,
             bots=[b.model_dump() for b in bots],

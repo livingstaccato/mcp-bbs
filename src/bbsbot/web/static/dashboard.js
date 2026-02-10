@@ -678,9 +678,12 @@
 	    const promptId = (lastTermSnapshot && lastTermSnapshot.prompt_detected && lastTermSnapshot.prompt_detected.prompt_id)
 	      ? lastTermSnapshot.prompt_detected.prompt_id
 	      : "-";
+	    const creditsDisplay = (bot.credits !== undefined && bot.credits !== null && bot.credits >= 0)
+	      ? formatCredits(bot.credits)
+	      : "-";
 	    termStats.innerHTML = [
 	      `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
-	      `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${formatCredits(bot.credits)}</span></span>`,
+	      `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${esc(creditsDisplay)}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Prompt</span><span class="stat-value">${esc(promptId)}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Strategy</span><span class="stat-value">${esc((bot.strategy || "").trim() || (bot.strategy_id ? (String(bot.strategy_id).trim() + (bot.strategy_mode ? "(" + String(bot.strategy_mode).trim() + ")" : "")) : "-"))}</span></span>`,
