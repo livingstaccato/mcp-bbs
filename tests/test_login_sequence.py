@@ -394,3 +394,47 @@ class TestLoginSequenceIntegration:
 
         # Should send space
         mock_session.send.assert_called_once_with(" ")
+
+    @pytest.mark.asyncio
+    async def test_login_sequence_stops_on_game_full(self) -> None:
+        """Test that login aborts immediately when new-player creation is blocked."""
+        from bbsbot.games.tw2002.login import GameFullError, login_sequence
+
+        class _Bot:
+            def __init__(self) -> None:
+                self.session = AsyncMock()
+                self.session.send = AsyncMock()
+                self.session.snapshot = MagicMock(return_value={"screen": ""})
+                self.loop_detection = MagicMock()
+                self.loop_detection.reset = MagicMock()
+                self.loop_detection.threshold = 5
+                self.last_prompt_id = None
+                self.current_sector = 0
+                self.current_credits = 0
+                self.config = MagicMock()
+                self.config.connection = MagicMock()
+                self.config.connection.game_letter = "B"
+                self.last_game_letter = "B"
+
+        bot = _Bot()
+
+        fake_wait = AsyncMock(
+            side_effect=[
+                (
+                    "single_key",
+                    "prompt.menu_selection",
+                    "A) Game A\nB) Trade Wars 2002\nSelection (? for menu):",
+                    {},
+                ),
+                (
+                    "single_key",
+                    "prompt.create_character",
+                    "Do you want to start a new character?\n(Type Y or N) Yes\nYes I'm sorry but the game is full.",
+                    {},
+                ),
+            ]
+        )
+
+        with patch("bbsbot.games.tw2002.login.wait_and_respond", fake_wait):
+            with pytest.raises(GameFullError):
+                await login_sequence(bot, username="botx", character_password="pw", game_password="game")

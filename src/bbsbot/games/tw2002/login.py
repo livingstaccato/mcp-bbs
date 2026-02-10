@@ -19,6 +19,23 @@ from bbsbot.games.tw2002.parsing import _extract_game_options, _select_trade_war
 from bbsbot.games.tw2002.logging_utils import logger
 
 
+class GameFullError(RuntimeError):
+    """Raised when the game rejects new-character creation due to capacity."""
+
+
+def _is_game_full_screen(screen: str) -> bool:
+    """Return True when screen text indicates new players are blocked by game-full rules."""
+    s = (screen or "").lower()
+    if not s:
+        return False
+    return (
+        "yes i'm sorry but the game is full" in s
+        or "yes i am sorry but the game is full" in s
+        or "new player not allowed - game full" in s
+        or ("game is full" in s and ("new player" in s or "start a new character" in s))
+    )
+
+
 def _maybe_patch_local_twcfig_for_new_players(game_letter: str) -> bool:
     """Best-effort local server patch to allow new players to be created.
 
@@ -125,6 +142,10 @@ def _get_actual_prompt(screen: str) -> str:
         return "corporate_listings"
     if "which listing" in last_line:
         return "corporate_listings"
+
+    # New player creation blocked because the game is full.
+    if _is_game_full_screen(last_lines):
+        return "game_full"
 
     # Command prompt - we've reached the game!
     if "command" in last_line and "?" in last_line:
@@ -296,6 +317,8 @@ async def login_sequence(
         print(f"  [{step}] {prompt_id} ({input_type}) {validation_msg}")
 
         screen_lower = screen.lower()
+        if _is_game_full_screen(screen):
+            raise GameFullError("Game is full; new character creation is blocked")
 
         # Handle prompts until we reach menu_selection
         if "twgs_begin_adventure" in prompt_id:
@@ -535,6 +558,8 @@ async def login_sequence(
         # This prevents confusion from stale buffer content
 
         screen_lower = screen.lower()
+        if _is_game_full_screen(screen):
+            raise GameFullError("Game is full; new character creation is blocked")
 
         # Server capacity/backpressure case:
         # Some servers print "Failed to start game session [NNN]..." when no nodes are available.
@@ -706,14 +731,21 @@ async def login_sequence(
             await asyncio.sleep(0.4)
             try:
                 s2 = bot.session.snapshot().get("screen", "")
+                if _is_game_full_screen(s2):
+                    raise GameFullError("Game is full; new character creation is blocked")
                 if _get_actual_prompt(s2) == "new_character_prompt":
                     print("      → Prompt did not advance; sending Enter")
                     await bot.session.send("\r")
                     await asyncio.sleep(0.3)
+            except GameFullError:
+                raise
             except Exception:
                 pass
             # Wait for server to process character creation / load prompts.
             await asyncio.sleep(1.2)
+
+        elif actual_prompt == "game_full":
+            raise GameFullError("Game is full; new character creation is blocked")
 
         elif actual_prompt == "show_log_prompt":
             print("      → Answering N to 'Show today's log?'")

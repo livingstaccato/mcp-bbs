@@ -104,6 +104,14 @@ Creating character..."""
         # Should not return new_character_prompt since it's answered
         assert _get_actual_prompt(screen) != "new_character_prompt"
 
+    def test_game_full_prompt(self) -> None:
+        """Test detection of game-full rejection during new-character flow."""
+        screen = """
+Do you want to start a new character?
+(Type Y or N) Yes
+Yes I'm sorry but the game is full."""
+        assert _get_actual_prompt(screen) == "game_full"
+
     def test_show_log_prompt(self) -> None:
         """Test detection of show today's log prompt."""
         screen = """

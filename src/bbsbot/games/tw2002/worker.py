@@ -807,12 +807,14 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
             self.window_s = float(window_s)
             self._events: dict[str, deque[float]] = {
                 "auth": deque(),
+                "game_full": deque(),
                 "network": deque(),
                 "logic": deque(),
                 "watchdog": deque(),
             }
             self._limits: dict[str, int] = {
                 "auth": 1,        # unrecoverable; block immediately
+                "game_full": 1,   # stop retrying character creation when game is full
                 "network": 5,     # 5 in 10m => blocked
                 "logic": 5,       # 5 in 10m => blocked
                 "watchdog": 3,    # 3 in 10m => blocked
@@ -839,6 +841,8 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     def _classify_exception(e: Exception) -> str:
         msg = str(e).lower()
         et = type(e).__name__.lower()
+        if "gamefullerror" in et or "game is full" in msg or "new player not allowed - game full" in msg:
+            return "game_full"
         if "watchdog_stuck" in msg or "watchdog" in msg:
             return "watchdog"
         if (
@@ -934,13 +938,16 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 budget.note(cls)
 
                 # Escalation: stop thrashing; enter blocked with long backoff.
-                if cls == "auth" or budget.exceeded(cls):
+                if cls in ("auth", "game_full") or budget.exceeded(cls):
                     lvl = int(blocked_level.get(cls, 0))
                     blocked_level[cls] = min(lvl + 1, len(blocked_schedule_s) - 1)
-                    base_sleep = blocked_schedule_s[min(lvl, len(blocked_schedule_s) - 1)]
+                    base_sleep = 86400.0 if cls == "game_full" else blocked_schedule_s[min(lvl, len(blocked_schedule_s) - 1)]
                     # Add small deterministic jitter to avoid a herd on the minute.
                     sleep_s = float(base_sleep) * (0.85 + 0.3 * rng.random())
-                    worker.ai_activity = f"BLOCKED {int(sleep_s // 60)}m ({cls})"
+                    if cls == "game_full":
+                        worker.ai_activity = "BLOCKED GAME_FULL"
+                    else:
+                        worker.ai_activity = f"BLOCKED {int(sleep_s // 60)}m ({cls})"
                     worker.lifecycle_state = "blocked"
                     await worker.report_error(
                         e,
