@@ -358,7 +358,17 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     print(
                         f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})"
                     )
-                    profit = await execute_port_trade(bot, commodity=commodity, trade_action=trade_action)
+                    max_qty = 0
+                    try:
+                        max_qty = int(params.get("max_quantity") or 0)
+                    except Exception:
+                        max_qty = 0
+                    profit = await execute_port_trade(
+                        bot,
+                        commodity=commodity,
+                        trade_action=trade_action,
+                        max_quantity=max_qty,
+                    )
                     if profit != 0:
                         char_state.record_trade(profit)
                         print(f"  Result: {profit:+,} credits")

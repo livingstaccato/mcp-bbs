@@ -72,6 +72,46 @@ class ProfitablePairsStrategy(TradingStrategy):
             return max(max_hops, 3), max(50, min_ppt // 2)
         return max_hops, min_ppt
 
+    def _recommended_buy_qty(self, state: GameState, pair: PortPair) -> int:
+        """Choose a safe buy quantity.
+
+        - If we don't have both sides priced yet, buy 1 to seed price discovery.
+        - If priced and profitable, size up bounded by holds, credits, and liquidity.
+        """
+        credits = int(state.credits or 0)
+        holds_free = int(state.holds_free or 0)
+        if credits <= 0 or holds_free <= 0:
+            return 0
+
+        buy_info = self.knowledge.get_sector_info(pair.buy_sector)
+        sell_info = self.knowledge.get_sector_info(pair.sell_sector)
+        buy_unit = ((buy_info.port_prices or {}).get(pair.commodity) or {}).get("sell") if buy_info else None
+        sell_unit = ((sell_info.port_prices or {}).get(pair.commodity) or {}).get("buy") if sell_info else None
+        if not buy_unit or not sell_unit:
+            return 1
+
+        profit_per_unit = int(sell_unit) - int(buy_unit)
+        if profit_per_unit <= 0:
+            return 1
+
+        max_affordable = max(0, int(credits // int(buy_unit)))
+        qty = min(holds_free, max_affordable)
+
+        buy_supply = (buy_info.port_trading_units or {}).get(pair.commodity) if buy_info else None
+        sell_demand = (sell_info.port_trading_units or {}).get(pair.commodity) if sell_info else None
+        if buy_supply is not None:
+            qty = min(qty, int(buy_supply))
+        if sell_demand is not None:
+            qty = min(qty, int(sell_demand))
+
+        # Avoid going all-in early; keep some slack for turns/upgrades.
+        if self.policy == "conservative":
+            qty = min(qty, max(1, holds_free // 2))
+        elif self.policy == "balanced":
+            qty = min(qty, max(1, (holds_free * 2) // 3))
+
+        return max(1, int(qty)) if qty > 0 else 0
+
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
         """Determine next action for profitable pairs trading.
 
@@ -151,7 +191,8 @@ class ProfitablePairsStrategy(TradingStrategy):
                     path_to_buy=[],
                     path_to_sell=pair.path,
                 )
-                return TradeAction.TRADE, {"opportunity": opp, "action": "buy"}
+                buy_qty = self._recommended_buy_qty(state, pair)
+                return TradeAction.TRADE, {"opportunity": opp, "action": "buy", "max_quantity": buy_qty}
             else:
                 # Navigate to buy port
                 path = self.knowledge.find_path(current, pair.buy_sector)
