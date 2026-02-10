@@ -290,10 +290,19 @@ async def login_sequence(
 
         elif "create_character" in prompt_id:
             # Character creation confirmation - answer Y
-            # Note: Even single_key prompts may need Enter on some systems
-            print(f"      → Create character confirmation, answering Y")
-            await bot.session.send("Y\r")
-            await asyncio.sleep(0.5)
+            # Prefer single-key `Y` (no Enter). If the prompt doesn't advance,
+            # follow up with Enter to handle stacks that require CR.
+            print("      → Create character confirmation, answering Y")
+            await bot.session.send("Y")
+            await asyncio.sleep(0.4)
+            try:
+                s2 = bot.session.snapshot().get("screen", "").lower()
+                if "start a new character" in s2 and "(type y or n)" in s2:
+                    print("      → Prompt did not advance; sending Enter")
+                    await bot.session.send("\r")
+                    await asyncio.sleep(0.3)
+            except Exception:
+                pass
 
         elif "new_player_name" in prompt_id:
             # Creating a new character - send the desired character name
@@ -639,8 +648,18 @@ async def login_sequence(
 
         elif actual_prompt == "new_character_prompt":
             print("      → New character prompt, answering Y to create character")
-            await bot.session.send("Y\r")
-            await asyncio.sleep(2.0)  # Wait for server to process character creation
+            await bot.session.send("Y")
+            await asyncio.sleep(0.4)
+            try:
+                s2 = bot.session.snapshot().get("screen", "").lower()
+                if "start a new character" in s2 and "(type y or n)" in s2:
+                    print("      → Prompt did not advance; sending Enter")
+                    await bot.session.send("\r")
+                    await asyncio.sleep(0.3)
+            except Exception:
+                pass
+            # Wait for server to process character creation / load prompts.
+            await asyncio.sleep(1.2)
 
         elif actual_prompt == "show_log_prompt":
             print("      → Answering N to 'Show today's log?'")
