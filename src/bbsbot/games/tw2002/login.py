@@ -86,6 +86,11 @@ def _get_actual_prompt(screen: str) -> str:
     if "enter your choice:" in last_line or "enter your choice" in last_line:
         return "tw_game_menu"
 
+    # Alias input prompt (when BBS name is taken)
+    # e.g. "What Alias do you want to use?"
+    if "what alias do you want to use" in last_lines:
+        return "alias_input"
+
     # Alias prompt (when chosen name is taken) - check BEFORE name_selection
     # This appears when the BBS name is already in use
     if "alias" in last_line and ("want to use" in last_line or "do you want" in last_line):
@@ -436,8 +441,6 @@ async def login_sequence(
             actual_prompt = "ship_name_prompt"
         elif prompt_id == "prompt.planet_name":
             actual_prompt = "planet_name_prompt"
-        elif prompt_id == "prompt.name_or_bbs":
-            actual_prompt = "name_selection"
 
         print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}", flush=True)
 
@@ -516,6 +519,14 @@ async def login_sequence(
             short_id = uuid.uuid4().hex[:6]
             alias = f"Cdx{short_id}"
             print(f"      → Alias prompt (name taken), entering: {alias}")
+            await send_input(bot, alias, "multi_key")
+
+        elif actual_prompt == "alias_input":
+            # Some servers skip the explanatory alias prompt and go straight to input.
+            import uuid
+            short_id = uuid.uuid4().hex[:6]
+            alias = f"Cdx{short_id}"
+            print(f"      → Alias input prompt, entering: {alias}")
             await send_input(bot, alias, "multi_key")
 
         elif actual_prompt == "ship_name_prompt":
