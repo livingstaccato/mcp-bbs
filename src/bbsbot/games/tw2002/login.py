@@ -86,11 +86,6 @@ def _get_actual_prompt(screen: str) -> str:
     if "enter your choice:" in last_line or "enter your choice" in last_line:
         return "tw_game_menu"
 
-    # Alias input prompt (when BBS name is taken)
-    # e.g. "What Alias do you want to use?"
-    if "what alias do you want to use" in last_lines:
-        return "alias_input"
-
     # Alias prompt (when chosen name is taken) - check BEFORE name_selection
     # This appears when the BBS name is already in use
     if "alias" in last_line and ("want to use" in last_line or "do you want" in last_line):
@@ -139,6 +134,12 @@ def _get_actual_prompt(screen: str) -> str:
     # the cursor line may be blank and the confirmation text may be just above it.
     if "is what you want?" in last_lines:
         return "name_confirm"
+
+    # Alias input prompt (when BBS name is taken)
+    # e.g. "What Alias do you want to use?"
+    # IMPORTANT: check LAST LINE only; this phrase can linger in the scrollback buffer.
+    if "what alias do you want to use" in last_line:
+        return "alias_input"
 
     # Generic Y/N prompt
     if "(y/n)" in last_line or "(type y or n)" in last_line:
