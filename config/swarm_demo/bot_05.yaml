@@ -9,9 +9,10 @@ session:
   max_turns_per_session: 0
   target_credits: 500000
 trading:
+  policy: balanced
   opportunistic:
     explore_chance: 0.6
     max_wander_without_trade: 4
-  strategy: opportunistic
+  strategy: profitable_pairs
 upgrades:
   enabled: false
