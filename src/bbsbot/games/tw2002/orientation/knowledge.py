@@ -112,7 +112,10 @@ class SectorKnowledge:
         try:
             from twerk.parsers import parse_sectors
 
+            # TWGS typically stores these as uppercase; accept either.
             sectors_path = self.twerk_data_dir / "twsect.dat"
+            if not sectors_path.exists():
+                sectors_path = self.twerk_data_dir / "TWSECT.DAT"
             if sectors_path.exists():
                 sectors = parse_sectors(sectors_path)
                 self._twerk_sectors = {

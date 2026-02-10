@@ -181,8 +181,13 @@ class TwerkOptimizedStrategy(TradingStrategy):
             from twerk.parsers import parse_ports, parse_sectors
             from twerk.analysis import find_trade_routes
 
+            # TWGS typically stores these as uppercase; accept either.
             sectors_path = data_path / "twsect.dat"
             ports_path = data_path / "twport.dat"
+            if not sectors_path.exists():
+                sectors_path = data_path / "TWSECT.DAT"
+            if not ports_path.exists():
+                ports_path = data_path / "TWPORT.DAT"
 
             if not sectors_path.exists() or not ports_path.exists():
                 logger.warning("Twerk data files not found")
