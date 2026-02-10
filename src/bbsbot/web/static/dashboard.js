@@ -94,23 +94,26 @@
   }
 
   // --- Bot table rendering ---
-  function update(data) {
-    lastData = data;
-    // Update stats immediately (lightweight)
-    $("#running").textContent = data.running;
-    $("#total").textContent = data.total_bots;
-    $("#completed").textContent = data.completed;
-    $("#errors").textContent = data.errors;
-    $("#credits").textContent = formatCredits(data.total_credits);
-    $("#turns").textContent = formatCredits(data.total_turns);
-    $("#uptime").textContent = " | " + formatUptime(data.uptime_seconds);
+	  function update(data) {
+	    lastData = data;
+	    // Update stats immediately (lightweight)
+	    $("#running").textContent = data.running;
+	    $("#total").textContent = data.total_bots;
+	    $("#completed").textContent = data.completed;
+	    $("#errors").textContent = data.errors;
+	    $("#credits").textContent = formatCredits(data.total_credits);
+	    $("#turns").textContent = formatCredits(data.total_turns);
+	    $("#uptime").textContent = " | " + formatUptime(data.uptime_seconds);
 
-    // Debounce table re-render to prevent button destruction during clicks
-    clearTimeout(updateTimer);
-    updateTimer = setTimeout(() => {
-      renderBotTable(data);
-    }, 300);  // 300ms debounce
-  }
+	    // Throttle (not debounce) table re-render.
+	    // Under high-frequency status broadcasts, a debounce can starve the table
+	    // and it will never render. Keep lastData and render at most every 300ms.
+	    if (updateTimer) return;
+	    updateTimer = setTimeout(() => {
+	      updateTimer = null;
+	      renderBotTable(lastData || data);
+	    }, 300);
+	  }
 
   function renderBotTable(data) {
     const bots = (data.bots || []).slice().sort((a, b) => {
