@@ -92,10 +92,12 @@ def _get_actual_prompt(screen: str) -> str:
         return "alias_prompt"
 
     # Name/alias confirmation prompt - check EARLY.
-    # Ship/planet naming flows keep the "What do you want to name..." line in the scrollback,
-    # so if we don't prioritize this, we can loop forever re-sending the name.
-    if "is what you want?" in last_lines:
-        return "name_confirm"
+    # Guard against stale scrollback: after we've answered, TWGS often echoes "Yes"/"No"
+    # on the same line, which should NOT be treated as an active prompt.
+    for line in lines[-3:]:
+        ll = line.lower()
+        if "is what you want?" in ll and "yes" not in ll and "no" not in ll:
+            return "name_confirm"
 
     # Ship/planet naming prompts (new character creation).
     # IMPORTANT: these screens can retain stale "(N)ew Name or (B)BS Name" text
