@@ -445,12 +445,12 @@ async def login_sequence(
         # Exception: ship/planet naming screens have an immediate Y/N confirmation
         # ("X is what you want?") that must be answered before we re-send the name.
         if prompt_id == "prompt.ship_name":
-            # Only treat as confirmation if the *last-lines* heuristic saw it as such.
-            # The full screen can contain stale "... is what you want?" from earlier alias prompts.
-            if actual_prompt != "name_confirm":
+            # The prompt detector can match stale "Use (N)ew Name or (B)BS Name" buffers.
+            # Only force "ship_name_prompt" when the heuristic is clearly wrong.
+            if actual_prompt in ("name_selection", "alias_prompt", "alias_input", ""):
                 actual_prompt = "ship_name_prompt"
         elif prompt_id == "prompt.planet_name":
-            if actual_prompt != "name_confirm":
+            if actual_prompt in ("name_selection", "alias_prompt", "alias_input", ""):
                 actual_prompt = "planet_name_prompt"
 
         print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}", flush=True)
