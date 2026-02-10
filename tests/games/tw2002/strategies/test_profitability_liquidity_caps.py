@@ -1,6 +1,7 @@
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorKnowledge, SectorInfo
 from bbsbot.games.tw2002.strategies.profitable_pairs import ProfitablePairsStrategy
+from bbsbot.games.tw2002.strategies.base import TradeAction
 
 
 def test_price_profit_estimate_is_capped_by_liquidity() -> None:
@@ -94,3 +95,99 @@ def test_known_unprofitable_pair_is_skipped() -> None:
         assert strat._select_best_pair(state) is None
     finally:
         knowledge.find_path = orig_find_path  # type: ignore[assignment]
+
+
+def test_local_bootstrap_trade_prefers_selling_held_cargo() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    info = SectorInfo(has_port=True, port_class="BSS")
+    info.port_status = {"fuel_ore": "buying", "organics": "selling", "equipment": "selling"}
+    knowledge._sectors[10] = info
+
+    state = GameState(
+        context="sector_command",
+        sector=10,
+        credits=300,
+        holds_free=10,
+        has_port=True,
+        cargo_fuel_ore=2,
+        cargo_organics=0,
+        cargo_equipment=0,
+    )
+
+    action, params = strat._local_bootstrap_trade(state)  # type: ignore[misc]
+    assert action == TradeAction.TRADE
+    assert params.get("action") == "sell"
+    assert params["opportunity"].commodity == "fuel_ore"
+
+
+def test_local_bootstrap_trade_does_not_speculatively_buy_without_pair() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    info = SectorInfo(has_port=True, port_class="SBS")
+    info.port_status = {"fuel_ore": "selling", "organics": "buying", "equipment": "selling"}
+    info.port_prices = {
+        "fuel_ore": {"sell": 120},
+        "equipment": {"sell": 500},
+    }
+    knowledge._sectors[11] = info
+
+    state = GameState(
+        context="sector_command",
+        sector=11,
+        credits=300,
+        holds_free=10,
+        has_port=True,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+    )
+
+    assert strat._local_bootstrap_trade(state) is None  # type: ignore[misc]
+
+
+def test_local_bootstrap_trade_uses_port_class_when_market_rows_missing() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    # SSB means fuel/organics are selling, equipment is buying.
+    info = SectorInfo(has_port=True, port_class="SSB")
+    knowledge._sectors[12] = info
+
+    state = GameState(
+        context="sector_command",
+        sector=12,
+        credits=300,
+        holds_free=10,
+        has_port=True,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+    )
+
+    assert strat._local_bootstrap_trade(state) is None  # type: ignore[misc]
+
+
+def test_unknown_holds_free_still_allows_minimum_trade_planning() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    buy_info = SectorInfo(has_port=True, port_class="SBB")
+    buy_info.port_prices = {"fuel_ore": {"sell": 20}}
+    sell_info = SectorInfo(has_port=True, port_class="BSS")
+    sell_info.port_prices = {"fuel_ore": {"buy": 30}}
+    knowledge._sectors[2] = buy_info
+    knowledge._sectors[3] = sell_info
+
+    from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+    pair = PortPair(buy_sector=2, sell_sector=3, commodity="fuel_ore", distance=1, path=[2, 3], estimated_profit=0)
+
+    state = GameState(context="sector_command", sector=2, credits=300, holds_free=None)
+    assert strat._recommended_buy_qty(state, pair) >= 1
+    assert strat._estimate_profit_for_pair(state, pair) > 0

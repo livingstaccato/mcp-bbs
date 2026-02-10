@@ -93,7 +93,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         - If priced and profitable, size up bounded by holds, credits, and liquidity.
         """
         credits = int(state.credits or 0)
-        holds_free = int(state.holds_free or 0)
+        holds_free = int(state.holds_free) if state.holds_free is not None else 1
         if credits <= 0 or holds_free <= 0:
             return 0
 
@@ -184,6 +184,9 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # If no pairs found, explore to find more ports
         if not self._pairs:
+            bootstrap = self._local_bootstrap_trade(state)
+            if bootstrap is not None:
+                return bootstrap
             logger.info("No profitable pairs found, exploring")
             return self._explore_for_ports(state)
 
@@ -191,6 +194,9 @@ class ProfitablePairsStrategy(TradingStrategy):
         if self._current_pair is None:
             self._current_pair = self._select_best_pair(state)
             if self._current_pair is None:
+                bootstrap = self._local_bootstrap_trade(state)
+                if bootstrap is not None:
+                    return bootstrap
                 logger.info("No reachable/viable pair selected, exploring")
                 return self._explore_for_ports(state)
             self._pair_phase = "going_to_buy"
@@ -374,7 +380,7 @@ class ProfitablePairsStrategy(TradingStrategy):
     def _estimate_profit_for_pair(self, state: GameState, pair: PortPair) -> int:
         """Estimate profit using observed per-unit prices when available."""
         credits = state.credits or 0
-        holds_free = state.holds_free or 0
+        holds_free = state.holds_free if state.holds_free is not None else 1
         if credits <= 0 or holds_free <= 0:
             return 0
 
@@ -493,6 +499,50 @@ class ProfitablePairsStrategy(TradingStrategy):
             "target_sector": target,
             "path": [current, target],
         }
+
+    def _local_bootstrap_trade(self, state: GameState) -> tuple[TradeAction, dict] | None:
+        """Fallback: do a small local trade when no global pair is currently viable."""
+        if not state.has_port or not state.sector:
+            return None
+
+        info = self.knowledge.get_sector_info(state.sector)
+        if not info:
+            return None
+
+        statuses = dict(info.port_status or {})
+        if not statuses and info.port_class and len(info.port_class) == 3:
+            # Fallback to static class semantics when dynamic market rows are unknown.
+            # B = buying, S = selling, commodity order is FO/ORG/EQUIP.
+            c = info.port_class
+            statuses = {
+                "fuel_ore": "buying" if c[0] == "B" else "selling",
+                "organics": "buying" if c[1] == "B" else "selling",
+                "equipment": "buying" if c[2] == "B" else "selling",
+            }
+        if not statuses:
+            return None
+
+        cargo = {
+            "fuel_ore": int(getattr(state, "cargo_fuel_ore", 0) or 0),
+            "organics": int(getattr(state, "cargo_organics", 0) or 0),
+            "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
+        }
+
+        # Prefer selling held cargo into local demand.
+        for comm, qty in cargo.items():
+            if qty > 0 and str(statuses.get(comm, "")).lower() == "buying":
+                opp = TradeOpportunity(
+                    buy_sector=state.sector,
+                    sell_sector=state.sector,
+                    commodity=comm,
+                    expected_profit=0,
+                    distance=0,
+                )
+                logger.info("Bootstrap local sell: %s at sector %s", comm, state.sector)
+                return TradeAction.TRADE, {"opportunity": opp, "action": "sell"}
+
+        # Without a viable pair, do not force speculative buys; that bleeds credits.
+        return None
 
     def _find_safe_sector(self, state: GameState) -> int | None:
         """Find a safe sector to retreat to."""
