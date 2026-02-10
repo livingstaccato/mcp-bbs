@@ -191,6 +191,7 @@ class PromptDetector:
         cursor_at_end: bool,
         compiled: list[tuple[re.Pattern[str], dict[str, Any]]],
         regex_matched_but_failed: list[dict[str, Any]],
+        cursor_miss_candidates: list["PromptMatch"] | None = None,
     ) -> PromptMatch | None:
         for regex, pattern in compiled:
             match = regex.search(text)
@@ -218,6 +219,19 @@ class PromptDetector:
                         "actual_cursor_at_end": cursor_at_end,
                     }
                 )
+                # Cursor-at-end is a heuristic; on some screens (or some telnet bursts)
+                # pyte cursor bookkeeping can be off. Preserve a fallback candidate so
+                # callers can still make progress instead of timing out forever.
+                if cursor_miss_candidates is not None:
+                    cursor_miss_candidates.append(
+                        PromptMatch(
+                            prompt_id=pattern["id"],
+                            pattern=pattern,
+                            input_type=pattern.get("input_type", "multi_key"),
+                            eol_pattern=pattern.get("eol_pattern", r"[\r\n]+"),
+                            kv_extract=pattern.get("kv_extract"),
+                        )
+                    )
                 continue
 
             return PromptMatch(
@@ -262,6 +276,7 @@ class PromptDetector:
 
         # Two-pass scan: first scan the prompt region (bottom-of-content),
         # then fall back to full-screen scan if the cursor isn't within that region.
+        cursor_miss_candidates: list[PromptMatch] = []
         region_text, cursor_in_region = self.prompt_region(snapshot)
         if region_text:
             match = self._detect_in_text(
@@ -270,6 +285,7 @@ class PromptDetector:
                 cursor_at_end=bool(cursor_at_end),
                 compiled=compiled_fast,
                 regex_matched_but_failed=regex_matched_but_failed,
+                cursor_miss_candidates=cursor_miss_candidates,
             )
             if match:
                 logger.info(
@@ -285,6 +301,7 @@ class PromptDetector:
                 cursor_at_end=bool(cursor_at_end),
                 compiled=compiled_all,
                 regex_matched_but_failed=regex_matched_but_failed,
+                cursor_miss_candidates=cursor_miss_candidates,
             )
             if match:
                 logger.info(
@@ -292,6 +309,16 @@ class PromptDetector:
                     f"(input_type: {match.input_type})"
                 )
                 return match
+
+        # Fallback: if we matched prompt regexes but the cursor heuristic disagreed, prefer progress.
+        # Gate this on "trailing space" which strongly correlates with an active input field.
+        if cursor_miss_candidates and not bool(cursor_at_end) and bool(has_trailing_space):
+            cand = cursor_miss_candidates[0]
+            logger.warning(
+                "[PROMPT DETECTION] Cursor-at-end heuristic blocked prompt match; "
+                f"falling back to {cand.prompt_id}"
+            )
+            return cand
 
         # NO PATTERNS MATCHED - Emit diagnostic
         if regex_matched_but_failed:

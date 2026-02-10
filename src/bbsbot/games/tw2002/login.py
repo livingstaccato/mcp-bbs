@@ -266,9 +266,15 @@ async def login_sequence(
 
         elif "twgs_real_name" in prompt_id:
             # Real name prompt during character creation
-            print(f"      → Real name prompt, sending: {username}")
-            await send_input(bot, username, input_type)
-            sent_username = True
+            # Some stacks show: "Please enter your name (ENTER for none):"
+            # This is NOT the login-name prompt; safest behavior is to accept blank.
+            if "enter for none" in screen_lower:
+                print("      → Real name prompt (ENTER for none), sending Enter")
+                await bot.session.send("\r")
+                await asyncio.sleep(0.3)
+            else:
+                print(f"      → Real name prompt, sending: {username}")
+                await send_input(bot, username, input_type)
 
         elif "what_is_your_name" in prompt_id:
             # Some systems ask this prior to the normal login_name prompt.

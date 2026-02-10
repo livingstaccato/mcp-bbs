@@ -49,11 +49,17 @@ def extract_semantic_kv(screen: str) -> dict:
             data["planet_names"] = names
 
     # Credits
-    credit_match = re.search(r"You have\s+([\d,]+)\s+credits", screen)
+    credit_match = re.search(r"You have\s+([\d,]+)\s+credits", screen, re.IGNORECASE)
     if not credit_match:
         credit_match = re.search(r"You only have\s+([\d,]+)\s+credits", screen, re.IGNORECASE)
     if not credit_match:
-        credit_match = re.search(r"Credits?\s*:?\s*([\d,]+)", screen)
+        # Strict "Credits: 123" style lines only. Avoid poisoning bankroll from:
+        # - "237 credits per fighter"
+        # - "594 credits / next hold"
+        credit_match = re.search(
+            r"(?im)^\s*credits(?!\s*(?:per|/))\s*:?\s*([\d,]+)\s*$",
+            screen,
+        )
     if credit_match:
         data["credits"] = int(credit_match.group(1).replace(",", ""))
 

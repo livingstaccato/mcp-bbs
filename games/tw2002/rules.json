@@ -56,6 +56,9 @@
       "id": "prompt.twgs_real_name",
       "kind": "input",
       "input_type": "multi_key",
+      "screen": {
+        "expect_cursor_at_end": false
+      },
       "match": {
         "pattern": "(?i)(real\\s+name:\\s*$|please\\s+enter\\s+your\\s+name\\s*\\(\\s*enter\\s+for\\s+none\\s*\\)\\s*:\\s*$)",
         "match_mode": "regex"
