@@ -11,10 +11,62 @@ The TWGS login flow is complex:
 """
 
 import asyncio
+import os
+from pathlib import Path
 
 from bbsbot.games.tw2002.io import wait_and_respond, send_input, send_masked_password
 from bbsbot.games.tw2002.parsing import _extract_game_options, _select_trade_wars_game
 from bbsbot.games.tw2002.logging_utils import logger
+
+
+def _maybe_patch_local_twcfig_for_new_players(game_letter: str) -> bool:
+    """Best-effort local server patch to allow new players to be created.
+
+    In this environment TW2002 is hosted via TWGS under Wine, and game B can be
+    configured in a way that blocks new players ("New player not allowed - game full.").
+    This is commonly caused by tournament/lockout flags in `TWCFIG.DAT`.
+
+    End-state behavior: if we can find the local `TWCFIG.DAT`, ensure tournament is disabled.
+    """
+    if os.getenv("BBSBOT_DISABLE_LOCAL_TWCFIG_PATCH", "").strip():
+        return False
+
+    # Prefer the TWGS Wine install path (source of truth for the running server).
+    root = Path.home() / ".wine" / "drive_c" / "Program Files (x86)" / "EIS" / "TWGS" / "Game"
+    twcfig = root / f"Game{game_letter.upper()}" / "TWCFIG.DAT"
+    if not twcfig.exists():
+        return False
+
+    try:
+        b = bytearray(twcfig.read_bytes())
+        # Guard for expected minimum offsets.
+        if len(b) < 0x6D:
+            return False
+
+        def i16(off: int) -> int:
+            return int.from_bytes(b[off : off + 2], "little", signed=True)
+
+        def set_i16(off: int, val: int) -> None:
+            b[off : off + 2] = int(val).to_bytes(2, "little", signed=True)
+
+        def set_u16(off: int, val: int) -> None:
+            b[off : off + 2] = int(val).to_bytes(2, "little", signed=False)
+
+        # Offset mapping here matches the local TW2002 build we're hosting.
+        # If the file doesn't match this layout, we just don't patch.
+        tournament_mode = i16(0x67)
+        if tournament_mode == -1:
+            return False
+
+        # Disable tournament mode and give generous entry/death limits.
+        set_i16(0x67, -1)
+        set_u16(0x69, 999)
+        set_u16(0x6B, 999)
+        twcfig.write_bytes(b)
+        logger.info("Patched TWCFIG.DAT to allow new players", extra={"game_letter": game_letter})
+        return True
+    except Exception:
+        return False
 
 
 def _check_kv_validation(kv_data: dict | None, prompt_id: str) -> str:
@@ -293,11 +345,12 @@ async def login_sequence(
             # Prefer single-key `Y` (no Enter). If the prompt doesn't advance,
             # follow up with Enter to handle stacks that require CR.
             print("      → Create character confirmation, answering Y")
+            _maybe_patch_local_twcfig_for_new_players(game_letter)
             await bot.session.send("Y")
             await asyncio.sleep(0.4)
             try:
-                s2 = bot.session.snapshot().get("screen", "").lower()
-                if "start a new character" in s2 and "(type y or n)" in s2:
+                s2 = bot.session.snapshot().get("screen", "")
+                if _get_actual_prompt(s2) == "new_character_prompt":
                     print("      → Prompt did not advance; sending Enter")
                     await bot.session.send("\r")
                     await asyncio.sleep(0.3)
@@ -648,11 +701,12 @@ async def login_sequence(
 
         elif actual_prompt == "new_character_prompt":
             print("      → New character prompt, answering Y to create character")
+            _maybe_patch_local_twcfig_for_new_players(game_letter)
             await bot.session.send("Y")
             await asyncio.sleep(0.4)
             try:
-                s2 = bot.session.snapshot().get("screen", "").lower()
-                if "start a new character" in s2 and "(type y or n)" in s2:
+                s2 = bot.session.snapshot().get("screen", "")
+                if _get_actual_prompt(s2) == "new_character_prompt":
                     print("      → Prompt did not advance; sending Enter")
                     await bot.session.send("\r")
                     await asyncio.sleep(0.3)
