@@ -4,10 +4,7 @@ connection:
   game_letter: B
 trading:
   policy: balanced
-  twerk_optimized:
-    data_dir: /Users/tim/code/gh/livingstaccato/tw2002/data/games/GameB
-  strategy: twerk_optimized
-  opportunistic:
+  strategy: profitable_pairs  opportunistic:
     explore_chance: 0.6
     max_wander_without_trade: 5
 session:
