@@ -7,6 +7,7 @@ the same commodity. Calculates expected profit before trading.
 from __future__ import annotations
 
 from collections import defaultdict
+from time import time
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -54,6 +55,8 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._current_pair: PortPair | None = None
         self._pair_phase: str = "idle"  # "idle", "going_to_buy", "going_to_sell"
         self._failed_warps: set[tuple[int, int]] = set()  # (from_sector, to_sector)
+        self._last_discover_ts: float = 0.0
+        self._last_known_sectors: int = 0
 
     @property
     def name(self) -> str:
@@ -97,9 +100,23 @@ class ProfitablePairsStrategy(TradingStrategy):
             return TradeAction.UPGRADE, {"upgrade_type": upgrade_type}
 
         # Refresh pairs if needed
+        # Important: after a server reset, knowledge fills in gradually. If we
+        # discovered 0 pairs early, we must keep re-discovering as knowledge grows.
+        known_now = 0
+        try:
+            known_now = int(self.knowledge.known_sector_count())
+        except Exception:
+            known_now = 0
+        if (not self._pairs and known_now > (self._last_known_sectors + 10)) or (
+            not self._pairs and (time() - self._last_discover_ts) > 30.0
+        ):
+            self._pairs_dirty = True
+
         if self._pairs_dirty:
             max_hops, _ = self._effective_limits()
             self._discover_pairs(max_hops=max_hops)
+            self._last_discover_ts = time()
+            self._last_known_sectors = known_now
 
         # If no pairs found, explore to find more ports
         if not self._pairs:
