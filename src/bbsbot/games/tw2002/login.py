@@ -516,14 +516,26 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "tw_game_menu":
-            # End-state behavior: always submit "T" with Enter.
+            # Start Trade Wars from the in-game menu.
             #
-            # Some TWGS stacks won't echo the typed character reliably, and
-            # waiting for the echo can lead to never actually entering the game.
-            print("      → At game menu, sending T+Enter to start Trade Wars")
-            await bot.session.send("T\r")
-            # Let the server start loading; prompt waiter will handle the rest.
-            await asyncio.sleep(0.5)
+            # Real-world behavior varies:
+            # - Some stacks accept a single-key `T`.
+            # - Others only advance after an Enter, but sending `T\r` can also
+            #   produce double-input side effects on certain menus.
+            #
+            # Robust approach: send `T`, then only send Enter if we detect the
+            # menu didn't advance.
+            print("      → At game menu, sending T to start Trade Wars")
+            await bot.session.send("T")
+            await asyncio.sleep(0.4)
+            try:
+                s2 = bot.session.snapshot().get("screen", "").lower()
+                if "trade wars 2002" in s2 and "enter your choice" in s2:
+                    print("      → Menu did not advance; sending Enter")
+                    await bot.session.send("\r")
+                    await asyncio.sleep(0.3)
+            except Exception:
+                pass
 
         elif actual_prompt == "name_selection":
             print("      → Name selection prompt, choosing (B)BS Name")

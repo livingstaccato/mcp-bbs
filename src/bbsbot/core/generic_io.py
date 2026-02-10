@@ -32,7 +32,7 @@ class PromptWaiter:
 
     def __init__(
         self,
-        session: Session,
+        session: Session | None,
         on_screen_update: Callable[[str], None] | None = None,
     ):
         """Initialize prompt waiter.
@@ -81,6 +81,13 @@ class PromptWaiter:
         read_interval_sec = read_interval_ms / 1000.0  # used only as a backstop timer
 
         while time.monotonic() - start_mono < timeout_sec:
+            if self.session is None:
+                # The owning bot disconnected and cleared its session reference.
+                # Treat as a recoverable network failure so the worker can reconnect.
+                raise ConnectionError("Session is None")
+            if hasattr(self.session, "is_connected") and not getattr(self.session, "is_connected")():
+                raise ConnectionError("Session disconnected")
+
             snapshot = self.session.snapshot()
             screen = snapshot.get("screen", "")
 
@@ -144,7 +151,7 @@ class PromptWaiter:
 class InputSender:
     """Generic input sending with type handling."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session | None):
         """Initialize input sender.
 
         Args:
@@ -165,6 +172,11 @@ class InputSender:
             input_type: Type of input ("single_key", "multi_key", "any_key")
             wait_after_sec: Time to wait after sending (seconds)
         """
+        if self.session is None:
+            raise ConnectionError("Session is None")
+        if hasattr(self.session, "is_connected") and not getattr(self.session, "is_connected")():
+            raise ConnectionError("Session disconnected")
+
         if input_type == "single_key":
             # Single key - send as-is without newline
             await self.session.send(keys)

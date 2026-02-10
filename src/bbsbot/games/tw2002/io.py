@@ -78,6 +78,11 @@ async def wait_and_respond(
         RuntimeError: If error detected in screen or stuck in loop
     """
     bot.step_count += 1
+    if not getattr(bot, "session", None):
+        raise ConnectionError("No session (bot.session is None)")
+    if hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+        raise ConnectionError("Session disconnected")
+
     start_time = time.time()
     last_screen_seen: str | None = None
 
@@ -182,6 +187,11 @@ async def send_input(
         input_type: Type from prompt metadata ("single_key", "multi_key", "any_key")
         wait_after: Time to wait after sending (seconds)
     """
+    if not getattr(bot, "session", None):
+        raise ConnectionError("No session (bot.session is None)")
+    if hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+        raise ConnectionError("Session disconnected")
+
     # TW2002-specific: Log the input being sent
     printable = keys.replace("\r", "\\r").replace("\n", "\\n")
     print(
@@ -208,6 +218,11 @@ async def send_masked_password(
     interpreted as extra masked characters ("******" vs "****"), causing
     "Invalid password" loops. See `games/tw2002/docs/bbs-login-solution.md`.
     """
+    if not getattr(bot, "session", None):
+        raise ConnectionError("No session (bot.session is None)")
+    if hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+        raise ConnectionError("Session disconnected")
+
     printable = password.replace("\r", "\\r").replace("\n", "\\n")
     print(f"status action=send_password step={bot.step_count} keys={printable}")
 

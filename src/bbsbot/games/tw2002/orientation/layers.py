@@ -273,7 +273,8 @@ async def _gather_state(
 
         if context == "sector_command" and (not have_credits) and (not stats_refreshed):
             print("  [Orient] Refreshing stats via 'i' (credits/holds)...")
-            await bot.session.send("i")
+            # TW2002 command prompt expects a submitted command.
+            await bot.session.send("i\r")
             await asyncio.sleep(0.05)
             _, _, info_screen, _ = await wait_and_respond(
                 bot,
