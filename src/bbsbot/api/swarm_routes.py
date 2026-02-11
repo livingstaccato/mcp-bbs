@@ -358,6 +358,8 @@ async def get_bot_events(bot_id: str):
                     "strategy_intent": action.get("strategy_intent") or bot.strategy_intent,
                     "credits": bot.credits,
                     "turns_executed": bot.turns_executed,
+                    "started_at": bot.started_at,
+                    "stopped_at": bot.stopped_at,
                 }
             )
 
@@ -379,6 +381,8 @@ async def get_bot_events(bot_id: str):
                 "sector": bot.sector,
                 "credits": bot.credits,
                 "turns_executed": bot.turns_executed,
+                "started_at": bot.started_at,
+                "stopped_at": bot.stopped_at,
             }
         )
 
@@ -402,6 +406,8 @@ async def get_bot_events(bot_id: str):
                 "autopilot_turns": bot.autopilot_turns,
                 "goal_contract_failures": bot.goal_contract_failures,
                 "llm_wakeups_per_100_turns": bot.llm_wakeups_per_100_turns,
+                "started_at": bot.started_at,
+                "stopped_at": bot.stopped_at,
             }
         )
 

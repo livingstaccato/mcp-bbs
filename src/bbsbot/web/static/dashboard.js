@@ -361,8 +361,6 @@
         }
 
         const turnsDisplay = `${b.turns_executed}`;
-        const startedDisplay = `<span title="${esc(formatAbsoluteTime(b.started_at))}">${esc(formatRelativeStamp(b.started_at))}</span>`;
-        const stoppedDisplay = `<span title="${esc(formatAbsoluteTime(b.stopped_at))}">${esc(formatRelativeStamp(b.stopped_at))}</span>`;
 
         // Display "-" for uninitialized numeric fields
         const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
@@ -393,8 +391,6 @@
 	        <td class="numeric">${orgDisplay}</td>
 	        <td class="numeric">${equipDisplay}</td>
 	        <td class="numeric">${turnsDisplay}</td>
-          <td class="timecell">${startedDisplay}</td>
-          <td class="timecell">${stoppedDisplay}</td>
 	        <td class="actions">
 	          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
           <button class="btn" onclick="window._openMetrics('${esc(b.bot_id)}')" style="border-color:var(--yellow);color:var(--yellow);" title="Metrics">Σ</button>
@@ -767,6 +763,12 @@
           ? formatCredits(Number(event.credits))
           : "-";
         const turns = event.turns_executed != null ? String(event.turns_executed) : "-";
+        const startedAt = event.started_at || null;
+        const stoppedAt = event.stopped_at || null;
+        const startedRel = formatRelativeStamp(startedAt);
+        const stoppedRel = formatRelativeStamp(stoppedAt);
+        const startedAbs = formatAbsoluteTime(startedAt);
+        const stoppedAbs = formatAbsoluteTime(stoppedAt);
         const resultDelta = (event.result_delta != null && Number(event.result_delta) !== 0)
           ? (Number(event.result_delta) > 0 ? ` Δ+${formatCredits(Number(event.result_delta))}` : ` Δ${formatCredits(Number(event.result_delta))}`)
           : "";
@@ -786,6 +788,8 @@
           <td class="activity-col-sector">${esc(sector)}</td>
           <td class="activity-col-credits">${esc(credits)}</td>
           <td class="activity-col-turns">${esc(turns)}</td>
+          <td class="activity-col-start" title="${esc(startedAbs)}">${esc(startedRel)}</td>
+          <td class="activity-col-stop" title="${esc(stoppedAbs)}">${esc(stoppedRel)}</td>
           <td class="activity-col-result ${resultCls}">${esc(resultText + resultDelta)}</td>
         </tr>`;
       })
@@ -804,6 +808,8 @@
               <th class="activity-col-sector">Sector</th>
               <th class="activity-col-credits">Credits</th>
               <th class="activity-col-turns">Turns</th>
+              <th class="activity-col-start">Started</th>
+              <th class="activity-col-stop">Stopped</th>
               <th class="activity-col-result">Result</th>
             </tr>
           </thead>
