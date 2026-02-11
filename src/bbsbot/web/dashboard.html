@@ -33,6 +33,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 .header h1 { font-size: 16px; color: var(--cyan); font-weight: 600; }
 .header .status { font-size: 12px; color: var(--fg2); }
@@ -46,15 +47,82 @@ body {
 }
 .dot.connected { background: var(--green); }
 .dot.disconnected { background: var(--red); }
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.spawn-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.spawn-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+.spawn-field.compact {
+  min-width: 68px;
+  max-width: 68px;
+}
+.spawn-field label {
+  font-size: 10px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.spawn-field select,
+.spawn-field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+}
+.spawn-field.compact input {
+  width: 100%;
+  text-align: center;
+}
+.header-separator {
+  border-left: 1px solid var(--border);
+  height: 24px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.header-note {
+  font-size: 11px;
+  color: var(--fg2);
+}
+.status-pool-wrap {
+  padding: 16px 24px 10px;
+}
+.pool-section-title {
+  font-size: 11px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  margin-bottom: 8px;
+}
 .summary {
   display: grid;
-  grid-template-columns: repeat(10, minmax(130px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
-  padding: 16px 24px;
   align-items: stretch;
 }
+.summary > .card {
+  min-width: 0;
+}
 .pool-panel-wrap {
-  padding: 0 24px 16px;
+  padding: 6px 24px 16px;
 }
 .pool-panel {
   background: var(--bg2);
@@ -108,27 +176,6 @@ body {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 1800px) {
-  .summary { grid-template-columns: repeat(8, minmax(130px, 1fr)); }
-}
-@media (max-width: 1550px) {
-  .summary { grid-template-columns: repeat(6, minmax(130px, 1fr)); }
-}
-@media (max-width: 1300px) {
-  .summary { grid-template-columns: repeat(5, minmax(140px, 1fr)); }
-}
-@media (max-width: 1100px) {
-  .summary { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
-}
-@media (max-width: 900px) {
-  .summary { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
-}
-@media (max-width: 720px) {
-  .summary { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
-}
-@media (max-width: 640px) {
-  .summary { grid-template-columns: 1fr; }
-}
 .card {
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -140,9 +187,6 @@ body {
 .card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
 .card .value.small { font-size: 14px; line-height: 1.3; font-weight: 600; white-space: normal; }
 .card.card-strategy { grid-column: 1 / -1; min-height: 86px; }
-@media (max-width: 640px) {
-  .card.card-strategy { grid-column: auto; }
-}
 .strategy-cpt-lines { display: block; }
 .strategy-cpt-line { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .strategy-cpt-line.low-confidence { color: var(--fg2); opacity: 0.85; }
@@ -683,28 +727,112 @@ tbody tr:hover { background: var(--bg3); }
 .toast.show { opacity: 1; }
 .toast.success { border-color: var(--green); color: var(--green); }
 .toast.error { border-color: var(--red); color: var(--red); }
+@media (max-width: 1260px) {
+  .summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .header h1 {
+    flex: 1 1 100%;
+  }
+  .header-controls {
+    flex: 1 1 auto;
+  }
+  .header .status {
+    margin-left: auto;
+  }
+}
+@media (max-width: 940px) {
+  .summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .header {
+    padding: 12px 16px;
+  }
+  .header-controls {
+    width: 100%;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .spawn-controls {
+    width: 100%;
+    gap: 8px;
+  }
+  .spawn-field {
+    flex: 1 1 180px;
+  }
+  .spawn-field.compact {
+    flex: 0 0 82px;
+    max-width: 82px;
+  }
+  .header-separator {
+    display: none;
+  }
+  .header-actions {
+    width: 100%;
+  }
+  .header .status {
+    width: 100%;
+    text-align: right;
+  }
+  .status-pool-wrap,
+  .pool-panel-wrap,
+  .table-wrap {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+@media (max-width: 760px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pool-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+@media (max-width: 420px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 </head>
 <body>
 <div class="header">
   <h1>BBSBOT SWARM DASHBOARD</h1>
-  <div style="display:flex;align-items:center;gap:12px;">
-    <div style="display:flex;align-items:center;gap:6px;">
-      <select id="spawn-preset" style="background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;">
+  <div class="header-controls">
+    <div class="spawn-controls">
+      <div class="spawn-field" title="Named bot mix templates">
+        <label for="spawn-preset">Preset</label>
+        <select id="spawn-preset">
         <option value="custom">custom</option>
-        <option value="mix_5_ai_35_dynamic">5_ai_35_dynamic</option>
-        <option value="mix_20_ai_20_dynamic">20_ai_20_dynamic</option>
-      </select>
-      <input type="number" id="spawn-count" min="1" max="100" value="5" style="width:60px;background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;" placeholder="Count">
-      <select id="spawn-config" style="background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;">
-        <option value="swarm_demo">swarm_demo</option>
-        <option value="swarm_demo_ai">swarm_demo_ai (AI)</option>
-      </select>
+        <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
+        <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
+        </select>
+      </div>
+      <div class="spawn-field compact" title="Used only when Preset is custom">
+        <label for="spawn-count">Count</label>
+        <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
+      </div>
+      <div class="spawn-field" title="Display labels map to stable config directories">
+        <label for="spawn-config">Profile</label>
+        <select id="spawn-config">
+          <option value="swarm_demo">tw2002_dynamic</option>
+          <option value="swarm_demo_ai">tw2002_ai</option>
+        </select>
+      </div>
       <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
     </div>
-    <div style="border-left:1px solid var(--border);height:24px;"></div>
-    <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
-    <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
+    <div class="header-separator"></div>
+    <div class="header-actions">
+      <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
+      <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
+    </div>
+    <div class="header-note">TW2002 profiles shown as labels; underlying config paths stay stable.</div>
   </div>
   <div class="status">
     <span class="dot disconnected" id="dot"></span>
@@ -713,24 +841,28 @@ tbody tr:hover { background: var(--bg3); }
   </div>
 </div>
 
-<div class="summary">
-  <div class="card"><div class="label">Running</div><div class="value green" id="running">-</div></div>
-  <div class="card"><div class="label">Total</div><div class="value" id="total">-</div></div>
-  <div class="card"><div class="label">Completed</div><div class="value blue" id="completed">-</div></div>
-  <div class="card"><div class="label">Errors</div><div class="value red" id="errors">-</div></div>
-  <div class="card"><div class="label">Credits</div><div class="value cyan" id="credits">-</div></div>
-  <div class="card"><div class="label">Turns</div><div class="value" id="turns">-</div></div>
-  <div class="card"><div class="label">Haggle Accept</div><div class="value green" id="accept-rate">-</div></div>
-  <div class="card"><div class="label">Too High</div><div class="value yellow" id="too-high-rate">-</div></div>
-  <div class="card"><div class="label">Too Low</div><div class="value blue" id="too-low-rate">-</div></div>
-  <div class="card"><div class="label">No Trade 120+</div><div class="value red" id="no-trade-120">-</div></div>
-  <div class="card card-strategy"><div class="label">Strategy CPT</div><div class="value small" id="strategy-cpt">-</div></div>
+<div class="status-pool-wrap">
+  <div class="pool-section-title">Status Pool</div>
+  <div class="summary">
+    <div class="card"><div class="label">Running</div><div class="value green" id="running">-</div></div>
+    <div class="card"><div class="label">Total</div><div class="value" id="total">-</div></div>
+    <div class="card"><div class="label">Completed</div><div class="value blue" id="completed">-</div></div>
+    <div class="card"><div class="label">Errors</div><div class="value red" id="errors">-</div></div>
+    <div class="card"><div class="label">Credits</div><div class="value cyan" id="credits">-</div></div>
+    <div class="card"><div class="label">Turns</div><div class="value" id="turns">-</div></div>
+    <div class="card"><div class="label">Haggle Accept</div><div class="value green" id="accept-rate">-</div></div>
+    <div class="card"><div class="label">Too High</div><div class="value yellow" id="too-high-rate">-</div></div>
+    <div class="card"><div class="label">Too Low</div><div class="value blue" id="too-low-rate">-</div></div>
+    <div class="card"><div class="label">No Trade 120+</div><div class="value red" id="no-trade-120">-</div></div>
+    <div class="card card-strategy"><div class="label">Strategy CPT</div><div class="value small" id="strategy-cpt">-</div></div>
+  </div>
 </div>
 
 <div class="pool-panel-wrap">
+  <div class="pool-section-title">Bot Pool</div>
   <div class="pool-panel">
     <div class="pool-head">
-      <div class="title">Account Pool</div>
+      <div class="title">Account Lease/Identity Pool</div>
       <div class="meta" id="pool-summary">loading...</div>
     </div>
     <div class="pool-table-wrap">
@@ -834,6 +966,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=15"></script>
+<script src="/static/dashboard.js?v=16"></script>
 </body>
 </html>

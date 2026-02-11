@@ -32,7 +32,13 @@ def test_spawn_presets_and_pool_panel_present() -> None:
     html = _dashboard_html()
     js = _dashboard_js()
     assert 'id="spawn-preset"' in html
+    assert "Preset" in html
+    assert "Count" in html
+    assert "Profile" in html
     assert "mix_5_ai_35_dynamic" in html
+    assert "tw2002_mix_5_ai_35_dynamic" in html
+    assert "tw2002_dynamic" in html
+    assert "tw2002_ai" in html
     assert 'id="pool-summary"' in html
     assert 'id="pool-table"' in html
     assert "buildSpawnConfigs" in js
