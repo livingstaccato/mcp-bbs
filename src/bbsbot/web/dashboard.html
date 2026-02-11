@@ -140,8 +140,10 @@ table thead th:nth-child(7), table tbody td:nth-child(7) { width: 90px; }  /* Cr
 table thead th:nth-child(8), table tbody td:nth-child(8) { width: 60px; }  /* Fuel */
 table thead th:nth-child(9), table tbody td:nth-child(9) { width: 60px; }  /* Org */
 table thead th:nth-child(10), table tbody td:nth-child(10) { width: 70px; } /* Equip */
-table thead th:nth-child(11), table tbody td:nth-child(11) { width: 100px; } /* Turns */
-table thead th:nth-child(12), table tbody td:nth-child(12) { width: 230px; } /* Actions */
+table thead th:nth-child(11), table tbody td:nth-child(11) { width: 90px; }  /* Turns */
+table thead th:nth-child(12), table tbody td:nth-child(12) { width: 110px; } /* Started */
+table thead th:nth-child(13), table tbody td:nth-child(13) { width: 110px; } /* Stopped */
+table thead th:nth-child(14), table tbody td:nth-child(14) { width: 230px; } /* Actions */
 table tbody td.actions {
   overflow: visible;
   text-overflow: clip;
@@ -164,7 +166,9 @@ table thead th:nth-child(7),
 table thead th:nth-child(8),
 table thead th:nth-child(9),
 table thead th:nth-child(10),
-table thead th:nth-child(11) {
+table thead th:nth-child(11),
+table thead th:nth-child(12),
+table thead th:nth-child(13) {
   text-align: center;
 }
 thead th:hover { color: var(--fg); }
@@ -187,6 +191,7 @@ tbody tr:hover { background: var(--bg3); }
 .state.queued { color: var(--yellow); }
 .state.warning { color: #f0883e; }
 .numeric { text-align: center; font-variant-numeric: tabular-nums; }
+.timecell { text-align: center; font-variant-numeric: tabular-nums; color: var(--fg2); }
 
 /* Hijack indicator */
 .hijack-badge {
@@ -679,6 +684,8 @@ tbody tr:hover { background: var(--bg3); }
         <th data-sort="cargo_organics">Org</th>
         <th data-sort="cargo_equipment">Equip</th>
         <th data-sort="turns_executed">Turns</th>
+        <th data-sort="started_at">Started</th>
+        <th data-sort="stopped_at">Stopped</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -746,6 +753,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=11"></script>
+<script src="/static/dashboard.js?v=12"></script>
 </body>
 </html>

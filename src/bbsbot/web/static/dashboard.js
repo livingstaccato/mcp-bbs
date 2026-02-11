@@ -78,6 +78,16 @@
     return Math.floor(age / 3600) + "h ago";
   }
 
+  function formatRelativeStamp(timestamp) {
+    if (!timestamp) return "-";
+    return formatRelativeTime(timestamp);
+  }
+
+  function formatAbsoluteTime(timestamp) {
+    if (!timestamp) return "-";
+    return new Date(timestamp * 1000).toLocaleString();
+  }
+
   function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
@@ -351,6 +361,8 @@
         }
 
         const turnsDisplay = `${b.turns_executed}`;
+        const startedDisplay = `<span title="${esc(formatAbsoluteTime(b.started_at))}">${esc(formatRelativeStamp(b.started_at))}</span>`;
+        const stoppedDisplay = `<span title="${esc(formatAbsoluteTime(b.stopped_at))}">${esc(formatRelativeStamp(b.stopped_at))}</span>`;
 
         // Display "-" for uninitialized numeric fields
         const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
@@ -381,6 +393,8 @@
 	        <td class="numeric">${orgDisplay}</td>
 	        <td class="numeric">${equipDisplay}</td>
 	        <td class="numeric">${turnsDisplay}</td>
+          <td class="timecell">${startedDisplay}</td>
+          <td class="timecell">${stoppedDisplay}</td>
 	        <td class="actions">
 	          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
           <button class="btn" onclick="window._openMetrics('${esc(b.bot_id)}')" style="border-color:var(--yellow);color:var(--yellow);" title="Metrics">Σ</button>
