@@ -145,7 +145,10 @@ def _choose_no_trade_guard_action(
                 with contextlib.suppress(Exception):
                     qv = int(quoted) if quoted is not None else 0
                     if qv > 0:
-                        qty = max(1, min(holds_free, int(credits_now // qv)))
+                        affordable = int(credits_now // qv)
+                        # If we cannot afford even one unit, do not force a local buy
+                        # and fall back to movement/exploration below.
+                        qty = min(holds_free, affordable) if affordable > 0 else 0
                     else:
                         # Unknown price: keep buys small until we build market intel.
                         qty = min(holds_free, 2 if int(credits_now) < 2000 else 4)
@@ -211,6 +214,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     turns_used = 0
     consecutive_orient_failures = 0
     goal_status_display: GoalStatusDisplay | None = None
+    last_trade_turn = int(getattr(bot, "_last_trade_turn", 0) or 0)
 
     # End-state swarm behavior: never "finish" the process just because we hit a goal.
     # Goals become milestones; the bot keeps playing and self-heals if it gets knocked out.
@@ -421,10 +425,14 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         # force a profit-first strategy/mode to avoid long explore-only runs.
         guard_turns = int(getattr(config.trading, "no_trade_guard_turns", 60))
         guard_min_trades = int(getattr(config.trading, "no_trade_guard_min_trades", 1))
+        guard_stale_turns = int(getattr(config.trading, "no_trade_guard_stale_turns", guard_turns))
         guard_strategy = str(getattr(config.trading, "no_trade_guard_strategy", "profitable_pairs"))
         guard_mode = str(getattr(config.trading, "no_trade_guard_mode", "balanced"))
         trades_done = int(getattr(bot, "trades_executed", 0) or 0)
-        force_guard = turns_used >= guard_turns and trades_done < guard_min_trades
+        turns_since_last_trade = turns_used if last_trade_turn <= 0 else max(0, turns_used - last_trade_turn)
+        force_guard = (turns_used >= guard_turns and trades_done < guard_min_trades) or (
+            turns_since_last_trade >= guard_stale_turns
+        )
 
         if force_guard:
             current_name = getattr(strategy, "name", "unknown")
@@ -477,7 +485,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 state=state,
                 knowledge=bot.sector_knowledge,
                 credits_now=int(getattr(state, "credits", 0) or 0),
-                guard_overage=max(0, int(turns_used - guard_turns)),
+                guard_overage=max(0, int(turns_since_last_trade - guard_stale_turns)),
             )
             if forced is not None:
                 action, params = forced
@@ -601,6 +609,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 bot.ai_activity = f"AI: {action.name} ({ai_reasoning[:80]})"
 
         # Execute action with error recovery
+        trades_before_action = int(getattr(bot, "trades_executed", 0) or 0)
         try:
             # Pause again right before acting (lets hijack take effect between planning and acting).
             await_if_hijacked2 = getattr(bot, "await_if_hijacked", None)
@@ -742,6 +751,12 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         if turns_counted == 0:
             turns_used = max(0, turns_used - 1)
             bot.turns_used = turns_used
+
+        # Track last successful trade turn for stale-trade guard.
+        trades_after_action = int(getattr(bot, "trades_executed", 0) or 0)
+        if trades_after_action > trades_before_action:
+            last_trade_turn = int(turns_used)
+            bot._last_trade_turn = last_trade_turn
 
         result = TradeResult(
             success=success,

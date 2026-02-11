@@ -44,6 +44,7 @@ class BotIdentityRecord(BaseModel):
     host: str | None = None
     port: int | None = None
     game_letter: str | None = None
+    identity_source: str = "unknown"  # config | persisted | pool | generated
     config_path: str | None = None
     first_seen_at: float = Field(default_factory=time.time)
     last_updated_at: float = Field(default_factory=time.time)
@@ -97,6 +98,7 @@ class BotIdentityStore:
         port: int | None,
         game_letter: str | None,
         config_path: str | None,
+        identity_source: str | None = None,
     ) -> BotIdentityRecord:
         record = self.load(bot_id) or BotIdentityRecord(bot_id=bot_id)
         record.username = username
@@ -107,6 +109,8 @@ class BotIdentityStore:
         record.port = port
         record.game_letter = game_letter
         record.config_path = config_path
+        if identity_source:
+            record.identity_source = identity_source
         self.save(record)
         return record
 
@@ -172,3 +176,14 @@ class BotIdentityStore:
         if record.active_session_id == session_id:
             record.active_session_id = None
         self.save(record)
+
+    def list_records(self) -> list[BotIdentityRecord]:
+        records: list[BotIdentityRecord] = []
+        for path in sorted(self.data_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                rec = BotIdentityRecord.model_validate(data)
+                records.append(rec)
+            except Exception:
+                continue
+        return records

@@ -6,6 +6,7 @@ Runs a single bot instance and reports status to swarm manager.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import random
 import string
@@ -16,16 +17,14 @@ from pathlib import Path
 import click
 import httpx
 
+from bbsbot.defaults import MANAGER_URL as MANAGER_URL_DEFAULT
+from bbsbot.games.tw2002.account_pool_store import AccountLeaseError, AccountPoolStore
 from bbsbot.games.tw2002.bot import TradingBot
 from bbsbot.games.tw2002.bot_identity_store import BotIdentityStore
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
-
-import contextlib
-
-from bbsbot.defaults import MANAGER_URL as MANAGER_URL_DEFAULT
 
 
 def _auto_username_from_bot_id(bot_id: str) -> str:
@@ -41,8 +40,9 @@ def _resolve_worker_identity(
     config_dict: dict,
     config_obj: BotConfig,
     identity_store: BotIdentityStore,
+    account_pool: AccountPoolStore,
     config_path: Path,
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, str]:
     """Resolve username/passwords with durable per-bot reuse."""
     identity = identity_store.load(bot_id)
     explicit_conn = (config_dict or {}).get("connection", {}) or {}
@@ -53,35 +53,102 @@ def _resolve_worker_identity(
     explicit_char_pw = explicit_conn.get("character_password")
     explicit_char_cfg_pw = explicit_char.get("password")
 
-    username = (
-        explicit_username
-        or config_obj.connection.username
-        or (identity.username if identity and identity.username else None)
-        or _auto_username_from_bot_id(bot_id)
+    host = config_obj.connection.host
+    port = config_obj.connection.port
+    game_letter = config_obj.connection.game_letter
+
+    explicit_mode = bool(explicit_username or config_obj.connection.username)
+    identity_source = "unknown"
+
+    preferred_username = (
+        explicit_username or config_obj.connection.username or (identity.username if identity and identity.username else None)
     )
-    character_password = (
+    preferred_char_pw = (
         explicit_char_pw
         or explicit_char_cfg_pw
         or (identity.character_password if identity and identity.character_password else None)
-        or username
     )
-    game_password = (
+    preferred_game_pw = (
         explicit_game_pw
         or (identity.game_password if identity and identity.game_password else None)
         or config_obj.connection.game_password
         or "game"
     )
+
+    leased = None
+    if preferred_username:
+        try:
+            identity_source = "config" if explicit_mode else "persisted"
+            if (
+                not explicit_mode
+                and identity
+                and identity.identity_source
+                and identity.identity_source != "unknown"
+            ):
+                identity_source = identity.identity_source
+            leased = account_pool.reserve_account(
+                bot_id=bot_id,
+                username=preferred_username,
+                character_password=preferred_char_pw or preferred_username,
+                game_password=preferred_game_pw,
+                host=host,
+                port=port,
+                game_letter=game_letter,
+                source=identity_source,
+            )
+        except AccountLeaseError:
+            if explicit_mode:
+                raise
+            leased = account_pool.acquire_account(
+                bot_id=bot_id,
+                host=host,
+                port=port,
+                game_letter=game_letter,
+            )
+            if leased is not None:
+                identity_source = "pool"
+    else:
+        leased = account_pool.acquire_account(
+            bot_id=bot_id,
+            host=host,
+            port=port,
+            game_letter=game_letter,
+        )
+        if leased is not None:
+            identity_source = "pool"
+
+    if leased is not None:
+        username = leased.username
+        character_password = leased.character_password
+        game_password = leased.game_password or preferred_game_pw
+    else:
+        username = _auto_username_from_bot_id(bot_id)
+        character_password = preferred_char_pw or username
+        game_password = preferred_game_pw
+        identity_source = "generated"
+        account_pool.reserve_account(
+            bot_id=bot_id,
+            username=username,
+            character_password=character_password,
+            game_password=game_password,
+            host=host,
+            port=port,
+            game_letter=game_letter,
+            source=identity_source,
+        )
+
     identity_store.upsert_identity(
         bot_id=bot_id,
         username=username,
         character_password=character_password,
         game_password=game_password,
-        host=config_obj.connection.host,
-        port=config_obj.connection.port,
-        game_letter=config_obj.connection.game_letter,
+        host=host,
+        port=port,
+        game_letter=game_letter,
         config_path=str(config_path),
+        identity_source=identity_source,
     )
-    return username, character_password, game_password
+    return username, character_password, game_password, identity_source
 
 
 class WorkerBot(TradingBot):
@@ -260,10 +327,7 @@ class WorkerBot(TradingBot):
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)
             turns_max = getattr(self.config, "session", {})
-            if hasattr(turns_max, "max_turns_per_session"):
-                turns_max = turns_max.max_turns_per_session
-            else:
-                turns_max = 0  # Default: auto-detect server max
+            turns_max = turns_max.max_turns_per_session if hasattr(turns_max, "max_turns_per_session") else 0
 
             # CRITICAL FIX: Use CURRENT screen for activity detection, not stale game_state
             # This ensures activity always matches what's actually on screen
@@ -426,10 +490,9 @@ class WorkerBot(TradingBot):
             }
             if prompt_id:
                 mapped = prompt_to_status.get(prompt_id)
-                if mapped and not status_detail:
-                    # Once in-game, do not regress status back to login phases.
-                    if not (in_game_now and mapped in login_statuses):
-                        status_detail = mapped
+                # Once in-game, do not regress status back to login phases.
+                if mapped and not status_detail and not (in_game_now and mapped in login_statuses):
+                    status_detail = mapped
 
             # If the password prompt is happening while already in-game, it's not password *selection*.
             if prompt_id == "prompt.character_password":
@@ -568,6 +631,7 @@ class WorkerBot(TradingBot):
             credits_per_turn = float(credits_delta) / float(self.turns_used) if self.turns_used > 0 else 0.0
 
             status_data = {
+                "reported_at": time.time(),
                 "sector": sector_out,
                 "turns_executed": self.turns_used,
                 "turns_max": turns_max,
@@ -852,7 +916,7 @@ class WorkerBot(TradingBot):
                 # Save to diagnostic log file
                 diagnostic_file = Path(f"logs/diagnostics/{self.bot_id}_diagnosis.json")
                 diagnostic_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(diagnostic_file, "w") as f:
+                with diagnostic_file.open("w") as f:
                     json.dump(
                         {
                             "timestamp": time.time(),
@@ -896,7 +960,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
     import yaml
 
-    with open(config_path) as f:
+    with config_path.open() as f:
         config_dict = yaml.safe_load(f)
 
     config_obj = BotConfig(**config_dict)
@@ -904,17 +968,31 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     worker = WorkerBot(bot_id, config_obj, manager_url)
     term_bridge = None
 
-    # Resolve credentials once from config + persistent store; retries use the same.
+    # Resolve credentials from config + persistent stores; retries may refresh identity.
     identity_store = BotIdentityStore()
-    username, character_password, game_password = _resolve_worker_identity(
-        bot_id=bot_id,
-        config_dict=config_dict,
-        config_obj=config_obj,
-        identity_store=identity_store,
-        config_path=config_path,
-    )
-    with contextlib.suppress(Exception):
-        worker.character_name = username  # Make status reflect the actual character name promptly.
+    account_pool = AccountPoolStore()
+    username = ""
+    character_password = ""
+    game_password = ""
+    identity_source = "unknown"
+    refresh_identity = True
+
+    def _resolve_identity() -> None:
+        nonlocal username, character_password, game_password, identity_source
+        username, character_password, game_password, identity_source = _resolve_worker_identity(
+            bot_id=bot_id,
+            config_dict=config_dict,
+            config_obj=config_obj,
+            identity_store=identity_store,
+            account_pool=account_pool,
+            config_path=config_path,
+        )
+        with contextlib.suppress(Exception):
+            # Make status reflect the actual character name promptly.
+            worker.character_name = username
+
+    _resolve_identity()
+    refresh_identity = False
 
     # Register with manager (best-effort; don't crash the worker if manager is down).
     with contextlib.suppress(Exception):
@@ -1055,6 +1133,10 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
     try:
         while True:
+            if refresh_identity:
+                _resolve_identity()
+                refresh_identity = False
+
             active_session = identity_store.start_session(bot_id=bot_id, state="starting")
             active_session_id = active_session.id
             try:
@@ -1126,6 +1208,10 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 logger.error(f"Worker cycle error: {e}", exc_info=True)
                 cls = _classify_exception(e)
                 budget.note(cls)
+                if cls == "auth":
+                    with contextlib.suppress(Exception):
+                        account_pool.release_by_bot(bot_id=bot_id, cooldown_s=1800)
+                    refresh_identity = True
                 _end_active_session(
                     stop_reason=f"error:{cls}",
                     state="recovering",
@@ -1190,6 +1276,8 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 continue
     finally:
         _end_active_session(stop_reason="shutdown", state="stopped", exit_reason="shutdown")
+        with contextlib.suppress(Exception):
+            account_pool.release_by_bot(bot_id=bot_id, cooldown_s=0)
         with contextlib.suppress(Exception):
             await worker.stop_status_reporter()
         with contextlib.suppress(Exception):

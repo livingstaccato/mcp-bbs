@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from bbsbot.games.tw2002.account_pool_store import AccountPoolStore
 from bbsbot.games.tw2002.bot_identity_store import BotIdentityStore
 from bbsbot.logging import get_logger
 
@@ -23,6 +24,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 _identity_store = BotIdentityStore()
+_account_pool_store = AccountPoolStore()
 
 # Reference to the manager instance, set during setup
 _manager: SwarmManager | None = None
@@ -125,6 +127,62 @@ async def timeseries_summary(window_minutes: int = 120):
     return _manager.get_timeseries_summary(window_minutes=window_minutes)
 
 
+@router.get("/swarm/account-pool")
+async def account_pool_summary():
+    """Get pooled account lease/cooldown state + identity lifecycle summary."""
+    pool = _account_pool_store.summary()
+    redacted_accounts = []
+    for account in pool.get("accounts", []):
+        lease = account.get("lease") or None
+        redacted_accounts.append(
+            {
+                "account_id": account.get("account_id"),
+                "username": account.get("username"),
+                "host": account.get("host"),
+                "port": account.get("port"),
+                "game_letter": account.get("game_letter"),
+                "source": account.get("source"),
+                "created_at": account.get("created_at"),
+                "last_used_at": account.get("last_used_at"),
+                "last_released_at": account.get("last_released_at"),
+                "use_count": account.get("use_count"),
+                "cooldown_until": account.get("cooldown_until"),
+                "disabled": bool(account.get("disabled")),
+                "lease": {
+                    "bot_id": lease.get("bot_id"),
+                    "leased_at": lease.get("leased_at"),
+                    "lease_expires_at": lease.get("lease_expires_at"),
+                }
+                if lease
+                else None,
+            }
+        )
+
+    identity_records = _identity_store.list_records()
+    by_source: dict[str, int] = {}
+    active_sessions = 0
+    for rec in identity_records:
+        src = (rec.identity_source or "unknown").strip() or "unknown"
+        by_source[src] = by_source.get(src, 0) + 1
+        if rec.active_session_id:
+            active_sessions += 1
+
+    return {
+        "pool": {
+            "accounts_total": int(pool.get("accounts_total") or 0),
+            "leased": int(pool.get("leased") or 0),
+            "cooldown": int(pool.get("cooldown") or 0),
+            "available": int(pool.get("available") or 0),
+            "accounts": redacted_accounts,
+        },
+        "identities": {
+            "total": len(identity_records),
+            "active": active_sessions,
+            "by_source": by_source,
+        },
+    }
+
+
 @router.post("/swarm/kill-all")
 async def kill_all():
     """Kill all running bots in the swarm."""
@@ -179,13 +237,21 @@ async def update_status(bot_id: str, update: dict):
     if bot_id not in _manager.bots:
         return JSONResponse({"error": f"Bot {bot_id} not found"}, status_code=404)
     bot = _manager.bots[bot_id]
+    # Ignore out-of-order reports to prevent stale Activity/Status regressions.
+    try:
+        incoming_reported_at = float(update.get("reported_at") or 0.0)
+    except Exception:
+        incoming_reported_at = 0.0
+    if incoming_reported_at > 0 and bot.status_reported_at > 0 and incoming_reported_at < bot.status_reported_at:
+        return {"ok": True, "ignored": "stale_report"}
+    if incoming_reported_at > 0:
+        bot.status_reported_at = incoming_reported_at
     if "sector" in update:
         bot.sector = update["sector"]
-    if "credits" in update:
-        # Accept any non-negative value (including 0)
-        # Only -1 means uninitialized, which we skip
-        if update["credits"] >= 0:
-            bot.credits = update["credits"]
+    # Accept any non-negative value (including 0).
+    # Only -1 means uninitialized, which we skip.
+    if "credits" in update and update["credits"] >= 0:
+        bot.credits = update["credits"]
     if "turns_executed" in update:
         # Update turns directly - worker knows the correct value
         new_turns = update["turns_executed"]
@@ -208,9 +274,14 @@ async def update_status(bot_id: str, update: dict):
     if "last_action_time" in update:
         bot.last_action_time = update["last_action_time"]
     if "activity_context" in update:
-        bot.activity_context = update["activity_context"]
+        activity = str(update["activity_context"] or "").strip()
+        bot.activity_context = activity.upper() if activity else None
     if "status_detail" in update:
-        bot.status_detail = update["status_detail"]
+        detail = str(update["status_detail"] or "").strip()
+        # Keep status values human-facing; avoid leaking raw prompt ids.
+        if detail.startswith("prompt."):
+            detail = detail.split(".", 1)[1].replace("_", " ").upper()
+        bot.status_detail = detail or None
     if "prompt_id" in update:
         bot.prompt_id = update["prompt_id"]
     if "cargo_fuel_ore" in update:

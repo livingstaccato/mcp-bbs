@@ -7,11 +7,11 @@ multiple trading bots through a REST API and WebSocket interface.
 from __future__ import annotations
 
 import asyncio
-from collections import deque
 import json
 import subprocess
 import sys
 import time
+from collections import deque
 from pathlib import Path
 
 import uvicorn
@@ -41,6 +41,7 @@ class BotStatus(BaseModel):
     turns_max: int = 500  # Max turns for this session
     uptime_seconds: float = 0
     last_update_time: float = Field(default_factory=time.time)
+    status_reported_at: float = 0.0  # worker-side event timestamp for stale update filtering
     completed_at: float | None = None  # Timestamp when bot completed
     started_at: float | None = None
     stopped_at: float | None = None
@@ -245,13 +246,12 @@ class SwarmManager:
             log_dir = Path("logs/workers")
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / f"{bot_id}.log"
-            log_handle = open(log_file, "w")
-
-            process = subprocess.Popen(
-                cmd,
-                stdout=log_handle,
-                stderr=subprocess.STDOUT,
-            )
+            with log_file.open("w") as log_handle:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,
+                )
 
             if bot_id in self.bots:
                 # Update pre-registered queued bot
@@ -276,7 +276,7 @@ class SwarmManager:
 
         except Exception as e:
             logger.error(f"Failed to spawn bot {bot_id}: {e}")
-            raise RuntimeError(f"Failed to spawn bot: {e}")
+            raise RuntimeError(f"Failed to spawn bot: {e}") from e
 
     async def spawn_swarm(
         self,
@@ -501,6 +501,15 @@ class SwarmManager:
         delta_turns = _rolling_counter_delta("total_turns")
         delta_credits = _rolling_counter_delta("total_credits")
         delta_llm_wakeups = _rolling_counter_delta("llm_wakeups_total")
+        delta_trades = _rolling_nested_counter_delta("trade_outcomes_overall", "trades_executed")
+
+        strategy_delta_trades = _strategy_deltas("trades_executed")
+        strategy_delta_turns = _strategy_deltas("turns_executed")
+        strategy_trades_per_100_turns: dict[str, float] = {}
+        for key in set(strategy_delta_trades.keys()) | set(strategy_delta_turns.keys()):
+            t = int(strategy_delta_trades.get(key, 0))
+            u = int(strategy_delta_turns.get(key, 0))
+            strategy_trades_per_100_turns[key] = (float(t) * 100.0 / float(u)) if u > 0 else 0.0
 
         return {
             "window_minutes": minutes,
@@ -513,6 +522,8 @@ class SwarmManager:
                 "turns": delta_turns,
                 "credits": delta_credits,
                 "credits_per_turn": (float(delta_credits) / float(delta_turns)) if delta_turns > 0 else 0.0,
+                "trades_executed": delta_trades,
+                "trades_per_100_turns": (float(delta_trades) * 100.0 / float(delta_turns)) if delta_turns > 0 else 0.0,
                 "haggle_offers": _rolling_nested_counter_delta("trade_outcomes_overall", "haggle_offers"),
                 "llm_wakeups": delta_llm_wakeups,
                 "llm_wakeups_per_100_turns": (
@@ -533,7 +544,9 @@ class SwarmManager:
                 "trade_outcomes_overall": last.get("trade_outcomes_overall") or {},
             },
             "strategy_delta": {
-                "trades_executed": _strategy_deltas("trades_executed"),
+                "trades_executed": strategy_delta_trades,
+                "turns_executed": strategy_delta_turns,
+                "trades_per_100_turns": strategy_trades_per_100_turns,
                 "haggle_accept": _strategy_deltas("haggle_accept"),
                 "haggle_counter": _strategy_deltas("haggle_counter"),
                 "haggle_too_high": _strategy_deltas("haggle_too_high"),
@@ -600,6 +613,7 @@ class SwarmManager:
             goal_contract_failures_total += goal_contract_failures
 
             trade_outcomes_overall["trades_executed"] += trades
+            trade_outcomes_overall["turns_executed"] = int(trade_outcomes_overall.get("turns_executed") or 0) + turns
             trade_outcomes_overall["haggle_accept"] += accept
             trade_outcomes_overall["haggle_counter"] += counter
             trade_outcomes_overall["haggle_too_high"] += high
@@ -614,6 +628,7 @@ class SwarmManager:
                     "strategy_mode": strategy_mode,
                     "bots": 0,
                     "trades_executed": 0,
+                    "turns_executed": 0,
                     "haggle_accept": 0,
                     "haggle_counter": 0,
                     "haggle_too_high": 0,
@@ -622,6 +637,7 @@ class SwarmManager:
             strat = trade_outcomes_by_strategy_mode[strategy_key]
             strat["bots"] += 1
             strat["trades_executed"] += trades
+            strat["turns_executed"] += turns
             strat["haggle_accept"] += accept
             strat["haggle_counter"] += counter
             strat["haggle_too_high"] += high
@@ -637,6 +653,7 @@ class SwarmManager:
                     "credits": int(bot.get("credits") or 0),
                     "turns": turns,
                     "trades": trades,
+                    "trades_per_100_turns": (float(trades) * 100.0 / float(turns)) if turns > 0 else 0.0,
                     "credits_delta": credits_delta,
                     "credits_per_turn": cpt,
                     "strategy_id": bot.get("strategy_id"),
@@ -668,6 +685,10 @@ class SwarmManager:
         trade_outcomes_overall["too_low_rate"] = (
             float(trade_outcomes_overall["haggle_too_low"]) / float(overall_offers) if overall_offers > 0 else 0.0
         )
+        overall_turns = int(trade_outcomes_overall.get("turns_executed") or 0)
+        trade_outcomes_overall["trades_per_100_turns"] = (
+            (float(trade_outcomes_overall["trades_executed"]) * 100.0 / float(overall_turns)) if overall_turns > 0 else 0.0
+        )
 
         for strat in trade_outcomes_by_strategy_mode.values():
             offers = strat["haggle_accept"] + strat["haggle_counter"] + strat["haggle_too_high"] + strat["haggle_too_low"]
@@ -675,6 +696,10 @@ class SwarmManager:
             strat["accept_rate"] = float(strat["haggle_accept"]) / float(offers) if offers > 0 else 0.0
             strat["too_high_rate"] = float(strat["haggle_too_high"]) / float(offers) if offers > 0 else 0.0
             strat["too_low_rate"] = float(strat["haggle_too_low"]) / float(offers) if offers > 0 else 0.0
+            strat_turns = int(strat.get("turns_executed") or 0)
+            strat["trades_per_100_turns"] = (
+                (float(strat["trades_executed"]) * 100.0 / float(strat_turns)) if strat_turns > 0 else 0.0
+            )
 
         return {
             "ts": time.time(),
@@ -789,7 +814,7 @@ class SwarmManager:
             "timestamp": time.time(),
             "bots": {bot_id: bot.model_dump() for bot_id, bot in self.bots.items()},
         }
-        with open(self.state_file, "w") as f:
+        with Path(self.state_file).open("w") as f:
             json.dump(state, f, indent=2)
 
     def _load_state(self) -> None:
@@ -797,7 +822,7 @@ class SwarmManager:
         if not Path(self.state_file).exists():
             return
         try:
-            with open(self.state_file) as f:
+            with Path(self.state_file).open() as f:
                 state = json.load(f)
                 # Load bots from previous state
                 for bot_id, bot_data in state.get("bots", {}).items():

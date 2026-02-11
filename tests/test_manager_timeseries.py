@@ -78,6 +78,8 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert row["goal_contract_failures_total"] == 1
     overall = row["trade_outcomes_overall"]
     assert overall["trades_executed"] == 6
+    assert overall["turns_executed"] == 182
+    assert overall["trades_per_100_turns"] > 3.0
     assert overall["haggle_accept"] == 4
     assert overall["haggle_counter"] == 3
     assert overall["haggle_too_high"] == 3
@@ -85,6 +87,8 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert overall["haggle_offers"] == 11
     by_strategy = row["trade_outcomes_by_strategy_mode"]
     assert by_strategy["profitable_pairs(balanced)"]["trades_executed"] == 6
+    assert by_strategy["profitable_pairs(balanced)"]["turns_executed"] == 42
+    assert by_strategy["profitable_pairs(balanced)"]["trades_per_100_turns"] > 10.0
     assert by_strategy["opportunistic(conservative)"]["haggle_too_high"] == 3
     assert len(row["bots"]) == 2
 
@@ -145,5 +149,8 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     assert summary["rows"] == 2
     assert summary["delta"]["turns"] >= 15
     assert summary["delta"]["credits"] >= 400
+    assert summary["delta"]["trades_executed"] >= 3
+    assert summary["delta"]["trades_per_100_turns"] > 0
     assert summary["delta"]["llm_wakeups"] >= 3
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_executed"]
+    assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_per_100_turns"]

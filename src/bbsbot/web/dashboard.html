@@ -53,6 +53,61 @@ body {
   padding: 16px 24px;
   align-items: stretch;
 }
+.pool-panel-wrap {
+  padding: 0 24px 16px;
+}
+.pool-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.pool-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.pool-head .title {
+  font-size: 12px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pool-head .meta {
+  font-size: 12px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.pool-table-wrap {
+  overflow-x: auto;
+}
+.pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.pool-table th,
+.pool-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.pool-table th {
+  color: var(--fg2);
+  text-align: left;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+}
+.pool-table td.num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 @media (max-width: 1800px) {
   .summary { grid-template-columns: repeat(8, minmax(130px, 1fr)); }
 }
@@ -635,6 +690,11 @@ tbody tr:hover { background: var(--bg3); }
   <h1>BBSBOT SWARM DASHBOARD</h1>
   <div style="display:flex;align-items:center;gap:12px;">
     <div style="display:flex;align-items:center;gap:6px;">
+      <select id="spawn-preset" style="background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;">
+        <option value="custom">custom</option>
+        <option value="mix_5_ai_35_dynamic">5_ai_35_dynamic</option>
+        <option value="mix_20_ai_20_dynamic">20_ai_20_dynamic</option>
+      </select>
       <input type="number" id="spawn-count" min="1" max="100" value="5" style="width:60px;background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;" placeholder="Count">
       <select id="spawn-config" style="background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:4px 8px;border-radius:4px;font-family:inherit;font-size:12px;">
         <option value="swarm_demo">swarm_demo</option>
@@ -665,6 +725,31 @@ tbody tr:hover { background: var(--bg3); }
   <div class="card"><div class="label">Too Low</div><div class="value blue" id="too-low-rate">-</div></div>
   <div class="card"><div class="label">No Trade 120+</div><div class="value red" id="no-trade-120">-</div></div>
   <div class="card card-strategy"><div class="label">Strategy CPT</div><div class="value small" id="strategy-cpt">-</div></div>
+</div>
+
+<div class="pool-panel-wrap">
+  <div class="pool-panel">
+    <div class="pool-head">
+      <div class="title">Account Pool</div>
+      <div class="meta" id="pool-summary">loading...</div>
+    </div>
+    <div class="pool-table-wrap">
+      <table class="pool-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Source</th>
+            <th>Host</th>
+            <th>Lease Bot</th>
+            <th>Cooldown</th>
+            <th>Uses</th>
+            <th>Last Used</th>
+          </tr>
+        </thead>
+        <tbody id="pool-table"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <div class="table-wrap">
@@ -749,6 +834,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=13"></script>
+<script src="/static/dashboard.js?v=14"></script>
 </body>
 </html>

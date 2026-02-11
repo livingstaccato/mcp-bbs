@@ -88,6 +88,14 @@
     return new Date(timestamp * 1000).toLocaleString();
   }
 
+  function formatAgeSeconds(ts) {
+    if (!ts) return "-";
+    const age = Math.max(0, (Date.now() / 1000) - Number(ts));
+    if (age < 60) return Math.floor(age) + "s ago";
+    if (age < 3600) return Math.floor(age / 60) + "m ago";
+    return Math.floor(age / 3600) + "h ago";
+  }
+
   function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
@@ -920,23 +928,103 @@
   }
 
   const btnSpawn = $("#btn-spawn");
+  const spawnPreset = $("#spawn-preset");
   const spawnCount = $("#spawn-count");
   const spawnConfig = $("#spawn-config");
+  const poolSummary = $("#pool-summary");
+  const poolTable = $("#pool-table");
+
+  function _buildRange(configDir, count, startAt) {
+    const out = [];
+    const start = Number(startAt || 1);
+    const total = Number(count || 0);
+    for (let i = 0; i < total; i++) {
+      const idx = start + i;
+      out.push(`config/${configDir}/bot_${String(idx).padStart(2, "0")}.yaml`);
+    }
+    return out;
+  }
+
+  function buildSpawnConfigs() {
+    const preset = (spawnPreset && spawnPreset.value) ? String(spawnPreset.value) : "custom";
+    if (preset === "mix_5_ai_35_dynamic") {
+      return [
+        ..._buildRange("swarm_demo_ai", 5, 1),
+        ..._buildRange("swarm_demo", 35, 1),
+      ];
+    }
+    if (preset === "mix_20_ai_20_dynamic") {
+      return [
+        ..._buildRange("swarm_demo_ai", 20, 1),
+        ..._buildRange("swarm_demo", 20, 1),
+      ];
+    }
+    const count = parseInt(spawnCount.value, 10) || 5;
+    const configDir = spawnConfig.value || "swarm_demo";
+    return _buildRange(configDir, count, 1);
+  }
+
+  function syncSpawnPresetUi() {
+    const preset = (spawnPreset && spawnPreset.value) ? String(spawnPreset.value) : "custom";
+    const custom = preset === "custom";
+    if (spawnCount) spawnCount.disabled = !custom;
+    if (spawnConfig) spawnConfig.disabled = !custom;
+  }
+
+  async function refreshAccountPool() {
+    if (!poolSummary || !poolTable) return;
+    try {
+      const resp = await fetch("/swarm/account-pool");
+      if (!resp.ok) {
+        poolSummary.textContent = "unavailable";
+        return;
+      }
+      const data = await resp.json();
+      const pool = data.pool || {};
+      const identities = data.identities || {};
+      poolSummary.textContent =
+        `accounts ${Number(pool.accounts_total || 0)} | leased ${Number(pool.leased || 0)} | ` +
+        `cooldown ${Number(pool.cooldown || 0)} | available ${Number(pool.available || 0)} | ` +
+        `identity: ${Number(identities.total || 0)} total / ${Number(identities.active || 0)} active`;
+
+      const accounts = Array.isArray(pool.accounts) ? pool.accounts.slice(0, 12) : [];
+      poolTable.innerHTML = accounts.map((a) => {
+        const host = [a.host || "-", a.port != null ? a.port : "-"].join(":");
+        const leaseBot = (a.lease && a.lease.bot_id) ? a.lease.bot_id : "-";
+        const cooldown = a.cooldown_until ? formatAgeSeconds(a.cooldown_until) : "-";
+        const lastUsed = a.last_used_at ? formatAgeSeconds(a.last_used_at) : "-";
+        return `<tr>
+          <td title="${esc(a.username || "-")}">${esc(a.username || "-")}</td>
+          <td>${esc(a.source || "-")}</td>
+          <td title="${esc(host)}">${esc(host)}</td>
+          <td title="${esc(leaseBot)}">${esc(leaseBot)}</td>
+          <td class="num">${esc(cooldown)}</td>
+          <td class="num">${esc(String(a.use_count || 0))}</td>
+          <td class="num">${esc(lastUsed)}</td>
+        </tr>`;
+      }).join("");
+      if (!accounts.length) {
+        poolTable.innerHTML = `<tr><td colspan="7" style="color: var(--fg2);">No pooled accounts yet</td></tr>`;
+      }
+    } catch (_) {
+      poolSummary.textContent = "unavailable";
+    }
+  }
 
   if (btnSpawn) {
     btnSpawn.addEventListener("click", async function () {
-      const count = parseInt(spawnCount.value) || 5;
-      const configDir = spawnConfig.value || "swarm_demo";
+      const preset = (spawnPreset && spawnPreset.value) ? String(spawnPreset.value) : "custom";
+      const count = parseInt(spawnCount.value, 10) || 5;
 
-      if (count < 1 || count > 100) {
+      if (preset === "custom" && (count < 1 || count > 100)) {
         showToast("Count must be between 1 and 100", "error");
         return;
       }
 
-      // Build list of config paths
-      const configs = [];
-      for (let i = 1; i <= count; i++) {
-        configs.push(`config/${configDir}/bot_${String(i).padStart(2, '0')}.yaml`);
+      const configs = buildSpawnConfigs();
+      if (!configs.length) {
+        showToast("No configs selected", "error");
+        return;
       }
 
       try {
@@ -955,7 +1043,10 @@
         });
 
         const data = await resp.json();
-        showToast(`Spawning ${data.total_bots} bots in ${data.total_groups} groups (~${Math.floor(data.estimated_time_seconds / 60)}m)`, "success");
+        showToast(
+          `Spawning ${data.total_bots} bots (${preset}) in ${data.total_groups} groups (~${Math.floor(data.estimated_time_seconds / 60)}m)`,
+          "success"
+        );
 
         setTimeout(() => {
           btnSpawn.disabled = false;
@@ -969,9 +1060,16 @@
     });
   }
 
+  if (spawnPreset) {
+    spawnPreset.addEventListener("change", syncSpawnPresetUi);
+    syncSpawnPresetUi();
+  }
+
 	  poll();
 	  connect();
 	  installTableInteractionGuards();
+    refreshAccountPool();
+    setInterval(refreshAccountPool, 10000);
 
   // --- Terminal spy/hijack modal (xterm.js) ---
   let termWs = null;

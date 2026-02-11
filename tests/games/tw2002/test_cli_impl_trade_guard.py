@@ -130,3 +130,33 @@ def test_trade_guard_does_not_repeat_local_buy_forever() -> None:
     action, params = _choose_no_trade_guard_action(state, knowledge, credits_now=300, guard_overage=3) or (None, {})
     assert action == TradeAction.EXPLORE
     assert params["direction"] == 91
+
+
+def test_trade_guard_does_not_force_unaffordable_local_buy() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    info = SectorInfo(
+        has_port=True,
+        port_class="SSS",
+        port_prices={
+            "fuel_ore": {"sell": 500},
+            "organics": {"sell": 700},
+            "equipment": {"sell": 900},
+        },
+    )
+    knowledge._sectors[88] = info
+    state = GameState(
+        context="sector_command",
+        sector=88,
+        has_port=True,
+        port_class="SSS",
+        credits=300,
+        holds_free=20,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[91, 92, 93],
+    )
+
+    action, params = _choose_no_trade_guard_action(state, knowledge, credits_now=300) or (None, {})
+    assert action == TradeAction.EXPLORE
+    assert params["direction"] == 91

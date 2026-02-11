@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from fastapi.testclient import TestClient
 
 from bbsbot.api import swarm_routes
+from bbsbot.games.tw2002.account_pool_store import AccountPoolStore
 from bbsbot.games.tw2002.bot_identity_store import BotIdentityStore
 from bbsbot.manager import BotStatus, SwarmManager
 
@@ -46,6 +47,68 @@ def test_update_status_accepts_llm_telemetry(tmp_path: Path) -> None:
     assert bot.autopilot_turns == 88
     assert bot.goal_contract_failures == 2
     assert bot.llm_wakeups_per_100_turns == 13.5
+
+
+def test_update_status_ignores_out_of_order_reports(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_009"] = BotStatus(
+        bot_id="bot_009",
+        pid=900,
+        config="config/swarm_demo/bot_009.yaml",
+        state="running",
+    )
+
+    with TestClient(manager.app) as client:
+        new_resp = client.post(
+            "/bot/bot_009/status",
+            json={
+                "reported_at": 200.0,
+                "activity_context": "EXPLORING",
+                "status_detail": "PORT_MENU",
+            },
+        )
+        assert new_resp.status_code == 200
+
+        stale_resp = client.post(
+            "/bot/bot_009/status",
+            json={
+                "reported_at": 100.0,
+                "activity_context": "LOGGING_IN",
+                "status_detail": "USERNAME",
+            },
+        )
+        assert stale_resp.status_code == 200
+        assert stale_resp.json().get("ignored") == "stale_report"
+
+    bot = manager.bots["bot_009"]
+    assert bot.activity_context == "EXPLORING"
+    assert bot.status_detail == "PORT_MENU"
+    assert bot.status_reported_at == 200.0
+
+
+def test_update_status_normalizes_detail_values(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_010"] = BotStatus(
+        bot_id="bot_010",
+        pid=910,
+        config="config/swarm_demo/bot_010.yaml",
+        state="running",
+    )
+
+    with TestClient(manager.app) as client:
+        resp = client.post(
+            "/bot/bot_010/status",
+            json={
+                "reported_at": 50.0,
+                "activity_context": "exploring",
+                "status_detail": "prompt.port_haggle",
+            },
+        )
+        assert resp.status_code == 200
+
+    bot = manager.bots["bot_010"]
+    assert bot.activity_context == "EXPLORING"
+    assert bot.status_detail == "PORT HAGGLE"
 
 
 def test_bot_events_include_structured_action_metadata(tmp_path: Path) -> None:
@@ -137,3 +200,47 @@ def test_bot_session_data_endpoint_returns_persisted_identity(tmp_path: Path) ->
     assert data["run_count"] == 1
     assert len(data["sessions"]) == 1
     assert data["sessions"][0]["stop_reason"] == "shutdown"
+
+
+def test_account_pool_endpoint_redacts_passwords_and_summarizes_identities(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    swarm_routes._identity_store = BotIdentityStore(data_dir=tmp_path / "sessions")
+    swarm_routes._account_pool_store = AccountPoolStore(
+        pool_file=tmp_path / "sessions" / "account_pool.json",
+        lock_file=tmp_path / "sessions" / "account_pool.lock",
+    )
+
+    swarm_routes._identity_store.upsert_identity(
+        bot_id="bot_pool",
+        username="pilot_pool",
+        character_password="secret_char",
+        game_password="secret_game",
+        host="localhost",
+        port=2002,
+        game_letter="T",
+        config_path="config/swarm_demo/bot_pool.yaml",
+        identity_source="pool",
+    )
+    swarm_routes._account_pool_store.reserve_account(
+        bot_id="bot_pool",
+        username="pilot_pool",
+        character_password="secret_char",
+        game_password="secret_game",
+        host="localhost",
+        port=2002,
+        game_letter="T",
+        source="pool",
+    )
+
+    with TestClient(manager.app) as client:
+        resp = client.get("/swarm/account-pool")
+        assert resp.status_code == 200
+        data = resp.json()
+
+    assert data["pool"]["accounts_total"] == 1
+    assert data["pool"]["leased"] == 1
+    assert data["identities"]["total"] >= 1
+    first = data["pool"]["accounts"][0]
+    assert first["username"] == "pilot_pool"
+    assert "character_password" not in first
+    assert "game_password" not in first
