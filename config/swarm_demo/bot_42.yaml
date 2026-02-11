@@ -3,6 +3,7 @@ connection:
   port: 2002
   game_letter: B
 trading:
+  policy: dynamic
   strategy: opportunistic
   opportunistic:
     explore_chance: 0.6

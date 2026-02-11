@@ -494,13 +494,20 @@ class ProfitablePairsStrategy(TradingStrategy):
 
     def _explore_for_ports(self, state: GameState) -> tuple[TradeAction, dict]:
         """Explore to find more ports when no pairs available."""
-        if not state.warps:
-            return TradeAction.WAIT, {}
-
+        warps = list(state.warps or [])
         current = state.sector or 0
 
+        # Fallback when parser fails to populate live warps: use persisted map data.
+        if not warps and current > 0:
+            known_warps = self.knowledge.get_warps(current)
+            if known_warps:
+                warps = list(known_warps)
+
+        if not warps:
+            return TradeAction.WAIT, {"reason": "no_warps"}
+
         # Pick an unexplored direction (skip failed warps)
-        for warp in state.warps:
+        for warp in warps:
             if (current, warp) in self._failed_warps:
                 continue
             if self.knowledge.get_warps(warp) is None:
@@ -509,7 +516,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         # All unexplored are failed; try explored warps we haven't failed on
         import random
 
-        viable = [w for w in state.warps if (current, w) not in self._failed_warps]
+        viable = [w for w in warps if (current, w) not in self._failed_warps]
         if viable:
             target = random.choice(viable)
             return TradeAction.MOVE, {
@@ -519,7 +526,7 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # All warps from this sector have failed; clear failures and retry
         self._failed_warps = {(f, t) for f, t in self._failed_warps if f != current}
-        target = random.choice(state.warps)
+        target = random.choice(warps)
         return TradeAction.MOVE, {
             "target_sector": target,
             "path": [current, target],

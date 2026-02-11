@@ -39,6 +39,7 @@ class _BotTermState(BaseModel):
     worker_ws: WebSocket | None = None
     browsers: set[WebSocket] = Field(default_factory=set)
     hijack_owner: WebSocket | None = None
+    hijack_owner_expires_at: float | None = None
     hijack_session: _HijackSession | None = None
     last_snapshot: dict[str, Any] | None = None
     events: deque[dict[str, Any]] = Field(default_factory=lambda: deque(maxlen=2000))
@@ -76,10 +77,11 @@ def _extract_prompt_id(snapshot: dict[str, Any] | None) -> str | None:
 class TermHub:
     """In-memory registry for terminal websocket connections."""
 
-    def __init__(self, manager: Any | None = None) -> None:
+    def __init__(self, manager: Any | None = None, dashboard_hijack_lease_s: int = 45) -> None:
         self._lock = asyncio.Lock()
         self._bots: dict[str, _BotTermState] = {}
         self._manager = manager
+        self._dashboard_hijack_lease_s = max(1, min(int(dashboard_hijack_lease_s), 600))
 
     @staticmethod
     def _clamp_lease(lease_s: int) -> int:
@@ -90,9 +92,16 @@ class TermHub:
         hs = st.hijack_session
         return hs is not None and hs.lease_expires_at > time.time()
 
-    @classmethod
-    def _is_hijacked(cls, st: _BotTermState) -> bool:
-        return st.hijack_owner is not None or cls._is_rest_session_active(st)
+    @staticmethod
+    def _is_dashboard_hijack_active(st: _BotTermState) -> bool:
+        if st.hijack_owner is None:
+            return False
+        if st.hijack_owner_expires_at is None:
+            return True
+        return st.hijack_owner_expires_at > time.time()
+
+    def _is_hijacked(self, st: _BotTermState) -> bool:
+        return self._is_dashboard_hijack_active(st) or self._is_rest_session_active(st)
 
     async def _get(self, bot_id: str) -> _BotTermState:
         async with self._lock:
@@ -133,29 +142,45 @@ class TermHub:
             return evt
 
     async def _cleanup_expired_hijack(self, bot_id: str) -> bool:
-        st = await self._get(bot_id)
-        hs = st.hijack_session
-        if hs is None or hs.lease_expires_at > time.time():
-            return False
-
+        now = time.time()
+        rest_expired = False
+        dashboard_expired = False
         should_resume = False
+
         async with self._lock:
-            st2 = self._bots.get(bot_id)
-            if st2 is None:
+            st = self._bots.get(bot_id)
+            if st is None:
                 return False
-            hs2 = st2.hijack_session
-            if hs2 is None or hs2.lease_expires_at > time.time():
-                return False
-            st2.hijack_session = None
-            should_resume = st2.hijack_owner is None
+
+            if st.hijack_session is not None and st.hijack_session.lease_expires_at <= now:
+                st.hijack_session = None
+                rest_expired = True
+
+            if (
+                st.hijack_owner is not None
+                and st.hijack_owner_expires_at is not None
+                and st.hijack_owner_expires_at <= now
+            ):
+                st.hijack_owner = None
+                st.hijack_owner_expires_at = None
+                dashboard_expired = True
+
+            should_resume = (rest_expired or dashboard_expired) and st.hijack_owner is None and st.hijack_session is None
+
+        if not rest_expired and not dashboard_expired:
+            return False
 
         if should_resume:
             await self._send_worker(
                 bot_id,
-                {"type": "control", "action": "resume", "owner": "lease-expired", "lease_s": 0, "ts": time.time()},
+                {"type": "control", "action": "resume", "owner": "lease-expired", "lease_s": 0, "ts": now},
             )
             self._set_manager_hijack(bot_id, enabled=False, owner=None)
-        await self._append_event(bot_id, "hijack_lease_expired")
+
+        if rest_expired:
+            await self._append_event(bot_id, "hijack_lease_expired")
+        if dashboard_expired:
+            await self._append_event(bot_id, "hijack_owner_expired")
         await self._broadcast_hijack_state(bot_id)
         return True
 
@@ -257,11 +282,16 @@ class TermHub:
     async def _broadcast_hijack_state(self, bot_id: str) -> None:
         st = await self._get(bot_id)
         dead: set[WebSocket] = set()
+        lease_expires_at = (
+            st.hijack_session.lease_expires_at
+            if self._is_rest_session_active(st) and st.hijack_session is not None
+            else st.hijack_owner_expires_at
+        )
         for ws in list(st.browsers):
             try:
-                if st.hijack_owner is ws:
+                if self._is_dashboard_hijack_active(st) and st.hijack_owner is ws:
                     owner = "me"
-                elif st.hijack_owner is not None or self._is_rest_session_active(st):
+                elif self._is_dashboard_hijack_active(st) or self._is_rest_session_active(st):
                     owner = "other"
                 else:
                     owner = None
@@ -271,11 +301,7 @@ class TermHub:
                             "type": "hijack_state",
                             "hijacked": self._is_hijacked(st),
                             "owner": owner,
-                            "lease_expires_at": (
-                                st.hijack_session.lease_expires_at
-                                if self._is_rest_session_active(st) and st.hijack_session is not None
-                                else None
-                            ),
+                            "lease_expires_at": lease_expires_at,
                         },
                         ensure_ascii=True,
                     )
@@ -303,37 +329,52 @@ class TermHub:
                     st2.worker_ws = None
             return False
 
-    async def _set_hijack_owner(self, bot_id: str, owner: WebSocket | None) -> None:
+    async def _set_hijack_owner(self, bot_id: str, owner: WebSocket | None, lease_s: int | None = None) -> None:
         async with self._lock:
             st = self._bots.get(bot_id)
             if st is None:
                 st = _BotTermState()
                 self._bots[bot_id] = st
             st.hijack_owner = owner
+            if owner is None:
+                st.hijack_owner_expires_at = None
+            else:
+                ttl = self._dashboard_hijack_lease_s if lease_s is None else max(1, min(int(lease_s), 600))
+                st.hijack_owner_expires_at = time.time() + ttl
+
+    async def _touch_hijack_owner(self, bot_id: str, lease_s: int | None = None) -> float | None:
+        async with self._lock:
+            st = self._bots.get(bot_id)
+            if st is None or st.hijack_owner is None:
+                return None
+            ttl = self._dashboard_hijack_lease_s if lease_s is None else max(1, min(int(lease_s), 600))
+            st.hijack_owner_expires_at = time.time() + ttl
+            return st.hijack_owner_expires_at
 
     async def _is_owner(self, bot_id: str, ws: WebSocket) -> bool:
         st = await self._get(bot_id)
-        return st.hijack_owner is ws
+        return self._is_dashboard_hijack_active(st) and st.hijack_owner is ws
 
     async def _owner_label_for(self, bot_id: str, ws: WebSocket) -> str | None:
         st = await self._get(bot_id)
-        if st.hijack_owner is ws:
+        if self._is_dashboard_hijack_active(st) and st.hijack_owner is ws:
             return "me"
-        if st.hijack_owner is None and not self._is_rest_session_active(st):
+        if not self._is_dashboard_hijack_active(st) and not self._is_rest_session_active(st):
             return None
         return "other"
 
     async def _hijack_state_msg_for(self, bot_id: str, ws: WebSocket) -> dict[str, Any]:
         st = await self._get(bot_id)
+        lease_expires_at = (
+            st.hijack_session.lease_expires_at
+            if self._is_rest_session_active(st) and st.hijack_session is not None
+            else st.hijack_owner_expires_at
+        )
         return {
             "type": "hijack_state",
             "hijacked": self._is_hijacked(st),
             "owner": await self._owner_label_for(bot_id, ws),
-            "lease_expires_at": (
-                st.hijack_session.lease_expires_at
-                if self._is_rest_session_active(st) and st.hijack_session is not None
-                else None
-            ),
+            "lease_expires_at": lease_expires_at,
         }
 
     async def _request_snapshot(self, bot_id: str) -> None:
@@ -653,7 +694,7 @@ class TermHub:
                         "bot_id": bot_id,
                         "can_hijack": True,
                         "hijacked": self._is_hijacked(st),
-                        "hijacked_by_me": st.hijack_owner is websocket,
+                        "hijacked_by_me": self._is_dashboard_hijack_active(st) and st.hijack_owner is websocket,
                     },
                     ensure_ascii=True,
                 )
@@ -675,13 +716,31 @@ class TermHub:
                         continue
                     mtype = msg.get("type")
                     if mtype == "snapshot_req":
+                        if await self._is_owner(bot_id, websocket):
+                            await self._touch_hijack_owner(bot_id)
                         await self._request_snapshot(bot_id)
                     elif mtype == "analyze_req":
+                        if await self._is_owner(bot_id, websocket):
+                            await self._touch_hijack_owner(bot_id)
                         await self._request_analysis(bot_id)
+                    elif mtype == "heartbeat":
+                        if await self._is_owner(bot_id, websocket):
+                            lease_expires_at = await self._touch_hijack_owner(bot_id)
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "heartbeat_ack",
+                                        "lease_expires_at": lease_expires_at,
+                                        "ts": time.time(),
+                                    },
+                                    ensure_ascii=True,
+                                )
+                            )
+                            await self._broadcast_hijack_state(bot_id)
                     elif mtype == "hijack_request":
                         st_now = await self._get(bot_id)
                         if st_now.hijack_owner is None and not self._is_rest_session_active(st_now):
-                            await self._set_hijack_owner(bot_id, websocket)
+                            await self._set_hijack_owner(bot_id, websocket, lease_s=self._dashboard_hijack_lease_s)
                             ok = await self._send_worker(
                                 bot_id,
                                 {"type": "control", "action": "pause", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
@@ -709,6 +768,7 @@ class TermHub:
                             )
                     elif mtype == "hijack_step":
                         if await self._is_owner(bot_id, websocket):
+                            await self._touch_hijack_owner(bot_id)
                             ok = await self._send_worker(
                                 bot_id,
                                 {"type": "control", "action": "step", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
@@ -742,6 +802,7 @@ class TermHub:
                             await self._append_event(bot_id, "hijack_released", {"owner": "dashboard_ws"})
                     elif mtype == "input":
                         if await self._is_owner(bot_id, websocket):
+                            await self._touch_hijack_owner(bot_id)
                             data = msg.get("data", "")
                             if data:
                                 ok = await self._send_worker(bot_id, {"type": "input", "data": data, "ts": time.time()})

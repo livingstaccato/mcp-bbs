@@ -381,6 +381,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         profit = 0
         success = True
+        turns_counted = 1
 
         # Log action to bot's action feed (if worker bot)
         import time
@@ -476,9 +477,22 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
             elif action == TradeAction.WAIT:
                 print("  No action available, exploring randomly")
-                if state.warps:
-                    target = random.choice(state.warps)
-                    await warp_to_sector(bot, target)
+                warps = list(state.warps or [])
+                if not warps and state.sector is not None:
+                    known_warps = bot.sector_knowledge.get_warps(int(state.sector))
+                    if known_warps:
+                        warps = list(known_warps)
+                if warps:
+                    target = random.choice(warps)
+                    print(f"  WAIT fallback move to sector {target}")
+                    success = await warp_to_sector(bot, target)
+                else:
+                    # No actionable movement data: avoid burning a synthetic turn.
+                    turns_counted = 0
+                    success = False
+                    print("  No warps available; attempting recovery")
+                    with contextlib.suppress(Exception):
+                        await bot.recover()
 
             elif action == TradeAction.DONE:
                 print("  Strategy complete")
@@ -501,12 +515,18 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 action=action.name, sector=state.sector, details=details, result="success" if success else "failure"
             )
 
+        # Keep turns metrics tied to real game actions. A WAIT with no available
+        # movement/recovery data is a no-op and should not advance turns.
+        if turns_counted == 0:
+            turns_used = max(0, turns_used - 1)
+            bot.turns_used = turns_used
+
         result = TradeResult(
             success=success,
             action=action,
             profit=profit,
             new_sector=bot.current_sector,
-            turns_used=1,
+            turns_used=turns_counted,
         )
 
         # Add from/to sector for failed warp tracking

@@ -247,3 +247,28 @@ def test_explore_streak_resets_on_profitable_trade() -> None:
 
     strat.record_result(TradeResult(success=True, action=TradeAction.TRADE, profit=50, turns_used=1))
     assert strat._explore_since_profit == 0
+
+
+def test_explore_for_ports_falls_back_to_known_warps_when_live_warps_missing() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    knowledge.update_sector(42, {"warps": [43, 44]})
+    state = GameState(context="sector_command", sector=42, warps=[])
+
+    action, params = strat._explore_for_ports(state)  # type: ignore[misc]
+    assert action in (TradeAction.EXPLORE, TradeAction.MOVE)
+    assert (params.get("direction") or params.get("target_sector")) in {43, 44}
+
+
+def test_explore_for_ports_waits_with_reason_when_no_warps_known() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    state = GameState(context="sector_command", sector=77, warps=[])
+    action, params = strat._explore_for_ports(state)  # type: ignore[misc]
+
+    assert action == TradeAction.WAIT
+    assert params.get("reason") == "no_warps"

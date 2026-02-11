@@ -6,6 +6,7 @@ session:
   max_turns_per_session: 0
   target_credits: 500000
 trading:
+  policy: dynamic
   strategy: ai_strategy
   ai_strategy:
     enabled: true

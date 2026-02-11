@@ -6,10 +6,41 @@
   let sortReverse = false;
   let lastData = null;
   let updateTimer = null;  // Debounce timer for table updates
+  let tablePointerActive = false;
+  let pendingTableData = null;
 
   const $ = (sel) => document.querySelector(sel);
   const dot = $("#dot");
   const connStatus = $("#conn-status");
+
+  function renderOrDeferTable(data) {
+    if (tablePointerActive) {
+      pendingTableData = data;
+      return;
+    }
+    renderBotTable(data);
+  }
+
+  function flushDeferredTableRender() {
+    if (tablePointerActive || !pendingTableData) return;
+    const data = pendingTableData;
+    pendingTableData = null;
+    renderBotTable(data);
+  }
+
+  function installTableInteractionGuards() {
+    const tbody = $("#bot-table");
+    if (!tbody) return;
+    const hold = () => { tablePointerActive = true; };
+    const release = () => {
+      tablePointerActive = false;
+      flushDeferredTableRender();
+    };
+    tbody.addEventListener("pointerdown", hold, true);
+    document.addEventListener("pointerup", release, true);
+    document.addEventListener("pointercancel", release, true);
+    document.addEventListener("dragend", release, true);
+  }
 
   // --- Toast notifications ---
   let toastTimer = null;
@@ -218,7 +249,7 @@
 	    if (updateTimer) return;
 	    updateTimer = setTimeout(() => {
 	      updateTimer = null;
-	      renderBotTable(lastData || data);
+	      renderOrDeferTable(lastData || data);
 	    }, 300);
 	  }
 
@@ -376,13 +407,13 @@
         sortKey = key;
         sortReverse = false;
       }
-      // Immediate re-render on sort (cancel debounced update)
-      if (lastData) {
-        clearTimeout(updateTimer);
-        renderBotTable(lastData);
-      }
-    });
-  });
+	      // Immediate re-render on sort (cancel debounced update)
+	      if (lastData) {
+	        clearTimeout(updateTimer);
+	        renderOrDeferTable(lastData);
+	      }
+	    });
+	  });
 
   // --- Error modal ---
   const errorModalOverlay = $("#error-modal-overlay");
@@ -804,8 +835,9 @@
     });
   }
 
-  poll();
-  connect();
+	  poll();
+	  connect();
+	  installTableInteractionGuards();
 
   // --- Terminal spy/hijack modal (xterm.js) ---
   let termWs = null;
@@ -814,6 +846,7 @@
   let hijacked = false;
   let hijackedByMe = false;
   let lastTermSnapshot = null;
+  let termHeartbeatTimer = null;
 
   const termModal = $("#term-modal");
   const termTitle = $("#term-title");
@@ -922,6 +955,12 @@
       setTermUiState();
       // Ask for a snapshot immediately
       termWs.send(JSON.stringify({ type: "snapshot_req" }));
+      if (termHeartbeatTimer) clearInterval(termHeartbeatTimer);
+      termHeartbeatTimer = setInterval(() => {
+        if (!termWs || termWs.readyState !== WebSocket.OPEN) return;
+        if (!hijackedByMe) return;
+        termWs.send(JSON.stringify({ type: "heartbeat" }));
+      }, 5000);
     };
 
     termWs.onmessage = (e) => {
@@ -961,6 +1000,8 @@
           termStatus.innerHTML = '<span class="live">&#9679; Connected</span> (watch)';
         }
         setTermUiState();
+      } else if (msg.type === "heartbeat_ack") {
+        // no-op: useful for debugging lease extension timing in devtools
       } else if (msg.type === "error") {
         termStatus.innerHTML = '<span class="bad">&#9679; Error</span> ' + esc(msg.message || "unknown");
       }
@@ -971,6 +1012,10 @@
       hijacked = false;
       hijackedByMe = false;
       setTermUiState();
+      if (termHeartbeatTimer) {
+        clearInterval(termHeartbeatTimer);
+        termHeartbeatTimer = null;
+      }
       termWs = null;
     };
 
@@ -1010,6 +1055,10 @@
     if (termWs) {
       try { termWs.close(); } catch (_) {}
       termWs = null;
+    }
+    if (termHeartbeatTimer) {
+      clearInterval(termHeartbeatTimer);
+      termHeartbeatTimer = null;
     }
     setTermUiState();
   }

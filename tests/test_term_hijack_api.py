@@ -124,3 +124,34 @@ def test_rest_hijack_lease_expiry_releases_bot() -> None:
 
         resume = _recv_until_type(worker, "control")
         assert resume["action"] == "resume"
+
+
+def test_dashboard_ws_hijack_expires_and_auto_resumes() -> None:
+    hub = TermHub(dashboard_hijack_lease_s=1)
+    app = FastAPI()
+    app.include_router(hub.create_router())
+
+    with (
+        TestClient(app) as client,
+        client.websocket_connect("/ws/worker/bot_104/term") as worker,
+        client.websocket_connect("/ws/bot/bot_104/term") as browser,
+    ):
+        _recv_until_type(worker, "snapshot_req")
+        _recv_until_type(browser, "hello")
+        _recv_until_type(browser, "hijack_state")
+
+        browser.send_text(json.dumps({"type": "hijack_request"}))
+        pause = _recv_until_type(worker, "control")
+        assert pause["action"] == "pause"
+        acquired_state = _recv_until_type(browser, "hijack_state")
+        assert acquired_state["hijacked"] is True
+
+        # Lease expires; next worker message cycle should trigger stale-owner cleanup.
+        time.sleep(1.2)
+        worker.send_text(json.dumps({"type": "term", "data": "x"}))
+
+        resume = _recv_until_type(worker, "control")
+        assert resume["action"] == "resume"
+
+        state = _recv_until_type(browser, "hijack_state")
+        assert state["hijacked"] is False
