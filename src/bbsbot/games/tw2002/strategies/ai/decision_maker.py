@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import TYPE_CHECKING
 
@@ -38,6 +39,28 @@ def truncate(s: str | None, limit: int = 50_000) -> str:
     if len(s) <= limit:
         return s
     return s[:limit] + "\n[...truncated...]"
+
+
+def _json_safe(value):
+    """Convert nested objects to JSON-safe primitives for logging."""
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list | tuple | set):
+        return [_json_safe(v) for v in value]
+
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        with contextlib.suppress(Exception):
+            return _json_safe(model_dump())
+
+    to_dict = getattr(value, "dict", None)
+    if callable(to_dict):
+        with contextlib.suppress(Exception):
+            return _json_safe(to_dict())
+
+    return str(value)
 
 
 async def make_llm_decision(
@@ -224,7 +247,7 @@ async def log_llm_decision(
             "request": trace.get("request", {}),
             "messages": messages,
             "response": response,
-            "parsed": {"action": action.name, "params": params},
+            "parsed": {"action": action.name, "params": _json_safe(params)},
             "validated": bool(validated),
             "state_hint": {
                 "sector": state.sector,
