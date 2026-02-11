@@ -37,3 +37,11 @@ def test_spawn_presets_and_pool_panel_present() -> None:
     assert 'id="pool-table"' in html
     assert "buildSpawnConfigs" in js
     assert "refreshAccountPool" in js
+
+
+def test_strategy_cpt_filters_small_samples_and_outliers() -> None:
+    js = _dashboard_js()
+    assert "MIN_TURNS_FOR_CPT" in js
+    assert "MIN_TRADES_FOR_CPT" in js
+    assert "MAX_ABS_CPT_PER_BOT" in js
+    assert "samplesSkipped" in js

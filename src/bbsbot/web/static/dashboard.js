@@ -109,6 +109,9 @@
 
   function computeAggregateMetrics(data) {
     const bots = data.bots || [];
+    const MIN_TURNS_FOR_CPT = 30;
+    const MIN_TRADES_FOR_CPT = 1;
+    const MAX_ABS_CPT_PER_BOT = 100.0;
     let accept = 0;
     let counter = 0;
     let tooHigh = 0;
@@ -138,6 +141,7 @@
       const cpt = Number(b.credits_per_turn || 0);
       const turnsExec = Number(b.turns_executed || 0);
       const creditsDelta = Number(b.credits_delta || 0);
+      const tradesExec = Number(b.trades_executed || 0);
       const sid = (b.strategy_id || b.strategy || "unknown").toString();
       const mode = (b.strategy_mode || "unknown").toString();
       const key = `${sid}(${mode})`;
@@ -146,14 +150,23 @@
       const isFresh = lastUpdate > 0 && nowS - lastUpdate <= 120;
       const bucketMap = (activeStates.has(state) && isFresh) ? activeByStrategy : historicalByStrategy;
       if (!bucketMap.has(key)) {
-        bucketMap.set(key, { sumCpt: 0, n: 0, sumDelta: 0, sumTurns: 0 });
+        bucketMap.set(key, { sumCpt: 0, n: 0, sumDelta: 0, sumTurns: 0, samplesSkipped: 0 });
       }
       const bucket = bucketMap.get(key);
-      bucket.sumCpt += cpt;
-      bucket.n += 1;
-      if (isFinite(turnsExec) && isFinite(creditsDelta) && turnsExec > 0) {
+
+      const hasSufficientTurns = isFinite(turnsExec) && turnsExec >= MIN_TURNS_FOR_CPT;
+      const hasTrades = isFinite(tradesExec) && tradesExec >= MIN_TRADES_FOR_CPT;
+      const hasValidDelta = isFinite(creditsDelta) && isFinite(turnsExec) && turnsExec > 0;
+      const perBotCpt = hasValidDelta ? (creditsDelta / turnsExec) : cpt;
+      const isOutlier = !isFinite(perBotCpt) || Math.abs(perBotCpt) > MAX_ABS_CPT_PER_BOT;
+
+      if (hasSufficientTurns && hasTrades && hasValidDelta && !isOutlier) {
+        bucket.sumCpt += perBotCpt;
+        bucket.n += 1;
         bucket.sumTurns += turnsExec;
         bucket.sumDelta += creditsDelta;
+      } else {
+        bucket.samplesSkipped += 1;
       }
     }
 
@@ -168,13 +181,14 @@
         const weighted = v.sumTurns > 0 ? v.sumDelta / v.sumTurns : NaN;
         const unweighted = v.n > 0 ? v.sumCpt / v.n : 0;
         const avg = isFinite(weighted) ? weighted : unweighted;
-        return { key: k, avg, n: v.n, turns: v.sumTurns };
+        return { key: k, avg, n: v.n, turns: v.sumTurns, samplesSkipped: v.samplesSkipped || 0 };
       })
+      .filter((x) => x.n > 0)
       .filter((x) => !(x.avg === 0 && x.key.toLowerCase().includes("(unknown)")))
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 3)
       .map((x) => ({
-        text: `${label} ${x.key}: ${x.avg.toFixed(2)} (n=${x.n})`,
+        text: `${label} ${x.key}: ${x.avg.toFixed(2)} (n=${x.n}${x.samplesSkipped ? `, skip=${x.samplesSkipped}` : ""})`,
         lowConfidence: x.n < 3 || x.turns < 200,
       }));
 
