@@ -283,3 +283,87 @@ def test_ai_strategy_find_opportunities(ai_strategy, game_state):
     opportunities = ai_strategy.find_opportunities(game_state)
     # Should delegate to fallback strategy
     assert isinstance(opportunities, list)
+
+
+def test_ai_strategy_goal_contract_failure_eval_and_enforce(ai_strategy, game_state):
+    ai_strategy._settings.goal_contract_enabled = True
+    ai_strategy._settings.goal_contract_window_turns = 5
+    ai_strategy._settings.goal_contract_min_trades = 1
+    ai_strategy._settings.goal_contract_min_profit_delta = 10
+    ai_strategy._settings.goal_contract_min_credits_delta = 10
+    ai_strategy._settings.goal_contract_fail_strategy = "opportunistic"
+    ai_strategy._settings.goal_contract_fail_policy = "conservative"
+    ai_strategy._settings.goal_contract_fail_review_turns = 3
+
+    ai_strategy._current_turn = 20
+    ai_strategy._turns_used = 20
+    ai_strategy._trades_executed = 0
+    ai_strategy._total_profit = 0
+    ai_strategy._active_managed_strategy = "profitable_pairs"
+    ai_strategy._goal_contract_baseline = {
+        "turn": 10,
+        "turns_used": 10,
+        "trades_executed": 0,
+        "total_profit": 0,
+        "credits": 1000,
+        "goal_id": "profit",
+        "strategy": "profitable_pairs",
+        "reason": "test",
+    }
+    game_state.credits = 1000
+
+    evaluation = ai_strategy.evaluate_goal_contract(game_state)
+    assert evaluation is not None
+    assert evaluation["failed"] is True
+    assert "trades<1" in evaluation["reasons"]
+
+    forced_strategy, forced_policy, review_turns = ai_strategy.enforce_goal_contract_failure(evaluation)
+    assert forced_strategy == "opportunistic"
+    assert forced_policy == "conservative"
+    assert review_turns == 3
+    assert ai_strategy.active_managed_strategy == "opportunistic"
+    assert ai_strategy.policy == "conservative"
+
+
+@pytest.mark.asyncio
+async def test_ai_strategy_orchestration_contract_forces_without_llm(ai_strategy, game_state):
+    ai_strategy._settings.goal_contract_enabled = True
+    ai_strategy._settings.goal_contract_window_turns = 5
+    ai_strategy._settings.goal_contract_min_trades = 1
+    ai_strategy._settings.goal_contract_min_profit_delta = 10
+    ai_strategy._settings.goal_contract_min_credits_delta = 10
+    ai_strategy._settings.goal_contract_fail_strategy = "opportunistic"
+    ai_strategy._settings.goal_contract_fail_policy = "conservative"
+    ai_strategy._settings.goal_contract_fail_review_turns = 4
+
+    ai_strategy._current_turn = 20
+    ai_strategy._turns_used = 20
+    ai_strategy._trades_executed = 0
+    ai_strategy._total_profit = 0
+    ai_strategy._goal_contract_baseline = {
+        "turn": 10,
+        "turns_used": 10,
+        "trades_executed": 0,
+        "total_profit": 0,
+        "credits": 1000,
+        "goal_id": "profit",
+        "strategy": "profitable_pairs",
+        "reason": "test",
+    }
+    game_state.credits = 1000
+
+    managed = MagicMock()
+    managed.get_next_action.return_value = (TradeAction.MOVE, {"target_sector": 2, "path": [1, 2]})
+    managed.set_policy.return_value = None
+
+    with (
+        patch.object(ai_strategy.llm_manager, "chat", new_callable=AsyncMock) as llm_chat,
+        patch.object(ai_strategy, "_get_managed_strategy", return_value=managed),
+    ):
+        action, params = await ai_strategy._get_next_action_async(game_state)
+
+    assert action == TradeAction.MOVE
+    assert params["target_sector"] == 2
+    assert params["__meta"]["decision_source"] == "goal_contract"
+    assert params["__meta"]["forced_contract"] is True
+    assert llm_chat.await_count == 0

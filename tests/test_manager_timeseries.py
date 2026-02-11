@@ -33,6 +33,9 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         credits_per_turn=7.14,
         strategy_id="profitable_pairs",
         strategy_mode="balanced",
+        llm_wakeups=3,
+        autopilot_turns=12,
+        goal_contract_failures=1,
     )
     manager.bots["bot_001"] = BotStatus(
         bot_id="bot_001",
@@ -51,6 +54,9 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         credits_per_turn=-0.35,
         strategy_id="opportunistic",
         strategy_mode="conservative",
+        llm_wakeups=1,
+        autopilot_turns=20,
+        goal_contract_failures=0,
     )
 
     manager._write_timeseries_sample(reason="test")
@@ -67,6 +73,9 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert row["profitable_bots"] == 1
     assert row["no_trade_120p"] == 1
     assert row["haggle_high_total"] == 3
+    assert row["llm_wakeups_total"] == 4
+    assert row["autopilot_turns_total"] == 32
+    assert row["goal_contract_failures_total"] == 1
     overall = row["trade_outcomes_overall"]
     assert overall["trades_executed"] == 6
     assert overall["haggle_accept"] == 4
@@ -116,6 +125,8 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
         credits_per_turn=20.0,
         haggle_accept=2,
         haggle_counter=1,
+        llm_wakeups=2,
+        autopilot_turns=8,
     )
     manager._write_timeseries_sample(reason="tick_a")
 
@@ -126,10 +137,13 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     manager.bots["bot_000"].credits_per_turn = 24.0
     manager.bots["bot_000"].haggle_accept = 5
     manager.bots["bot_000"].haggle_counter = 2
+    manager.bots["bot_000"].llm_wakeups = 5
+    manager.bots["bot_000"].autopilot_turns = 20
     manager._write_timeseries_sample(reason="tick_b")
 
     summary = manager.get_timeseries_summary(window_minutes=120)
     assert summary["rows"] == 2
     assert summary["delta"]["turns"] >= 15
     assert summary["delta"]["credits"] >= 400
+    assert summary["delta"]["llm_wakeups"] >= 3
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_executed"]

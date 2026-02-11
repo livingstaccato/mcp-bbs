@@ -10,6 +10,21 @@ trading:
   strategy: ai_strategy
   ai_strategy:
     enabled: true
+    supervisor_policy_locked: true
+    allow_llm_policy_override: true
+    think_interval_turns: 10
+    post_change_review_turns: 4
+    no_trade_trigger_turns: 12
+    loss_trigger_turns: 10
+    stagnation_trigger_turns: 10
+    goal_contract_enabled: true
+    goal_contract_window_turns: 18
+    goal_contract_min_trades: 1
+    goal_contract_min_profit_delta: 25
+    goal_contract_min_credits_delta: 25
+    goal_contract_fail_strategy: opportunistic
+    goal_contract_fail_policy: conservative
+    goal_contract_fail_review_turns: 4
     feedback_enabled: true
     feedback_interval_turns: 10
 llm:
@@ -20,4 +35,7 @@ llm:
     timeout_seconds: 30
 banking:
   enabled: true
-  min_credits_to_bank: 25000
+  deposit_threshold: 25000
+  keep_on_hand: 5000
+upgrades:
+  enabled: false

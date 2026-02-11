@@ -15,6 +15,31 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _with_meta(
+    params: dict | None,
+    *,
+    decision_source: str,
+    selected_strategy: str,
+    wake_reason: str,
+    review_after_turns: int | None = None,
+    forced_contract: bool = False,
+) -> dict:
+    """Attach orchestration metadata for downstream telemetry/logging."""
+    out = dict(params or {})
+    meta = dict(out.get("__meta") or {})
+    meta.update(
+        {
+            "decision_source": decision_source,
+            "selected_strategy": selected_strategy,
+            "wake_reason": wake_reason,
+            "review_after_turns": int(review_after_turns) if review_after_turns is not None else None,
+            "forced_contract": bool(forced_contract),
+        }
+    )
+    out["__meta"] = meta
+    return out
+
+
 async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[TradeAction, dict]:
     """Orchestrate the main decision-making flow.
 
@@ -40,7 +65,14 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
         except Exception as e:
             logger.error(f"ollama_not_available: {e}")
             print(f"  [AI] Ollama not available: {e}, using fallback strategy")
-            return strategy.run_fallback_action(state, reason="ollama_not_available")
+            action, params = strategy.run_fallback_action(state, reason="ollama_not_available")
+            return action, _with_meta(
+                params,
+                decision_source="fallback",
+                selected_strategy="opportunistic",
+                wake_reason="ollama_not_available",
+                review_after_turns=getattr(strategy, "_last_review_after_turns", None),
+            )
 
     # Re-evaluate goal if needed
     await goals.maybe_reevaluate_goal(strategy, state)
@@ -95,6 +127,48 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
     ):
         await feedback_loop.periodic_feedback(strategy, strategy.llm_manager, state)
 
+    # Hard goal contract enforcement before regular wake/autopilot logic.
+    contract = strategy.evaluate_goal_contract(state)
+    if contract and contract.get("failed"):
+        forced_strategy, forced_policy, review_turns = strategy.enforce_goal_contract_failure(contract)
+        delegated_action, delegated_params = strategy.run_managed_strategy(forced_strategy, state, update_active=True)
+        strategy._is_thinking = False
+        strategy.note_autopilot_turn("goal_contract_failed")
+        logger.warning(
+            "ai_goal_contract_forced",
+            strategy=forced_strategy,
+            policy=forced_policy,
+            reasons=contract.get("reasons"),
+            window_turns=contract.get("window_turns"),
+            trades_delta=contract.get("trades_delta"),
+            credits_delta=contract.get("credits_delta"),
+            profit_delta=contract.get("profit_delta"),
+        )
+        strategy._record_event(
+            "decision",
+            {
+                "turn": strategy._current_turn,
+                "source": "goal_contract",
+                "selected_strategy": forced_strategy,
+                "policy": forced_policy,
+                "action": delegated_action.name,
+                "params": delegated_params,
+                "wake_reason": "goal_contract_failed",
+                "review_after_turns": review_turns,
+                "contract": contract,
+                "sector": state.sector,
+                "credits": state.credits,
+            },
+        )
+        return delegated_action, _with_meta(
+            delegated_params,
+            decision_source="goal_contract",
+            selected_strategy=forced_strategy,
+            wake_reason="goal_contract_failed",
+            review_after_turns=review_turns,
+            forced_contract=True,
+        )
+
     # Graduated fallback: scale cooldown with consecutive failures
     if strategy.consecutive_failures > 0:
         if strategy._current_turn < strategy.fallback_until_turn:
@@ -102,7 +176,14 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 f"ai_strategy_fallback_active: turn={strategy._current_turn}, "
                 f"until={strategy.fallback_until_turn}, failures={strategy.consecutive_failures}"
             )
-            return strategy.run_fallback_action(state, reason="failure_cooldown")
+            action, params = strategy.run_fallback_action(state, reason="failure_cooldown")
+            return action, _with_meta(
+                params,
+                decision_source="fallback",
+                selected_strategy="opportunistic",
+                wake_reason="failure_cooldown",
+                review_after_turns=getattr(strategy, "_last_review_after_turns", None),
+            )
         elif strategy.consecutive_failures >= strategy._settings.fallback_threshold:
             # Cooldown expired, try LLM again
             logger.info("ai_strategy_fallback_cooldown_expired")
@@ -130,6 +211,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
             f"next review turn {strategy._next_llm_turn}"
         )
         strategy._is_thinking = False
+        strategy.note_autopilot_turn(wake_reason)
         logger.debug(
             "ai_supervisor_autopilot",
             selected_strategy=selected_strategy,
@@ -146,14 +228,22 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 "action": delegated_action.name,
                 "params": delegated_params,
                 "wake_reason": wake_reason,
+                "review_after_turns": int(getattr(strategy, "_last_review_after_turns", 0) or 0),
                 "sector": state.sector,
                 "credits": state.credits,
             },
         )
-        return delegated_action, delegated_params
+        return delegated_action, _with_meta(
+            delegated_params,
+            decision_source="supervisor_autopilot",
+            selected_strategy=selected_strategy,
+            wake_reason=wake_reason,
+            review_after_turns=getattr(strategy, "_last_review_after_turns", None),
+        )
 
     # Try LLM decision
     try:
+        strategy.note_llm_wakeup(wake_reason)
         action, params, trace = await decision_maker.make_llm_decision(
             strategy=strategy,
             llm_manager=strategy.llm_manager,
@@ -179,6 +269,13 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
             selected_strategy = strategy.resolve_requested_strategy(params)
             if selected_strategy == "ai_direct":
                 selected_strategy = strategy.active_managed_strategy
+
+            requested_policy = params.get("policy")
+            if (
+                requested_policy in ("conservative", "balanced", "aggressive")
+                and bool(getattr(strategy._settings, "allow_llm_policy_override", True))
+            ):
+                strategy.set_policy(str(requested_policy))
 
             # Loss-recovery override: if AI is bleeding, force a proven strategy.
             stats = strategy.stats or {}
@@ -224,6 +321,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 if selected_strategy != previous_strategy and requested_review is None:
                     requested_review = int(getattr(strategy._settings, "post_change_review_turns", 4) or 4)
                 strategy.schedule_llm_review(requested_review, reason=f"llm:{wake_reason}")
+                review_turns = int(getattr(strategy, "_last_review_after_turns", 0) or 0)
                 strategy._recent_actions.append(f"{selected_strategy}:{delegated_action.name}")
                 if len(strategy._recent_actions) > strategy._stuck_threshold + 2:
                     strategy._recent_actions = strategy._recent_actions[-(strategy._stuck_threshold + 2) :]
@@ -241,22 +339,32 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                         "selected_strategy": selected_strategy,
                         "action": delegated_action.name,
                         "params": delegated_params,
+                        "wake_reason": wake_reason,
+                        "review_after_turns": review_turns,
                         "sector": state.sector,
                         "credits": state.credits,
                     },
+                )
+                delegated_with_meta = _with_meta(
+                    delegated_params,
+                    decision_source="llm_managed",
+                    selected_strategy=selected_strategy,
+                    wake_reason=wake_reason,
+                    review_after_turns=review_turns,
                 )
                 await decision_maker.log_llm_decision(
                     strategy=strategy,
                     state=state,
                     trace=trace,
                     action=delegated_action,
-                    params=delegated_params,
+                    params=delegated_with_meta,
                     validated=True,
                 )
-                return delegated_action, delegated_params
+                return delegated_action, delegated_with_meta
 
             strategy._last_action_strategy = "ai_direct"
             strategy.schedule_llm_review(params.get("review_after_turns"), reason=f"llm:{wake_reason}")
+            review_turns = int(getattr(strategy, "_last_review_after_turns", 0) or 0)
             logger.info(f"ai_strategy_decision: action={action.name}, params={params}")
             # Record event for feedback
             strategy._record_event(
@@ -265,19 +373,28 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                     "turn": strategy._current_turn,
                     "action": action.name,
                     "params": params,
+                    "wake_reason": wake_reason,
+                    "review_after_turns": review_turns,
                     "sector": state.sector,
                     "credits": state.credits,
                 },
+            )
+            params_with_meta = _with_meta(
+                params,
+                decision_source="llm_direct",
+                selected_strategy="ai_direct",
+                wake_reason=wake_reason,
+                review_after_turns=review_turns,
             )
             await decision_maker.log_llm_decision(
                 strategy=strategy,
                 state=state,
                 trace=trace,
                 action=action,
-                params=params,
+                params=params_with_meta,
                 validated=True,
             )
-            return action, params
+            return action, params_with_meta
         else:
             await decision_maker.log_llm_decision(
                 strategy=strategy,
@@ -308,4 +425,11 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 strategy.fallback_until_turn = strategy._current_turn + duration
                 logger.warning(f"ai_strategy_long_fallback: until_turn={strategy.fallback_until_turn}")
 
-        return strategy.run_fallback_action(state, reason=f"exception:{type(e).__name__}")
+        action, params = strategy.run_fallback_action(state, reason=f"exception:{type(e).__name__}")
+        return action, _with_meta(
+            params,
+            decision_source="fallback",
+            selected_strategy="opportunistic",
+            wake_reason=f"exception:{type(e).__name__}",
+            review_after_turns=getattr(strategy, "_last_review_after_turns", None),
+        )

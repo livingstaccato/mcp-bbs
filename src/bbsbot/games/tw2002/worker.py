@@ -536,6 +536,18 @@ class WorkerBot(TradingBot):
                 "credits_delta": int(credits_delta),
                 "credits_per_turn": float(credits_per_turn),
             }
+            try:
+                s_stats = self.strategy.stats if self.strategy else {}
+            except Exception:
+                s_stats = {}
+            status_data["llm_wakeups"] = int(s_stats.get("llm_wakeups", 0) or 0)
+            status_data["autopilot_turns"] = int(s_stats.get("autopilot_turns", 0) or 0)
+            status_data["goal_contract_failures"] = int(s_stats.get("goal_contract_failures", 0) or 0)
+            status_data["llm_wakeups_per_100_turns"] = (
+                (float(status_data["llm_wakeups"]) * 100.0 / float(self.turns_used))
+                if self.turns_used > 0
+                else 0.0
+            )
 
             # Update "last activity" memory after we've computed the final Activity value.
             # Do not record pause screens, since they are transient overlays.
@@ -663,7 +675,26 @@ class WorkerBot(TradingBot):
             with contextlib.suppress(asyncio.CancelledError):
                 await self._report_task
 
-    def log_action(self, action: str, sector: int, details: str | None = None, result: str = "pending") -> None:
+    def log_action(
+        self,
+        action: str,
+        sector: int,
+        details: str | None = None,
+        result: str = "pending",
+        *,
+        why: str | None = None,
+        strategy_id: str | None = None,
+        strategy_mode: str | None = None,
+        strategy_intent: str | None = None,
+        wake_reason: str | None = None,
+        review_after_turns: int | None = None,
+        decision_source: str | None = None,
+        credits_before: int | None = None,
+        credits_after: int | None = None,
+        turns_before: int | None = None,
+        turns_after: int | None = None,
+        result_delta: int | None = None,
+    ) -> None:
         """Log a bot action for the action feed."""
         import time
 
@@ -673,6 +704,18 @@ class WorkerBot(TradingBot):
             "sector": sector,
             "details": details,
             "result": result,
+            "why": why,
+            "strategy_id": strategy_id,
+            "strategy_mode": strategy_mode,
+            "strategy_intent": strategy_intent,
+            "wake_reason": wake_reason,
+            "review_after_turns": review_after_turns,
+            "decision_source": decision_source,
+            "credits_before": credits_before,
+            "credits_after": credits_after,
+            "turns_before": turns_before,
+            "turns_after": turns_after,
+            "result_delta": result_delta,
         }
         self.recent_actions.append(action_entry)
         # Keep only last 10 actions

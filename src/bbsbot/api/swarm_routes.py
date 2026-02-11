@@ -244,6 +244,14 @@ async def update_status(bot_id: str, update: dict):
         bot.credits_delta = int(update["credits_delta"])
     if "credits_per_turn" in update:
         bot.credits_per_turn = float(update["credits_per_turn"])
+    if "llm_wakeups" in update:
+        bot.llm_wakeups = int(update["llm_wakeups"])
+    if "autopilot_turns" in update:
+        bot.autopilot_turns = int(update["autopilot_turns"])
+    if "goal_contract_failures" in update:
+        bot.goal_contract_failures = int(update["goal_contract_failures"])
+    if "llm_wakeups_per_100_turns" in update:
+        bot.llm_wakeups_per_100_turns = float(update["llm_wakeups_per_100_turns"])
     import time
 
     bot.last_update_time = time.time()
@@ -320,10 +328,19 @@ async def get_bot_events(bot_id: str):
                     "sector": action.get("sector"),
                     "result": action.get("result"),
                     "details": action.get("details"),
+                    "why": action.get("why"),
+                    "wake_reason": action.get("wake_reason"),
+                    "review_after_turns": action.get("review_after_turns"),
+                    "decision_source": action.get("decision_source"),
+                    "credits_before": action.get("credits_before"),
+                    "credits_after": action.get("credits_after"),
+                    "turns_before": action.get("turns_before"),
+                    "turns_after": action.get("turns_after"),
+                    "result_delta": action.get("result_delta"),
                     "strategy": bot.strategy,
-                    "strategy_id": bot.strategy_id,
-                    "strategy_mode": bot.strategy_mode,
-                    "strategy_intent": bot.strategy_intent,
+                    "strategy_id": action.get("strategy_id") or bot.strategy_id,
+                    "strategy_mode": action.get("strategy_mode") or bot.strategy_mode,
+                    "strategy_intent": action.get("strategy_intent") or bot.strategy_intent,
                     "credits": bot.credits,
                     "turns_executed": bot.turns_executed,
                 }
@@ -341,6 +358,9 @@ async def get_bot_events(bot_id: str):
                 "strategy_id": bot.strategy_id,
                 "strategy_mode": bot.strategy_mode,
                 "strategy_intent": bot.strategy_intent,
+                "llm_wakeups": bot.llm_wakeups,
+                "autopilot_turns": bot.autopilot_turns,
+                "goal_contract_failures": bot.goal_contract_failures,
                 "sector": bot.sector,
                 "credits": bot.credits,
                 "turns_executed": bot.turns_executed,
@@ -363,6 +383,10 @@ async def get_bot_events(bot_id: str):
                 "strategy_id": bot.strategy_id,
                 "strategy_mode": bot.strategy_mode,
                 "strategy_intent": bot.strategy_intent,
+                "llm_wakeups": bot.llm_wakeups,
+                "autopilot_turns": bot.autopilot_turns,
+                "goal_contract_failures": bot.goal_contract_failures,
+                "llm_wakeups_per_100_turns": bot.llm_wakeups_per_100_turns,
             }
         )
 

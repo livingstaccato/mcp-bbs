@@ -409,6 +409,14 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 return "aggressive"
             return "balanced"
 
+        try:
+            ai_policy_locked = bool(
+                getattr(strategy, "name", "") == "ai_strategy"
+                and bool(getattr(config.trading.ai_strategy, "supervisor_policy_locked", True))
+            )
+        except Exception:
+            ai_policy_locked = False
+
         # Anti-waste guardrail: if we have burned many turns with very few trades,
         # force a profit-first strategy/mode to avoid long explore-only runs.
         guard_turns = int(getattr(config.trading, "no_trade_guard_turns", 60))
@@ -442,6 +450,9 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             effective_policy = guard_mode
             with contextlib.suppress(Exception):
                 bot.strategy_intent = f"RECOVERY:FORCE_{guard_strategy.upper()}"
+        elif ai_policy_locked:
+            # End-state AI behavior: policy is controlled by AI supervisor decisions.
+            effective_policy = str(getattr(strategy, "policy", None) or "balanced")
         else:
             effective_policy = _compute_policy(getattr(state, "credits", None))
 
@@ -539,6 +550,30 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         success = True
         turns_counted = 1
 
+        # Decision metadata emitted by AI orchestration (or derived from strategy state).
+        decision_meta = params.get("__meta") if isinstance(params, dict) else None
+        if not isinstance(decision_meta, dict):
+            decision_meta = {}
+        decision_source = str(decision_meta.get("decision_source") or "")
+        wake_reason = str(
+            decision_meta.get("wake_reason")
+            or getattr(strategy, "_last_wake_reason", "")
+            or ""
+        )
+        review_after_turns = decision_meta.get("review_after_turns")
+        if review_after_turns is None:
+            review_after_turns = getattr(strategy, "_last_review_after_turns", None)
+        selected_strategy_meta = str(
+            decision_meta.get("selected_strategy")
+            or getattr(strategy, "active_managed_strategy", "")
+            or getattr(strategy, "name", "")
+            or ""
+        )
+
+        credits_before = int(getattr(state, "credits", 0) or 0)
+        turns_before = int(turns_used)
+        result_delta = 0
+
         # Log action to bot's action feed (if worker bot)
         import time
 
@@ -552,6 +587,15 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     sector=state.sector,
                     details=ai_reasoning[:200],
                     result="pending",
+                    why=ai_reasoning[:200],
+                    strategy_id=selected_strategy_meta or None,
+                    strategy_mode=effective_policy,
+                    strategy_intent=intent,
+                    wake_reason=wake_reason or None,
+                    review_after_turns=review_after_turns,
+                    decision_source=decision_source or None,
+                    credits_before=credits_before,
+                    turns_before=turns_before,
                 )
                 # Set activity context with AI reasoning for dashboard
                 bot.ai_activity = f"AI: {action.name} ({ai_reasoning[:80]})"
@@ -584,6 +628,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     if profit != 0:
                         char_state.record_trade(profit)
                         print(f"  Result: {profit:+,} credits")
+                        result_delta = int(profit)
                     else:
                         print("  No trade executed")
                         success = False
@@ -593,6 +638,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     if profit != 0:
                         char_state.record_trade(profit)
                         print(f"  Result: {profit:+,} credits")
+                        result_delta = int(profit)
                     else:
                         print("  No trade executed")
                         success = False
@@ -667,8 +713,28 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 target = params.get("target_sector") or params.get("direction")
                 details = str(target)
 
+            credits_after = int(getattr(bot, "current_credits", credits_before) or credits_before)
+            if credits_after <= 0 and credits_before > 0 and result_delta != 0:
+                credits_after = credits_before + int(result_delta)
+            turns_after = int(turns_used + max(0, turns_counted))
+
             bot.log_action(
-                action=action.name, sector=state.sector, details=details, result="success" if success else "failure"
+                action=action.name,
+                sector=state.sector,
+                details=details,
+                result="success" if success else "failure",
+                why=ai_reasoning or intent,
+                strategy_id=selected_strategy_meta or None,
+                strategy_mode=effective_policy,
+                strategy_intent=intent,
+                wake_reason=wake_reason or None,
+                review_after_turns=review_after_turns,
+                decision_source=decision_source or None,
+                credits_before=credits_before,
+                credits_after=credits_after,
+                turns_before=turns_before,
+                turns_after=turns_after,
+                result_delta=int(result_delta),
             )
 
         # Keep turns metrics tied to real game actions. A WAIT with no available

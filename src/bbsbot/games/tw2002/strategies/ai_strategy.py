@@ -82,6 +82,10 @@ class AIStrategy(TradingStrategy):
         self._next_llm_turn = 1  # Bootstrap: allow an immediate first decision
         self._last_llm_turn = 0
         self._last_profitable_turn = 0
+        self._last_wake_reason: str = "bootstrap"
+        self._last_review_after_turns: int = int(getattr(self._settings, "think_interval_turns", 8) or 8)
+        self._llm_wakeups: int = 0
+        self._autopilot_turns: int = 0
 
         # Stuck detection: track recent action names
         self._recent_actions: list[str] = []
@@ -113,6 +117,9 @@ class AIStrategy(TradingStrategy):
         self._goal_phases: list[GoalPhase] = []  # Will hold GoalPhase instances
         self._current_phase: GoalPhase | None = None  # Current active phase
         self._max_turns = config.session.max_turns_per_session
+        self._goal_contract_baseline: dict[str, int | str | None] = {}
+        self._goal_contract_failures: int = 0
+        self._last_goal_contract_result: dict | None = None
 
         # Start initial goal phase
         # If "auto", start with "profit" as default until first evaluation
@@ -136,11 +143,23 @@ class AIStrategy(TradingStrategy):
             config=config,
             llm_manager=self.llm_manager,
         )
+        self._reset_goal_contract_baseline(state=None, reason="init")
 
     @property
     def name(self) -> str:
         """Strategy name."""
         return "ai_strategy"
+
+    @property
+    def stats(self) -> dict:
+        """Get strategy stats including supervisor telemetry."""
+        out = dict(super().stats)
+        out["llm_wakeups"] = int(self._llm_wakeups)
+        out["autopilot_turns"] = int(self._autopilot_turns)
+        out["goal_contract_failures"] = int(self._goal_contract_failures)
+        out["last_wake_reason"] = str(self._last_wake_reason)
+        out["last_review_after_turns"] = int(self._last_review_after_turns)
+        return out
 
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
         """Determine next action using LLM or fallback.
@@ -334,6 +353,7 @@ class AIStrategy(TradingStrategy):
     def schedule_llm_review(self, turns: int | None = None, *, reason: str = "scheduled") -> None:
         """Schedule the next LLM review turn."""
         review_turns = self._coerce_review_turns(turns)
+        self._last_review_after_turns = int(review_turns)
         self._last_llm_turn = self._current_turn
         self._next_llm_turn = self._current_turn + review_turns
         logger.debug(
@@ -343,6 +363,118 @@ class AIStrategy(TradingStrategy):
             review_in=review_turns,
             next_llm_turn=self._next_llm_turn,
         )
+
+    def note_llm_wakeup(self, reason: str) -> None:
+        """Track that the LLM was explicitly invoked this turn."""
+        self._llm_wakeups += 1
+        self._last_wake_reason = str(reason)
+
+    def note_autopilot_turn(self, reason: str) -> None:
+        """Track one supervisor autopilot turn."""
+        self._autopilot_turns += 1
+        self._last_wake_reason = str(reason)
+
+    def _reset_goal_contract_baseline(self, state: GameState | None, *, reason: str) -> None:
+        """Reset hard goal-contract baseline to current progress counters."""
+        stats = super().stats
+        credits_now = None
+        try:
+            credits_now = int(getattr(state, "credits", None)) if state and state.credits is not None else None
+        except Exception:
+            credits_now = None
+        self._goal_contract_baseline = {
+            "turn": int(self._current_turn),
+            "turns_used": int(stats.get("turns_used", 0) or 0),
+            "trades_executed": int(stats.get("trades_executed", 0) or 0),
+            "total_profit": int(stats.get("total_profit", 0) or 0),
+            "credits": credits_now,
+            "goal_id": str(self._current_goal_id or "profit"),
+            "strategy": str(self._active_managed_strategy or "profitable_pairs"),
+            "reason": reason,
+        }
+
+    def evaluate_goal_contract(self, state: GameState) -> dict | None:
+        """Evaluate hard goal contract and return result when a window closes."""
+        if not bool(getattr(self._settings, "goal_contract_enabled", True)):
+            return None
+
+        window_turns = int(getattr(self._settings, "goal_contract_window_turns", 20) or 20)
+        if window_turns <= 0:
+            return None
+
+        baseline = self._goal_contract_baseline or {}
+        base_turns_used = int(baseline.get("turns_used") or 0)
+        current_stats = super().stats
+        turns_used_now = int(current_stats.get("turns_used", 0) or 0)
+        turns_delta = max(0, turns_used_now - base_turns_used)
+        if turns_delta < window_turns:
+            return None
+
+        trades_delta = int(current_stats.get("trades_executed", 0) or 0) - int(baseline.get("trades_executed") or 0)
+        profit_delta = int(current_stats.get("total_profit", 0) or 0) - int(baseline.get("total_profit") or 0)
+
+        credits_delta = 0
+        try:
+            base_credits = baseline.get("credits")
+            if base_credits is not None and state.credits is not None:
+                credits_delta = int(state.credits) - int(base_credits)
+            else:
+                credits_delta = int(profit_delta)
+        except Exception:
+            credits_delta = int(profit_delta)
+
+        min_trades = int(getattr(self._settings, "goal_contract_min_trades", 1) or 1)
+        min_profit = int(getattr(self._settings, "goal_contract_min_profit_delta", 25) or 25)
+        min_credits = int(getattr(self._settings, "goal_contract_min_credits_delta", 25) or 25)
+
+        reasons: list[str] = []
+        if trades_delta < min_trades:
+            reasons.append(f"trades<{min_trades}")
+        if profit_delta < min_profit:
+            reasons.append(f"profit_delta<{min_profit}")
+        if credits_delta < min_credits:
+            reasons.append(f"credits_delta<{min_credits}")
+
+        failed = bool(reasons)
+        if failed:
+            self._goal_contract_failures += 1
+        else:
+            self._goal_contract_failures = 0
+
+        result = {
+            "failed": failed,
+            "reasons": reasons,
+            "window_turns": turns_delta,
+            "trades_delta": int(trades_delta),
+            "profit_delta": int(profit_delta),
+            "credits_delta": int(credits_delta),
+            "goal_id": str(self._current_goal_id),
+            "strategy": str(self._active_managed_strategy),
+            "contract_failures": int(self._goal_contract_failures),
+            "turn": int(self._current_turn),
+        }
+        self._last_goal_contract_result = result
+        self._record_event("goal_contract", dict(result))
+        self._reset_goal_contract_baseline(state=state, reason="contract_window_closed")
+        return result
+
+    def enforce_goal_contract_failure(self, evaluation: dict) -> tuple[str, str, int]:
+        """Apply forced recovery strategy/policy on contract failure."""
+        forced_strategy = str(
+            self.normalize_strategy_name(getattr(self._settings, "goal_contract_fail_strategy", "opportunistic"))
+            or "opportunistic"
+        )
+        forced_policy = str(getattr(self._settings, "goal_contract_fail_policy", "conservative") or "conservative")
+        if forced_policy in ("conservative", "balanced", "aggressive"):
+            self.set_policy(forced_policy)
+        self._active_managed_strategy = forced_strategy
+        review_turns = int(getattr(self._settings, "goal_contract_fail_review_turns", 4) or 4)
+        self.schedule_llm_review(review_turns, reason="goal_contract_failed")
+        self._last_reasoning = (
+            f"GOAL CONTRACT FAILED ({','.join(evaluation.get('reasons', []))}); "
+            f"forcing {forced_strategy}({forced_policy}) and rechecking in {review_turns} turns"
+        )
+        return forced_strategy, forced_policy, review_turns
 
     def should_wake_llm(self, state: GameState, *, stuck_action: str | None = None) -> tuple[bool, str]:
         """Decide whether the LLM should run this turn or stay on autopilot."""

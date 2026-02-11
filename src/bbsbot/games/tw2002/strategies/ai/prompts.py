@@ -55,6 +55,7 @@ Parameter formats:
 
 # Optional supervisor field:
 # - review_after_turns: integer number of turns before the next LLM review.
+# - policy: "conservative" | "balanced" | "aggressive" for delegated strategy behavior.
 
 
 class PromptBuilder:

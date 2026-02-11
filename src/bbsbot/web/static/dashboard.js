@@ -710,7 +710,15 @@
   }
 
   function buildEventWhy(event) {
-    if (event.type === "action") return event.details || "";
+    if (event.type === "action") {
+      const parts = [];
+      if (event.why) parts.push(event.why);
+      else if (event.details) parts.push(event.details);
+      if (event.wake_reason) parts.push("wake=" + event.wake_reason);
+      if (event.review_after_turns != null) parts.push("review=" + String(event.review_after_turns));
+      if (event.decision_source) parts.push("src=" + event.decision_source);
+      return parts.join(" | ");
+    }
     if (event.type === "error") return event.error_message || "";
     if (event.type === "status_update") {
       if (event.strategy_intent) return event.strategy_intent;
@@ -745,6 +753,9 @@
           ? formatCredits(Number(event.credits))
           : "-";
         const turns = event.turns_executed != null ? String(event.turns_executed) : "-";
+        const resultDelta = (event.result_delta != null && Number(event.result_delta) !== 0)
+          ? (Number(event.result_delta) > 0 ? ` Δ+${formatCredits(Number(event.result_delta))}` : ` Δ${formatCredits(Number(event.result_delta))}`)
+          : "";
         const resultRaw = String(event.result || (event.type === "error" ? "failure" : "")).toLowerCase();
         const resultText = resultRaw || "-";
         const resultCls =
@@ -761,7 +772,7 @@
           <td class="activity-col-sector">${esc(sector)}</td>
           <td class="activity-col-credits">${esc(credits)}</td>
           <td class="activity-col-turns">${esc(turns)}</td>
-          <td class="activity-col-result ${resultCls}">${esc(resultText)}</td>
+          <td class="activity-col-result ${resultCls}">${esc(resultText + resultDelta)}</td>
         </tr>`;
       })
       .join("");

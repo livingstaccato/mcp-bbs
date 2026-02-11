@@ -236,12 +236,27 @@ class AIStrategyConfig(BaseModel):
     min_review_turns: int = 2
     max_review_turns: int = 40
     urgent_wakeup_min_spacing_turns: int = 4  # Min turns between urgent overrides
+    # When true, risk policy is controlled by AI supervisor decisions and will
+    # not be overwritten by generic dynamic policy in the main trading loop.
+    supervisor_policy_locked: bool = True
+    # Allow LLM to set conservative|balanced|aggressive for delegated strategies.
+    allow_llm_policy_override: bool = True
 
     # Urgent wake-up triggers (override cadence)
     no_trade_trigger_turns: int = 18
     loss_trigger_turns: int = 12
     loss_trigger_profit_per_turn: float = -1.0
     stagnation_trigger_turns: int = 12
+
+    # Hard goal contract: enforce minimum progress windows.
+    goal_contract_enabled: bool = True
+    goal_contract_window_turns: int = 20
+    goal_contract_min_trades: int = 1
+    goal_contract_min_profit_delta: int = 25
+    goal_contract_min_credits_delta: int = 25
+    goal_contract_fail_strategy: Literal["profitable_pairs", "opportunistic", "twerk_optimized"] = "opportunistic"
+    goal_contract_fail_policy: Literal["conservative", "balanced", "aggressive"] = "conservative"
+    goal_contract_fail_review_turns: int = 4
 
     # Learning
     record_history: bool = True

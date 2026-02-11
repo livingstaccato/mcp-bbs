@@ -80,6 +80,10 @@ class BotStatus(BaseModel):
     trades_executed: int = 0
     credits_delta: int = 0
     credits_per_turn: float = 0.0
+    llm_wakeups: int = 0
+    autopilot_turns: int = 0
+    goal_contract_failures: int = 0
+    llm_wakeups_per_100_turns: float = 0.0
     # Hijack/MCP control tracking
     is_hijacked: bool = False  # Whether bot is under MCP control
     hijacked_at: float | None = None  # Timestamp when hijack started
@@ -490,6 +494,7 @@ class SwarmManager:
         elapsed_s = float(last.get("ts") or now) - float(first.get("ts") or now)
         delta_turns = _rolling_counter_delta("total_turns")
         delta_credits = _rolling_counter_delta("total_credits")
+        delta_llm_wakeups = _rolling_counter_delta("llm_wakeups_total")
 
         return {
             "window_minutes": minutes,
@@ -503,6 +508,10 @@ class SwarmManager:
                 "credits": delta_credits,
                 "credits_per_turn": (float(delta_credits) / float(delta_turns)) if delta_turns > 0 else 0.0,
                 "haggle_offers": _rolling_nested_counter_delta("trade_outcomes_overall", "haggle_offers"),
+                "llm_wakeups": delta_llm_wakeups,
+                "llm_wakeups_per_100_turns": (
+                    (float(delta_llm_wakeups) * 100.0 / float(delta_turns)) if delta_turns > 0 else 0.0
+                ),
             },
             "last": {
                 "running": _safe_int(last, "running"),
@@ -511,6 +520,10 @@ class SwarmManager:
                 "profitable_bots": _safe_int(last, "profitable_bots"),
                 "positive_cpt_bots": _safe_int(last, "positive_cpt_bots"),
                 "no_trade_120p": _safe_int(last, "no_trade_120p"),
+                "llm_wakeups_total": _safe_int(last, "llm_wakeups_total"),
+                "autopilot_turns_total": _safe_int(last, "autopilot_turns_total"),
+                "goal_contract_failures_total": _safe_int(last, "goal_contract_failures_total"),
+                "llm_wakeups_per_100_turns": float(last.get("llm_wakeups_per_100_turns") or 0.0),
                 "trade_outcomes_overall": last.get("trade_outcomes_overall") or {},
             },
             "strategy_delta": {
@@ -533,6 +546,9 @@ class SwarmManager:
         no_trade_120p = 0
         haggle_low_total = 0
         haggle_high_total = 0
+        llm_wakeups_total = 0
+        autopilot_turns_total = 0
+        goal_contract_failures_total = 0
         trade_outcomes_overall = {
             "trades_executed": 0,
             "haggle_accept": 0,
@@ -568,8 +584,14 @@ class SwarmManager:
             high = int(bot.get("haggle_too_high") or 0)
             accept = int(bot.get("haggle_accept") or 0)
             counter = int(bot.get("haggle_counter") or 0)
+            llm_wakeups = int(bot.get("llm_wakeups") or 0)
+            autopilot_turns = int(bot.get("autopilot_turns") or 0)
+            goal_contract_failures = int(bot.get("goal_contract_failures") or 0)
             haggle_low_total += low
             haggle_high_total += high
+            llm_wakeups_total += llm_wakeups
+            autopilot_turns_total += autopilot_turns
+            goal_contract_failures_total += goal_contract_failures
 
             trade_outcomes_overall["trades_executed"] += trades
             trade_outcomes_overall["haggle_accept"] += accept
@@ -617,6 +639,10 @@ class SwarmManager:
                     "haggle_counter": counter,
                     "haggle_too_low": low,
                     "haggle_too_high": high,
+                    "llm_wakeups": llm_wakeups,
+                    "autopilot_turns": autopilot_turns,
+                    "goal_contract_failures": goal_contract_failures,
+                    "llm_wakeups_per_100_turns": float(bot.get("llm_wakeups_per_100_turns") or 0.0),
                 }
             )
 
@@ -662,6 +688,12 @@ class SwarmManager:
             "no_trade_120p": no_trade_120p,
             "haggle_low_total": haggle_low_total,
             "haggle_high_total": haggle_high_total,
+            "llm_wakeups_total": llm_wakeups_total,
+            "autopilot_turns_total": autopilot_turns_total,
+            "goal_contract_failures_total": goal_contract_failures_total,
+            "llm_wakeups_per_100_turns": (
+                (float(llm_wakeups_total) * 100.0 / float(status.total_turns)) if status.total_turns > 0 else 0.0
+            ),
             "trade_outcomes_overall": trade_outcomes_overall,
             "trade_outcomes_by_strategy_mode": trade_outcomes_by_strategy_mode,
             "bots": bot_rows,
