@@ -8,10 +8,40 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
+
+from bbsbot.defaults import MANAGER_URL
 from bbsbot.games.tw2002.mcp_tools import registry
 from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
+
+_ASSUMED_BOT_ID: str | None = None
+
+
+def _manager_request(method: str, path: str, **kwargs: Any) -> tuple[bool, dict[str, Any]]:
+    """Call swarm manager REST API and normalize response."""
+    try:
+        with httpx.Client(timeout=20) as client:
+            response = client.request(method, f"{MANAGER_URL}{path}", **kwargs)
+        data = response.json()
+        if response.status_code >= 400:
+            if isinstance(data, dict):
+                return False, data
+            return False, {"error": str(data)}
+        if isinstance(data, dict):
+            return True, data
+        return True, {"value": data}
+    except Exception as exc:
+        return False, {"error": str(exc)}
+
+
+def _resolve_bot_id(bot_id: str | None) -> tuple[bool, str | None, dict[str, Any] | None]:
+    """Resolve bot_id from explicit arg or assumed context."""
+    target = bot_id or _ASSUMED_BOT_ID
+    if not target:
+        return False, None, {"error": "No bot selected. Pass bot_id or call tw2002_assume_bot first."}
+    return True, target, None
 
 
 def _get_active_bot():
@@ -565,3 +595,157 @@ async def ask_strategy(
             "success": False,
             "error": str(e),
         }
+
+
+@registry.tool()
+async def assume_bot(bot_id: str) -> dict[str, Any]:
+    """Set active swarm bot context for takeover tools."""
+    global _ASSUMED_BOT_ID  # noqa: PLW0603
+
+    ok, data = _manager_request("GET", f"/bot/{bot_id}/status")
+    if not ok:
+        return {
+            "success": False,
+            "error": data.get("error", f"Bot {bot_id} not found"),
+        }
+
+    _ASSUMED_BOT_ID = bot_id
+    return {
+        "success": True,
+        "bot_id": bot_id,
+        "state": data.get("state"),
+        "strategy": data.get("strategy"),
+        "sector": data.get("sector"),
+    }
+
+
+@registry.tool()
+async def assumed_bot_status() -> dict[str, Any]:
+    """Get current assumed bot plus live status."""
+    if not _ASSUMED_BOT_ID:
+        return {"success": False, "error": "No assumed bot. Call tw2002_assume_bot first."}
+
+    ok, data = _manager_request("GET", f"/bot/{_ASSUMED_BOT_ID}/status")
+    if not ok:
+        return {
+            "success": False,
+            "assumed_bot_id": _ASSUMED_BOT_ID,
+            "error": data.get("error", "Failed to read assumed bot status"),
+        }
+    return {"success": True, "assumed_bot_id": _ASSUMED_BOT_ID, "status": data}
+
+
+@registry.tool()
+async def hijack_begin(bot_id: str | None = None, lease_s: int = 90, owner: str = "twbot_mcp") -> dict[str, Any]:
+    """Acquire a lease-based hijack session for a running swarm bot."""
+    ok_resolve, target, err = _resolve_bot_id(bot_id)
+    if not ok_resolve or target is None:
+        return {"success": False, **(err or {})}
+
+    ok, data = _manager_request("POST", f"/bot/{target}/hijack/acquire", json={"owner": owner, "lease_s": lease_s})
+    if not ok:
+        return {"success": False, "bot_id": target, "error": data.get("error", "Failed to acquire hijack")}
+    return {"success": True, **data}
+
+
+@registry.tool()
+async def hijack_heartbeat(hijack_id: str, bot_id: str | None = None, lease_s: int = 90) -> dict[str, Any]:
+    """Extend a hijack lease."""
+    ok_resolve, target, err = _resolve_bot_id(bot_id)
+    if not ok_resolve or target is None:
+        return {"success": False, **(err or {})}
+
+    ok, data = _manager_request(
+        "POST",
+        f"/bot/{target}/hijack/{hijack_id}/heartbeat",
+        json={"lease_s": lease_s},
+    )
+    if not ok:
+        return {"success": False, "bot_id": target, "hijack_id": hijack_id, "error": data.get("error")}
+    return {"success": True, **data}
+
+
+@registry.tool()
+async def hijack_read(
+    hijack_id: str,
+    bot_id: str | None = None,
+    mode: str = "snapshot",
+    after_seq: int = 0,
+    limit: int = 200,
+) -> dict[str, Any]:
+    """Read snapshot/events from an active hijack session."""
+    ok_resolve, target, err = _resolve_bot_id(bot_id)
+    if not ok_resolve or target is None:
+        return {"success": False, **(err or {})}
+
+    if mode == "snapshot":
+        ok, data = _manager_request("GET", f"/bot/{target}/hijack/{hijack_id}/snapshot")
+    elif mode == "events":
+        ok, data = _manager_request(
+            "GET",
+            f"/bot/{target}/hijack/{hijack_id}/events",
+            params={"after_seq": after_seq, "limit": limit},
+        )
+    else:
+        return {"success": False, "error": "mode must be 'snapshot' or 'events'"}
+
+    if not ok:
+        return {"success": False, "bot_id": target, "hijack_id": hijack_id, "error": data.get("error")}
+    return {"success": True, **data}
+
+
+@registry.tool()
+async def hijack_send(
+    hijack_id: str,
+    keys: str,
+    bot_id: str | None = None,
+    expect_prompt_id: str | None = None,
+    expect_regex: str | None = None,
+    timeout_ms: int = 2000,
+    poll_interval_ms: int = 120,
+) -> dict[str, Any]:
+    """Send input to a hijacked bot, optionally guarded by prompt/regex."""
+    ok_resolve, target, err = _resolve_bot_id(bot_id)
+    if not ok_resolve or target is None:
+        return {"success": False, **(err or {})}
+
+    ok, data = _manager_request(
+        "POST",
+        f"/bot/{target}/hijack/{hijack_id}/send",
+        json={
+            "keys": keys,
+            "expect_prompt_id": expect_prompt_id,
+            "expect_regex": expect_regex,
+            "timeout_ms": timeout_ms,
+            "poll_interval_ms": poll_interval_ms,
+        },
+    )
+    if not ok:
+        return {"success": False, "bot_id": target, "hijack_id": hijack_id, "error": data.get("error"), **data}
+    return {"success": True, **data}
+
+
+@registry.tool()
+async def hijack_step(hijack_id: str, bot_id: str | None = None) -> dict[str, Any]:
+    """Single-step a hijacked bot loop."""
+    ok_resolve, target, err = _resolve_bot_id(bot_id)
+    if not ok_resolve or target is None:
+        return {"success": False, **(err or {})}
+
+    ok, data = _manager_request("POST", f"/bot/{target}/hijack/{hijack_id}/step")
+    if not ok:
+        return {"success": False, "bot_id": target, "hijack_id": hijack_id, "error": data.get("error")}
+    return {"success": True, **data}
+
+
+@registry.tool()
+async def hijack_release(hijack_id: str, bot_id: str | None = None) -> dict[str, Any]:
+    """Release hijack session and resume bot automation."""
+    ok_resolve, target, err = _resolve_bot_id(bot_id)
+    if not ok_resolve or target is None:
+        return {"success": False, **(err or {})}
+
+    ok, data = _manager_request("POST", f"/bot/{target}/hijack/{hijack_id}/release")
+    if not ok:
+        return {"success": False, "bot_id": target, "hijack_id": hijack_id, "error": data.get("error")}
+    return {"success": True, **data}

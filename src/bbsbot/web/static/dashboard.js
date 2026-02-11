@@ -53,6 +53,90 @@
     return d.innerHTML;
   }
 
+  function percent(v) {
+    if (!isFinite(v)) return "0.0%";
+    return (v * 100).toFixed(1) + "%";
+  }
+
+  function computeAggregateMetrics(data) {
+    const bots = data.bots || [];
+    let accept = 0;
+    let counter = 0;
+    let tooHigh = 0;
+    let tooLow = 0;
+    let noTrade120 = 0;
+    const nowS = Date.now() / 1000;
+    const activeStates = new Set(["running", "recovering", "blocked"]);
+    const activeByStrategy = new Map();
+    const historicalByStrategy = new Map();
+
+    for (const b of bots) {
+      const a = Number(b.haggle_accept || 0);
+      const c = Number(b.haggle_counter || 0);
+      const h = Number(b.haggle_too_high || 0);
+      const l = Number(b.haggle_too_low || 0);
+      accept += a;
+      counter += c;
+      tooHigh += h;
+      tooLow += l;
+
+      const turns = Number(b.turns_executed || 0);
+      const trades = Number(b.trades_executed || 0);
+      if (turns >= 120 && trades === 0 && String(b.state || "") === "running") {
+        noTrade120 += 1;
+      }
+
+      const cpt = Number(b.credits_per_turn || 0);
+      const turnsExec = Number(b.turns_executed || 0);
+      const creditsDelta = Number(b.credits_delta || 0);
+      const sid = (b.strategy_id || b.strategy || "unknown").toString();
+      const mode = (b.strategy_mode || "unknown").toString();
+      const key = `${sid}(${mode})`;
+      const state = String(b.state || "").toLowerCase();
+      const lastUpdate = Number(b.last_update_time || 0);
+      const isFresh = lastUpdate > 0 && nowS - lastUpdate <= 120;
+      const bucketMap = (activeStates.has(state) && isFresh) ? activeByStrategy : historicalByStrategy;
+      if (!bucketMap.has(key)) {
+        bucketMap.set(key, { sumCpt: 0, n: 0, sumDelta: 0, sumTurns: 0 });
+      }
+      const bucket = bucketMap.get(key);
+      bucket.sumCpt += cpt;
+      bucket.n += 1;
+      if (isFinite(turnsExec) && isFinite(creditsDelta) && turnsExec > 0) {
+        bucket.sumTurns += turnsExec;
+        bucket.sumDelta += creditsDelta;
+      }
+    }
+
+    const offers = accept + counter + tooHigh + tooLow;
+    const acceptRate = offers > 0 ? accept / offers : 0;
+    const tooHighRate = offers > 0 ? tooHigh / offers : 0;
+    const tooLowRate = offers > 0 ? tooLow / offers : 0;
+
+    const toLines = (label, byStrategy) =>
+      Array.from(byStrategy.entries())
+      .map(([k, v]) => {
+        const weighted = v.sumTurns > 0 ? v.sumDelta / v.sumTurns : NaN;
+        const unweighted = v.n > 0 ? v.sumCpt / v.n : 0;
+        const avg = isFinite(weighted) ? weighted : unweighted;
+        return { key: k, avg, n: v.n, turns: v.sumTurns };
+      })
+      .filter((x) => !(x.avg === 0 && x.key.toLowerCase().includes("(unknown)")))
+      .sort((a, b) => b.avg - a.avg)
+      .slice(0, 3)
+      .map((x) => ({
+        text: `${label} ${x.key}: ${x.avg.toFixed(2)} (n=${x.n})`,
+        lowConfidence: x.n < 3 || x.turns < 200,
+      }));
+
+    const strategyLines = [
+      ...toLines("ACTIVE", activeByStrategy),
+      ...toLines("HIST", historicalByStrategy),
+    ];
+
+    return { acceptRate, tooHighRate, tooLowRate, noTrade120, strategyLines };
+  }
+
   function shortBotId(botId) {
     const s = String(botId || "");
     if (s.length <= 14) return s;
@@ -104,6 +188,29 @@
 	    $("#credits").textContent = formatCredits(data.total_credits);
 	    $("#turns").textContent = formatCredits(data.total_turns);
 	    $("#uptime").textContent = " | " + formatUptime(data.uptime_seconds);
+
+      const metrics = computeAggregateMetrics(data);
+      const acceptEl = $("#accept-rate");
+      const highEl = $("#too-high-rate");
+      const lowEl = $("#too-low-rate");
+      const noTradeEl = $("#no-trade-120");
+      const strategyEl = $("#strategy-cpt");
+      if (acceptEl) acceptEl.textContent = percent(metrics.acceptRate);
+      if (highEl) highEl.textContent = percent(metrics.tooHighRate);
+      if (lowEl) lowEl.textContent = percent(metrics.tooLowRate);
+      if (noTradeEl) noTradeEl.textContent = String(metrics.noTrade120);
+      if (strategyEl) {
+        if (metrics.strategyLines.length) {
+          strategyEl.innerHTML = `<span class="strategy-cpt-lines">${metrics.strategyLines
+            .map((line) => {
+              const cls = line.lowConfidence ? "strategy-cpt-line low-confidence" : "strategy-cpt-line";
+              return `<span class="${cls}" title="${esc(line.text)}">${esc(line.text)}</span>`;
+            })
+            .join("")}</span>`;
+        } else {
+          strategyEl.textContent = "-";
+        }
+      }
 
 	    // Throttle (not debounce) table re-render.
 	    // Under high-frequency status broadcasts, a debounce can starve the table
@@ -186,9 +293,15 @@
           statusHtml += `<span class="status-detail">${esc(withReason)}</span>`;
         }
         const detail = (b.status_detail || "").trim();
+        const isStaleOrientFailed =
+          detail === "ORIENTING:FAILED" &&
+          b.state === "running" &&
+          !["CONNECTING", "LOGGING_IN", "INITIALIZING"].includes(String(activity || "").toUpperCase());
         if (detail) {
-          if (statusHtml) statusHtml += " ";
-          statusHtml += `<span class="status-detail">${esc(detail)}</span>`;
+          if (!isStaleOrientFailed) {
+            if (statusHtml) statusHtml += " ";
+            statusHtml += `<span class="status-detail">${esc(detail)}</span>`;
+          }
         } else if (b.prompt_id) {
           // Avoid showing "prompt.sector_command" etc. as status; Status is for meaningful blocking phases.
           const safePrompts = new Set([

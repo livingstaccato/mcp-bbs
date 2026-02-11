@@ -400,7 +400,10 @@ class WorkerBot(TradingBot):
             # CRITICAL: Do NOT override activity with "ORIENTING" if we know the context
             # Only show ORIENTING if context is actually "unknown"
             in_game = self.current_sector and self.current_sector > 0
-            if orient_phase and current_context == "unknown" and in_game:
+            # Only surface orient progress when we don't already have a stronger
+            # status signal (prompt/status_detail). This prevents stale
+            # ORIENTING:FAILED from overriding active states like PORT_HAGGLE.
+            if orient_phase and current_context == "unknown" and in_game and not status_detail:
                 if orient_step > 0 and orient_max > 0:
                     status_detail = f"ORIENTING:{orient_step}/{orient_max}"
                 else:

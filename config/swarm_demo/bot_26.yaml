@@ -4,7 +4,8 @@ connection:
   game_letter: B
 trading:
   policy: balanced
-  strategy: profitable_pairs  opportunistic:
+  strategy: profitable_pairs
+  opportunistic:
     explore_chance: 0.5
     max_wander_without_trade: 3
 session:

@@ -41,6 +41,23 @@ def _is_port_qty_prompt(line: str) -> bool:
     return bool(re.search(r"(?i)\bhow\s+many\b.*\[[\d,]+\]\s*\?\s*$", ll))
 
 
+def _create_strategy_instance(strategy_name: str, config: BotConfig, knowledge):
+    """Create a strategy instance by name (fallback to opportunistic)."""
+    from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
+    from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
+    from bbsbot.games.tw2002.strategies.profitable_pairs import ProfitablePairsStrategy
+    from bbsbot.games.tw2002.strategies.twerk_optimized import TwerkOptimizedStrategy
+
+    mapping = {
+        "ai_strategy": AIStrategy,
+        "opportunistic": OpportunisticStrategy,
+        "profitable_pairs": ProfitablePairsStrategy,
+        "twerk_optimized": TwerkOptimizedStrategy,
+    }
+    cls = mapping.get(strategy_name, OpportunisticStrategy)
+    return cls(config, knowledge)
+
+
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     """Run the main trading loop using the configured strategy."""
     from bbsbot.games.tw2002.strategy_manager import StrategyManager
@@ -263,7 +280,42 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 return "aggressive"
             return "balanced"
 
-        effective_policy = _compute_policy(getattr(state, "credits", None))
+        # Anti-waste guardrail: if we have burned many turns with very few trades,
+        # force a profit-first strategy/mode to avoid long explore-only runs.
+        guard_turns = int(getattr(config.trading, "no_trade_guard_turns", 120))
+        guard_min_trades = int(getattr(config.trading, "no_trade_guard_min_trades", 3))
+        guard_strategy = str(getattr(config.trading, "no_trade_guard_strategy", "profitable_pairs"))
+        guard_mode = str(getattr(config.trading, "no_trade_guard_mode", "balanced"))
+        trades_done = int(getattr(bot, "trades_executed", 0) or 0)
+        force_guard = turns_used >= guard_turns and trades_done < guard_min_trades
+
+        if force_guard:
+            current_name = getattr(strategy, "name", "unknown")
+            if current_name != guard_strategy:
+                logger.warning(
+                    "no_trade_guard_switch: turns=%s trades=%s from=%s to=%s",
+                    turns_used,
+                    trades_done,
+                    current_name,
+                    guard_strategy,
+                )
+                if strategy_manager:
+                    with contextlib.suppress(Exception):
+                        strategy_manager._current_strategy_name = guard_strategy
+                        strategy_manager._current_strategy = strategy_manager._create_strategy(guard_strategy)
+                        strategy_manager._consecutive_failures = 0
+                        strategy_manager._turns_on_current_strategy = 0
+                        strategy = strategy_manager._current_strategy
+                else:
+                    strategy = _create_strategy_instance(guard_strategy, config, bot.sector_knowledge)
+                with contextlib.suppress(Exception):
+                    bot._strategy = strategy
+            effective_policy = guard_mode
+            with contextlib.suppress(Exception):
+                bot.strategy_intent = f"RECOVERY:FORCE_{guard_strategy.upper()}"
+        else:
+            effective_policy = _compute_policy(getattr(state, "credits", None))
+
         try:
             if hasattr(strategy, "set_policy"):
                 strategy.set_policy(effective_policy)
@@ -726,6 +778,17 @@ async def execute_port_trade(
             if too_low_phrase and hasattr(bot, "note_trade_telemetry"):
                 bot.note_trade_telemetry("haggle_too_low", 1)
 
+            too_high_phrase = any(
+                phrase in screen_lower
+                for phrase in (
+                    "offer is too high",
+                    "that's too high",
+                    "too high",
+                )
+            )
+            if too_high_phrase and hasattr(bot, "note_trade_telemetry"):
+                bot.note_trade_telemetry("haggle_too_high", 1)
+
             # Negotiate modestly when possible. If we can't determine the side
             # (buy vs sell), or credits are unknown, fall back to accepting.
             if default_offer is not None and default_offer > 0 and last_trade_is_buy is not None:
@@ -737,21 +800,65 @@ async def execute_port_trade(
                     await asyncio.sleep(0.5)
                     continue
 
-                policy = getattr(bot, "strategy_mode", None) or "balanced"
-                # Many TW2002 servers treat the bracketed offer as non-negotiable,
-                # or will abort the transaction if you deviate. Only haggle in
-                # aggressive mode; otherwise accept defaults for reliability.
-                if policy != "aggressive":
+                policy = str(getattr(bot, "strategy_mode", None) or "balanced")
+                strategy_id = str(
+                    getattr(bot, "strategy_id", None)
+                    or getattr(getattr(bot, "strategy", None), "name", None)
+                    or "unknown"
+                )
+
+                # Profile by strategy/mode. This is intentionally conservative:
+                # we optimize for realized credits/turn and loop safety first.
+                profile_by_strategy_mode = {
+                    "profitable_pairs:aggressive": {"enabled": True, "buy_discount": 0.06, "sell_markup": 0.10, "step": 0.02, "max_attempts": 2},
+                    "opportunistic:aggressive": {"enabled": True, "buy_discount": 0.04, "sell_markup": 0.08, "step": 0.015, "max_attempts": 2},
+                    "ai_strategy:aggressive": {"enabled": True, "buy_discount": 0.05, "sell_markup": 0.09, "step": 0.02, "max_attempts": 2},
+                    "profitable_pairs:balanced": {"enabled": True, "buy_discount": 0.02, "sell_markup": 0.03, "step": 0.01, "max_attempts": 1},
+                    "opportunistic:balanced": {"enabled": False, "buy_discount": 0.0, "sell_markup": 0.0, "step": 0.0, "max_attempts": 0},
+                    "ai_strategy:balanced": {"enabled": False, "buy_discount": 0.0, "sell_markup": 0.0, "step": 0.0, "max_attempts": 0},
+                    "profitable_pairs:conservative": {"enabled": False, "buy_discount": 0.0, "sell_markup": 0.0, "step": 0.0, "max_attempts": 0},
+                    "opportunistic:conservative": {"enabled": False, "buy_discount": 0.0, "sell_markup": 0.0, "step": 0.0, "max_attempts": 0},
+                    "ai_strategy:conservative": {"enabled": False, "buy_discount": 0.0, "sell_markup": 0.0, "step": 0.0, "max_attempts": 0},
+                }
+                base = profile_by_strategy_mode.get(
+                    f"{strategy_id}:{policy}",
+                    {"enabled": policy == "aggressive", "buy_discount": 0.05, "sell_markup": 0.08, "step": 0.02, "max_attempts": 2},
+                )
+                enabled = bool(base["enabled"])
+                buy_discount = float(base["buy_discount"])
+                sell_markup = float(base["sell_markup"])
+                step = float(base["step"])
+                max_attempts = int(base["max_attempts"])
+
+                haggle_accept = int(getattr(bot, "haggle_accept", 0) or 0)
+                haggle_counter = int(getattr(bot, "haggle_counter", 0) or 0)
+                haggle_too_high = int(getattr(bot, "haggle_too_high", 0) or 0)
+                haggle_too_low = int(getattr(bot, "haggle_too_low", 0) or 0)
+                offers_total = haggle_accept + haggle_counter + haggle_too_high + haggle_too_low
+                too_high_rate = (float(haggle_too_high) / float(offers_total)) if offers_total > 0 else 0.0
+                too_low_rate = (float(haggle_too_low) / float(offers_total)) if offers_total > 0 else 0.0
+
+                # Auto-de-risk when "too high" starts to climb.
+                if offers_total >= 30 and too_high_rate >= 0.05:
+                    enabled = False
+                elif offers_total >= 30 and too_high_rate >= 0.02:
+                    buy_discount *= 0.5
+                    sell_markup *= 0.5
+                    max_attempts = min(max_attempts, 1)
+
+                # If we are repeatedly too low, move closer to default prices.
+                if offers_total >= 30 and too_low_rate >= 0.03:
+                    buy_discount *= 0.5
+                    sell_markup *= 0.5
+                    step = max(step, 0.02)
+
+                # Many TW2002 servers treat bracketed offer as non-negotiable.
+                if not enabled or max_attempts <= 0:
                     if hasattr(bot, "note_trade_telemetry"):
                         bot.note_trade_telemetry("haggle_accept", 1)
                     await bot.session.send("\r")
                     await asyncio.sleep(0.5)
                     continue
-
-                buy_discount = 0.08
-                sell_markup = 0.12
-                step = 0.03
-                max_attempts = 3
 
                 # Reset negotiation state if the prompt's default changed (new deal).
                 if last_default_offer is None or default_offer != last_default_offer:
@@ -778,7 +885,8 @@ async def execute_port_trade(
                         if hasattr(bot, "note_trade_telemetry"):
                             bot.note_trade_telemetry("haggle_counter", 1)
                         logger.debug(
-                            "haggle_buy: policy=%s attempt=%s default=%s offer=%s credits=%s",
+                            "haggle_buy: strategy=%s policy=%s attempt=%s default=%s offer=%s credits=%s",
+                            strategy_id,
                             policy,
                             haggle_attempts,
                             default_offer,
@@ -809,7 +917,8 @@ async def execute_port_trade(
                     if hasattr(bot, "note_trade_telemetry"):
                         bot.note_trade_telemetry("haggle_counter", 1)
                     logger.debug(
-                        "haggle_sell: policy=%s attempt=%s default=%s offer=%s",
+                        "haggle_sell: strategy=%s policy=%s attempt=%s default=%s offer=%s",
+                        strategy_id,
                         policy,
                         haggle_attempts,
                         default_offer,

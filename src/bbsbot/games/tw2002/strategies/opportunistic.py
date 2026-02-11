@@ -138,17 +138,29 @@ class OpportunisticStrategy(TradingStrategy):
             if direction:
                 return TradeAction.EXPLORE, {"direction": direction}
 
+        # Check if we've wandered too long.
+        # Important: don't just reset the counter; force fresh exploration so we can
+        # discover new port classes instead of bouncing between known sectors.
+        if self._exploration.wanders_without_trade >= self._settings.max_wander_without_trade:
+            limit = int(self._settings.max_wander_without_trade)
+            self._exploration.wanders_without_trade = 0
+            direction = self._pick_exploration_direction(state)
+            if direction is None and state.warps:
+                direction = random.choice(state.warps)
+            if direction is not None:
+                logger.warning(
+                    "Max wander without trade reached (%s); forcing exploration to %s",
+                    limit,
+                    direction,
+                )
+                return TradeAction.EXPLORE, {"direction": direction}
+
         # Wander to a known sector
         target = self._pick_wander_target(state)
         if target:
             path = self.knowledge.find_path(state.sector, target)
             if path and len(path) > 1:
                 return TradeAction.MOVE, {"target_sector": target, "path": path}
-
-        # Check if we've wandered too long
-        if self._exploration.wanders_without_trade >= self._settings.max_wander_without_trade:
-            logger.warning("Max wander without trade reached, resetting")
-            self._exploration.wanders_without_trade = 0
 
         # Fallback: if we have warps, just explore somewhere
         if state.warps:

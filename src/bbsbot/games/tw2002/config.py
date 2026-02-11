@@ -283,6 +283,13 @@ class TradingConfig(BaseModel):
         default_factory=lambda: ["ai_strategy", "profitable_pairs", "opportunistic", "twerk_optimized"]
     )
 
+    # Anti-waste guardrail: if a bot burns turns without enough trades, force a
+    # profit-first strategy/mode to recover.
+    no_trade_guard_turns: int = 120
+    no_trade_guard_min_trades: int = 3
+    no_trade_guard_strategy: Literal["profitable_pairs", "opportunistic"] = "profitable_pairs"
+    no_trade_guard_mode: Literal["conservative", "balanced", "aggressive"] = "balanced"
+
     model_config = ConfigDict(extra="ignore")
 
 

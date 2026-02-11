@@ -99,6 +99,30 @@ async def status():
     return _manager.get_swarm_status().model_dump()
 
 
+@router.get("/swarm/timeseries/info")
+async def timeseries_info():
+    """Get built-in swarm timeseries metadata."""
+    assert _manager is not None
+    return _manager.get_timeseries_info()
+
+
+@router.get("/swarm/timeseries/recent")
+async def timeseries_recent(limit: int = 200):
+    """Get recent built-in swarm timeseries rows."""
+    assert _manager is not None
+    return {
+        "rows": _manager.get_timeseries_recent(limit=limit),
+        "info": _manager.get_timeseries_info(),
+    }
+
+
+@router.get("/swarm/timeseries/summary")
+async def timeseries_summary(window_minutes: int = 120):
+    """Get trailing-window summary from built-in swarm timeseries."""
+    assert _manager is not None
+    return _manager.get_timeseries_summary(window_minutes=window_minutes)
+
+
 @router.post("/swarm/kill-all")
 async def kill_all():
     """Kill all running bots in the swarm."""
