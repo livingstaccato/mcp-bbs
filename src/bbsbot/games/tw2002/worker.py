@@ -199,6 +199,18 @@ class WorkerBot(TradingBot):
         self.haggle_too_low: int = 0
         self.trades_executed: int = 0
 
+    def reset_runtime_session_metrics(self) -> None:
+        """Reset per-runtime-session metrics before a new login/run cycle."""
+        self.turns_used = 0
+        self._session_start_credits = None
+        self.haggle_accept = 0
+        self.haggle_counter = 0
+        self.haggle_too_high = 0
+        self.haggle_too_low = 0
+        self.trades_executed = 0
+        with contextlib.suppress(Exception):
+            self._last_trade_turn = 0
+
     def note_trade_telemetry(self, metric: str, amount: int = 1) -> None:
         """Increment a trade telemetry counter in a safe, no-throw way."""
         try:
@@ -1139,6 +1151,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
             active_session = identity_store.start_session(bot_id=bot_id, state="starting")
             active_session_id = active_session.id
+            worker.reset_runtime_session_metrics()
             try:
                 # Ensure watchdog is running once per process.
                 worker.start_watchdog(stuck_timeout_s=120.0, check_interval_s=5.0)
