@@ -806,23 +806,23 @@ tbody tr:hover { background: var(--bg3); }
   <h1>BBSBOT SWARM DASHBOARD</h1>
   <div class="header-controls">
     <div class="spawn-controls">
-      <div class="spawn-field" title="Named bot mix templates">
-        <label for="spawn-preset">Preset</label>
-        <select id="spawn-preset">
-        <option value="custom">custom</option>
-        <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
-        <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
+      <div class="spawn-field" title="Display labels map to stable config directories">
+        <label for="spawn-config">Profile</label>
+        <select id="spawn-config">
+          <option value="swarm_demo">tw2002_dynamic</option>
+          <option value="swarm_demo_ai">tw2002_ai</option>
         </select>
       </div>
       <div class="spawn-field compact" title="Used only when Preset is custom">
         <label for="spawn-count">Count</label>
         <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
       </div>
-      <div class="spawn-field" title="Display labels map to stable config directories">
-        <label for="spawn-config">Profile</label>
-        <select id="spawn-config">
-          <option value="swarm_demo">tw2002_dynamic</option>
-          <option value="swarm_demo_ai">tw2002_ai</option>
+      <div class="spawn-field" title="Named bot mix templates">
+        <label for="spawn-preset">Preset</label>
+        <select id="spawn-preset">
+        <option value="custom">custom</option>
+        <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
+        <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
         </select>
       </div>
       <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
@@ -858,6 +858,29 @@ tbody tr:hover { background: var(--bg3); }
   </div>
 </div>
 
+<div class="table-wrap">
+  <div class="pool-section-title">Bot List</div>
+  <table>
+    <thead>
+      <tr>
+        <th data-sort="bot_id">Bot ID</th>
+        <th data-sort="state">State</th>
+        <th>Activity</th>
+        <th data-sort="is_hijacked">Status</th>
+	        <th data-sort="strategy">Strategy</th>
+        <th data-sort="sector">Sector</th>
+        <th data-sort="credits">Credits</th>
+        <th data-sort="cargo_fuel_ore">Fuel</th>
+        <th data-sort="cargo_organics">Org</th>
+        <th data-sort="cargo_equipment">Equip</th>
+        <th data-sort="turns_executed">Turns</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="bot-table"></tbody>
+  </table>
+</div>
+
 <div class="pool-panel-wrap">
   <div class="pool-section-title">Bot Pool</div>
   <div class="pool-panel">
@@ -882,28 +905,6 @@ tbody tr:hover { background: var(--bg3); }
       </table>
     </div>
   </div>
-</div>
-
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th data-sort="bot_id">Bot ID</th>
-        <th data-sort="state">State</th>
-        <th>Activity</th>
-        <th data-sort="is_hijacked">Status</th>
-	        <th data-sort="strategy">Strategy</th>
-        <th data-sort="sector">Sector</th>
-        <th data-sort="credits">Credits</th>
-        <th data-sort="cargo_fuel_ore">Fuel</th>
-        <th data-sort="cargo_organics">Org</th>
-        <th data-sort="cargo_equipment">Equip</th>
-        <th data-sort="turns_executed">Turns</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="bot-table"></tbody>
-  </table>
 </div>
 
 <!-- Terminal modal -->
@@ -966,6 +967,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=16"></script>
+<script src="/static/dashboard.js?v=17"></script>
 </body>
 </html>
