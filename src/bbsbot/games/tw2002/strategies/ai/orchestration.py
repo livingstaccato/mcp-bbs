@@ -117,6 +117,41 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
         stuck_action = strategy._recent_actions[-1]
         logger.warning(f"ai_stuck_detected: {stuck_action} x{strategy._stuck_threshold}")
 
+    should_wake, wake_reason = strategy.should_wake_llm(state, stuck_action=stuck_action)
+    if not should_wake:
+        selected_strategy = strategy.active_managed_strategy or "profitable_pairs"
+        delegated_action, delegated_params = strategy.run_managed_strategy(
+            selected_strategy,
+            state,
+            update_active=False,
+        )
+        strategy._last_reasoning = (
+            f"SUPERVISOR AUTOPILOT ({selected_strategy}) {wake_reason}; "
+            f"next review turn {strategy._next_llm_turn}"
+        )
+        strategy._is_thinking = False
+        logger.debug(
+            "ai_supervisor_autopilot",
+            selected_strategy=selected_strategy,
+            action=delegated_action.name,
+            wake_reason=wake_reason,
+            next_llm_turn=strategy._next_llm_turn,
+        )
+        strategy._record_event(
+            "decision",
+            {
+                "turn": strategy._current_turn,
+                "source": "supervisor_autopilot",
+                "selected_strategy": selected_strategy,
+                "action": delegated_action.name,
+                "params": delegated_params,
+                "wake_reason": wake_reason,
+                "sector": state.sector,
+                "credits": state.credits,
+            },
+        )
+        return delegated_action, delegated_params
+
     # Try LLM decision
     try:
         action, params, trace = await decision_maker.make_llm_decision(
@@ -179,11 +214,16 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                     )
 
             if selected_strategy != "ai_direct":
+                previous_strategy = strategy.active_managed_strategy
                 delegated_action, delegated_params = strategy.run_managed_strategy(
                     selected_strategy,
                     state,
                     update_active=True,
                 )
+                requested_review = params.get("review_after_turns")
+                if selected_strategy != previous_strategy and requested_review is None:
+                    requested_review = int(getattr(strategy._settings, "post_change_review_turns", 4) or 4)
+                strategy.schedule_llm_review(requested_review, reason=f"llm:{wake_reason}")
                 strategy._recent_actions.append(f"{selected_strategy}:{delegated_action.name}")
                 if len(strategy._recent_actions) > strategy._stuck_threshold + 2:
                     strategy._recent_actions = strategy._recent_actions[-(strategy._stuck_threshold + 2) :]
@@ -192,6 +232,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                     selected_strategy=selected_strategy,
                     action=delegated_action.name,
                     params=delegated_params,
+                    wake_reason=wake_reason,
                 )
                 strategy._record_event(
                     "decision",
@@ -215,6 +256,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 return delegated_action, delegated_params
 
             strategy._last_action_strategy = "ai_direct"
+            strategy.schedule_llm_review(params.get("review_after_turns"), reason=f"llm:{wake_reason}")
             logger.info(f"ai_strategy_decision: action={action.name}, params={params}")
             # Record event for feedback
             strategy._record_event(

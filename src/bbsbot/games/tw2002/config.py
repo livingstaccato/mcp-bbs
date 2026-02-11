@@ -230,6 +230,19 @@ class AIStrategyConfig(BaseModel):
     timeout_ms: int = 30000
     cache_decisions: bool = False
 
+    # Supervisor cadence (LLM should not think every turn).
+    think_interval_turns: int = 8  # Normal periodic review cadence
+    post_change_review_turns: int = 4  # Quicker check after plan/strategy changes
+    min_review_turns: int = 2
+    max_review_turns: int = 40
+    urgent_wakeup_min_spacing_turns: int = 4  # Min turns between urgent overrides
+
+    # Urgent wake-up triggers (override cadence)
+    no_trade_trigger_turns: int = 18
+    loss_trigger_turns: int = 12
+    loss_trigger_profit_per_turn: float = -1.0
+    stagnation_trigger_turns: int = 12
+
     # Learning
     record_history: bool = True
 

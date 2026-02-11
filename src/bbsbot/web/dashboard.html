@@ -259,11 +259,25 @@ tbody tr:hover { background: var(--bg3); }
   padding: 10px 16px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.modal-header-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 .modal-header h2 {
   font-size: 14px;
   color: var(--cyan);
   font-weight: 600;
+}
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal-header-actions .btn {
+  margin-right: 0;
 }
 .modal-header .close-btn {
   background: none;
@@ -295,6 +309,58 @@ tbody tr:hover { background: var(--bg3); }
 }
 .log-content .log-line { margin: 0; }
 .log-content .log-line:nth-child(even) { background: rgba(255,255,255,0.015); }
+
+/* Activity ledger (columnized) */
+.modal.activity-mode .log-content {
+  padding: 0;
+  white-space: normal;
+  word-break: normal;
+  overflow: auto;
+}
+.activity-ledger-wrap {
+  overflow: auto;
+  max-height: 100%;
+}
+.activity-ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.activity-ledger-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg2);
+  color: var(--fg2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+}
+.activity-ledger-table tbody td {
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  padding: 7px 10px;
+  vertical-align: top;
+  color: var(--fg);
+}
+.activity-ledger-table tbody tr:nth-child(even) td {
+  background: rgba(255,255,255,0.015);
+}
+.activity-col-time { width: 100px; color: var(--fg2); }
+.activity-col-type { width: 90px; color: var(--cyan); font-weight: 600; }
+.activity-col-what { width: 210px; }
+.activity-col-why { width: auto; color: var(--fg2); }
+.activity-col-strategy { width: 190px; color: var(--yellow); }
+.activity-col-sector { width: 70px; text-align: center; }
+.activity-col-credits { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+.activity-col-turns { width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+.activity-col-result { width: 90px; text-transform: uppercase; font-size: 11px; }
+.activity-result-success { color: var(--green); }
+.activity-result-failure { color: var(--red); }
+.activity-result-pending { color: var(--yellow); }
 
 /* Terminal modal */
 .term-modal-overlay {
@@ -659,10 +725,15 @@ tbody tr:hover { background: var(--bg3); }
 
 <!-- Log viewer modal -->
 <div class="modal-overlay" id="log-modal">
-  <div class="modal">
+  <div class="modal" id="log-modal-panel">
     <div class="modal-header">
-      <h2 id="log-title">Logs: ---</h2>
-      <button class="close-btn" id="log-close">&times;</button>
+      <div class="modal-header-main">
+        <h2 id="log-title">Logs: ---</h2>
+      </div>
+      <div class="modal-header-actions">
+        <button class="btn logs" id="log-open-raw" title="Open bot worker log">Open Logs</button>
+        <button class="close-btn" id="log-close">&times;</button>
+      </div>
     </div>
     <div class="modal-status">
       <span id="log-status">Connecting...</span>

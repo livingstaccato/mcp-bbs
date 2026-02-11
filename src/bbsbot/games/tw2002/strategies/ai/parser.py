@@ -50,6 +50,14 @@ class ResponseParser:
                 params["strategy"] = str(strategy_name).strip().lower()
             if policy := data.get("policy") or data.get("mode"):
                 params["policy"] = str(policy).strip().lower()
+            review_turns = data.get("review_after_turns")
+            if review_turns is None:
+                review_turns = data.get("check_after_turns")
+            if review_turns is not None:
+                try:
+                    params["review_after_turns"] = int(review_turns)
+                except Exception:
+                    logger.debug("invalid_review_after_turns", value=review_turns)
             self._normalize_trade_params(action, params, state)
             logger.debug(
                 "ai_response_parsed",
@@ -70,6 +78,9 @@ class ResponseParser:
             policy = self._extract_policy_hint(content)
             if policy:
                 params["policy"] = policy
+            review_turns = self._extract_review_hint(content)
+            if review_turns is not None:
+                params["review_after_turns"] = review_turns
             self._normalize_trade_params(action, params, state)
             logger.debug("ai_response_regex_parsed", action=action.name)
             return action, params
@@ -201,6 +212,16 @@ class ResponseParser:
                 return candidate
         return None
 
+    def _extract_review_hint(self, content: str) -> int | None:
+        match = re.search(r"(?:review|check)\s*(?:again)?\s*(?:in|after)\s*(\d+)\s*turn", content, re.IGNORECASE)
+        if not match:
+            return None
+        try:
+            value = int(match.group(1))
+            return value if value > 0 else None
+        except Exception:
+            return None
+
     def _normalize_trade_params(self, action: TradeAction, params: dict, state: GameState) -> None:
         if action != TradeAction.TRADE:
             return
@@ -213,6 +234,27 @@ class ResponseParser:
         raw = str(commodity).strip().lower()
         if not raw:
             return raw
+
+        # Guard against mis-parsing port class tokens (e.g., "BBS") as commodity.
+        if re.fullmatch(r"[bs]{3}", raw):
+            cargo_map = {
+                "fuel_ore": int(getattr(state, "cargo_fuel_ore", 0) or 0),
+                "organics": int(getattr(state, "cargo_organics", 0) or 0),
+                "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
+            }
+            port_class = str(getattr(state, "port_class", "") or "").strip().upper()
+            mapping = [("fuel_ore", 0), ("organics", 1), ("equipment", 2)]
+            # Prefer selling cargo we already hold.
+            if len(port_class) == 3:
+                for comm, idx in mapping:
+                    if cargo_map.get(comm, 0) > 0 and port_class[idx] == "B":
+                        return comm
+                # Otherwise buy something the current port sells.
+                for comm, idx in mapping:
+                    if port_class[idx] == "S":
+                        return comm
+            # Last resort: stable default.
+            return "fuel_ore"
 
         alias = {
             "fuel": "fuel_ore",

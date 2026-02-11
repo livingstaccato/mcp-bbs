@@ -46,6 +46,17 @@ def validate_decision(
         logger.debug("invalid_policy_selection", policy=requested_policy)
         return False
 
+    review_after_turns = params.get("review_after_turns")
+    if review_after_turns is not None:
+        try:
+            review_turns = int(review_after_turns)
+        except Exception:
+            logger.debug("invalid_review_after_turns_type", value=review_after_turns)
+            return False
+        if review_turns < 1 or review_turns > 120:
+            logger.debug("invalid_review_after_turns_range", value=review_turns)
+            return False
+
     # MOVE requires valid target
     if action == TradeAction.MOVE:
         target = params.get("target_sector")

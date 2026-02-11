@@ -380,10 +380,24 @@ class OpportunisticStrategy(TradingStrategy):
             return None
 
         # Get all known sectors with ports
+        cargo = self._get_cargo(state)
+        has_cargo = any(v > 0 for v in cargo.values())
+        idx_map = {"fuel_ore": 0, "organics": 1, "equipment": 2}
         candidates = []
         for sector in range(1, 1001):  # Typical TW2002 universe size
             info = self.knowledge.get_sector_info(sector)
             if info and info.has_port:
+                port_class = (info.port_class or "").upper()
+                if len(port_class) == 3:
+                    if has_cargo:
+                        # With cargo, prefer reachable buyers for what we hold.
+                        wants = [c for c, q in cargo.items() if q > 0]
+                        if wants and not any(port_class[idx_map[c]] == "B" for c in wants):
+                            continue
+                    else:
+                        # With empty holds, prefer ports that can sell something.
+                        if "S" not in port_class:
+                            continue
                 if sector != state.sector and sector != self._exploration.last_trade_sector:
                     candidates.append(sector)
 

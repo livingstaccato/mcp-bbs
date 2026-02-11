@@ -79,6 +79,9 @@ class AIStrategy(TradingStrategy):
         self.consecutive_failures = 0
         self.fallback_until_turn = 0
         self._current_turn = 0
+        self._next_llm_turn = 1  # Bootstrap: allow an immediate first decision
+        self._last_llm_turn = 0
+        self._last_profitable_turn = 0
 
         # Stuck detection: track recent action names
         self._recent_actions: list[str] = []
@@ -320,9 +323,75 @@ class AIStrategy(TradingStrategy):
         logger.warning("ai_strategy_fallback_action", reason=reason, action=action.name)
         return action, params
 
+    def _coerce_review_turns(self, turns: int | None) -> int:
+        """Bound review interval to configured limits."""
+        default_turns = int(getattr(self._settings, "think_interval_turns", 8) or 8)
+        min_turns = int(getattr(self._settings, "min_review_turns", 2) or 2)
+        max_turns = int(getattr(self._settings, "max_review_turns", 40) or 40)
+        review_turns = default_turns if turns is None else int(turns)
+        return max(min_turns, min(max_turns, review_turns))
+
+    def schedule_llm_review(self, turns: int | None = None, *, reason: str = "scheduled") -> None:
+        """Schedule the next LLM review turn."""
+        review_turns = self._coerce_review_turns(turns)
+        self._last_llm_turn = self._current_turn
+        self._next_llm_turn = self._current_turn + review_turns
+        logger.debug(
+            "ai_supervisor_schedule_review",
+            reason=reason,
+            current_turn=self._current_turn,
+            review_in=review_turns,
+            next_llm_turn=self._next_llm_turn,
+        )
+
+    def should_wake_llm(self, state: GameState, *, stuck_action: str | None = None) -> tuple[bool, str]:
+        """Decide whether the LLM should run this turn or stay on autopilot."""
+        if self._current_turn <= 1:
+            return True, "bootstrap"
+
+        if self.consecutive_failures > 0:
+            return True, "failure_recovery"
+        if stuck_action:
+            return True, "stuck_pattern"
+
+        next_llm_turn = int(self._next_llm_turn or 1)
+        urgent_spacing = int(getattr(self._settings, "urgent_wakeup_min_spacing_turns", 4) or 4)
+        can_urgent_override = (self._current_turn - int(self._last_llm_turn or 0)) >= urgent_spacing
+        before_scheduled_review = self._current_turn < next_llm_turn
+
+        stats = self.stats or {}
+        turns_used = int(stats.get("turns_used", 0) or 0)
+        trades = int(stats.get("trades_executed", 0) or 0)
+        ppt = float(stats.get("profit_per_turn", 0.0) or 0.0)
+
+        no_trade_trigger = int(getattr(self._settings, "no_trade_trigger_turns", 18) or 18)
+        if turns_used >= no_trade_trigger and trades == 0 and (can_urgent_override or not before_scheduled_review):
+            return True, "no_trade_trigger"
+
+        loss_trigger_turns = int(getattr(self._settings, "loss_trigger_turns", 12) or 12)
+        loss_trigger_ppt = float(getattr(self._settings, "loss_trigger_profit_per_turn", -1.0) or -1.0)
+        if turns_used >= loss_trigger_turns and ppt <= loss_trigger_ppt and (can_urgent_override or not before_scheduled_review):
+            return True, "loss_trigger"
+
+        stagnation_turns = int(getattr(self._settings, "stagnation_trigger_turns", 12) or 12)
+        since_profit = self._current_turn - int(self._last_profitable_turn or 0)
+        if (
+            turns_used >= stagnation_turns
+            and since_profit >= stagnation_turns
+            and (can_urgent_override or not before_scheduled_review)
+        ):
+            return True, "stagnation_trigger"
+
+        if self._current_turn >= next_llm_turn:
+            return True, "scheduled_review"
+
+        return False, f"autopilot_until_{next_llm_turn}"
+
     def record_result(self, result: TradeResult) -> None:
         """Record result in AI strategy and delegated concrete strategy."""
         super().record_result(result)
+        if result.success and result.action == TradeAction.TRADE and int(getattr(result, "profit", 0) or 0) > 0:
+            self._last_profitable_turn = self._current_turn
         strategy_name = self._last_action_strategy
         if strategy_name in ("", "ai_direct"):
             return

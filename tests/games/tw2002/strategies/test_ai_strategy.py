@@ -167,6 +167,36 @@ async def test_ai_strategy_llm_can_delegate_managed_strategy(ai_strategy, game_s
     assert ai_strategy.active_managed_strategy == "profitable_pairs"
 
 
+@pytest.mark.asyncio
+async def test_ai_strategy_supervisor_autopilot_uses_llm_periodically(ai_strategy, game_state):
+    """LLM decides a plan, then supervisor runs managed strategy without re-calling LLM each turn."""
+    mock_response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"strategy":"profitable_pairs","review_after_turns":12,"action":"MOVE","parameters":{"target_sector":2}}',
+        ),
+        model="llama2",
+    )
+    managed = MagicMock()
+    managed.get_next_action.return_value = (TradeAction.MOVE, {"target_sector": 2, "path": [1, 2]})
+    managed.set_policy.return_value = None
+
+    with (
+        patch.object(ai_strategy.llm_manager, "chat", new_callable=AsyncMock, return_value=mock_response) as llm_chat,
+        patch.object(ai_strategy, "_get_managed_strategy", return_value=managed),
+    ):
+        # Turn 1: LLM should run and schedule next review.
+        action1, _ = await ai_strategy._get_next_action_async(game_state)
+        assert action1 == TradeAction.MOVE
+        assert llm_chat.await_count == 1
+        assert ai_strategy._next_llm_turn >= ai_strategy._current_turn + 1
+
+        # Turn 2: supervisor autopilot should execute managed strategy without another LLM call.
+        action2, _ = await ai_strategy._get_next_action_async(game_state)
+        assert action2 == TradeAction.MOVE
+        assert llm_chat.await_count == 1
+
+
 def test_ai_strategy_done_requires_no_turns(ai_strategy, game_state):
     """DONE is invalid while turns remain."""
     assert not ai_strategy._validate_decision(TradeAction.DONE, {}, game_state)
@@ -220,6 +250,32 @@ def test_ai_strategy_validate_upgrade_decision(ai_strategy, game_state):
 
     # Invalid upgrade type
     assert not ai_strategy._validate_decision(TradeAction.UPGRADE, {"upgrade_type": "invalid"}, game_state)
+
+
+def test_ai_strategy_validate_review_after_turns(ai_strategy, game_state):
+    assert ai_strategy._validate_decision(TradeAction.MOVE, {"target_sector": 2, "review_after_turns": 8}, game_state)
+    assert not ai_strategy._validate_decision(TradeAction.MOVE, {"target_sector": 2, "review_after_turns": 0}, game_state)
+    assert not ai_strategy._validate_decision(
+        TradeAction.MOVE,
+        {"target_sector": 2, "review_after_turns": 999},
+        game_state,
+    )
+
+
+def test_ai_strategy_urgent_triggers_respect_spacing(ai_strategy, game_state):
+    ai_strategy._current_turn = 20
+    ai_strategy._next_llm_turn = 30
+    ai_strategy._last_llm_turn = 19
+    ai_strategy._turns_used = 20
+    ai_strategy._trades_executed = 0
+    should_wake, reason = ai_strategy.should_wake_llm(game_state, stuck_action=None)
+    assert not should_wake
+    assert reason.startswith("autopilot_until_")
+
+    ai_strategy._last_llm_turn = 15
+    should_wake2, reason2 = ai_strategy.should_wake_llm(game_state, stuck_action=None)
+    assert should_wake2
+    assert reason2 == "no_trade_trigger"
 
 
 def test_ai_strategy_find_opportunities(ai_strategy, game_state):

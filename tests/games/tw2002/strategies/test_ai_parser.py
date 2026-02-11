@@ -61,6 +61,21 @@ def test_parser_json_strategy_and_policy(parser, game_state):
     assert params["policy"] == "aggressive"
 
 
+def test_parser_json_review_after_turns(parser, game_state):
+    response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"action":"MOVE","review_after_turns":12,"parameters":{"target_sector":2}}',
+        ),
+        model="llama2",
+    )
+
+    action, params = parser.parse(response, game_state)
+    assert action == TradeAction.MOVE
+    assert params["target_sector"] == 2
+    assert params["review_after_turns"] == 12
+
+
 def test_parser_json_in_markdown(parser, game_state):
     """Test parsing JSON wrapped in markdown."""
     response = ChatResponse(
@@ -104,6 +119,19 @@ def test_parser_normalizes_pipe_separated_commodity(parser, game_state):
     action, params = parser.parse(response, game_state)
     assert action == TradeAction.TRADE
     assert params["commodity"] in ("fuel_ore", "organics")
+
+
+def test_parser_port_class_token_not_treated_as_commodity(parser, game_state):
+    response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"action":"TRADE","parameters":{"commodity":"BBS"}}',
+        ),
+        model="llama2",
+    )
+    action, params = parser.parse(response, game_state)
+    assert action == TradeAction.TRADE
+    assert params["commodity"] in ("fuel_ore", "organics", "equipment")
 
 
 def test_parser_regex_fallback_move(parser, game_state):

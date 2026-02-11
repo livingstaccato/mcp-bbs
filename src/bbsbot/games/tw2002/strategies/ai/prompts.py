@@ -41,7 +41,7 @@ If omitted, strategy defaults to the current concrete strategy.
 Only choose "DONE" if turns_left is 0 or a hard-stop was explicitly requested by operator.
 
 Example response:
-{"strategy": "profitable_pairs", "action": "TRADE", "reasoning": "Use pair trading here", "confidence": 0.85, "parameters": {"commodity": "equipment"}}
+{"strategy": "profitable_pairs", "review_after_turns": 8, "action": "TRADE", "reasoning": "Use pair trading here", "confidence": 0.85, "parameters": {"commodity": "equipment"}}
 
 Parameter formats:
 - TRADE: {"commodity": "fuel_ore|organics|equipment"}
@@ -52,6 +52,9 @@ Parameter formats:
 - RETREAT: {}
 - WAIT: {}
 - DONE: {}"""
+
+# Optional supervisor field:
+# - review_after_turns: integer number of turns before the next LLM review.
 
 
 class PromptBuilder:
