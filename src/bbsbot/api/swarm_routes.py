@@ -320,6 +320,12 @@ async def get_bot_events(bot_id: str):
                     "sector": action.get("sector"),
                     "result": action.get("result"),
                     "details": action.get("details"),
+                    "strategy": bot.strategy,
+                    "strategy_id": bot.strategy_id,
+                    "strategy_mode": bot.strategy_mode,
+                    "strategy_intent": bot.strategy_intent,
+                    "credits": bot.credits,
+                    "turns_executed": bot.turns_executed,
                 }
             )
 
@@ -331,6 +337,13 @@ async def get_bot_events(bot_id: str):
                 "type": "error",
                 "error_type": bot.error_type,
                 "error_message": bot.error_message,
+                "strategy": bot.strategy,
+                "strategy_id": bot.strategy_id,
+                "strategy_mode": bot.strategy_mode,
+                "strategy_intent": bot.strategy_intent,
+                "sector": bot.sector,
+                "credits": bot.credits,
+                "turns_executed": bot.turns_executed,
             }
         )
 
@@ -342,9 +355,14 @@ async def get_bot_events(bot_id: str):
                 "type": "status_update",
                 "state": bot.state,
                 "activity": bot.activity_context,
+                "status_detail": bot.status_detail,
                 "sector": bot.sector,
                 "credits": bot.credits,
                 "turns_executed": bot.turns_executed,
+                "strategy": bot.strategy,
+                "strategy_id": bot.strategy_id,
+                "strategy_mode": bot.strategy_mode,
+                "strategy_intent": bot.strategy_intent,
             }
         )
 

@@ -385,7 +385,6 @@
 	          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
           <button class="btn" onclick="window._openMetrics('${esc(b.bot_id)}')" style="border-color:var(--yellow);color:var(--yellow);" title="Metrics">Σ</button>
           <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')" title="Activity">📊</button>
-          <button class="btn" onclick="window._openLogs('${esc(b.bot_id)}')" style="border-color:var(--fg2);color:var(--fg2);" title="Logs">📝</button>
           <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"} title="Restart">🔄</button>
           <button class="btn kill" onclick="window._killBot('${esc(b.bot_id)}')" ${isRunning ? "" : "disabled"} title="Kill">⏹️</button>
         </td>
@@ -563,11 +562,28 @@
   // --- Log viewer modal ---
   let logWs = null;
   let logAutoScroll = true;
+  let currentLogBotId = null;
+  let currentLogMode = "raw";
 
   const logModal = $("#log-modal");
+  const logModalPanel = $("#log-modal-panel");
   const logTitle = $("#log-title");
   const logStatus = $("#log-status");
   const logContent = $("#log-content");
+  const logOpenRawBtn = $("#log-open-raw");
+
+  function setLogModalMode(mode, botId) {
+    currentLogMode = mode;
+    currentLogBotId = botId || null;
+    if (!logModalPanel) return;
+    if (mode === "activity") {
+      logModalPanel.classList.add("activity-mode");
+      if (logOpenRawBtn) logOpenRawBtn.style.display = "inline-block";
+    } else {
+      logModalPanel.classList.remove("activity-mode");
+      if (logOpenRawBtn) logOpenRawBtn.style.display = "none";
+    }
+  }
 
   // Track scroll position for auto-scroll
   logContent.addEventListener("scroll", function () {
@@ -602,6 +618,7 @@
       logWs = null;
     }
 
+    setLogModalMode("raw", botId);
     logContent.innerHTML = "";
     logTitle.textContent = "Logs: " + botId;
     logStatus.innerHTML = "Connecting...";
@@ -644,10 +661,20 @@
 
   function closeLogs() {
     logModal.classList.remove("open");
+    if (logModalPanel) logModalPanel.classList.remove("activity-mode");
+    currentLogBotId = null;
+    currentLogMode = "raw";
     if (logWs) {
       logWs.close();
       logWs = null;
     }
+  }
+
+  if (logOpenRawBtn) {
+    logOpenRawBtn.addEventListener("click", function () {
+      if (!currentLogBotId) return;
+      window._openLogs(currentLogBotId);
+    });
   }
 
   $("#log-close").addEventListener("click", closeLogs);
@@ -660,18 +687,120 @@
     }
   });
 
-  // --- Event ledger (simplified activity log) ---
+  function formatEventType(event) {
+    if (event.type === "action") return "ACTION";
+    if (event.type === "status_update") return "STATUS";
+    if (event.type === "error") return "ERROR";
+    return String(event.type || "EVENT").toUpperCase();
+  }
+
+  function buildEventWhat(event) {
+    if (event.type === "action") {
+      const atSector = event.sector ? " @ " + event.sector : "";
+      return (event.action || "UNKNOWN") + atSector;
+    }
+    if (event.type === "status_update") {
+      const activity = event.activity || "idle";
+      return (event.state || "unknown").toUpperCase() + " | " + activity;
+    }
+    if (event.type === "error") {
+      return event.error_type || "ERROR";
+    }
+    return "-";
+  }
+
+  function buildEventWhy(event) {
+    if (event.type === "action") return event.details || "";
+    if (event.type === "error") return event.error_message || "";
+    if (event.type === "status_update") {
+      if (event.strategy_intent) return event.strategy_intent;
+      if (event.status_detail) return event.status_detail;
+      return "";
+    }
+    return "";
+  }
+
+  function buildEventStrategy(event) {
+    const sid = event.strategy_id || event.strategy || "";
+    const mode = event.strategy_mode || "";
+    if (sid && mode) return sid + "(" + mode + ")";
+    return sid || "-";
+  }
+
+  function renderActivityLedger(events) {
+    if (!events.length) {
+      logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--fg2); padding: 12px 16px;\">No activity events yet</div>";
+      return;
+    }
+
+    const rows = events
+      .map((event) => {
+        const time = new Date((event.timestamp || 0) * 1000).toLocaleTimeString();
+        const eventType = formatEventType(event);
+        const what = buildEventWhat(event);
+        const why = buildEventWhy(event);
+        const strategy = buildEventStrategy(event);
+        const sector = event.sector != null ? String(event.sector) : "-";
+        const credits = (event.credits != null && Number(event.credits) >= 0)
+          ? formatCredits(Number(event.credits))
+          : "-";
+        const turns = event.turns_executed != null ? String(event.turns_executed) : "-";
+        const resultRaw = String(event.result || (event.type === "error" ? "failure" : "")).toLowerCase();
+        const resultText = resultRaw || "-";
+        const resultCls =
+          resultRaw === "success" ? "activity-result-success" :
+          resultRaw === "failure" || resultRaw === "error" ? "activity-result-failure" :
+          resultRaw === "pending" ? "activity-result-pending" : "";
+
+        return `<tr>
+          <td class="activity-col-time">${esc(time)}</td>
+          <td class="activity-col-type">${esc(eventType)}</td>
+          <td class="activity-col-what">${esc(what)}</td>
+          <td class="activity-col-why" title="${esc(why)}">${esc(why || "-")}</td>
+          <td class="activity-col-strategy">${esc(strategy)}</td>
+          <td class="activity-col-sector">${esc(sector)}</td>
+          <td class="activity-col-credits">${esc(credits)}</td>
+          <td class="activity-col-turns">${esc(turns)}</td>
+          <td class="activity-col-result ${resultCls}">${esc(resultText)}</td>
+        </tr>`;
+      })
+      .join("");
+
+    logContent.innerHTML = `
+      <div class="activity-ledger-wrap">
+        <table class="activity-ledger-table">
+          <thead>
+            <tr>
+              <th class="activity-col-time">Time</th>
+              <th class="activity-col-type">Type</th>
+              <th class="activity-col-what">What Happened</th>
+              <th class="activity-col-why">Why</th>
+              <th class="activity-col-strategy">Strategy</th>
+              <th class="activity-col-sector">Sector</th>
+              <th class="activity-col-credits">Credits</th>
+              <th class="activity-col-turns">Turns</th>
+              <th class="activity-col-result">Result</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // --- Event ledger (columnized activity log) ---
   window._openEventLedger = async function (botId) {
-    // Use the same modal as logs but with event ledger content
+    // Use the same modal as logs but with a structured ledger view.
     if (logWs) {
       logWs.close();
       logWs = null;
     }
 
+    setLogModalMode("activity", botId);
     logContent.innerHTML = "";
     logTitle.textContent = "Activity: " + botId;
     logStatus.innerHTML = "Loading...";
-    logAutoScroll = true;
+    logAutoScroll = false;
     logModal.classList.add("open");
 
     try {
@@ -685,33 +814,7 @@
       const data = await resp.json();
       const events = data.events || [];
 
-      if (events.length === 0) {
-        logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--fg2);\">No events yet</div>";
-        logStatus.textContent = "Loaded";
-        return;
-      }
-
-      const lines = [];
-      for (const event of events) {
-        const time = new Date(event.timestamp * 1000).toLocaleTimeString();
-        let line = time + " ";
-
-        if (event.type === "action") {
-          line += "[ACTION] " + event.action + " @ sector " + event.sector;
-          if (event.result) line += " → " + event.result;
-          if (event.details) line += " (" + event.details + ")";
-        } else if (event.type === "error") {
-          line += "[ERROR] " + (event.error_type || "Unknown error") + ": " + (event.error_message || "");
-        } else if (event.type === "status_update") {
-          line += "[STATUS] " + event.state + " | " + (event.activity || "idle");
-          if (event.sector) line += " @ " + event.sector;
-          line += " | Credits: " + formatCredits(event.credits || 0) + " | Turns: " + (event.turns_executed || 0);
-        }
-
-        lines.push(line);
-      }
-
-      appendLogLines(lines);
+      renderActivityLedger(events);
       logStatus.textContent = "Loaded " + events.length + " events";
     } catch (e) {
       logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Network error: " + e.message + "</div>";
