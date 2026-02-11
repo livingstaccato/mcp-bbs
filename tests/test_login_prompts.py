@@ -91,6 +91,14 @@ Do you want to start a new character?
 (Type Y or N)"""
         assert _get_actual_prompt(screen) == "new_character_prompt"
 
+    def test_new_character_prompt_y_slash_n_variant(self) -> None:
+        """Test detection of new-character prompt that uses (Y/N) wording."""
+        screen = """
+testbot is not in the game.
+
+Would you like to start a new character in this game? (Y/N)"""
+        assert _get_actual_prompt(screen) == "new_character_prompt"
+
     def test_new_character_prompt_already_answered(self) -> None:
         """Test that answered new character prompt is not detected."""
         # When "Yes" appears on the same line, it's already answered

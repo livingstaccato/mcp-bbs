@@ -436,3 +436,56 @@ class TestLoginSequenceIntegration:
 
         with patch("bbsbot.games.tw2002.login.wait_and_respond", fake_wait), pytest.raises(GameFullError):
             await login_sequence(bot, username="botx", character_password="pw", game_password="game")
+
+    @pytest.mark.asyncio
+    async def test_login_sequence_yes_no_new_character_answers_y(self) -> None:
+        """If a new-character prompt appears as generic Y/N, login should answer Y."""
+        from bbsbot.games.tw2002.login import login_sequence
+
+        class _Bot:
+            def __init__(self) -> None:
+                self.session = AsyncMock()
+                self.session.send = AsyncMock()
+                self.session.snapshot = MagicMock(return_value={"screen": ""})
+                self.loop_detection = MagicMock()
+                self.loop_detection.reset = MagicMock()
+                self.loop_detection.threshold = 5
+                self.last_prompt_id = None
+                self.current_sector = 0
+                self.current_credits = 0
+                self.config = MagicMock()
+                self.config.connection = MagicMock()
+                self.config.connection.game_letter = "B"
+                self.last_game_letter = "B"
+
+        bot = _Bot()
+
+        fake_wait = AsyncMock(
+            side_effect=[
+                (
+                    "single_key",
+                    "prompt.menu_selection",
+                    "A) Game A\nB) Trade Wars 2002\nSelection (? for menu):",
+                    {},
+                ),
+                (
+                    "single_key",
+                    "prompt.yes_no",
+                    "Would you like to start a new character in this game? (Y/N)",
+                    {},
+                ),
+                (
+                    "single_key",
+                    "prompt.sector_command",
+                    "Command [TL=00:00:00]:[1] (?=Help)?",
+                    {},
+                ),
+            ]
+        )
+
+        with patch("bbsbot.games.tw2002.login.wait_and_respond", fake_wait):
+            await login_sequence(bot, username="fixedbot", character_password="pw", game_password="game")
+
+        sent_keys = [str(c.args[0]) for c in bot.session.send.await_args_list if c.args]
+        assert "B" in sent_keys
+        assert "Y" in sent_keys

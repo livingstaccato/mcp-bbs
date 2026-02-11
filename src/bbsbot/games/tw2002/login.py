@@ -197,11 +197,17 @@ def _get_actual_prompt(screen: str) -> str:
     if last_line.startswith("password?"):
         return "password_prompt"
 
-    # New character creation prompt
-    if "start a new character" in last_lines and "(type y or n)" in last_lines:
-        # Only if not already answered (check for "Yes" on the line)
-        for line in lines[-3:]:
-            if "(type y or n)" in line.lower() and "yes" not in line.lower():
+    # New character creation prompt.
+    # Handles variants like:
+    # - "Do you want to start a new character? (Type Y or N)"
+    # - "Would you like to start a new character in this game? (Y/N)"
+    if "new character" in last_lines and (
+        "(type y or n)" in last_lines or "(y/n)" in last_lines or "type y or n" in last_lines
+    ):
+        # Only if not already answered (prompt line shouldn't include echoed Yes/No).
+        for line in lines[-4:]:
+            ll = line.lower()
+            if ("type y or n" in ll or "(y/n)" in ll) and " yes" not in ll and " no" not in ll:
                 return "new_character_prompt"
 
     # Show today's log?
@@ -271,6 +277,9 @@ async def login_sequence(
     sent_username: bool = False
     last_password_kind: str | None = None  # "game" | "character"
     ambiguous_password_attempts: int = 0
+    # Use configured game_letter if available, otherwise default to B.
+    config_letter = getattr(bot.config.connection, "game_letter", None) if hasattr(bot, "config") else None
+    game_letter = config_letter if config_letter else "B"
 
     # PHASE 1: Navigate to game selection (menu_selection prompt)
     print("\nNavigating to game selection menu...")
@@ -426,6 +435,12 @@ async def login_sequence(
                 await bot.session.send(f"{username}\r")
                 await asyncio.sleep(0.3)
                 handled = True
+            elif "new character" in screen_lower and ("(y/n)" in screen_lower or "type y or n" in screen_lower):
+                print("      → [Content] New character prompt, answering Y")
+                _maybe_patch_local_twcfig_for_new_players(game_letter)
+                await bot.session.send("Y")
+                await asyncio.sleep(0.3)
+                handled = True
             elif "selection" in screen_lower and "for menu" in screen_lower:
                 print("      ✓ [Content] Detected game selection menu!")
                 break
@@ -440,9 +455,6 @@ async def login_sequence(
 
     # PHASE 2: Send game selection
     print("\nSending game selection...")
-    # Use configured game_letter if available, otherwise auto-detect
-    config_letter = getattr(bot.config.connection, "game_letter", None) if hasattr(bot, "config") else None
-    game_letter = config_letter if config_letter else "B"  # Default to B if not configured
     original_threshold = bot.loop_detection.threshold  # Save before any modifications
 
     # Check screen content for game selection menu (more robust than prompt detection)
@@ -756,8 +768,13 @@ async def login_sequence(
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "yes_no_prompt":
-            print("      → Generic Y/N prompt, answering N")
-            await bot.session.send("N")
+            if "new character" in screen_lower:
+                print("      → Y/N new-character prompt, answering Y")
+                _maybe_patch_local_twcfig_for_new_players(game_letter)
+                await bot.session.send("Y")
+            else:
+                print("      → Generic Y/N prompt, answering N")
+                await bot.session.send("N")
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "what_is_your_name":
@@ -814,6 +831,12 @@ async def login_sequence(
             # Corporate listings menu - send Q to quit
             print("      → Corporate Listings menu, sending Q to exit")
             await bot.session.send("Q")
+            await asyncio.sleep(0.3)
+
+        elif "create_character" in prompt_id:
+            print("      → Create-character prompt (pattern fallback), answering Y")
+            _maybe_patch_local_twcfig_for_new_players(game_letter)
+            await bot.session.send("Y")
             await asyncio.sleep(0.3)
 
         elif input_type == "any_key":
