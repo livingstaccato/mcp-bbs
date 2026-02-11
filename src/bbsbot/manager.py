@@ -42,6 +42,8 @@ class BotStatus(BaseModel):
     uptime_seconds: float = 0
     last_update_time: float = Field(default_factory=time.time)
     completed_at: float | None = None  # Timestamp when bot completed
+    started_at: float | None = None
+    stopped_at: float | None = None
     error_message: str | None = None
     # Activity tracking
     last_action: str | None = None  # "TRADING", "EXPLORING", "BATTLING", etc
@@ -256,12 +258,15 @@ class SwarmManager:
                 self.bots[bot_id].pid = process.pid
                 self.bots[bot_id].state = "running"
                 self.bots[bot_id].last_update_time = time.time()
+                self.bots[bot_id].started_at = time.time()
+                self.bots[bot_id].stopped_at = None
             else:
                 self.bots[bot_id] = BotStatus(
                     bot_id=bot_id,
                     pid=process.pid,
                     config=config_path,
                     state="running",
+                    started_at=time.time(),
                 )
             self.processes[bot_id] = process
 
@@ -345,6 +350,7 @@ class SwarmManager:
             logger.warning(f"Bot {bot_id} force-killed")
 
         self.bots[bot_id].state = "stopped"
+        self.bots[bot_id].stopped_at = time.time()
         del self.processes[bot_id]
         await self._broadcast_status()
 
@@ -735,6 +741,7 @@ class SwarmManager:
                         else:
                             bot.state = "completed"
                             bot.completed_at = time.time()
+                            bot.stopped_at = time.time()
                             if not bot.exit_reason:
                                 bot.exit_reason = "target_reached"
                     else:
@@ -743,6 +750,7 @@ class SwarmManager:
                             bot.exit_reason = f"exit_code_{exit_code}"
                         if not bot.error_message:
                             bot.error_message = f"Process exited with code {exit_code}"
+                        bot.stopped_at = time.time()
                     del self.processes[bot_id]
                     await self._broadcast_status()
 
@@ -757,6 +765,7 @@ class SwarmManager:
                     import time as time_module
 
                     bot.error_timestamp = time_module.time()
+                    bot.stopped_at = time.time()
 
             await asyncio.sleep(self.health_check_interval)
 
@@ -812,6 +821,8 @@ class SwarmManager:
                             uptime_seconds=bot_data.get("uptime_seconds", 0),
                             last_update_time=bot_data.get("last_update_time", time.time()),
                             completed_at=bot_data.get("completed_at"),
+                            started_at=bot_data.get("started_at"),
+                            stopped_at=bot_data.get("stopped_at"),
                             error_message=bot_data.get("error_message"),
                             last_action=bot_data.get("last_action"),
                             last_action_time=bot_data.get("last_action_time", 0),

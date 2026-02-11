@@ -188,6 +188,10 @@ async def update_status(bot_id: str, update: dict):
         bot.turns_max = update["turns_max"]
     if "state" in update:
         bot.state = update["state"]
+    if "started_at" in update:
+        bot.started_at = float(update["started_at"]) if update["started_at"] is not None else None
+    if "stopped_at" in update:
+        bot.stopped_at = float(update["stopped_at"]) if update["stopped_at"] is not None else None
     if "last_action" in update:
         bot.last_action = update["last_action"]
     if "last_action_time" in update:

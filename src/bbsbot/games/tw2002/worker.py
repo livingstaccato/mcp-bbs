@@ -17,6 +17,7 @@ import click
 import httpx
 
 from bbsbot.games.tw2002.bot import TradingBot
+from bbsbot.games.tw2002.bot_identity_store import BotIdentityStore
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.logging import get_logger
 
@@ -25,6 +26,62 @@ logger = get_logger(__name__)
 import contextlib
 
 from bbsbot.defaults import MANAGER_URL as MANAGER_URL_DEFAULT
+
+
+def _auto_username_from_bot_id(bot_id: str) -> str:
+    base = "".join(ch for ch in bot_id if ch.isalnum()).lower()
+    base = base[:8] if base else "bot"
+    suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+    return f"{base}{suffix}"
+
+
+def _resolve_worker_identity(
+    *,
+    bot_id: str,
+    config_dict: dict,
+    config_obj: BotConfig,
+    identity_store: BotIdentityStore,
+    config_path: Path,
+) -> tuple[str, str, str]:
+    """Resolve username/passwords with durable per-bot reuse."""
+    identity = identity_store.load(bot_id)
+    explicit_conn = (config_dict or {}).get("connection", {}) or {}
+    explicit_char = (config_dict or {}).get("character", {}) or {}
+
+    explicit_username = explicit_conn.get("username")
+    explicit_game_pw = explicit_conn.get("game_password")
+    explicit_char_pw = explicit_conn.get("character_password")
+    explicit_char_cfg_pw = explicit_char.get("password")
+
+    username = (
+        explicit_username
+        or config_obj.connection.username
+        or (identity.username if identity and identity.username else None)
+        or _auto_username_from_bot_id(bot_id)
+    )
+    character_password = (
+        explicit_char_pw
+        or explicit_char_cfg_pw
+        or (identity.character_password if identity and identity.character_password else None)
+        or username
+    )
+    game_password = (
+        explicit_game_pw
+        or (identity.game_password if identity and identity.game_password else None)
+        or config_obj.connection.game_password
+        or "game"
+    )
+    identity_store.upsert_identity(
+        bot_id=bot_id,
+        username=username,
+        character_password=character_password,
+        game_password=game_password,
+        host=config_obj.connection.host,
+        port=config_obj.connection.port,
+        game_letter=config_obj.connection.game_letter,
+        config_path=str(config_path),
+    )
+    return username, character_password, game_password
 
 
 class WorkerBot(TradingBot):
@@ -847,25 +904,17 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     worker = WorkerBot(bot_id, config_obj, manager_url)
     term_bridge = None
 
-    # Resolve credentials once from config; retries use the same.
-    # Username / character name:
-    # - If config provides a username, we keep it stable (reuses the same character).
-    # - If not provided, generate a unique one per worker start so we always create a fresh character.
-    def _auto_username() -> str:
-        base = "".join(ch for ch in bot_id if ch.isalnum()).lower()
-        base = base[:8] if base else "bot"
-        suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
-        return f"{base}{suffix}"
-
-    username = config_obj.connection.username or _auto_username()
-    try:
+    # Resolve credentials once from config + persistent store; retries use the same.
+    identity_store = BotIdentityStore()
+    username, character_password, game_password = _resolve_worker_identity(
+        bot_id=bot_id,
+        config_dict=config_dict,
+        config_obj=config_obj,
+        identity_store=identity_store,
+        config_path=config_path,
+    )
+    with contextlib.suppress(Exception):
         worker.character_name = username  # Make status reflect the actual character name promptly.
-    except Exception:
-        pass
-    explicit_char_pw = (config_dict or {}).get("connection", {}).get("character_password")
-    explicit_char_cfg_pw = (config_dict or {}).get("character", {}).get("password")
-    character_password = explicit_char_pw or explicit_char_cfg_pw or username
-    game_password = config_obj.connection.game_password
 
     # Register with manager (best-effort; don't crash the worker if manager is down).
     with contextlib.suppress(Exception):
@@ -950,9 +999,64 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
     blocked_level: dict[str, int] = {"auth": 0, "network": 0, "logic": 0, "watchdog": 0}
     blocked_schedule_s = [300.0, 900.0, 1800.0]  # 5m, 15m, 30m
     rng = __import__("random").Random(1)
+    active_session_id: str | None = None
+
+    def _metrics_snapshot() -> dict[str, int | None]:
+        credits_val: int | None = None
+        try:
+            if worker.game_state and worker.game_state.credits is not None:
+                credits_val = int(worker.game_state.credits)
+            elif getattr(worker, "current_credits", None) is not None:
+                credits_val = int(worker.current_credits)
+        except Exception:
+            credits_val = None
+        sector_val: int | None = None
+        try:
+            if worker.current_sector and int(worker.current_sector) > 0:
+                sector_val = int(worker.current_sector)
+            elif worker.game_state and getattr(worker.game_state, "sector", None):
+                sector_val = int(worker.game_state.sector)
+        except Exception:
+            sector_val = None
+        return {
+            "credits": credits_val,
+            "turns_executed": int(getattr(worker, "turns_used", 0) or 0),
+            "trades_executed": int(getattr(worker, "trades_executed", 0) or 0),
+            "sector": sector_val,
+        }
+
+    def _end_active_session(
+        *,
+        stop_reason: str,
+        state: str | None = None,
+        exit_reason: str | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        nonlocal active_session_id
+        if not active_session_id:
+            return
+        metrics = _metrics_snapshot()
+        error_type = type(error).__name__ if error is not None else None
+        error_message = str(error) if error is not None else None
+        identity_store.end_session(
+            bot_id=bot_id,
+            session_id=active_session_id,
+            stop_reason=stop_reason,
+            state=state,
+            exit_reason=exit_reason,
+            error_type=error_type,
+            error_message=error_message,
+            turns_executed=metrics["turns_executed"],
+            credits=metrics["credits"],
+            trades_executed=metrics["trades_executed"],
+            sector=metrics["sector"],
+        )
+        active_session_id = None
 
     try:
         while True:
+            active_session = identity_store.start_session(bot_id=bot_id, state="starting")
+            active_session_id = active_session.id
             try:
                 # Ensure watchdog is running once per process.
                 worker.start_watchdog(stuck_timeout_s=120.0, check_interval_s=5.0)
@@ -996,6 +1100,11 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 worker.ai_activity = "RUNNING"
                 worker.lifecycle_state = "running"
                 await run_trading_loop(worker, config_obj, char_state)
+                _end_active_session(
+                    stop_reason="soft_stop",
+                    state="running",
+                    exit_reason="soft_stop",
+                )
 
                 # If the trading loop returns, treat it as a soft-stop and restart.
                 worker.ai_activity = "RESTARTING (soft-stop)"
@@ -1010,12 +1119,19 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                     blocked_level[k] = 0
 
             except asyncio.CancelledError:
+                _end_active_session(stop_reason="cancelled", state="stopped", exit_reason="cancelled")
                 raise
             except Exception as e:
                 failures += 1
                 logger.error(f"Worker cycle error: {e}", exc_info=True)
                 cls = _classify_exception(e)
                 budget.note(cls)
+                _end_active_session(
+                    stop_reason=f"error:{cls}",
+                    state="recovering",
+                    exit_reason="recovering",
+                    error=e,
+                )
 
                 # Escalation: stop thrashing; enter blocked with long backoff.
                 if cls in ("auth", "game_full") or budget.exceeded(cls):
@@ -1073,6 +1189,7 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
                 backoff_s = min(60.0, backoff_s * 2.0)
                 continue
     finally:
+        _end_active_session(stop_reason="shutdown", state="stopped", exit_reason="shutdown")
         with contextlib.suppress(Exception):
             await worker.stop_status_reporter()
         with contextlib.suppress(Exception):
