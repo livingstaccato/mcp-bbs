@@ -19,6 +19,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.types import Scope
 
 from bbsbot.api import log_routes, swarm_routes, term_routes
 from bbsbot.defaults import MANAGER_HOST, MANAGER_PORT
@@ -26,6 +27,24 @@ from bbsbot.log_service import LogService
 from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+_NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+
+class DashboardStaticFiles(StaticFiles):
+    """Static files mount with no-store headers for dashboard frontend assets."""
+
+    async def get_response(self, path: str, scope: Scope):  # type: ignore[override]
+        response = await super().get_response(path, scope)
+        if path in {"dashboard.js"}:
+            for key, value in _NO_STORE_HEADERS.items():
+                response.headers[key] = value
+        return response
 
 
 class BotStatus(BaseModel):
@@ -188,7 +207,7 @@ class SwarmManager:
         if static_dir.is_dir():
             self.app.mount(
                 "/static",
-                StaticFiles(directory=str(static_dir)),
+                DashboardStaticFiles(directory=str(static_dir)),
                 name="static",
             )
 
@@ -201,7 +220,7 @@ class SwarmManager:
         @self.app.get("/dashboard", response_class=HTMLResponse)
         async def dashboard():
             if dashboard_html.exists():
-                return dashboard_html.read_text()
+                return HTMLResponse(dashboard_html.read_text(), headers=_NO_STORE_HEADERS)
             return HTMLResponse("<h1>Dashboard not found</h1>", status_code=404)
 
     def _setup_routes(self) -> None:
