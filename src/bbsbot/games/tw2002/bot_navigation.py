@@ -125,27 +125,33 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
             # End-state: always learn core stats immediately after entering game.
             # On this server, "D" is re-display sector, not a stats screen. "i" reliably prints credits
             # and (often) holds, and can appear even without leaving the command context.
-            needs_stats = (
-                merged_kv.get("credits") is None
-                or merged_kv.get("holds_total") is None
-                or merged_kv.get("holds_free") is None
-            )
+            core_stat_keys = ("credits", "holds_total", "holds_free", "fighters", "shields")
+            missing_stats = [k for k in core_stat_keys if merged_kv.get(k) is None]
+            stats_refresh_attempts = int(getattr(bot, "_stats_refresh_attempts", 0))
+            needs_stats = bool(missing_stats) and stats_refresh_attempts < 4
             if needs_stats and bot.session:
                 try:
-                    print("  [Orient] Refreshing stats via 'i' (credits/holds)...")
-                    before = bot.session.screen_change_seq()
-                    await bot.session.send("i")
-                    # Wait for bytes to arrive (the info line often prints without a full screen redraw).
-                    await bot.session.wait_for_update(timeout_ms=2500)
-                    # If the screen did change, wait until it's idle to avoid parsing mid-render.
-                    changed = await bot.session.wait_for_screen_change(timeout_ms=1200, since=before)
-                    if changed:
-                        await bot.session.wait_for_update(timeout_ms=800)
-                    snap2 = bot.session.snapshot()
-                    kv2 = (snap2.get("prompt_detected") or {}).get("kv_data") or {}
-                    merged_kv.update({k: v for k, v in kv2.items() if v is not None})
-                    # Also merge any semantic watch updates that arrived from the info line.
-                    merged_kv.update({k: v for k, v in dict(bot.last_semantic_data).items() if v is not None})
+                    print(f"  [Orient] Refreshing stats via '/' quick-stats (missing: {', '.join(missing_stats)})...")
+                    refresh_cmds = ["/"]
+                    if quick_state.context == "sector_command":
+                        refresh_cmds.append("i")
+                    for refresh_cmd in refresh_cmds:
+                        before = bot.session.screen_change_seq()
+                        await bot.session.send(refresh_cmd)
+                        # Wait for bytes to arrive (the info line often prints without a full screen redraw).
+                        await bot.session.wait_for_update(timeout_ms=2500)
+                        # If the screen did change, wait until it's idle to avoid parsing mid-render.
+                        changed = await bot.session.wait_for_screen_change(timeout_ms=1200, since=before)
+                        if changed:
+                            await bot.session.wait_for_update(timeout_ms=800)
+                        snap2 = bot.session.snapshot()
+                        kv2 = (snap2.get("prompt_detected") or {}).get("kv_data") or {}
+                        merged_kv.update({k: v for k, v in kv2.items() if v is not None})
+                        # Also merge any semantic watch updates that arrived from the info line.
+                        merged_kv.update({k: v for k, v in dict(bot.last_semantic_data).items() if v is not None})
+                        if all(merged_kv.get(k) is not None for k in core_stat_keys):
+                            break
+                    bot._stats_refresh_attempts = stats_refresh_attempts + 1
                 except Exception:
                     pass
 
@@ -162,6 +168,12 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
                 turns_left=merged_kv.get("turns_left"),
                 fighters=merged_kv.get("fighters"),
                 shields=merged_kv.get("shields"),
+                ship_type=merged_kv.get("ship_type"),
+                ship_name=merged_kv.get("ship_name"),
+                player_name=merged_kv.get("player_name"),
+                alignment=merged_kv.get("alignment"),
+                experience=merged_kv.get("experience"),
+                corp_id=merged_kv.get("corp_id"),
             )
             # Pull additional state from semantic extraction when present. This keeps
             # our SectorKnowledge fresh even when we skip the full D-driven orient().
@@ -231,6 +243,8 @@ async def orient_full(bot: TradingBot, force_scan: bool = False) -> GameState:
                 except Exception:
                     pass
             fast_ms = (_time() - t0) * 1000
+            if all(merged_kv.get(k) is not None for k in core_stat_keys):
+                bot._stats_refreshed = True
             print(f"  [Orient] Fast path: {bot.game_state.summary()} [{fast_ms:.0f}ms]")
         else:
             # Not safe, need full orient

@@ -29,13 +29,19 @@ ACTIONS:
 - UPGRADE: Buy ship improvements
 - RETREAT: Flee from danger
 - WAIT: Do nothing (use sparingly)
-- DONE: Stop playing
 
 IMPORTANT: You MUST respond with ONLY a JSON object. No other text before or after.
 Do NOT include explanations, markdown, or code blocks. Just raw JSON.
+Always include the top-level field "strategy" to select execution mode.
+Valid strategy values:
+- "profitable_pairs": delegate execution to profitable_pairs strategy
+- "opportunistic": delegate execution to opportunistic strategy
+- "twerk_optimized": delegate execution to twerk_optimized strategy
+If omitted, strategy defaults to the current concrete strategy.
+Only choose "DONE" if turns_left is 0 or a hard-stop was explicitly requested by operator.
 
 Example response:
-{"action": "TRADE", "reasoning": "Port sells equipment cheaply, good profit opportunity", "confidence": 0.85, "parameters": {"commodity": "equipment"}}
+{"strategy": "profitable_pairs", "action": "TRADE", "reasoning": "Use pair trading here", "confidence": 0.85, "parameters": {"commodity": "equipment"}}
 
 Parameter formats:
 - TRADE: {"commodity": "fuel_ore|organics|equipment"}

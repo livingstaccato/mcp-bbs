@@ -122,7 +122,7 @@ async def make_llm_decision(
                     role="user",
                     content=(
                         "Your response was not valid JSON. Respond with ONLY a JSON object like: "
-                        '{"action": "TRADE", "reasoning": "...", "parameters": {}}'
+                        '{"strategy": "ai_direct", "action": "TRADE", "reasoning": "...", "parameters": {}}'
                     ),
                 ),
             ]

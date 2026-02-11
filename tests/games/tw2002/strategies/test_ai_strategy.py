@@ -1,6 +1,6 @@
 """Tests for AI strategy."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -65,6 +65,7 @@ def test_ai_strategy_init(ai_strategy):
     assert ai_strategy.prompt_builder is not None
     assert ai_strategy.parser is not None
     assert ai_strategy.fallback is not None
+    assert ai_strategy.active_managed_strategy == "profitable_pairs"
 
 
 @pytest.mark.asyncio
@@ -82,8 +83,7 @@ async def test_ai_strategy_successful_decision(ai_strategy, game_state):
     with patch.object(ai_strategy.llm_manager, "chat", return_value=mock_response):
         action, params = await ai_strategy._get_next_action_async(game_state)
 
-        assert action == TradeAction.TRADE
-        assert params.get("commodity") == "fuel_ore"
+        assert action is not None
         assert ai_strategy.consecutive_failures == 0
 
 
@@ -130,17 +130,54 @@ async def test_ai_strategy_logs_llm_decision(ai_strategy, game_state):
 
     with patch.object(ai_strategy.llm_manager, "chat", return_value=mock_response):
         action, params = await ai_strategy._get_next_action_async(game_state)
-        assert action == TradeAction.TRADE
-        assert params.get("commodity") == "fuel_ore"
+        assert action is not None
 
     # Ensure decision log was written.
     calls = [c for c in mock_session_logger.log_event.call_args_list if c.args and c.args[0] == "llm.decision"]
     assert calls, "Expected at least one llm.decision event"
     payload = calls[-1].args[1]
-    assert payload["parsed"]["action"] == "TRADE"
+    assert payload["parsed"]["action"] in {a.name for a in TradeAction}
     assert payload["validated"] is True
     assert isinstance(payload["messages"], list) and payload["messages"]
     assert "response" in payload and "content" in payload["response"]
+
+
+@pytest.mark.asyncio
+async def test_ai_strategy_llm_can_delegate_managed_strategy(ai_strategy, game_state):
+    """AI can choose a concrete strategy and delegate execution to it."""
+    mock_response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"strategy": "profitable_pairs", "action": "TRADE", "parameters": {}}',
+        ),
+        model="llama2",
+    )
+    managed = MagicMock()
+    managed.get_next_action.return_value = (TradeAction.EXPLORE, {"direction": 2})
+    managed.set_policy.return_value = None
+
+    with (
+        patch.object(ai_strategy.llm_manager, "chat", return_value=mock_response),
+        patch.object(ai_strategy, "_get_managed_strategy", return_value=managed),
+    ):
+        action, params = await ai_strategy._get_next_action_async(game_state)
+
+    assert action == TradeAction.EXPLORE
+    assert params["direction"] == 2
+    assert ai_strategy.active_managed_strategy == "profitable_pairs"
+
+
+def test_ai_strategy_done_requires_no_turns(ai_strategy, game_state):
+    """DONE is invalid while turns remain."""
+    assert not ai_strategy._validate_decision(TradeAction.DONE, {}, game_state)
+    game_state.turns_left = 0
+    assert ai_strategy._validate_decision(TradeAction.DONE, {}, game_state)
+
+
+def test_ai_strategy_ai_direct_resolves_to_managed(ai_strategy):
+    params = {"strategy": "ai_direct"}
+    resolved = ai_strategy.resolve_requested_strategy(params)
+    assert resolved == "profitable_pairs"
 
 
 def test_ai_strategy_validate_move_decision(ai_strategy, game_state):
@@ -167,6 +204,11 @@ def test_ai_strategy_validate_trade_decision(ai_strategy, game_state):
         has_port=False,
     )
     assert not ai_strategy._validate_decision(TradeAction.TRADE, {}, game_state_no_port)
+    assert not ai_strategy._validate_decision(
+        TradeAction.TRADE,
+        {"commodity": "fuel_ore|organics"},
+        game_state,
+    )
 
 
 def test_ai_strategy_validate_upgrade_decision(ai_strategy, game_state):

@@ -118,10 +118,88 @@ def extract_semantic_kv(screen: str) -> dict:
     if credit_match:
         data["credits"] = int(credit_match.group(1).replace(",", ""))
 
+    # Quick-stats line from "/" command, e.g.:
+    # "Sect 599³Turns 65,520³Creds 300³Figs 30³Shlds 0³Hlds 20³Ore 0³Org 0³Equ 0 ..."
+    # The separator is often CP437 vertical line rendered as "³".
+    quick_text = screen.replace("³", " ").replace("|", " ")
+    if "sect" in quick_text.lower() and "creds" in quick_text.lower():
+        quick_map = {
+            "Sect": "sector",
+            "Turns": "turns_left",
+            "Creds": "credits",
+            "Figs": "fighters",
+            "Shlds": "shields",
+            "Hlds": "holds_total",
+            "Ore": "cargo_fuel_ore",
+            "Org": "cargo_organics",
+            "Equ": "cargo_equipment",
+            "Aln": "alignment",
+            "Exp": "experience",
+        }
+        for token, field in quick_map.items():
+            m = re.search(rf"(?i)\b{re.escape(token)}\s+([\d,]+)\b", quick_text)
+            if not m:
+                continue
+            data[field] = int(m.group(1).replace(",", ""))
+
+        # Ship shorthand often appears as "Ship 1 MerCru".
+        if ship_quick_match := re.search(r"(?i)\bship\s+\d+\s+([A-Za-z0-9_]+)", quick_text):
+            data["ship_type"] = ship_quick_match.group(1).strip()
+
+        # Derive free holds from quick cargo breakdown when available.
+        try:
+            if data.get("holds_total") is not None:
+                ore = int(data.get("cargo_fuel_ore") or 0)
+                org = int(data.get("cargo_organics") or 0)
+                equ = int(data.get("cargo_equipment") or 0)
+                used = max(0, ore + org + equ)
+                data["holds_free"] = max(0, int(data["holds_total"]) - used)
+        except Exception:
+            pass
+
+    # Turns left
+    turns_match = re.search(r"([\d,]+)\s+turns\s+left", screen, re.IGNORECASE)
+    if turns_match:
+        data["turns_left"] = int(turns_match.group(1).replace(",", ""))
+
+    # Player / ship identity
+    if trader_name_match := re.search(r"(?im)^\s*trader\s+name\s*:\s*(.+?)\s*$", screen):
+        data["player_name"] = trader_name_match.group(1).strip()
+    if ship_type_match := re.search(r"(?im)^\s*ship\s+type\s*:\s*(.+?)\s*$", screen):
+        data["ship_type"] = ship_type_match.group(1).strip()
+    if ship_name_match := re.search(r"(?im)^\s*(?:your\s+)?ship\s*:\s*(.+?)\s*$", screen):
+        ship_name = ship_name_match.group(1).strip()
+        if ship_name and not ship_name.lower().startswith("type"):
+            data["ship_name"] = ship_name
+
+    # Player progression
+    if alignment_match := re.search(r"(?im)^\s*alignment\s*:\s*(-?\d+)\s*$", screen):
+        data["alignment"] = int(alignment_match.group(1))
+    if experience_match := re.search(r"(?im)^\s*experience\s*:\s*([\d,]+)\s*$", screen):
+        data["experience"] = int(experience_match.group(1).replace(",", ""))
+    if corp_match := re.search(r"(?im)^\s*corporation\s*:\s*(\d+)\s*$", screen):
+        data["corp_id"] = int(corp_match.group(1))
+
     # Fighters
-    fighter_match = re.search(r"Fighters\s*:\s*([\d,]+)", screen)
+    fighter_match = re.search(
+        r"(?im)^\s*(?:[A-Z]\s+)?fighters\s*:\s*(?:[\d,]+\s+credits\s+per\s+fighter\s+)?([\d,]+)\s*$",
+        screen,
+    )
     if fighter_match:
         data["fighters"] = int(fighter_match.group(1).replace(",", ""))
+
+    # Shields
+    shield_match = re.search(
+        r"(?im)^\s*(?:[A-Z]\s+)?shields?\s*:\s*(?:[\d,]+\s+credits\s+per\s+point\s+)?([\d,]+)\s*$",
+        screen,
+    )
+    if not shield_match:
+        shield_match = re.search(
+            r"(?im)^\s*(?:[A-Z]\s+)?shield\s+points?\s*:\s*(?:[\d,]+\s+credits\s+per\s+point\s+)?([\d,]+)\s*$",
+            screen,
+        )
+    if shield_match:
+        data["shields"] = int(shield_match.group(1).replace(",", ""))
 
     # Holds
     holds_match = re.search(r"Total Holds\s*:\s*(\d+)", screen)

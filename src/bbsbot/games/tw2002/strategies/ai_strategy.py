@@ -8,6 +8,7 @@ This strategy uses a hybrid approach:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections import deque
 from typing import TYPE_CHECKING
@@ -25,6 +26,7 @@ from bbsbot.games.tw2002.strategies.ai.prompts import PromptBuilder
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
     TradeOpportunity,
+    TradeResult,
     TradingStrategy,
 )
 from bbsbot.games.tw2002.strategies.opportunistic import OpportunisticStrategy
@@ -70,6 +72,10 @@ class AIStrategy(TradingStrategy):
 
         # Fallback strategy
         self.fallback = OpportunisticStrategy(config, knowledge)
+        self._managed_strategies: dict[str, TradingStrategy] = {"opportunistic": self.fallback}
+        # End-state default: AI orchestrates concrete strategies, not direct raw actions.
+        self._active_managed_strategy: str = "profitable_pairs"
+        self._last_action_strategy: str = "profitable_pairs"
         self.consecutive_failures = 0
         self.fallback_until_turn = 0
         self._current_turn = 0
@@ -226,6 +232,103 @@ class AIStrategy(TradingStrategy):
             List of opportunities
         """
         return self.fallback.find_opportunities(state)
+
+    @property
+    def active_managed_strategy(self) -> str:
+        """Current strategy chosen by the LLM orchestrator."""
+        return self._active_managed_strategy
+
+    def normalize_strategy_name(self, strategy_name: str | None) -> str | None:
+        """Normalize strategy aliases from LLM output."""
+        if not strategy_name:
+            return None
+        normalized = str(strategy_name).strip().lower()
+        alias_map = {
+            "ai": "ai_direct",
+            "ai_direct": "ai_direct",
+            "direct": "ai_direct",
+            "llm": "ai_direct",
+            "self": "ai_direct",
+            "profitable_pairs": "profitable_pairs",
+            "pairs": "profitable_pairs",
+            "opportunistic": "opportunistic",
+            "twerk_optimized": "twerk_optimized",
+            "twerk": "twerk_optimized",
+        }
+        return alias_map.get(normalized)
+
+    def resolve_requested_strategy(self, params: dict) -> str:
+        """Resolve an LLM-requested strategy (or continue current strategy)."""
+        requested = params.get("strategy") or params.get("strategy_id")
+        normalized = self.normalize_strategy_name(requested)
+        if requested and not normalized:
+            raise ValueError(f"Unknown strategy selection: {requested}")
+        if normalized == "ai_direct":
+            # Treat ai_direct as "continue current managed strategy".
+            return self._active_managed_strategy or "profitable_pairs"
+        if normalized:
+            self._active_managed_strategy = normalized
+        return self._active_managed_strategy
+
+    def _get_managed_strategy(self, strategy_name: str) -> TradingStrategy:
+        """Get or lazily create a managed concrete strategy."""
+        if strategy_name in self._managed_strategies:
+            return self._managed_strategies[strategy_name]
+
+        if strategy_name == "profitable_pairs":
+            from bbsbot.games.tw2002.strategies.profitable_pairs import ProfitablePairsStrategy
+
+            strategy = ProfitablePairsStrategy(self.config, self.knowledge)
+        elif strategy_name == "twerk_optimized":
+            from bbsbot.games.tw2002.strategies.twerk_optimized import TwerkOptimizedStrategy
+
+            strategy = TwerkOptimizedStrategy(self.config, self.knowledge)
+        elif strategy_name == "opportunistic":
+            strategy = self.fallback
+        else:
+            raise ValueError(f"Unsupported managed strategy: {strategy_name}")
+
+        self._managed_strategies[strategy_name] = strategy
+        return strategy
+
+    def run_managed_strategy(
+        self,
+        strategy_name: str,
+        state: GameState,
+        *,
+        update_active: bool = True,
+    ) -> tuple[TradeAction, dict]:
+        """Run one turn of a concrete strategy selected by the LLM."""
+        normalized = self.normalize_strategy_name(strategy_name)
+        if normalized is None:
+            raise ValueError(f"Unknown strategy selection: {strategy_name}")
+        if normalized == "ai_direct":
+            raise ValueError("ai_direct is not a concrete managed strategy")
+        if update_active:
+            self._active_managed_strategy = normalized
+
+        managed = self._get_managed_strategy(normalized)
+        with contextlib.suppress(Exception):
+            managed.set_policy(self.policy)
+        action, params = managed.get_next_action(state)
+        self._last_action_strategy = normalized
+        return action, params
+
+    def run_fallback_action(self, state: GameState, reason: str) -> tuple[TradeAction, dict]:
+        """Execute fallback behavior without changing active strategy selection."""
+        action, params = self.run_managed_strategy("opportunistic", state, update_active=False)
+        logger.warning("ai_strategy_fallback_action", reason=reason, action=action.name)
+        return action, params
+
+    def record_result(self, result: TradeResult) -> None:
+        """Record result in AI strategy and delegated concrete strategy."""
+        super().record_result(result)
+        strategy_name = self._last_action_strategy
+        if strategy_name in ("", "ai_direct"):
+            return
+        with contextlib.suppress(Exception):
+            managed = self._get_managed_strategy(strategy_name)
+            managed.record_result(result)
 
     def set_session_logger(self, logger: SessionLogger) -> None:
         """Set session logger for feedback event logging.

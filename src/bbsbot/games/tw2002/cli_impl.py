@@ -58,6 +58,135 @@ def _create_strategy_instance(strategy_name: str, config: BotConfig, knowledge):
     return cls(config, knowledge)
 
 
+def _normalize_port_side(value: str | None) -> str | None:
+    if not value:
+        return None
+    side = str(value).strip().lower()
+    if side in {"buying", "buy"}:
+        return "buying"
+    if side in {"selling", "sell"}:
+        return "selling"
+    return None
+
+
+def _derive_port_statuses(port_class: str | None, info) -> dict[str, str]:
+    statuses: dict[str, str] = {}
+    if info is not None:
+        raw = getattr(info, "port_status", None) or {}
+        for commodity, side in raw.items():
+            norm = _normalize_port_side(side)
+            if norm and commodity in {"fuel_ore", "organics", "equipment"}:
+                statuses[commodity] = norm
+
+    if statuses:
+        return statuses
+
+    if not port_class or len(port_class) != 3:
+        return statuses
+
+    cls = str(port_class).upper()
+    return {
+        "fuel_ore": "buying" if cls[0] == "B" else "selling",
+        "organics": "buying" if cls[1] == "B" else "selling",
+        "equipment": "buying" if cls[2] == "B" else "selling",
+    }
+
+
+def _choose_no_trade_guard_action(
+    state,
+    knowledge,
+    credits_now: int,
+    *,
+    guard_overage: int = 0,
+) -> tuple[TradeAction, dict] | None:
+    """Hard trade-urgency override when the no-trade guard is active."""
+    if state.context != "sector_command":
+        return None
+
+    current_sector = int(state.sector or 0)
+    info = knowledge.get_sector_info(current_sector) if current_sector > 0 else None
+    statuses = _derive_port_statuses(getattr(state, "port_class", None), info)
+    cargo = {
+        "fuel_ore": int(getattr(state, "cargo_fuel_ore", 0) or 0),
+        "organics": int(getattr(state, "cargo_organics", 0) or 0),
+        "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
+    }
+
+    if bool(getattr(state, "has_port", False)) and current_sector > 0:
+        # First priority: sell whatever we already hold into local demand.
+        for commodity, qty in cargo.items():
+            if qty > 0 and statuses.get(commodity) == "buying":
+                return TradeAction.TRADE, {
+                    "commodity": commodity,
+                    "action": "sell",
+                    "max_quantity": qty,
+                    "urgency": "no_trade_guard",
+                }
+
+        # Second priority: buy the cheapest local commodity the port is selling.
+        holds_free = max(0, int(getattr(state, "holds_free", 0) or 0))
+        allow_local_buy_attempt = guard_overage <= 1
+        if allow_local_buy_attempt and holds_free > 0 and int(credits_now or 0) > 0:
+            sellables = [c for c in ("fuel_ore", "organics", "equipment") if statuses.get(c) == "selling"]
+            if sellables:
+                prices = (getattr(info, "port_prices", {}) or {}) if info else {}
+
+                def _rank_buy(comm: str) -> tuple[int, str]:
+                    quoted = (prices.get(comm) or {}).get("sell")
+                    try:
+                        p = int(quoted) if quoted is not None else 10**9
+                    except Exception:
+                        p = 10**9
+                    return (p, comm)
+
+                commodity = sorted(sellables, key=_rank_buy)[0]
+                quoted = (prices.get(commodity) or {}).get("sell")
+                qty = 1
+                with contextlib.suppress(Exception):
+                    qv = int(quoted) if quoted is not None else 0
+                    if qv > 0:
+                        qty = max(1, min(holds_free, int(credits_now // qv)))
+                    else:
+                        # Unknown price: keep buys small until we build market intel.
+                        qty = min(holds_free, 2 if int(credits_now) < 2000 else 4)
+                if qty > 0:
+                    return TradeAction.TRADE, {
+                        "commodity": commodity,
+                        "action": "buy",
+                        "max_quantity": qty,
+                        "urgency": "no_trade_guard",
+                    }
+
+    # Not at a usable port: force movement to nearest known port.
+    if current_sector > 0:
+        best_path: list[int] | None = None
+        best_sector: int | None = None
+        known = getattr(knowledge, "_sectors", {}) or {}
+        for sector, sector_info in known.items():
+            if int(sector) == current_sector:
+                continue
+            if not getattr(sector_info, "has_port", False):
+                continue
+            path = knowledge.find_path(current_sector, int(sector), max_hops=20)
+            if not path or len(path) < 2:
+                continue
+            if best_path is None or len(path) < len(best_path):
+                best_path = path
+                best_sector = int(sector)
+        if best_path and best_sector:
+            return TradeAction.MOVE, {
+                "target_sector": best_sector,
+                "path": best_path,
+                "urgency": "no_trade_guard",
+            }
+
+    warps = [int(w) for w in (state.warps or []) if int(w) != current_sector]
+    if warps:
+        target = sorted(warps)[0]
+        return TradeAction.EXPLORE, {"direction": target, "urgency": "no_trade_guard"}
+    return None
+
+
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     """Run the main trading loop using the configured strategy."""
     from bbsbot.games.tw2002.strategy_manager import StrategyManager
@@ -282,8 +411,8 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         # Anti-waste guardrail: if we have burned many turns with very few trades,
         # force a profit-first strategy/mode to avoid long explore-only runs.
-        guard_turns = int(getattr(config.trading, "no_trade_guard_turns", 120))
-        guard_min_trades = int(getattr(config.trading, "no_trade_guard_min_trades", 3))
+        guard_turns = int(getattr(config.trading, "no_trade_guard_turns", 60))
+        guard_min_trades = int(getattr(config.trading, "no_trade_guard_min_trades", 1))
         guard_strategy = str(getattr(config.trading, "no_trade_guard_strategy", "profitable_pairs"))
         guard_mode = str(getattr(config.trading, "no_trade_guard_mode", "balanced"))
         trades_done = int(getattr(bot, "trades_executed", 0) or 0)
@@ -332,6 +461,25 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             # Synchronous strategy
             action, params = strategy.get_next_action(state)
 
+        if force_guard:
+            forced = _choose_no_trade_guard_action(
+                state=state,
+                knowledge=bot.sector_knowledge,
+                credits_now=int(getattr(state, "credits", 0) or 0),
+                guard_overage=max(0, int(turns_used - guard_turns)),
+            )
+            if forced is not None:
+                action, params = forced
+                logger.warning(
+                    "no_trade_guard_force_action: turns=%s trades=%s action=%s params=%s",
+                    turns_used,
+                    trades_done,
+                    action.name,
+                    params,
+                )
+                with contextlib.suppress(Exception):
+                    bot.strategy_intent = f"RECOVERY:TRADE_URGENCY {action.name}"
+
         print(f"  Strategy: {action.name}")
 
         # Emit a short intent string (separate from prompt_id/UI state).
@@ -365,6 +513,14 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 intent = "WAIT"
         except Exception:
             intent = None
+
+        # If AI delegated execution to a concrete strategy, expose that in intent.
+        try:
+            active_managed = getattr(strategy, "active_managed_strategy", "ai_direct")
+            if getattr(strategy, "name", "") == "ai_strategy" and active_managed != "ai_direct":
+                intent = f"{active_managed.upper()} | {intent or action.name}"
+        except Exception:
+            pass
 
         try:
             if hasattr(strategy, "set_intent"):
@@ -633,7 +789,7 @@ async def execute_port_trade(
             break
 
         # Use last lines to detect current prompt state
-        lines = [l.strip() for l in screen.split("\n") if l.strip()]
+        lines = [line.strip() for line in screen.split("\n") if line.strip()]
         last_lines = "\n".join(lines[-6:]).lower() if lines else ""
         last_line = lines[-1].strip().lower() if lines else ""
 

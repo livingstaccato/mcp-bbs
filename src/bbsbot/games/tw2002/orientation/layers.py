@@ -268,22 +268,41 @@ async def _gather_state(
 
     try:
         bot_semantic_before = getattr(bot, "last_semantic_data", {}) or {}
-        have_credits = bool((kv_data or {}).get("credits") or bot_semantic_before.get("credits"))
         stats_refreshed = bool(getattr(bot, "_stats_refreshed", False))
+        stats_refresh_attempts = int(getattr(bot, "_stats_refresh_attempts", 0))
+        last_stats_refresh_ts = float(getattr(bot, "_last_stats_refresh_ts", 0.0))
 
-        if context == "sector_command" and (not have_credits) and (not stats_refreshed):
-            print("  [Orient] Refreshing stats via 'i' (credits/holds)...")
-            # TW2002 command prompt expects a submitted command.
-            await bot.session.send("i\r")
-            await asyncio.sleep(0.05)
-            _, _, info_screen, _ = await wait_and_respond(
-                bot,
-                timeout_ms=10000,
-                ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter", "prompt.sector_command"},
-            )
-            # Ensure semantic updates even if the waiter's callback missed the transient line.
-            bot.last_semantic_data.update(extract_semantic_kv(info_screen))
-            bot._stats_refreshed = True
+        def merged_value(key: str):
+            if kv_data and key in kv_data and kv_data.get(key) is not None:
+                return kv_data.get(key)
+            if bot_semantic_before and key in bot_semantic_before and bot_semantic_before.get(key) is not None:
+                return bot_semantic_before.get(key)
+            return None
+
+        core_keys = ("credits", "holds_total", "holds_free", "fighters", "shields")
+        missing_core = [k for k in core_keys if merged_value(k) is None]
+        should_refresh_stats = bool(missing_core) and stats_refresh_attempts < 4 and ((time() - last_stats_refresh_ts) >= 1.5)
+
+        if should_refresh_stats:
+            print(f"  [Orient] Refreshing stats via '/' quick-stats (missing: {', '.join(missing_core)})...")
+            refresh_cmds = ["/"]
+            if context == "sector_command":
+                refresh_cmds.append("i\r")
+            for refresh_cmd in refresh_cmds:
+                await bot.session.send(refresh_cmd)
+                await asyncio.sleep(0.05)
+                _, _, info_screen, _ = await wait_and_respond(
+                    bot,
+                    timeout_ms=10000,
+                    ignore_loop_for={"prompt.pause_simple", "prompt.pause_space_or_enter", "prompt.sector_command"},
+                )
+                # Ensure semantic updates even if the waiter's callback missed the transient line.
+                bot.last_semantic_data.update(extract_semantic_kv(info_screen))
+                sem_now = getattr(bot, "last_semantic_data", {}) or {}
+                if all(sem_now.get(k) is not None for k in core_keys):
+                    break
+            bot._stats_refresh_attempts = stats_refresh_attempts + 1
+            bot._last_stats_refresh_ts = time()
 
         # Build a best-effort snapshot from merged semantic cache.
         bot_semantic = getattr(bot, "last_semantic_data", {}) or {}
@@ -306,6 +325,11 @@ async def _gather_state(
         state.alignment = get_with_fallback("alignment")
         state.experience = get_with_fallback("experience")
         state.corp_id = get_with_fallback("corp_id")
+        state.ship_name = get_with_fallback("ship_name")
+
+        # Mark refresh complete once core state is present.
+        if all(get_with_fallback(k) is not None for k in core_keys):
+            bot._stats_refreshed = True
 
         # Cargo is primarily learned from port tables; default to 0 if unknown.
         try:

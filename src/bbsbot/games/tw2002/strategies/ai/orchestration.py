@@ -40,7 +40,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
         except Exception as e:
             logger.error(f"ollama_not_available: {e}")
             print(f"  [AI] Ollama not available: {e}, using fallback strategy")
-            return strategy.fallback.get_next_action(state)
+            return strategy.run_fallback_action(state, reason="ollama_not_available")
 
     # Re-evaluate goal if needed
     await goals.maybe_reevaluate_goal(strategy, state)
@@ -102,7 +102,7 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 f"ai_strategy_fallback_active: turn={strategy._current_turn}, "
                 f"until={strategy.fallback_until_turn}, failures={strategy.consecutive_failures}"
             )
-            return strategy.fallback.get_next_action(state)
+            return strategy.run_fallback_action(state, reason="failure_cooldown")
         elif strategy.consecutive_failures >= strategy._settings.fallback_threshold:
             # Cooldown expired, try LLM again
             logger.info("ai_strategy_fallback_cooldown_expired")
@@ -139,8 +139,82 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
             # If we were stuck AND the LLM returned the same action again, force fallback
             if stuck_action and action.name == stuck_action:
                 logger.warning(f"ai_still_stuck: {stuck_action}, forcing fallback")
-                return strategy.fallback.get_next_action(state)
+                return strategy.run_fallback_action(state, reason="stuck_repeat")
 
+            selected_strategy = strategy.resolve_requested_strategy(params)
+            if selected_strategy == "ai_direct":
+                selected_strategy = strategy.active_managed_strategy
+
+            # Loss-recovery override: if AI is bleeding, force a proven strategy.
+            stats = strategy.stats or {}
+            if (
+                float(stats.get("profit_per_turn", 0.0)) < 0.0
+                and int(stats.get("turns_used", 0)) >= 20
+                and selected_strategy not in ("profitable_pairs", "opportunistic")
+            ):
+                selected_strategy = "profitable_pairs"
+                strategy._active_managed_strategy = selected_strategy
+                logger.warning(
+                    "ai_strategy_loss_recovery_override",
+                    selected_strategy=selected_strategy,
+                    profit_per_turn=float(stats.get("profit_per_turn", 0.0)),
+                    turns_used=int(stats.get("turns_used", 0)),
+                )
+
+            # Bootstrap: profitable_pairs can over-explore early with sparse market intel.
+            # Use opportunistic until we establish a little trade/capital baseline.
+            if selected_strategy == "profitable_pairs":
+                low_bankroll = int(getattr(state, "credits", 0) or 0) <= 1000
+                low_trade_count = int(stats.get("trades_executed", 0)) < 3
+                early_turns = int(stats.get("turns_used", 0)) < 30
+                if low_bankroll and low_trade_count and early_turns:
+                    selected_strategy = "opportunistic"
+                    strategy._active_managed_strategy = selected_strategy
+                    logger.info(
+                        "ai_strategy_bootstrap_override",
+                        selected_strategy=selected_strategy,
+                        credits=int(getattr(state, "credits", 0) or 0),
+                        trades_executed=int(stats.get("trades_executed", 0)),
+                        turns_used=int(stats.get("turns_used", 0)),
+                    )
+
+            if selected_strategy != "ai_direct":
+                delegated_action, delegated_params = strategy.run_managed_strategy(
+                    selected_strategy,
+                    state,
+                    update_active=True,
+                )
+                strategy._recent_actions.append(f"{selected_strategy}:{delegated_action.name}")
+                if len(strategy._recent_actions) > strategy._stuck_threshold + 2:
+                    strategy._recent_actions = strategy._recent_actions[-(strategy._stuck_threshold + 2) :]
+                logger.info(
+                    "ai_strategy_managed_decision",
+                    selected_strategy=selected_strategy,
+                    action=delegated_action.name,
+                    params=delegated_params,
+                )
+                strategy._record_event(
+                    "decision",
+                    {
+                        "turn": strategy._current_turn,
+                        "selected_strategy": selected_strategy,
+                        "action": delegated_action.name,
+                        "params": delegated_params,
+                        "sector": state.sector,
+                        "credits": state.credits,
+                    },
+                )
+                await decision_maker.log_llm_decision(
+                    strategy=strategy,
+                    state=state,
+                    trace=trace,
+                    action=delegated_action,
+                    params=delegated_params,
+                    validated=True,
+                )
+                return delegated_action, delegated_params
+
+            strategy._last_action_strategy = "ai_direct"
             logger.info(f"ai_strategy_decision: action={action.name}, params={params}")
             # Record event for feedback
             strategy._record_event(
@@ -192,4 +266,4 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 strategy.fallback_until_turn = strategy._current_turn + duration
                 logger.warning(f"ai_strategy_long_fallback: until_turn={strategy.fallback_until_turn}")
 
-        return strategy.fallback.get_next_action(state)
+        return strategy.run_fallback_action(state, reason=f"exception:{type(e).__name__}")

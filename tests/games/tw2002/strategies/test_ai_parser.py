@@ -41,6 +41,26 @@ def test_parser_json_response(parser, game_state):
     assert params["commodity"] == "fuel_ore"
 
 
+def test_parser_json_strategy_and_policy(parser, game_state):
+    """Test parsing strategy/policy fields from JSON response."""
+    response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content=(
+                '{"strategy": "profitable_pairs", "policy": "aggressive", "action": "TRADE", '
+                '"parameters": {"commodity": "equipment"}}'
+            ),
+        ),
+        model="llama2",
+    )
+
+    action, params = parser.parse(response, game_state)
+
+    assert action == TradeAction.TRADE
+    assert params["strategy"] == "profitable_pairs"
+    assert params["policy"] == "aggressive"
+
+
 def test_parser_json_in_markdown(parser, game_state):
     """Test parsing JSON wrapped in markdown."""
     response = ChatResponse(
@@ -71,6 +91,19 @@ def test_parser_regex_fallback_trade(parser, game_state):
 
     assert action == TradeAction.TRADE
     assert params.get("commodity") == "fuel_ore"
+
+
+def test_parser_normalizes_pipe_separated_commodity(parser, game_state):
+    response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"action":"TRADE","parameters":{"commodity":"fuel_ore|organics"}}',
+        ),
+        model="llama2",
+    )
+    action, params = parser.parse(response, game_state)
+    assert action == TradeAction.TRADE
+    assert params["commodity"] in ("fuel_ore", "organics")
 
 
 def test_parser_regex_fallback_move(parser, game_state):

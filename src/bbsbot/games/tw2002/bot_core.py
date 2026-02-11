@@ -64,6 +64,9 @@ class TradingBot:
 
         # Last semantic extraction data (populated by io.wait_and_respond callbacks)
         self.last_semantic_data: dict = {}
+        self._stats_refreshed: bool = False
+        self._stats_refresh_attempts: int = 0
+        self._last_stats_refresh_ts: float = 0.0
 
         # Error tracking
         self.error_count = 0
