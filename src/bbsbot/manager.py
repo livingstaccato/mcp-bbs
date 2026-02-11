@@ -16,7 +16,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -193,6 +193,10 @@ class SwarmManager:
             )
 
         dashboard_html = web_dir / "dashboard.html"
+
+        @self.app.get("/", include_in_schema=False)
+        async def dashboard_root():
+            return RedirectResponse(url="/dashboard", status_code=307)
 
         @self.app.get("/dashboard", response_class=HTMLResponse)
         async def dashboard():

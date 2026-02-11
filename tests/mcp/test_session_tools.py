@@ -20,6 +20,9 @@ def test_tw2002_session_tools_exist() -> None:
     tools = registry.get_tools()
     assert "tw2002_connect" in tools
     assert "tw2002_login" in tools
+    assert "tw2002_list_sessions" in tools
+    assert "tw2002_set_active_session" in tools
+    assert "tw2002_bootstrap" in tools
 
 
 @pytest.mark.asyncio

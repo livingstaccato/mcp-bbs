@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from bbsbot.defaults import MANAGER_URL
+from bbsbot.games.tw2002.mcp_context import resolve_active_bot
 from bbsbot.games.tw2002.mcp_tools import registry
 from bbsbot.logging import get_logger
 
@@ -19,11 +20,11 @@ logger = get_logger(__name__)
 _ASSUMED_BOT_ID: str | None = None
 
 
-def _manager_request(method: str, path: str, **kwargs: Any) -> tuple[bool, dict[str, Any]]:
+async def _manager_request(method: str, path: str, **kwargs: Any) -> tuple[bool, dict[str, Any]]:
     """Call swarm manager REST API and normalize response."""
     try:
-        with httpx.Client(timeout=20) as client:
-            response = client.request(method, f"{MANAGER_URL}{path}", **kwargs)
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.request(method, f"{MANAGER_URL}{path}", **kwargs)
         data = response.json()
         if response.status_code >= 400:
             if isinstance(data, dict):
@@ -46,13 +47,7 @@ def _resolve_bot_id(bot_id: str | None) -> tuple[bool, str | None, dict[str, Any
 
 def _get_active_bot():
     """Get the active bot from session manager."""
-    from bbsbot.mcp.server import session_manager
-
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
+    bot, _, _ = resolve_active_bot()
     return bot
 
 
@@ -288,7 +283,7 @@ async def recover_bot(
                         "error": "No active session to send command",
                     }
 
-                bot.session.send(command)
+                await bot.session.send(command)
                 logger.info(f"Manual command sent: {command}")
                 return {
                     "success": True,
@@ -398,9 +393,9 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
         action: Action type to execute
             - 'warp': Move to sector (params: {sector: int})
             - 'dock': Dock at current port
-            - 'trade': Execute trade (params: {commodity: str, quantity: int})
-            - 'bank': Deposit/withdraw credits (params: {amount: int})
             - 'scan': Run D command to scan sector
+            - 'trade': Not implemented in this tool (returns error)
+            - 'bank': Not implemented in this tool (returns error)
         params: Action-specific parameters (dict)
 
     Returns:
@@ -438,7 +433,7 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
                         "success": False,
                         "error": "sector parameter required",
                     }
-                bot.session.send(f"W\r{sector}\r")
+                await bot.session.send(f"W\r{sector}\r")
                 _mark_hijacked(bot, "force_action")
                 logger.info(f"Forced warp to sector {sector}")
                 return {
@@ -447,7 +442,7 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
                 }
 
             case "dock":
-                bot.session.send("D\r")
+                await bot.session.send("D\r")
                 _mark_hijacked(bot, "force_action")
                 logger.info("Forced dock")
                 return {
@@ -456,7 +451,7 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
                 }
 
             case "scan":
-                bot.session.send("D\r")
+                await bot.session.send("D\r")
                 _mark_hijacked(bot, "force_action")
                 logger.info("Forced scan")
                 return {
@@ -472,11 +467,9 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
                         "success": False,
                         "error": "commodity and quantity parameters required",
                     }
-                # Note: Actual trade execution would be more complex
-                logger.info(f"Forced trade: {quantity} {commodity}")
                 return {
-                    "success": True,
-                    "message": f"Trade queued: {quantity} {commodity}",
+                    "success": False,
+                    "error": "trade force_action is not implemented safely; use hijack_send with explicit prompts",
                 }
 
             case "bank":
@@ -486,10 +479,9 @@ async def force_action(action: str, params: dict[str, Any] | None = None) -> dic
                         "success": False,
                         "error": "amount parameter required",
                     }
-                logger.info(f"Forced bank action: {amount} credits")
                 return {
-                    "success": True,
-                    "message": f"Bank action: {amount} credits",
+                    "success": False,
+                    "error": "bank force_action is not implemented safely; use hijack_send with explicit prompts",
                 }
 
             case _:
@@ -602,7 +594,7 @@ async def assume_bot(bot_id: str) -> dict[str, Any]:
     """Set active swarm bot context for takeover tools."""
     global _ASSUMED_BOT_ID  # noqa: PLW0603
 
-    ok, data = _manager_request("GET", f"/bot/{bot_id}/status")
+    ok, data = await _manager_request("GET", f"/bot/{bot_id}/status")
     if not ok:
         return {
             "success": False,
@@ -625,7 +617,7 @@ async def assumed_bot_status() -> dict[str, Any]:
     if not _ASSUMED_BOT_ID:
         return {"success": False, "error": "No assumed bot. Call tw2002_assume_bot first."}
 
-    ok, data = _manager_request("GET", f"/bot/{_ASSUMED_BOT_ID}/status")
+    ok, data = await _manager_request("GET", f"/bot/{_ASSUMED_BOT_ID}/status")
     if not ok:
         return {
             "success": False,
@@ -642,7 +634,7 @@ async def hijack_begin(bot_id: str | None = None, lease_s: int = 90, owner: str 
     if not ok_resolve or target is None:
         return {"success": False, **(err or {})}
 
-    ok, data = _manager_request("POST", f"/bot/{target}/hijack/acquire", json={"owner": owner, "lease_s": lease_s})
+    ok, data = await _manager_request("POST", f"/bot/{target}/hijack/acquire", json={"owner": owner, "lease_s": lease_s})
     if not ok:
         return {"success": False, "bot_id": target, "error": data.get("error", "Failed to acquire hijack")}
     return {"success": True, **data}
@@ -655,7 +647,7 @@ async def hijack_heartbeat(hijack_id: str, bot_id: str | None = None, lease_s: i
     if not ok_resolve or target is None:
         return {"success": False, **(err or {})}
 
-    ok, data = _manager_request(
+    ok, data = await _manager_request(
         "POST",
         f"/bot/{target}/hijack/{hijack_id}/heartbeat",
         json={"lease_s": lease_s},
@@ -679,9 +671,9 @@ async def hijack_read(
         return {"success": False, **(err or {})}
 
     if mode == "snapshot":
-        ok, data = _manager_request("GET", f"/bot/{target}/hijack/{hijack_id}/snapshot")
+        ok, data = await _manager_request("GET", f"/bot/{target}/hijack/{hijack_id}/snapshot")
     elif mode == "events":
-        ok, data = _manager_request(
+        ok, data = await _manager_request(
             "GET",
             f"/bot/{target}/hijack/{hijack_id}/events",
             params={"after_seq": after_seq, "limit": limit},
@@ -709,7 +701,7 @@ async def hijack_send(
     if not ok_resolve or target is None:
         return {"success": False, **(err or {})}
 
-    ok, data = _manager_request(
+    ok, data = await _manager_request(
         "POST",
         f"/bot/{target}/hijack/{hijack_id}/send",
         json={
@@ -732,7 +724,7 @@ async def hijack_step(hijack_id: str, bot_id: str | None = None) -> dict[str, An
     if not ok_resolve or target is None:
         return {"success": False, **(err or {})}
 
-    ok, data = _manager_request("POST", f"/bot/{target}/hijack/{hijack_id}/step")
+    ok, data = await _manager_request("POST", f"/bot/{target}/hijack/{hijack_id}/step")
     if not ok:
         return {"success": False, "bot_id": target, "hijack_id": hijack_id, "error": data.get("error")}
     return {"success": True, **data}
@@ -745,7 +737,29 @@ async def hijack_release(hijack_id: str, bot_id: str | None = None) -> dict[str,
     if not ok_resolve or target is None:
         return {"success": False, **(err or {})}
 
-    ok, data = _manager_request("POST", f"/bot/{target}/hijack/{hijack_id}/release")
+    ok, data = await _manager_request("POST", f"/bot/{target}/hijack/{hijack_id}/release")
     if not ok:
         return {"success": False, "bot_id": target, "hijack_id": hijack_id, "error": data.get("error")}
     return {"success": True, **data}
+
+
+@registry.tool()
+async def get_account_pool() -> dict[str, Any]:
+    """Fetch manager account-pool and identity summary."""
+    ok, data = await _manager_request("GET", "/swarm/account-pool")
+    if not ok:
+        return {"success": False, "error": data.get("error", "Failed to read account pool"), "detail": data}
+    return {"success": True, **data}
+
+
+@registry.tool()
+async def get_bot_session_data(bot_id: str | None = None) -> dict[str, Any]:
+    """Fetch persisted identity/session lifecycle for one bot."""
+    ok_resolve, target, err = _resolve_bot_id(bot_id)
+    if not ok_resolve or target is None:
+        return {"success": False, **(err or {})}
+
+    ok, data = await _manager_request("GET", f"/bot/{target}/session-data")
+    if not ok:
+        return {"success": False, "bot_id": target, "error": data.get("error", "Failed to fetch bot session data")}
+    return {"success": True, "bot_id": target, "session_data": data}

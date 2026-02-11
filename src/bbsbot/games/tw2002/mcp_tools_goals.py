@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from bbsbot.games.tw2002.mcp_context import resolve_active_bot
 from bbsbot.games.tw2002.mcp_tools import registry
 from bbsbot.logging import get_logger
 
@@ -14,13 +15,7 @@ logger = get_logger(__name__)
 
 
 def _get_active_bot():
-    from bbsbot.mcp.server import session_manager
-
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
+    bot, _, _ = resolve_active_bot()
     return bot
 
 

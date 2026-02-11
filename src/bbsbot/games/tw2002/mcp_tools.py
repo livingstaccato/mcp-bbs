@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from bbsbot.games.tw2002.mcp_context import resolve_active_bot
 from bbsbot.logging import get_logger
 from bbsbot.mcp.registry import create_registry
 
@@ -26,15 +27,50 @@ from bbsbot.games.tw2002 import (  # noqa: E402, F401
 )
 
 
-def _get_active_bot():
-    from bbsbot.mcp.server import session_manager
+def _get_active_bot() -> tuple[Any | None, str | None, str | None]:
+    return resolve_active_bot()
 
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
-    return bot
+
+@registry.tool()
+async def capabilities() -> dict[str, Any]:
+    """Describe TW2002 MCP capability groups and fastest task entrypoints."""
+    return {
+        "success": True,
+        "entrypoints": {
+            "quick_start": ["tw2002_bootstrap", "tw2002_get_bot_status", "tw2002_debug_screen"],
+            "swarm_hijack": [
+                "tw2002_assume_bot",
+                "tw2002_hijack_begin",
+                "tw2002_hijack_read",
+                "tw2002_hijack_send",
+                "tw2002_hijack_release",
+            ],
+            "session_targeting": ["tw2002_list_sessions", "tw2002_set_active_session"],
+        },
+        "tool_groups": {
+            "session": ["tw2002_connect", "tw2002_login", "tw2002_bootstrap"],
+            "status": [
+                "tw2002_get_bot_status",
+                "tw2002_get_bot_health",
+                "tw2002_knowledge_status",
+                "tw2002_get_trade_opportunities",
+            ],
+            "strategy": ["tw2002_set_goal", "tw2002_get_goals", "tw2002_set_directive", "tw2002_ask_strategy"],
+            "manual_control": ["tw2002_force_action", "tw2002_debug_screen", "tw2002_debug"],
+            "swarm": [
+                "tw2002_assume_bot",
+                "tw2002_assumed_bot_status",
+                "tw2002_hijack_begin",
+                "tw2002_hijack_heartbeat",
+                "tw2002_hijack_read",
+                "tw2002_hijack_send",
+                "tw2002_hijack_step",
+                "tw2002_hijack_release",
+                "tw2002_get_account_pool",
+                "tw2002_get_bot_session_data",
+            ],
+        },
+    }
 
 
 @registry.tool()
@@ -58,27 +94,30 @@ async def set_directive(directive: str, turns: int = 0) -> dict[str, Any]:
             turns=30
         )
     """
-    from bbsbot.mcp.server import session_manager
+    bot, _, err = _get_active_bot()
+    if bot is None:
+        return {"success": False, "error": err or "No active bot found"}
 
-    # Get active bot
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
+    strategy = getattr(bot, "strategy", None)
+    if strategy is None:
+        return {"success": False, "error": "Bot has no active strategy"}
 
-    if not bot:
-        return {
-            "success": False,
-            "error": "No active bot found",
-        }
+    clean = str(directive or "").strip()
+    if not clean:
+        strategy._operator_directive = None
+        strategy._operator_directive_until_turn = 0
+        return {"success": True, "directive": None, "turns": 0, "message": "Directive cleared"}
 
-    # For now, we'll implement this as a special goal
-    # In the future, this could be a separate directive system
+    current_turn = int(getattr(strategy, "_current_turn", 0) or 0)
+    until_turn = (current_turn + int(turns)) if int(turns) > 0 else 0
+    strategy._operator_directive = clean
+    strategy._operator_directive_until_turn = until_turn
     return {
-        "success": False,
-        "error": "Custom directives not yet implemented - use set_goal for now",
-        "suggestion": "Use tw2002_set_goal() to change bot behavior",
+        "success": True,
+        "directive": clean,
+        "turns": int(turns),
+        "active_until_turn": until_turn if until_turn > 0 else None,
+        "strategy": getattr(strategy, "name", type(strategy).__name__),
     }
 
 
@@ -86,7 +125,7 @@ async def set_directive(directive: str, turns: int = 0) -> dict[str, Any]:
 async def get_trade_opportunities(
     max_hops: int = 3,
     min_profit: int = 1000,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Analyze current trade opportunities.
 
     Finds profitable trade routes from the bot's current location
@@ -103,29 +142,21 @@ async def get_trade_opportunities(
         opps = await tw2002_get_trade_opportunities(max_hops=5, min_profit=2000)
         # Returns: [{buy_sector: 100, sell_sector: 150, profit: 3500, ...}, ...]
     """
-    from bbsbot.mcp.server import session_manager
-
-    # Get active bot
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
-
-    if not bot:
-        return []
+    bot, _, err = _get_active_bot()
+    if bot is None:
+        return {"success": False, "error": err or "No active bot found", "opportunities": []}
 
     # Check if bot has strategy with find_opportunities
     if not hasattr(bot, "strategy") or not bot.strategy:
-        return []
+        return {"success": False, "error": "No strategy initialized", "opportunities": []}
 
     strategy = bot.strategy
     if not hasattr(strategy, "find_opportunities"):
-        return []
+        return {"success": False, "error": "Strategy does not expose find_opportunities()", "opportunities": []}
 
     # Get current state
     if not bot.game_state:
-        return []
+        return {"success": False, "error": "No game state available", "opportunities": []}
 
     # Find opportunities
     try:
@@ -147,10 +178,10 @@ async def get_trade_opportunities(
                     }
                 )
 
-        return results
+        return {"success": True, "opportunities": results}
     except Exception as e:
         logger.error(f"trade_opportunities_error: {e}")
-        return []
+        return {"success": False, "error": str(e), "opportunities": []}
 
 
 @registry.tool()
@@ -173,20 +204,21 @@ async def debug_screen() -> dict[str, Any]:
     """
     from bbsbot.games.tw2002.debug_screens import analyze_screen, format_screen_analysis
 
-    bot = _get_active_bot()
-    if not bot:
-        return {"error": "No active bot session"}
+    bot, _, err = _get_active_bot()
+    if bot is None:
+        return {"success": False, "error": err or "No active bot session"}
 
     try:
         analysis = await analyze_screen(bot)
         # Return formatted text for easy reading
         return {
+            "success": True,
             "formatted": format_screen_analysis(analysis),
             "raw": analysis.model_dump(),
         }
     except Exception as e:
         logger.error(f"debug_screen_error: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 
 @registry.tool()
@@ -203,22 +235,16 @@ async def analyze_combat_readiness() -> dict[str, Any]:
         status = await tw2002_analyze_combat_readiness()
         # Returns: {fighters: 45, shields: 120, readiness: "moderate", ...}
     """
-    from bbsbot.mcp.server import session_manager
-
-    # Get active bot
-    bot = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            break
-
-    if not bot:
+    bot, _, err = _get_active_bot()
+    if bot is None:
         return {
+            "success": False,
             "error": "No active bot found",
         }
 
     if not bot.game_state:
         return {
+            "success": False,
             "error": "No game state available",
         }
 
@@ -260,6 +286,7 @@ async def analyze_combat_readiness() -> dict[str, Any]:
         )
 
     return {
+        "success": True,
         "fighters": fighters,
         "shields": shields,
         "credits": credits,
@@ -282,24 +309,16 @@ async def get_bot_status() -> dict[str, Any]:
         status = await tw2002_get_bot_status()
         # Returns: {goal: "profit", sector: 100, credits: 50000, ...}
     """
-    from bbsbot.mcp.server import session_manager
-
-    # Get active bot
-    bot = None
-    bot_session_id = None
-    for session_id in session_manager._sessions:
-        bot = session_manager.get_bot(session_id)
-        if bot:
-            bot_session_id = session_id
-            break
-
-    if not bot:
+    bot, bot_session_id, err = _get_active_bot()
+    if bot is None:
         return {
+            "success": False,
             "connected": False,
-            "error": "No active bot found",
+            "error": err or "No active bot found",
         }
 
     result: dict[str, Any] = {
+        "success": True,
         "connected": True,
         "session_id": bot_session_id,
         "character_name": getattr(bot, "character_name", "unknown"),
@@ -377,16 +396,18 @@ async def debug(command: str, limit: int | None = None) -> dict[str, Any]:
 
     match command:
         case "bot_state":
-            return await bbs_debug_bot_state()
+            payload = await bbs_debug_bot_state()
         case "learning_state":
-            return await bbs_debug_learning_state()
+            payload = await bbs_debug_learning_state()
         case "llm_stats":
-            return await bbs_debug_llm_stats()
+            payload = await bbs_debug_llm_stats()
         case "session_events":
             if limit is not None:
-                return await bbs_debug_session_events(limit=limit)
-            return await bbs_debug_session_events()
+                payload = await bbs_debug_session_events(limit=limit)
+            else:
+                payload = await bbs_debug_session_events()
         case _:
             raise ValueError(
                 f"Unknown command: {command}. Valid options: bot_state, learning_state, llm_stats, session_events"
             )
+    return {"success": True, "command": command, "result": payload}

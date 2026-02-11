@@ -499,7 +499,7 @@ Set metadata attached to all subsequent log entries.
 
 ### Keepalive
 
-#### `bbs_set_keepalive`
+#### `bbs_keepalive`
 Configure automatic keepalive to prevent idle timeout.
 ```json
 {
@@ -603,7 +603,7 @@ Configure terminal size and keepalive via MCP tools:
 ```python
 # Using MCP client
 await client.call_tool("bbs_set_size", {"cols": 80, "rows": 25})
-await client.call_tool("bbs_set_keepalive", {"interval_s": 30.0, "keys": "\r"})
+await client.call_tool("bbs_keepalive", {"interval_s": 30.0, "keys": "\r"})
 ```
 
 Or programmatically:
@@ -731,6 +731,9 @@ If you’re running the bot inside the MCP server process, you can query goal pr
 
 - `tw2002_get_goal_visualization` (renders compact/timeline/summary)
 - `tw2002_get_goal_phases` (raw phase data)
+- `tw2002_capabilities` (returns grouped tool map + quick entrypoints)
+- `tw2002_list_sessions` / `tw2002_set_active_session` (deterministic session targeting)
+- `tw2002_bootstrap` (connect + login in one call)
 
 ### Quick Start
 

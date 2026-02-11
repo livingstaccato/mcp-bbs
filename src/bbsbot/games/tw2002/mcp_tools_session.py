@@ -14,6 +14,11 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
+from bbsbot.games.tw2002.mcp_context import (
+    get_active_session_id,
+    list_bot_sessions,
+    set_active_session_id,
+)
 from bbsbot.games.tw2002.mcp_tools import registry
 from bbsbot.logging import get_logger
 
@@ -21,20 +26,8 @@ log = get_logger(__name__)
 
 
 def _tail_lines(screen: str, n: int = 12) -> list[str]:
-    lines = [l.rstrip() for l in (screen or "").splitlines() if l.strip()]
+    lines = [line.rstrip() for line in (screen or "").splitlines() if line.strip()]
     return lines[-n:]
-
-
-def _get_active_session_id() -> str | None:
-    import bbsbot.mcp.server as mcp_server
-
-    return getattr(mcp_server, "_active_session_id", None)
-
-
-def _set_active_session_id(session_id: str) -> None:
-    import bbsbot.mcp.server as mcp_server
-
-    mcp_server._active_session_id = session_id
 
 
 @registry.tool()
@@ -66,7 +59,7 @@ async def connect(
         send_newline=send_newline,
         reuse=reuse,
     )
-    _set_active_session_id(session_id)
+    set_active_session_id(session_id)
 
     # IMPORTANT: enable learning with namespace so prompt patterns auto-load.
     await session_manager.enable_learning(session_id, knowledge_root, namespace="tw2002")
@@ -98,7 +91,7 @@ async def login(
     """
     from bbsbot.mcp.server import _require_knowledge_root, session_manager
 
-    session_id = _get_active_session_id()
+    session_id = get_active_session_id()
     if not session_id:
         return {
             "success": False,
@@ -188,3 +181,77 @@ async def login(
         "sector": getattr(bot, "current_sector", None),
         "credits": getattr(bot, "current_credits", None),
     }
+
+
+@registry.tool()
+async def list_sessions() -> dict[str, Any]:
+    """List MCP sessions and which one is currently active.
+
+    Use this when multiple in-process sessions exist and you need to choose
+    the target for TW2002 game tools.
+    """
+    sessions = list_bot_sessions()
+    return {
+        "success": True,
+        "sessions": sessions,
+        "active_session_id": get_active_session_id(),
+    }
+
+
+@registry.tool()
+async def set_active_session(session_id: str) -> dict[str, Any]:
+    """Select which MCP session TW2002 tools should target."""
+    from bbsbot.mcp.server import session_manager
+
+    try:
+        await session_manager.get_session(session_id)
+    except Exception:
+        return {"success": False, "error": f"Unknown session_id: {session_id}"}
+
+    set_active_session_id(session_id)
+    bot = session_manager.get_bot(session_id)
+    return {
+        "success": True,
+        "session_id": session_id,
+        "bot_attached": bot is not None,
+        "character_name": getattr(bot, "character_name", None) if bot else None,
+    }
+
+
+@registry.tool()
+async def bootstrap(
+    host: str,
+    username: str,
+    character_password: str,
+    port: int = 2002,
+    game_password: str = "game",
+    game_letter: str | None = None,
+    cols: int = 80,
+    rows: int = 25,
+    term: str = "ANSI",
+    send_newline: bool = True,
+    reuse: bool = True,
+) -> dict[str, Any]:
+    """Connect + login in one call for fast operator workflows."""
+    conn = await connect(
+        host=host,
+        port=port,
+        cols=cols,
+        rows=rows,
+        term=term,
+        send_newline=send_newline,
+        reuse=reuse,
+    )
+    if not conn.get("success"):
+        return {"success": False, "stage": "connect", "error": conn.get("error"), "connect": conn}
+
+    auth = await login(
+        username=username,
+        character_password=character_password,
+        game_password=game_password,
+        game_letter=game_letter,
+    )
+    if not auth.get("success"):
+        return {"success": False, "stage": "login", "error": auth.get("error"), "connect": conn, "login": auth}
+
+    return {"success": True, "stage": "ready", "connect": conn, "login": auth}

@@ -17,6 +17,8 @@ def test_mcp_hijack_tools_are_registered() -> None:
     expected = {
         "tw2002_assume_bot",
         "tw2002_assumed_bot_status",
+        "tw2002_get_account_pool",
+        "tw2002_get_bot_session_data",
         "tw2002_hijack_begin",
         "tw2002_hijack_heartbeat",
         "tw2002_hijack_read",
@@ -32,7 +34,7 @@ def test_mcp_hijack_tools_use_assumed_bot(monkeypatch) -> None:
 
     calls: list[tuple[str, str, dict]] = []
 
-    def fake_manager_request(method: str, path: str, **kwargs):
+    async def fake_manager_request(method: str, path: str, **kwargs):
         calls.append((method, path, kwargs))
         if method == "GET" and path == "/bot/bot_777/status":
             return True, {"bot_id": "bot_777", "state": "running", "strategy": "profitable_pairs", "sector": 44}

@@ -90,6 +90,17 @@ async def make_llm_decision(
     goal_description = goal_config.description if goal_config else None
     goal_instructions = goal_config.instructions if goal_config else None
 
+    # Optional operator directive injected via MCP (tw2002_set_directive).
+    operator_directive = getattr(strategy, "_operator_directive", None)
+    directive_until_turn = int(getattr(strategy, "_operator_directive_until_turn", 0) or 0)
+    if operator_directive:
+        if directive_until_turn > 0 and int(strategy._current_turn or 0) > directive_until_turn:
+            strategy._operator_directive = None
+            strategy._operator_directive_until_turn = 0
+        else:
+            directive_text = f"OPERATOR DIRECTIVE: {operator_directive}"
+            goal_instructions = f"{goal_instructions}\n\n{directive_text}" if goal_instructions else directive_text
+
     base_messages = strategy.prompt_builder.build(
         state,
         strategy.knowledge,
