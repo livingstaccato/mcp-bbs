@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from bbsbot.games.tw2002.bot_identity_store import BotIdentityStore
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 router = APIRouter()
+_identity_store = BotIdentityStore()
 
 # Reference to the manager instance, set during setup
 _manager: SwarmManager | None = None
@@ -160,6 +162,15 @@ async def bot_status(bot_id: str):
     if bot_id not in _manager.bots:
         return JSONResponse({"error": f"Bot {bot_id} not found"}, status_code=404)
     return _manager.bots[bot_id].model_dump()
+
+
+@router.get("/bot/{bot_id}/session-data")
+async def bot_session_data(bot_id: str):
+    """Return persisted identity + session lifecycle data for one bot."""
+    record = _identity_store.load(bot_id)
+    if record is None:
+        return JSONResponse({"error": f"No persisted session data for {bot_id}"}, status_code=404)
+    return record.model_dump(mode="json")
 
 
 @router.post("/bot/{bot_id}/status")

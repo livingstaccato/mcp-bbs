@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
 
+from bbsbot.api import swarm_routes
+from bbsbot.games.tw2002.bot_identity_store import BotIdentityStore
 from bbsbot.manager import BotStatus, SwarmManager
 
 if TYPE_CHECKING:
@@ -96,3 +98,42 @@ def test_bot_events_include_structured_action_metadata(tmp_path: Path) -> None:
     assert action_event["strategy_id"] == "opportunistic"
     assert action_event["strategy_mode"] == "conservative"
     assert action_event["result_delta"] == 30
+
+
+def test_bot_session_data_endpoint_returns_persisted_identity(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    swarm_routes._identity_store = BotIdentityStore(data_dir=tmp_path / "sessions")
+    swarm_routes._identity_store.upsert_identity(
+        bot_id="bot_777",
+        username="pilot777",
+        character_password="pw777",
+        game_password="game777",
+        host="localhost",
+        port=2002,
+        game_letter="A",
+        config_path="config/swarm_demo/bot_777.yaml",
+    )
+    session = swarm_routes._identity_store.start_session(bot_id="bot_777", state="running")
+    swarm_routes._identity_store.end_session(
+        bot_id="bot_777",
+        session_id=session.id,
+        stop_reason="shutdown",
+        state="stopped",
+        turns_executed=12,
+        credits=900,
+        trades_executed=2,
+        sector=9,
+    )
+
+    with TestClient(manager.app) as client:
+        resp = client.get("/bot/bot_777/session-data")
+        assert resp.status_code == 200
+        data = resp.json()
+
+    assert data["bot_id"] == "bot_777"
+    assert data["username"] == "pilot777"
+    assert data["character_password"] == "pw777"
+    assert data["game_password"] == "game777"
+    assert data["run_count"] == 1
+    assert len(data["sessions"]) == 1
+    assert data["sessions"][0]["stop_reason"] == "shutdown"
