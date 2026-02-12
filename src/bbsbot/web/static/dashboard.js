@@ -254,6 +254,37 @@
     return strategy || "-";
   }
 
+  function getStateCode(state) {
+    return {
+      running: "RUN",
+      recovering: "REC",
+      blocked: "BLK",
+      completed: "CMP",
+      error: "ERR",
+      stopped: "STP",
+      queued: "QUE",
+      warning: "WRN",
+      disconnected: "DSC",
+    }[String(state || "").toLowerCase()] || "UNK";
+  }
+
+  function getStrategyCompact(bot) {
+    const rawId = String(bot.strategy_id || bot.strategy || "").trim();
+    const rawMode = String(bot.strategy_mode || "").trim();
+    const id = ({
+      profitable_pairs: "pairs",
+      opportunistic: "opp",
+      ai_strategy: "ai",
+    }[rawId] || rawId || "-");
+    const mode = ({
+      conservative: "con",
+      balanced: "bal",
+      aggressive: "agg",
+      unknown: "unk",
+    }[rawMode] || rawMode || "");
+    return { id, mode, full: getStrategyLabel(bot) };
+  }
+
   function matchesTextFilter(bot, q) {
     if (!q) return true;
     const fields = [
@@ -325,7 +356,11 @@
 	    $("#errors").textContent = data.errors;
 	    $("#credits").textContent = formatCredits(data.total_credits);
 	    $("#turns").textContent = formatCredits(data.total_turns);
-	    $("#uptime").textContent = " | " + formatUptime(data.uptime_seconds);
+    const uptimeText = formatUptime(data.uptime_seconds);
+    const uptimeEl = $("#uptime");
+    if (uptimeEl) uptimeEl.textContent = " | " + uptimeText;
+    const connectedForEl = $("#connected-for");
+    if (connectedForEl) connectedForEl.textContent = uptimeText;
 
       const metrics = computeAggregateMetrics(data);
       const acceptEl = $("#accept-rate");
@@ -383,7 +418,6 @@
     tbody.innerHTML = bots
       .map((b) => {
         const isRunning = b.state === "running";
-        const isDead = ["completed", "error", "stopped", "disconnected", "blocked"].includes(b.state);
         const isQueued = b.state === "queued";
 
         // For all bots, preserve last known activity context
@@ -407,20 +441,19 @@
         }
 
         const activityClass = getActivityClass(activity);
-        let activityHtml = `<span class="activity-badge ${activityClass}">${esc(activity)}${exitInfo ? `<span style="color: var(--fg2); font-size: 11px;">${esc(exitInfo)}</span>` : ""}</span>`;
+        let activityPrimary = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
         if (b.last_action_time && isRunning) {
-          activityHtml += `<br><span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
+          activityPrimary += `<span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
         }
 
-        const stateEmoji = {running: "🟢", completed: "🔵", error: "🔴", blocked: "🟠", recovering: "🟡", stopped: "⚫", queued: "🟡", warning: "🟠", disconnected: "🔴"}[b.state] || "⚪";
-        let stateHtml = `<span class="state ${b.state}" title="${b.state}" style="cursor:pointer" onclick="window._openErrorModal('${esc(b.bot_id)}')">${stateEmoji}</span>`;
+        const stateClass = String(b.state || "unknown").toLowerCase();
+        const stateHtml = `<span class="state-pill ${esc(stateClass)}" title="${esc(String(b.state || "unknown"))}">${esc(getStateCode(b.state))}</span>`;
 
         // Status: phase/prompt detail (Paused, Username/Password, Port Haggle, etc.)
         // Hijack is additive; it shouldn't replace the bot's true activity.
-        let statusHtml = "";
+        const statusParts = [];
         if (b.is_hijacked) {
-          const hijackedTime = b.hijacked_at ? new Date(b.hijacked_at * 1000).toLocaleTimeString() : "now";
-          statusHtml += `<span class="hijack-badge" title="Hijacked at ${hijackedTime} by ${esc(b.hijacked_by || '-')}" style="margin-right:6px;">🔒 HIJACKED</span>`;
+          statusParts.push("HIJACKED");
         }
         const lifecycleLabel = {
           blocked: "BLOCKED",
@@ -435,7 +468,7 @@
           const withReason = (b.exit_reason && ["blocked", "error", "disconnected"].includes(b.state))
             ? `${lifecycleLabel} (${b.exit_reason})`
             : lifecycleLabel;
-          statusHtml += `<span class="status-detail">${esc(withReason)}</span>`;
+          statusParts.push(withReason);
         }
         const detail = (b.status_detail || "").trim();
         const isStaleOrientFailed =
@@ -444,8 +477,7 @@
           !["CONNECTING", "LOGGING_IN", "INITIALIZING"].includes(String(activity || "").toUpperCase());
         if (detail) {
           if (!isStaleOrientFailed) {
-            if (statusHtml) statusHtml += " ";
-            statusHtml += `<span class="status-detail">${esc(detail)}</span>`;
+            statusParts.push(detail);
           }
         } else if (b.prompt_id) {
           // Avoid showing "prompt.sector_command" etc. as status; Status is for meaningful blocking phases.
@@ -458,11 +490,11 @@
           const isInteresting = !safePrompts.has(b.prompt_id);
           const isBadState = ["error", "blocked", "recovering", "disconnected"].includes(b.state);
           if (isBadState && isInteresting) {
-            statusHtml += `<span class="status-detail" style="color: var(--fg2);" title="prompt_id">${esc(b.prompt_id)}</span>`;
+            statusParts.push(b.prompt_id);
           }
-        } else if (!statusHtml) {
-          statusHtml = "-";
         }
+        const statusText = statusParts.length ? statusParts.join(" | ") : "-";
+        const activityHtml = `<div class="activity-cell" onclick="window._openInspector('${esc(b.bot_id)}','activity')" title="${esc(statusText)}"><div class="activity-primary">${activityPrimary}</div><div class="activity-secondary">${esc(statusText)}${exitInfo ? " " + esc(exitInfo) : ""}</div></div>`;
 
         const turnsDisplay = `${b.turns_executed}`;
 
@@ -472,18 +504,18 @@
         const orgDisplay = (b.cargo_organics === null || b.cargo_organics === undefined) ? "-" : formatCredits(b.cargo_organics);
         const equipDisplay = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? "-" : formatCredits(b.cargo_equipment);
 
-        const strategyMain = getStrategyLabel(b);
-        const strategyIntent = (b.strategy_intent || "").trim();
-        const strategyHtml =
-          `<div class="strategy-cell"><div class="strategy-main">${esc(strategyMain)}</div>` +
-          (strategyIntent ? `<div class="strategy-intent" title="${esc(strategyIntent)}">${esc(strategyIntent)}</div>` : "") +
-          `</div>`;
+        const compact = getStrategyCompact(b);
+        const strategyHtml = compact.id === "-"
+          ? "-"
+          : `<span class="strategy-chip-row" title="${esc(compact.full)}">` +
+              `<span class="chip sid">${esc(compact.id)}</span>` +
+              (compact.mode ? `<span class="chip mode">${esc(compact.mode)}</span>` : "") +
+            `</span>`;
 
         return `<tr>
 	        <td title="${esc(b.bot_id)}">${esc(shortBotId(b.bot_id))}</td>
 	        <td>${stateHtml}</td>
 	        <td>${activityHtml}</td>
-	        <td>${statusHtml}</td>
 	        <td>${strategyHtml}</td>
 	        <td class="numeric">${b.sector}</td>
 	        <td class="numeric">${creditsDisplay}</td>
@@ -492,11 +524,7 @@
 	        <td class="numeric">${equipDisplay}</td>
 	        <td class="numeric">${turnsDisplay}</td>
 	        <td class="actions">
-	          <button class="btn logs" onclick="window._openTerminal('${esc(b.bot_id)}')" title="Terminal">🖥️</button>
-          <button class="btn" onclick="window._openMetrics('${esc(b.bot_id)}')" style="border-color:var(--yellow);color:var(--yellow);" title="Metrics">Σ</button>
-          <button class="btn logs" onclick="window._openEventLedger('${esc(b.bot_id)}')" title="Activity">📊</button>
-          <button class="btn restart" onclick="window._restartBot('${esc(b.bot_id)}')" ${isDead ? "" : "disabled"} title="Restart">🔄</button>
-          <button class="btn kill" onclick="window._killBot('${esc(b.bot_id)}')" ${isRunning ? "" : "disabled"} title="Kill">⏹️</button>
+	          <button class="btn more" onclick="window._openInspector('${esc(b.bot_id)}')" title="Inspect">...</button>
         </td>
       </tr>`;
       })
@@ -682,30 +710,36 @@
     }
   };
 
-  // --- Log viewer modal ---
+  // --- Inspector modal ---
   let logWs = null;
   let logAutoScroll = true;
   let currentLogBotId = null;
-  let currentLogMode = "raw";
+  let currentInspectorTab = "activity";
 
   const logModal = $("#log-modal");
   const logModalPanel = $("#log-modal-panel");
   const logTitle = $("#log-title");
   const logStatus = $("#log-status");
   const logContent = $("#log-content");
-  const logOpenRawBtn = $("#log-open-raw");
+  const logTabActivity = $("#log-tab-activity");
+  const logTabLogs = $("#log-tab-logs");
+  const logTabMetrics = $("#log-tab-metrics");
+  const logTabTerminal = $("#log-tab-terminal");
 
-  function setLogModalMode(mode, botId) {
-    currentLogMode = mode;
-    currentLogBotId = botId || null;
+  function setInspectorTab(tab) {
+    currentInspectorTab = tab;
     if (!logModalPanel) return;
-    if (mode === "activity") {
-      logModalPanel.classList.add("activity-mode");
-      if (logOpenRawBtn) logOpenRawBtn.style.display = "inline-block";
-    } else {
-      logModalPanel.classList.remove("activity-mode");
-      if (logOpenRawBtn) logOpenRawBtn.style.display = "none";
-    }
+    if (tab === "activity") logModalPanel.classList.add("activity-mode");
+    else logModalPanel.classList.remove("activity-mode");
+    [
+      [logTabActivity, "activity"],
+      [logTabLogs, "logs"],
+      [logTabMetrics, "metrics"],
+      [logTabTerminal, "terminal"],
+    ].forEach(([el, key]) => {
+      if (!el) return;
+      el.classList.toggle("active", tab === key);
+    });
   }
 
   // Track scroll position for auto-scroll
@@ -734,20 +768,17 @@
     }
   }
 
-  window._openLogs = function (botId) {
-    // Close existing
-    if (logWs) {
-      logWs.close();
-      logWs = null;
-    }
+  function closeLogStream() {
+    if (!logWs) return;
+    try { logWs.close(); } catch (_) {}
+    logWs = null;
+  }
 
-    setLogModalMode("raw", botId);
+  function openLogsStream(botId) {
+    closeLogStream();
     logContent.innerHTML = "";
-    logTitle.textContent = "Logs: " + botId;
-    logStatus.innerHTML = "Connecting...";
+    logStatus.innerHTML = "Connecting log stream...";
     logAutoScroll = true;
-    logModal.classList.add("open");
-
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = proto + "//" + location.host + "/ws/bot/" + encodeURIComponent(botId) + "/logs";
 
@@ -773,32 +804,127 @@
     };
 
     logWs.onclose = function () {
-      logStatus.textContent = "Disconnected";
+      if (currentInspectorTab === "logs") logStatus.textContent = "Log stream disconnected";
       logWs = null;
     };
 
     logWs.onerror = function () {
       logStatus.textContent = "Connection error";
     };
-  };
+  }
+
+  function renderInspectorMetrics(botId) {
+    if (!lastData || !lastData.bots) {
+      logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Metrics unavailable</div>";
+      return;
+    }
+    const bot = lastData.bots.find((b) => b.bot_id === botId);
+    if (!bot) {
+      logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Bot not found</div>";
+      return;
+    }
+    const haggleAccept = Number(bot.haggle_accept || 0);
+    const haggleCounter = Number(bot.haggle_counter || 0);
+    const haggleHigh = Number(bot.haggle_too_high || 0);
+    const haggleLow = Number(bot.haggle_too_low || 0);
+    const haggleTotal = haggleAccept + haggleCounter + haggleHigh + haggleLow;
+    const acceptRate = haggleTotal > 0 ? ((haggleAccept / haggleTotal) * 100).toFixed(1) + "%" : "0.0%";
+    const creditsDelta = Number(bot.credits_delta || 0);
+    const cpt = Number(bot.credits_per_turn || 0);
+    logContent.innerHTML = `
+      <div class="field"><div class="label">Bot ID</div><div class="value">${esc(bot.bot_id)}</div></div>
+      <div class="field"><div class="label">State</div><div class="value">${esc(bot.state || "-")}</div></div>
+      <div class="field"><div class="label">Strategy</div><div class="value">${esc(getStrategyLabel(bot))}</div></div>
+      <div class="field"><div class="label">Trades Executed</div><div class="value">${esc(String(bot.trades_executed || 0))}</div></div>
+      <div class="field"><div class="label">Credits Delta</div><div class="value">${esc(String(creditsDelta))}</div></div>
+      <div class="field"><div class="label">Credits / Turn</div><div class="value">${esc(cpt.toFixed(2))}</div></div>
+      <div class="field"><div class="label">Haggle Accept</div><div class="value">${esc(String(haggleAccept))}</div></div>
+      <div class="field"><div class="label">Haggle Counter</div><div class="value">${esc(String(haggleCounter))}</div></div>
+      <div class="field"><div class="label">Haggle Too High</div><div class="value">${esc(String(haggleHigh))}</div></div>
+      <div class="field"><div class="label">Haggle Too Low</div><div class="value">${esc(String(haggleLow))}</div></div>
+      <div class="field"><div class="label">Haggle Accept Rate</div><div class="value">${esc(acceptRate)}</div></div>
+    `;
+  }
+
+  function renderInspectorTerminalTab(botId) {
+    logContent.innerHTML = `
+      <div class="field">
+        <div class="label">Terminal Control</div>
+        <div class="value">Live spy/hijack stays in the dedicated terminal panel.</div>
+      </div>
+      <div class="field">
+        <button class="btn logs" id="inspector-open-terminal">Open Live Terminal</button>
+      </div>
+    `;
+    const btn = $("#inspector-open-terminal");
+    if (btn) btn.addEventListener("click", () => window._openTerminal(botId));
+  }
+
+  async function loadInspectorTab(botId, tab) {
+    setInspectorTab(tab);
+    if (tab !== "logs") closeLogStream();
+    logTitle.textContent = "Inspector: " + botId;
+
+    if (tab === "activity") {
+      logStatus.textContent = "Loading activity...";
+      logAutoScroll = false;
+      logContent.innerHTML = "";
+      try {
+        const resp = await fetch("/bot/" + encodeURIComponent(botId) + "/events");
+        if (!resp.ok) {
+          logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Error: " + resp.status + " " + resp.statusText + "</div>";
+          logStatus.textContent = "Error";
+          return;
+        }
+        const data = await resp.json();
+        const events = data.events || [];
+        renderActivityLedger(events);
+        logStatus.textContent = "Loaded " + events.length + " events";
+      } catch (e) {
+        logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Network error: " + e.message + "</div>";
+        logStatus.textContent = "Error";
+      }
+      return;
+    }
+
+    if (tab === "logs") {
+      openLogsStream(botId);
+      return;
+    }
+
+    if (tab === "metrics") {
+      logStatus.textContent = "Metrics";
+      renderInspectorMetrics(botId);
+      return;
+    }
+
+    if (tab === "terminal") {
+      logStatus.textContent = "Terminal";
+      renderInspectorTerminalTab(botId);
+    }
+  }
+
+  async function openInspector(botId, tab) {
+    currentLogBotId = botId;
+    logModal.classList.add("open");
+    await loadInspectorTab(botId, tab || "activity");
+  }
 
   function closeLogs() {
     logModal.classList.remove("open");
     if (logModalPanel) logModalPanel.classList.remove("activity-mode");
     currentLogBotId = null;
-    currentLogMode = "raw";
-    if (logWs) {
-      logWs.close();
-      logWs = null;
-    }
+    currentInspectorTab = "activity";
+    closeLogStream();
   }
 
-  if (logOpenRawBtn) {
-    logOpenRawBtn.addEventListener("click", function () {
-      if (!currentLogBotId) return;
-      window._openLogs(currentLogBotId);
-    });
-  }
+  window._openInspector = function (botId, tab) {
+    void openInspector(botId, tab || "activity");
+  };
+
+  window._openLogs = function (botId) {
+    void openInspector(botId, "logs");
+  };
 
   $("#log-close").addEventListener("click", closeLogs);
   logModal.addEventListener("click", function (e) {
@@ -808,6 +934,15 @@
     if (e.key === "Escape" && logModal.classList.contains("open")) {
       closeLogs();
     }
+  });
+
+  [logTabActivity, logTabLogs, logTabMetrics, logTabTerminal].forEach((el) => {
+    if (!el) return;
+    el.addEventListener("click", () => {
+      if (!currentLogBotId) return;
+      const tab = el.id.replace("log-tab-", "");
+      void loadInspectorTab(currentLogBotId, tab);
+    });
   });
 
   function formatEventType(event) {
@@ -933,37 +1068,8 @@
   }
 
   // --- Event ledger (columnized activity log) ---
-  window._openEventLedger = async function (botId) {
-    // Use the same modal as logs but with a structured ledger view.
-    if (logWs) {
-      logWs.close();
-      logWs = null;
-    }
-
-    setLogModalMode("activity", botId);
-    logContent.innerHTML = "";
-    logTitle.textContent = "Activity: " + botId;
-    logStatus.innerHTML = "Loading...";
-    logAutoScroll = false;
-    logModal.classList.add("open");
-
-    try {
-      const resp = await fetch("/bot/" + encodeURIComponent(botId) + "/events");
-      if (!resp.ok) {
-        logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Error: " + resp.status + " " + resp.statusText + "</div>";
-        logStatus.textContent = "Error";
-        return;
-      }
-
-      const data = await resp.json();
-      const events = data.events || [];
-
-      renderActivityLedger(events);
-      logStatus.textContent = "Loaded " + events.length + " events";
-    } catch (e) {
-      logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--red);\">Network error: " + e.message + "</div>";
-      logStatus.textContent = "Error";
-    }
+  window._openEventLedger = function (botId) {
+    void openInspector(botId, "activity");
   };
 
   // --- Swarm WebSocket connection ---

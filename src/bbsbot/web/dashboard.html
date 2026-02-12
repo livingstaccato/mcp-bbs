@@ -43,15 +43,9 @@ body {
 }
 .header-brand {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
   min-width: 180px;
 }
 .header h1 { font-size: 15px; color: var(--cyan); font-weight: 700; letter-spacing: 0.45px; }
-.header-subtitle {
-  font-size: 11px;
-  color: var(--fg2);
-}
 .header .status { font-size: 12px; color: var(--fg2); }
 .header .status .dot {
   display: inline-block;
@@ -65,7 +59,7 @@ body {
 .dot.disconnected { background: var(--red); }
 .header-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
   flex: 1 1 auto;
@@ -116,13 +110,53 @@ body {
 }
 .header-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
 }
 .header-note {
   font-size: 11px;
   color: var(--fg2);
 }
+.top-stats {
+  margin: 12px 20px 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.top-stat {
+  background: linear-gradient(180deg, rgba(22,27,34,0.95), rgba(13,17,23,0.96));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.top-stat .k {
+  display: block;
+  font-size: 10px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+}
+.top-stat .v {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.top-stat .v.small {
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-stat .green { color: var(--green); }
+.top-stat .blue { color: var(--blue); }
+.top-stat .red { color: var(--red); }
+.top-stat .yellow { color: var(--yellow); }
+.top-stat .cyan { color: var(--cyan); }
+.top-stat.wide { grid-column: span 2; }
 .status-pool-wrap { padding: 0; }
 .pool-section-title {
   font-size: 11px;
@@ -316,6 +350,60 @@ thead th, tbody td {
 .strategy-cell { white-space: normal; line-height: 1.15; }
 .strategy-main { font-weight: 600; }
 .strategy-intent { color: var(--fg2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-cell {
+  cursor: pointer;
+}
+.activity-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.activity-secondary {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--fg2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.strategy-chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+}
+.chip.sid { color: var(--cyan); border-color: rgba(57,197,207,0.45); }
+.chip.mode { color: var(--yellow); border-color: rgba(210,153,34,0.45); }
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.state-pill.running { color: var(--green); border-color: rgba(63,185,80,0.5); }
+.state-pill.completed { color: var(--blue); border-color: rgba(88,166,255,0.5); }
+.state-pill.error { color: var(--red); border-color: rgba(248,81,73,0.5); }
+.state-pill.blocked,
+.state-pill.warning { color: #f0883e; border-color: rgba(240,136,62,0.5); }
+.state-pill.recovering,
+.state-pill.queued { color: var(--yellow); border-color: rgba(210,153,34,0.5); }
+.state-pill.stopped,
+.state-pill.disconnected { color: var(--fg2); border-color: rgba(139,148,158,0.45); }
 /* Keep Actions visible within the fixed table */
 table thead th:last-child,
 table tbody td:last-child {
@@ -328,23 +416,23 @@ table tbody td:last-child {
 table thead th:last-child {
   background: var(--bg3);
 }
-/* Proportional column widths to avoid horizontal scrolling at normal desktop widths */
+/* Proportional column widths for dense table scanning */
 table thead th:nth-child(1), table tbody td:nth-child(1) { width: 10%; } /* Bot ID */
 table thead th:nth-child(2), table tbody td:nth-child(2) { width: 6%; }  /* State */
-table thead th:nth-child(3), table tbody td:nth-child(3) { width: 10%; } /* Activity */
-table thead th:nth-child(4), table tbody td:nth-child(4) { width: 13%; } /* Status */
-table thead th:nth-child(5), table tbody td:nth-child(5) { width: 13%; } /* Strategy */
-table thead th:nth-child(6), table tbody td:nth-child(6) { width: 5%; }  /* Sector */
-table thead th:nth-child(7), table tbody td:nth-child(7) { width: 8%; }  /* Credits */
-table thead th:nth-child(8), table tbody td:nth-child(8) { width: 4%; }  /* Fuel */
-table thead th:nth-child(9), table tbody td:nth-child(9) { width: 4%; }  /* Org */
-table thead th:nth-child(10), table tbody td:nth-child(10) { width: 5%; } /* Equip */
-table thead th:nth-child(11), table tbody td:nth-child(11) { width: 6%; }  /* Turns */
-table thead th:nth-child(12), table tbody td:nth-child(12) { width: 16%; } /* Actions */
+table thead th:nth-child(3), table tbody td:nth-child(3) { width: 23%; } /* Activity+Status */
+table thead th:nth-child(4), table tbody td:nth-child(4) { width: 11%; } /* Strategy */
+table thead th:nth-child(5), table tbody td:nth-child(5) { width: 6%; }  /* Sector */
+table thead th:nth-child(6), table tbody td:nth-child(6) { width: 8%; }  /* Credits */
+table thead th:nth-child(7), table tbody td:nth-child(7) { width: 5%; }  /* Fuel */
+table thead th:nth-child(8), table tbody td:nth-child(8) { width: 5%; }  /* Org */
+table thead th:nth-child(9), table tbody td:nth-child(9) { width: 5%; }  /* Equip */
+table thead th:nth-child(10), table tbody td:nth-child(10) { width: 8%; } /* Turns */
+table thead th:nth-child(11), table tbody td:nth-child(11) { width: 13%; } /* Actions */
 table tbody td.actions {
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
+  text-align: center;
 }
 thead th {
   text-align: left;
@@ -363,7 +451,7 @@ table thead th:nth-child(7),
 table thead th:nth-child(8),
 table thead th:nth-child(9),
 table thead th:nth-child(10),
-table thead th:nth-child(11) {
+table thead th:nth-child(5) {
   text-align: center;
 }
 thead th:hover { color: var(--fg); }
@@ -412,6 +500,14 @@ tbody tr:hover { background: var(--bg3); }
 .actions .btn {
   padding: 2px 6px;
   margin-right: 2px;
+}
+.btn.more {
+  border-color: var(--blue);
+  color: var(--blue);
+  min-width: 34px;
+}
+.btn.more:hover {
+  background: rgba(88,166,255,0.14);
 }
 .btn {
   display: inline-block;
@@ -479,6 +575,11 @@ tbody tr:hover { background: var(--bg3); }
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.modal-header-actions .btn.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(57,197,207,0.12);
 }
 .modal-header-actions .btn {
   margin-right: 0;
@@ -850,9 +951,13 @@ tbody tr:hover { background: var(--bg3); }
   .right-pane {
     order: 2;
   }
+  .top-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .top-stat.wide { grid-column: span 2; }
 }
 @media (max-width: 940px) {
   .dashboard-main { padding: 14px 16px 18px; }
+  .top-stats { margin: 12px 16px 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .top-stat.wide { grid-column: span 2; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .header {
     padding: 12px 16px;
@@ -885,18 +990,12 @@ tbody tr:hover { background: var(--bg3); }
   }
 }
 @media (max-width: 760px) {
-  .summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .pool-head {
     flex-direction: column;
     align-items: flex-start;
   }
 }
 @media (max-width: 420px) {
-  .summary {
-    grid-template-columns: 1fr;
-  }
   .table-filters select {
     min-width: 100%;
   }
@@ -910,12 +1009,11 @@ tbody tr:hover { background: var(--bg3); }
 <div class="header">
   <div class="header-brand">
     <h1>BBSBOT SWARM DASHBOARD</h1>
-    <div class="header-subtitle">Operator console for TW2002 swarms</div>
   </div>
   <div class="header-controls">
     <div class="spawn-controls">
       <div class="spawn-field" title="Named bot mix templates">
-        <label for="spawn-preset">Preset</label>
+        <label for="spawn-preset">Mix</label>
         <select id="spawn-preset">
         <option value="custom">custom</option>
         <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
@@ -927,7 +1025,7 @@ tbody tr:hover { background: var(--bg3); }
         <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
       </div>
       <div class="spawn-field" title="Display labels map to stable config directories">
-        <label for="spawn-config">Profile</label>
+        <label for="spawn-config">Config</label>
         <select id="spawn-config">
           <option value="swarm_demo">tw2002_dynamic</option>
           <option value="swarm_demo_ai">tw2002_ai</option>
@@ -940,14 +1038,43 @@ tbody tr:hover { background: var(--bg3); }
       <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
       <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
     </div>
-    <div class="header-note">TW2002 profiles shown as labels; underlying config paths stay stable.</div>
   </div>
   <div class="status">
     <span class="dot disconnected" id="dot"></span>
     <span id="conn-status">Connecting...</span>
-    <span id="uptime"></span>
   </div>
 </div>
+
+<section class="top-stats">
+  <div class="top-stat">
+    <span class="k">Runtime</span>
+    <span class="v"><span class="green" id="running">-</span> / <span id="total">-</span></span>
+  </div>
+  <div class="top-stat">
+    <span class="k">Done / Errors</span>
+    <span class="v"><span class="blue" id="completed">-</span> / <span class="red" id="errors">-</span></span>
+  </div>
+  <div class="top-stat">
+    <span class="k">Credits / Turns</span>
+    <span class="v"><span class="cyan" id="credits">-</span> / <span id="turns">-</span></span>
+  </div>
+  <div class="top-stat">
+    <span class="k">Haggle</span>
+    <span class="v"><span class="green" id="accept-rate">-</span></span>
+  </div>
+  <div class="top-stat">
+    <span class="k">High / Low / NoTrade</span>
+    <span class="v"><span class="yellow" id="too-high-rate">-</span> / <span class="blue" id="too-low-rate">-</span> / <span class="red" id="no-trade-120">-</span></span>
+  </div>
+  <div class="top-stat">
+    <span class="k">Connected</span>
+    <span class="v small" id="connected-for">-</span>
+  </div>
+  <div class="top-stat wide">
+    <span class="k">Strategy CPT</span>
+    <span class="v small" id="strategy-cpt">-</span>
+  </div>
+</section>
 
 <main class="dashboard-main">
   <div class="dashboard-grid">
@@ -981,10 +1108,9 @@ tbody tr:hover { background: var(--bg3); }
               <tr>
                 <th data-sort="bot_id">Bot ID</th>
                 <th data-sort="state">State</th>
-                <th>Activity</th>
-                <th data-sort="is_hijacked">Status</th>
-                <th data-sort="strategy">Strategy</th>
-                <th data-sort="sector">Sector</th>
+                <th>Activity / Status</th>
+                <th data-sort="strategy">Strat</th>
+                <th data-sort="sector">Sect</th>
                 <th data-sort="credits">Credits</th>
                 <th data-sort="cargo_fuel_ore">Fuel</th>
                 <th data-sort="cargo_organics">Org</th>
@@ -999,22 +1125,6 @@ tbody tr:hover { background: var(--bg3); }
       </div>
     </section>
     <aside class="right-pane">
-      <section class="panel status-pool-wrap">
-        <div class="pool-section-title">Status Pool</div>
-        <div class="summary">
-          <div class="card"><div class="label">Running</div><div class="value green" id="running">-</div></div>
-          <div class="card"><div class="label">Total</div><div class="value" id="total">-</div></div>
-          <div class="card"><div class="label">Completed</div><div class="value blue" id="completed">-</div></div>
-          <div class="card"><div class="label">Errors</div><div class="value red" id="errors">-</div></div>
-          <div class="card"><div class="label">Credits</div><div class="value cyan" id="credits">-</div></div>
-          <div class="card"><div class="label">Turns</div><div class="value" id="turns">-</div></div>
-          <div class="card"><div class="label">Haggle Accept</div><div class="value green" id="accept-rate">-</div></div>
-          <div class="card"><div class="label">Too High</div><div class="value yellow" id="too-high-rate">-</div></div>
-          <div class="card"><div class="label">Too Low</div><div class="value blue" id="too-low-rate">-</div></div>
-          <div class="card"><div class="label">No Trade 120+</div><div class="value red" id="no-trade-120">-</div></div>
-          <div class="card card-strategy"><div class="label">Strategy CPT</div><div class="value small" id="strategy-cpt">-</div></div>
-        </div>
-      </section>
       <section class="panel pool-panel-wrap">
         <div class="section-head">
           <div class="pool-section-title">Bot Pool</div>
@@ -1083,15 +1193,18 @@ tbody tr:hover { background: var(--bg3); }
   </div>
 </div>
 
-<!-- Log viewer modal -->
+<!-- Inspector modal -->
 <div class="modal-overlay" id="log-modal">
   <div class="modal" id="log-modal-panel">
     <div class="modal-header">
       <div class="modal-header-main">
-        <h2 id="log-title">Logs: ---</h2>
+        <h2 id="log-title">Inspector: ---</h2>
       </div>
       <div class="modal-header-actions">
-        <button class="btn logs" id="log-open-raw" title="Open bot worker log" style="display:none;">Open Logs</button>
+        <button class="btn" id="log-tab-activity">Activity</button>
+        <button class="btn" id="log-tab-logs">Logs</button>
+        <button class="btn" id="log-tab-metrics">Metrics</button>
+        <button class="btn" id="log-tab-terminal">Terminal</button>
         <button class="close-btn" id="log-close">&times;</button>
       </div>
     </div>
@@ -1106,6 +1219,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=18"></script>
+<script src="/static/dashboard.js?v=20"></script>
 </body>
 </html>
