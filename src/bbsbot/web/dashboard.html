@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BBSBot Swarm Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 <style>
 :root {
@@ -213,8 +214,7 @@ body {
 .pool-table td {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 12px;
@@ -226,6 +226,11 @@ body {
   font-size: 10px;
   letter-spacing: 0.4px;
 }
+.pool-table th:nth-child(1), .pool-table td:nth-child(1) { width: 24%; }
+.pool-table th:nth-child(2), .pool-table td:nth-child(2) { width: 24%; }
+.pool-table th:nth-child(3), .pool-table td:nth-child(3) { width: 24%; }
+.pool-table th:nth-child(4), .pool-table td:nth-child(4) { width: 12%; text-align: center; font-variant-numeric: tabular-nums; }
+.pool-table th:nth-child(5), .pool-table td:nth-child(5) { width: 16%; text-align: right; font-variant-numeric: tabular-nums; }
 .pool-table td.num {
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -354,9 +359,17 @@ thead th, tbody td {
   cursor: pointer;
 }
 .activity-primary {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+.activity-age {
+  color: var(--fg2);
+  font-size: 11px;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 .activity-secondary {
   margin-top: 2px;
@@ -419,15 +432,15 @@ table thead th:last-child {
 /* Proportional column widths for dense table scanning */
 table thead th:nth-child(1), table tbody td:nth-child(1) { width: 10%; } /* Bot ID */
 table thead th:nth-child(2), table tbody td:nth-child(2) { width: 6%; }  /* State */
-table thead th:nth-child(3), table tbody td:nth-child(3) { width: 23%; } /* Activity+Status */
-table thead th:nth-child(4), table tbody td:nth-child(4) { width: 11%; } /* Strategy */
+table thead th:nth-child(3), table tbody td:nth-child(3) { width: 24%; } /* Activity+Status */
+table thead th:nth-child(4), table tbody td:nth-child(4) { width: 10%; } /* Strategy */
 table thead th:nth-child(5), table tbody td:nth-child(5) { width: 6%; }  /* Sector */
-table thead th:nth-child(6), table tbody td:nth-child(6) { width: 8%; }  /* Credits */
+table thead th:nth-child(6), table tbody td:nth-child(6) { width: 9%; }  /* Credits */
 table thead th:nth-child(7), table tbody td:nth-child(7) { width: 5%; }  /* Fuel */
 table thead th:nth-child(8), table tbody td:nth-child(8) { width: 5%; }  /* Org */
 table thead th:nth-child(9), table tbody td:nth-child(9) { width: 5%; }  /* Equip */
-table thead th:nth-child(10), table tbody td:nth-child(10) { width: 8%; } /* Turns */
-table thead th:nth-child(11), table tbody td:nth-child(11) { width: 13%; } /* Actions */
+table thead th:nth-child(10), table tbody td:nth-child(10) { width: 10%; } /* Turns */
+table thead th:nth-child(11), table tbody td:nth-child(11) { width: 8%; } /* Actions */
 table tbody td.actions {
   overflow: visible;
   text-overflow: clip;
@@ -498,13 +511,13 @@ tbody tr:hover { background: var(--bg3); }
 /* Action buttons */
 .actions { white-space: nowrap; }
 .actions .btn {
-  padding: 2px 6px;
-  margin-right: 2px;
+  padding: 1px 6px;
+  margin-right: 0;
 }
 .btn.more {
   border-color: var(--blue);
   color: var(--blue);
-  min-width: 34px;
+  min-width: 30px;
 }
 .btn.more:hover {
   background: rgba(88,166,255,0.14);
@@ -530,6 +543,66 @@ tbody tr:hover { background: var(--bg3); }
 .btn.restart:hover { background: rgba(63,185,80,0.15); }
 .btn.kill { border-color: var(--red); color: var(--red); }
 .btn.kill:hover { background: rgba(248,81,73,0.15); }
+
+.pool-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.pool-metric {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.015);
+}
+.pool-metric .k {
+  display: block;
+  font-size: 9px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.pool-metric .v {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pool-telemetry {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.pool-rate {
+  font-size: 11px;
+  color: var(--fg2);
+}
+.pool-rate strong {
+  color: var(--cyan);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.pool-sparkline {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.015);
+}
+.pool-sparkline polyline {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.pool-sparkline .baseline {
+  stroke: var(--border);
+  stroke-width: 1;
+}
 
 /* Log modal */
 .modal-overlay {
@@ -989,7 +1062,24 @@ tbody tr:hover { background: var(--bg3); }
     text-align: right;
   }
 }
+@media (max-width: 1360px) {
+  table thead th:nth-child(4), table tbody td:nth-child(4) { display: none; } /* strat */
+}
+@media (max-width: 1240px) {
+  .activity-secondary { display: none; } /* status detail */
+}
+@media (max-width: 1120px) {
+  table thead th:nth-child(7), table tbody td:nth-child(7) { display: none; } /* fuel */
+}
+@media (max-width: 1040px) {
+  table thead th:nth-child(8), table tbody td:nth-child(8) { display: none; } /* org */
+}
+@media (max-width: 980px) {
+  table thead th:nth-child(9), table tbody td:nth-child(9) { display: none; } /* equip */
+}
 @media (max-width: 760px) {
+  .pool-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pool-telemetry { grid-template-columns: 1fr; }
   .pool-head {
     flex-direction: column;
     align-items: flex-start;
@@ -1128,23 +1218,34 @@ tbody tr:hover { background: var(--bg3); }
       <section class="panel pool-panel-wrap">
         <div class="section-head">
           <div class="pool-section-title">Bot Pool</div>
-          <div class="section-meta" id="pool-summary">loading...</div>
+          <div class="section-meta" id="pool-summary">-</div>
+        </div>
+        <div class="pool-metrics">
+          <div class="pool-metric"><span class="k">Leased</span><span class="v" id="pool-kpi-leased">-</span></div>
+          <div class="pool-metric"><span class="k">Available</span><span class="v" id="pool-kpi-available">-</span></div>
+          <div class="pool-metric"><span class="k">Cooldown</span><span class="v" id="pool-kpi-cooldown">-</span></div>
+          <div class="pool-metric"><span class="k">Identity</span><span class="v" id="pool-kpi-identity">-</span></div>
+        </div>
+        <div class="pool-telemetry">
+          <div class="pool-rate">Lease Rate <strong id="pool-rate">-</strong></div>
+          <svg class="pool-sparkline" id="pool-sparkline" viewBox="0 0 120 28" preserveAspectRatio="none" aria-label="Pool rate sparkline">
+            <line class="baseline" x1="0" y1="27" x2="120" y2="27"></line>
+            <polyline id="pool-sparkline-line" points=""></polyline>
+          </svg>
         </div>
         <div class="pool-panel">
           <div class="pool-head">
-            <div class="title">Account Lease/Identity Pool</div>
+            <div class="title">Lease / Identity</div>
           </div>
           <div class="pool-table-wrap">
             <table class="pool-table">
               <thead>
                 <tr>
-                  <th>Username</th>
-                  <th>Source</th>
+                  <th>User</th>
+                  <th>Lease</th>
                   <th>Host</th>
-                  <th>Lease Bot</th>
-                  <th>Cooldown</th>
                   <th>Uses</th>
-                  <th>Last Used</th>
+                  <th>Last</th>
                 </tr>
               </thead>
               <tbody id="pool-table"></tbody>
@@ -1219,6 +1320,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=20"></script>
+<script src="/static/dashboard.js?v=21"></script>
 </body>
 </html>

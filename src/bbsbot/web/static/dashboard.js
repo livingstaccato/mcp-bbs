@@ -443,7 +443,7 @@
         const activityClass = getActivityClass(activity);
         let activityPrimary = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
         if (b.last_action_time && isRunning) {
-          activityPrimary += `<span style="color: var(--fg2); font-size: 11px;">${formatRelativeTime(b.last_action_time)}</span>`;
+          activityPrimary += `<span class="activity-age">${formatRelativeTime(b.last_action_time)}</span>`;
         }
 
         const stateClass = String(b.state || "unknown").toLowerCase();
@@ -1144,6 +1144,35 @@
   const spawnConfig = $("#spawn-config");
   const poolSummary = $("#pool-summary");
   const poolTable = $("#pool-table");
+  const poolKpiLeased = $("#pool-kpi-leased");
+  const poolKpiAvailable = $("#pool-kpi-available");
+  const poolKpiCooldown = $("#pool-kpi-cooldown");
+  const poolKpiIdentity = $("#pool-kpi-identity");
+  const poolRate = $("#pool-rate");
+  const poolSparkline = $("#pool-sparkline-line");
+
+  let poolLastSample = null;
+  const poolRateHistory = [];
+
+  function pushPoolRateSample(v) {
+    poolRateHistory.push(Math.max(0, Number(v) || 0));
+    while (poolRateHistory.length > 32) poolRateHistory.shift();
+    if (!poolSparkline) return;
+    const n = poolRateHistory.length;
+    if (n === 0) {
+      poolSparkline.setAttribute("points", "");
+      return;
+    }
+    const w = 120;
+    const h = 28;
+    const maxV = Math.max(...poolRateHistory, 0.0001);
+    const points = poolRateHistory.map((val, i) => {
+      const x = n === 1 ? w : (i / (n - 1)) * w;
+      const y = h - 1 - (val / maxV) * (h - 4);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(" ");
+    poolSparkline.setAttribute("points", points);
+  }
 
   function _buildRange(configDir, count, startAt) {
     const out = [];
@@ -1188,37 +1217,57 @@
       const resp = await fetch("/swarm/account-pool");
       if (!resp.ok) {
         poolSummary.textContent = "unavailable";
+        if (poolRate) poolRate.textContent = "-";
         return;
       }
       const data = await resp.json();
       const pool = data.pool || {};
       const identities = data.identities || {};
-      poolSummary.textContent =
-        `accounts ${Number(pool.accounts_total || 0)} | leased ${Number(pool.leased || 0)} | ` +
-        `cooldown ${Number(pool.cooldown || 0)} | available ${Number(pool.available || 0)} | ` +
-        `identity: ${Number(identities.total || 0)} total / ${Number(identities.active || 0)} active`;
-
       const accounts = Array.isArray(pool.accounts) ? pool.accounts.slice(0, 12) : [];
+      const total = Number(pool.accounts_total || 0);
+      const leased = Number(pool.leased || 0);
+      const cooldown = Number(pool.cooldown || 0);
+      const available = Number(pool.available || 0);
+      const identityTotal = Number(identities.total || 0);
+      const identityActive = Number(identities.active || 0);
+
+      poolSummary.textContent =
+        `${total} | leased ${leased} | avail ${available} | cool ${cooldown} | id ${identityActive}/${identityTotal}`;
+
+      if (poolKpiLeased) poolKpiLeased.textContent = `${leased}/${total}`;
+      if (poolKpiAvailable) poolKpiAvailable.textContent = String(available);
+      if (poolKpiCooldown) poolKpiCooldown.textContent = String(cooldown);
+      if (poolKpiIdentity) poolKpiIdentity.textContent = `${identityActive}/${identityTotal}`;
+
+      const totalUses = accounts.reduce((sum, a) => sum + Number(a.use_count || 0), 0);
+      const now = Date.now() / 1000;
+      let leasesPerMin = 0;
+      if (poolLastSample && now > poolLastSample.time) {
+        const dtMin = (now - poolLastSample.time) / 60;
+        if (dtMin > 0) leasesPerMin = Math.max(0, (totalUses - poolLastSample.totalUses) / dtMin);
+      }
+      poolLastSample = { time: now, totalUses };
+      if (poolRate) poolRate.textContent = `${leasesPerMin.toFixed(2)}/min`;
+      pushPoolRateSample(leasesPerMin);
+
       poolTable.innerHTML = accounts.map((a) => {
         const host = [a.host || "-", a.port != null ? a.port : "-"].join(":");
         const leaseBot = (a.lease && a.lease.bot_id) ? a.lease.bot_id : "-";
-        const cooldown = a.cooldown_until ? formatAgeSeconds(a.cooldown_until) : "-";
         const lastUsed = a.last_used_at ? formatAgeSeconds(a.last_used_at) : "-";
         return `<tr>
           <td title="${esc(a.username || "-")}">${esc(a.username || "-")}</td>
-          <td>${esc(a.source || "-")}</td>
-          <td title="${esc(host)}">${esc(host)}</td>
           <td title="${esc(leaseBot)}">${esc(leaseBot)}</td>
-          <td class="num">${esc(cooldown)}</td>
+          <td title="${esc(host)}">${esc(host)}</td>
           <td class="num">${esc(String(a.use_count || 0))}</td>
           <td class="num">${esc(lastUsed)}</td>
         </tr>`;
       }).join("");
       if (!accounts.length) {
-        poolTable.innerHTML = `<tr><td colspan="7" style="color: var(--fg2);">No pooled accounts yet</td></tr>`;
+        poolTable.innerHTML = `<tr><td colspan="5" style="color: var(--fg2);">No pooled accounts yet</td></tr>`;
       }
     } catch (_) {
       poolSummary.textContent = "unavailable";
+      if (poolRate) poolRate.textContent = "-";
     }
   }
 
