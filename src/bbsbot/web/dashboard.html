@@ -168,18 +168,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .pool-table-wrap {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 .pool-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
 }
 .pool-table th,
 .pool-table td {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 12px;
@@ -294,7 +295,7 @@ body {
 }
 .table-wrap {
   padding: 0;
-  overflow-x: auto;
+  overflow-x: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -305,7 +306,7 @@ table {
   background: var(--bg2);
   border: none;
   overflow: hidden;
-  min-width: 1280px;
+  min-width: 0;
 }
 thead th, tbody td {
   white-space: nowrap;
@@ -315,7 +316,7 @@ thead th, tbody td {
 .strategy-cell { white-space: normal; line-height: 1.15; }
 .strategy-main { font-weight: 600; }
 .strategy-intent { color: var(--fg2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Keep Actions visible when horizontally scrolling */
+/* Keep Actions visible within the fixed table */
 table thead th:last-child,
 table tbody td:last-child {
   position: sticky;
@@ -327,19 +328,19 @@ table tbody td:last-child {
 table thead th:last-child {
   background: var(--bg3);
 }
-/* Fixed column widths to avoid jitter as data changes */
-table thead th:nth-child(1), table tbody td:nth-child(1) { width: 110px; } /* Bot ID */
-table thead th:nth-child(2), table tbody td:nth-child(2) { width: 76px; }  /* State */
-table thead th:nth-child(3), table tbody td:nth-child(3) { width: 150px; } /* Activity */
-table thead th:nth-child(4), table tbody td:nth-child(4) { width: 170px; } /* Status */
-table thead th:nth-child(5), table tbody td:nth-child(5) { width: 180px; } /* Strategy */
-table thead th:nth-child(6), table tbody td:nth-child(6) { width: 70px; }  /* Sector */
-table thead th:nth-child(7), table tbody td:nth-child(7) { width: 90px; }  /* Credits */
-table thead th:nth-child(8), table tbody td:nth-child(8) { width: 60px; }  /* Fuel */
-table thead th:nth-child(9), table tbody td:nth-child(9) { width: 60px; }  /* Org */
-table thead th:nth-child(10), table tbody td:nth-child(10) { width: 70px; } /* Equip */
-table thead th:nth-child(11), table tbody td:nth-child(11) { width: 90px; }  /* Turns */
-table thead th:nth-child(12), table tbody td:nth-child(12) { width: 230px; } /* Actions */
+/* Proportional column widths to avoid horizontal scrolling at normal desktop widths */
+table thead th:nth-child(1), table tbody td:nth-child(1) { width: 10%; } /* Bot ID */
+table thead th:nth-child(2), table tbody td:nth-child(2) { width: 6%; }  /* State */
+table thead th:nth-child(3), table tbody td:nth-child(3) { width: 10%; } /* Activity */
+table thead th:nth-child(4), table tbody td:nth-child(4) { width: 13%; } /* Status */
+table thead th:nth-child(5), table tbody td:nth-child(5) { width: 13%; } /* Strategy */
+table thead th:nth-child(6), table tbody td:nth-child(6) { width: 5%; }  /* Sector */
+table thead th:nth-child(7), table tbody td:nth-child(7) { width: 8%; }  /* Credits */
+table thead th:nth-child(8), table tbody td:nth-child(8) { width: 4%; }  /* Fuel */
+table thead th:nth-child(9), table tbody td:nth-child(9) { width: 4%; }  /* Org */
+table thead th:nth-child(10), table tbody td:nth-child(10) { width: 5%; } /* Equip */
+table thead th:nth-child(11), table tbody td:nth-child(11) { width: 6%; }  /* Turns */
+table thead th:nth-child(12), table tbody td:nth-child(12) { width: 16%; } /* Actions */
 table tbody td.actions {
   overflow: visible;
   text-overflow: clip;
@@ -408,6 +409,10 @@ tbody tr:hover { background: var(--bg3); }
 
 /* Action buttons */
 .actions { white-space: nowrap; }
+.actions .btn {
+  padding: 2px 6px;
+  margin-right: 2px;
+}
 .btn {
   display: inline-block;
   padding: 3px 10px;
@@ -840,6 +845,12 @@ tbody tr:hover { background: var(--bg3); }
     margin-left: auto;
   }
 }
+@media (max-width: 1560px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .right-pane {
+    order: 2;
+  }
+}
 @media (max-width: 940px) {
   .dashboard-main { padding: 14px 16px 18px; }
   .dashboard-grid { grid-template-columns: 1fr; }
@@ -871,9 +882,6 @@ tbody tr:hover { background: var(--bg3); }
   .header .status {
     width: 100%;
     text-align: right;
-  }
-  .right-pane {
-    order: 2;
   }
 }
 @media (max-width: 760px) {
