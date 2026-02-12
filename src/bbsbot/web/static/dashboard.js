@@ -12,6 +12,12 @@
   const $ = (sel) => document.querySelector(sel);
   const dot = $("#dot");
   const connStatus = $("#conn-status");
+  const botListMeta = $("#bot-list-meta");
+  const filterStateEl = $("#filter-state");
+  const filterStrategyEl = $("#filter-strategy");
+  const filterSearchEl = $("#filter-search");
+  const filterNoTradeEl = $("#filter-no-trade");
+  const strategyFilterOptionSet = new Set();
 
   function renderOrDeferTable(data) {
     if (tablePointerActive) {
@@ -240,6 +246,75 @@
     return "idle";
   }
 
+  function getStrategyLabel(bot) {
+    const strategy =
+      (bot.strategy && String(bot.strategy).trim()) ||
+      ((bot.strategy_id ? String(bot.strategy_id).trim() : "") +
+        (bot.strategy_mode ? `(${String(bot.strategy_mode).trim()})` : ""));
+    return strategy || "-";
+  }
+
+  function matchesTextFilter(bot, q) {
+    if (!q) return true;
+    const fields = [
+      bot.bot_id,
+      bot.state,
+      bot.activity_context,
+      bot.status_detail,
+      bot.prompt_id,
+      bot.strategy,
+      bot.strategy_id,
+      bot.strategy_mode,
+      bot.strategy_intent,
+      bot.sector,
+    ];
+    return fields.some((f) => String(f || "").toLowerCase().includes(q));
+  }
+
+  function noTrade120(bot) {
+    const turns = Number(bot.turns_executed || 0);
+    const trades = Number(bot.trades_executed || 0);
+    return turns >= 120 && trades === 0 && String(bot.state || "") === "running";
+  }
+
+  function syncStrategyFilterOptions(bots) {
+    if (!filterStrategyEl) return;
+    const labels = Array.from(
+      new Set(
+        bots
+          .map((b) => getStrategyLabel(b))
+          .filter((v) => v && v !== "-")
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    let changed = false;
+    for (const label of labels) {
+      if (strategyFilterOptionSet.has(label)) continue;
+      const opt = document.createElement("option");
+      opt.value = label;
+      opt.textContent = `strategy: ${label}`;
+      filterStrategyEl.appendChild(opt);
+      strategyFilterOptionSet.add(label);
+      changed = true;
+    }
+    if (!changed && filterStrategyEl.options.length > 1) return;
+  }
+
+  function applyFilters(bots) {
+    const stateFilter = filterStateEl ? String(filterStateEl.value || "all") : "all";
+    const strategyFilter = filterStrategyEl ? String(filterStrategyEl.value || "all") : "all";
+    const searchFilter = filterSearchEl ? String(filterSearchEl.value || "").trim().toLowerCase() : "";
+    const noTradeFilter = !!(filterNoTradeEl && filterNoTradeEl.checked);
+
+    return bots.filter((bot) => {
+      if (stateFilter !== "all" && String(bot.state || "") !== stateFilter) return false;
+      if (strategyFilter !== "all" && getStrategyLabel(bot) !== strategyFilter) return false;
+      if (noTradeFilter && !noTrade120(bot)) return false;
+      if (!matchesTextFilter(bot, searchFilter)) return false;
+      return true;
+    });
+  }
+
   // --- Bot table rendering ---
 	  function update(data) {
 	    lastData = data;
@@ -286,7 +361,14 @@
 	  }
 
   function renderBotTable(data) {
-    const bots = (data.bots || []).slice().sort((a, b) => {
+    const allBots = data.bots || [];
+    syncStrategyFilterOptions(allBots);
+    const filteredBots = applyFilters(allBots);
+    if (botListMeta) {
+      botListMeta.textContent = `${filteredBots.length} visible / ${allBots.length} total`;
+    }
+
+    const bots = filteredBots.slice().sort((a, b) => {
       let va = a[sortKey] ?? "";
       let vb = b[sortKey] ?? "";
       if (typeof va === "number") {
@@ -390,11 +472,7 @@
         const orgDisplay = (b.cargo_organics === null || b.cargo_organics === undefined) ? "-" : formatCredits(b.cargo_organics);
         const equipDisplay = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? "-" : formatCredits(b.cargo_equipment);
 
-        const strategyMain =
-          (b.strategy && String(b.strategy).trim()) ||
-          ((b.strategy_id ? String(b.strategy_id).trim() : "") +
-            (b.strategy_mode ? `(${String(b.strategy_mode).trim()})` : "")) ||
-          "-";
+        const strategyMain = getStrategyLabel(b);
         const strategyIntent = (b.strategy_intent || "").trim();
         const strategyHtml =
           `<div class="strategy-cell"><div class="strategy-main">${esc(strategyMain)}</div>` +
@@ -445,6 +523,19 @@
 	      }
 	    });
 	  });
+
+  [filterStateEl, filterStrategyEl, filterNoTradeEl].forEach((el) => {
+    if (!el) return;
+    el.addEventListener("change", () => {
+      if (lastData) renderOrDeferTable(lastData);
+    });
+  });
+
+  if (filterSearchEl) {
+    filterSearchEl.addEventListener("input", () => {
+      if (lastData) renderOrDeferTable(lastData);
+    });
+  }
 
   // --- Error modal ---
   const errorModalOverlay = $("#error-modal-overlay");

@@ -25,17 +25,33 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 .header {
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
-  padding: 12px 24px;
+  padding: 10px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 30;
   gap: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
-.header h1 { font-size: 16px; color: var(--cyan); font-weight: 600; }
+.header-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+.header h1 { font-size: 15px; color: var(--cyan); font-weight: 700; letter-spacing: 0.45px; }
+.header-subtitle {
+  font-size: 11px;
+  color: var(--fg2);
+}
 .header .status { font-size: 12px; color: var(--fg2); }
 .header .status .dot {
   display: inline-block;
@@ -52,6 +68,7 @@ body {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  flex: 1 1 auto;
 }
 .spawn-controls {
   display: flex;
@@ -89,6 +106,10 @@ body {
   width: 100%;
   text-align: center;
 }
+.spawn-field select,
+.spawn-field input {
+  width: 100%;
+}
 .header-separator {
   border-left: 1px solid var(--border);
   height: 24px;
@@ -102,33 +123,31 @@ body {
   font-size: 11px;
   color: var(--fg2);
 }
-.status-pool-wrap {
-  padding: 16px 24px 10px;
-}
+.status-pool-wrap { padding: 0; }
 .pool-section-title {
   font-size: 11px;
   color: var(--fg2);
   text-transform: uppercase;
   letter-spacing: 0.45px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   align-items: stretch;
 }
 .summary > .card {
   min-width: 0;
 }
 .pool-panel-wrap {
-  padding: 6px 24px 16px;
+  padding: 0;
 }
 .pool-panel {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 .pool-head {
   display: flex;
@@ -180,12 +199,12 @@ body {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px 16px;
-  min-height: 86px;
+  padding: 10px 12px;
+  min-height: 72px;
 }
 .card .label { font-size: 11px; color: var(--fg2); text-transform: uppercase; letter-spacing: 0.5px; }
-.card .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
-.card .value.small { font-size: 14px; line-height: 1.3; font-weight: 600; white-space: normal; }
+.card .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+.card .value.small { font-size: 13px; line-height: 1.25; font-weight: 600; white-space: normal; }
 .card.card-strategy { grid-column: 1 / -1; min-height: 86px; }
 .strategy-cpt-lines { display: block; }
 .strategy-cpt-line { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -195,18 +214,98 @@ body {
 .card .value.blue { color: var(--blue); }
 .card .value.cyan { color: var(--cyan); }
 .card .value.yellow { color: var(--yellow); }
+.dashboard-main {
+  padding: 16px 20px 20px;
+}
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 14px;
+  align-items: start;
+}
+.left-pane,
+.right-pane {
+  min-width: 0;
+}
+.right-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.panel {
+  background: linear-gradient(180deg, rgba(22,27,34,0.95), rgba(13,17,23,0.96));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.section-head .pool-section-title {
+  margin-bottom: 0;
+}
+.section-meta {
+  font-size: 11px;
+  color: var(--fg2);
+  font-variant-numeric: tabular-nums;
+}
+.table-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.table-filters select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  min-width: 130px;
+}
+.table-filters input[type="search"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  min-width: 180px;
+}
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--fg2);
+}
+.filter-badge input {
+  accent-color: var(--cyan);
+}
 .table-wrap {
-  padding: 0 24px 24px;
+  padding: 0;
   overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: none;
   overflow: hidden;
+  min-width: 1280px;
 }
 thead th, tbody td {
   white-space: nowrap;
@@ -728,16 +827,12 @@ tbody tr:hover { background: var(--bg3); }
 .toast.success { border-color: var(--green); color: var(--green); }
 .toast.error { border-color: var(--red); color: var(--red); }
 @media (max-width: 1260px) {
-  .summary {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+  .dashboard-grid { grid-template-columns: minmax(0, 1fr) 320px; }
   .header {
     flex-wrap: wrap;
     align-items: flex-start;
   }
-  .header h1 {
-    flex: 1 1 100%;
-  }
+  .header-brand { flex: 1 1 100%; }
   .header-controls {
     flex: 1 1 auto;
   }
@@ -746,9 +841,8 @@ tbody tr:hover { background: var(--bg3); }
   }
 }
 @media (max-width: 940px) {
-  .summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+  .dashboard-main { padding: 14px 16px 18px; }
+  .dashboard-grid { grid-template-columns: 1fr; }
   .header {
     padding: 12px 16px;
   }
@@ -778,11 +872,8 @@ tbody tr:hover { background: var(--bg3); }
     width: 100%;
     text-align: right;
   }
-  .status-pool-wrap,
-  .pool-panel-wrap,
-  .table-wrap {
-    padding-left: 16px;
-    padding-right: 16px;
+  .right-pane {
+    order: 2;
   }
 }
 @media (max-width: 760px) {
@@ -798,31 +889,40 @@ tbody tr:hover { background: var(--bg3); }
   .summary {
     grid-template-columns: 1fr;
   }
+  .table-filters select {
+    min-width: 100%;
+  }
+  .table-filters input[type="search"] {
+    min-width: 100%;
+  }
 }
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>BBSBOT SWARM DASHBOARD</h1>
+  <div class="header-brand">
+    <h1>BBSBOT SWARM DASHBOARD</h1>
+    <div class="header-subtitle">Operator console for TW2002 swarms</div>
+  </div>
   <div class="header-controls">
     <div class="spawn-controls">
-      <div class="spawn-field" title="Display labels map to stable config directories">
-        <label for="spawn-config">Profile</label>
-        <select id="spawn-config">
-          <option value="swarm_demo">tw2002_dynamic</option>
-          <option value="swarm_demo_ai">tw2002_ai</option>
-        </select>
-      </div>
-      <div class="spawn-field compact" title="Used only when Preset is custom">
-        <label for="spawn-count">Count</label>
-        <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
-      </div>
       <div class="spawn-field" title="Named bot mix templates">
         <label for="spawn-preset">Preset</label>
         <select id="spawn-preset">
         <option value="custom">custom</option>
         <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
         <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
+        </select>
+      </div>
+      <div class="spawn-field compact" title="Used only when Preset is custom">
+        <label for="spawn-count">Count</label>
+        <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
+      </div>
+      <div class="spawn-field" title="Display labels map to stable config directories">
+        <label for="spawn-config">Profile</label>
+        <select id="spawn-config">
+          <option value="swarm_demo">tw2002_dynamic</option>
+          <option value="swarm_demo_ai">tw2002_ai</option>
         </select>
       </div>
       <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
@@ -841,71 +941,102 @@ tbody tr:hover { background: var(--bg3); }
   </div>
 </div>
 
-<div class="status-pool-wrap">
-  <div class="pool-section-title">Status Pool</div>
-  <div class="summary">
-    <div class="card"><div class="label">Running</div><div class="value green" id="running">-</div></div>
-    <div class="card"><div class="label">Total</div><div class="value" id="total">-</div></div>
-    <div class="card"><div class="label">Completed</div><div class="value blue" id="completed">-</div></div>
-    <div class="card"><div class="label">Errors</div><div class="value red" id="errors">-</div></div>
-    <div class="card"><div class="label">Credits</div><div class="value cyan" id="credits">-</div></div>
-    <div class="card"><div class="label">Turns</div><div class="value" id="turns">-</div></div>
-    <div class="card"><div class="label">Haggle Accept</div><div class="value green" id="accept-rate">-</div></div>
-    <div class="card"><div class="label">Too High</div><div class="value yellow" id="too-high-rate">-</div></div>
-    <div class="card"><div class="label">Too Low</div><div class="value blue" id="too-low-rate">-</div></div>
-    <div class="card"><div class="label">No Trade 120+</div><div class="value red" id="no-trade-120">-</div></div>
-    <div class="card card-strategy"><div class="label">Strategy CPT</div><div class="value small" id="strategy-cpt">-</div></div>
+<main class="dashboard-main">
+  <div class="dashboard-grid">
+    <section class="left-pane">
+      <div class="panel">
+        <div class="section-head">
+          <div class="pool-section-title">Bot List</div>
+          <div class="section-meta" id="bot-list-meta">0 visible</div>
+        </div>
+        <div class="table-filters">
+          <select id="filter-state">
+            <option value="all">state: all</option>
+            <option value="running">state: running</option>
+            <option value="recovering">state: recovering</option>
+            <option value="blocked">state: blocked</option>
+            <option value="error">state: error</option>
+            <option value="completed">state: completed</option>
+          </select>
+          <select id="filter-strategy">
+            <option value="all">strategy: all</option>
+          </select>
+          <input id="filter-search" type="search" placeholder="search bot/status/strategy/sector">
+          <label class="filter-badge">
+            <input type="checkbox" id="filter-no-trade">
+            <span>No trade 120+</span>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-sort="bot_id">Bot ID</th>
+                <th data-sort="state">State</th>
+                <th>Activity</th>
+                <th data-sort="is_hijacked">Status</th>
+                <th data-sort="strategy">Strategy</th>
+                <th data-sort="sector">Sector</th>
+                <th data-sort="credits">Credits</th>
+                <th data-sort="cargo_fuel_ore">Fuel</th>
+                <th data-sort="cargo_organics">Org</th>
+                <th data-sort="cargo_equipment">Equip</th>
+                <th data-sort="turns_executed">Turns</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bot-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <aside class="right-pane">
+      <section class="panel status-pool-wrap">
+        <div class="pool-section-title">Status Pool</div>
+        <div class="summary">
+          <div class="card"><div class="label">Running</div><div class="value green" id="running">-</div></div>
+          <div class="card"><div class="label">Total</div><div class="value" id="total">-</div></div>
+          <div class="card"><div class="label">Completed</div><div class="value blue" id="completed">-</div></div>
+          <div class="card"><div class="label">Errors</div><div class="value red" id="errors">-</div></div>
+          <div class="card"><div class="label">Credits</div><div class="value cyan" id="credits">-</div></div>
+          <div class="card"><div class="label">Turns</div><div class="value" id="turns">-</div></div>
+          <div class="card"><div class="label">Haggle Accept</div><div class="value green" id="accept-rate">-</div></div>
+          <div class="card"><div class="label">Too High</div><div class="value yellow" id="too-high-rate">-</div></div>
+          <div class="card"><div class="label">Too Low</div><div class="value blue" id="too-low-rate">-</div></div>
+          <div class="card"><div class="label">No Trade 120+</div><div class="value red" id="no-trade-120">-</div></div>
+          <div class="card card-strategy"><div class="label">Strategy CPT</div><div class="value small" id="strategy-cpt">-</div></div>
+        </div>
+      </section>
+      <section class="panel pool-panel-wrap">
+        <div class="section-head">
+          <div class="pool-section-title">Bot Pool</div>
+          <div class="section-meta" id="pool-summary">loading...</div>
+        </div>
+        <div class="pool-panel">
+          <div class="pool-head">
+            <div class="title">Account Lease/Identity Pool</div>
+          </div>
+          <div class="pool-table-wrap">
+            <table class="pool-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Source</th>
+                  <th>Host</th>
+                  <th>Lease Bot</th>
+                  <th>Cooldown</th>
+                  <th>Uses</th>
+                  <th>Last Used</th>
+                </tr>
+              </thead>
+              <tbody id="pool-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </aside>
   </div>
-</div>
-
-<div class="table-wrap">
-  <div class="pool-section-title">Bot List</div>
-  <table>
-    <thead>
-      <tr>
-        <th data-sort="bot_id">Bot ID</th>
-        <th data-sort="state">State</th>
-        <th>Activity</th>
-        <th data-sort="is_hijacked">Status</th>
-	        <th data-sort="strategy">Strategy</th>
-        <th data-sort="sector">Sector</th>
-        <th data-sort="credits">Credits</th>
-        <th data-sort="cargo_fuel_ore">Fuel</th>
-        <th data-sort="cargo_organics">Org</th>
-        <th data-sort="cargo_equipment">Equip</th>
-        <th data-sort="turns_executed">Turns</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="bot-table"></tbody>
-  </table>
-</div>
-
-<div class="pool-panel-wrap">
-  <div class="pool-section-title">Bot Pool</div>
-  <div class="pool-panel">
-    <div class="pool-head">
-      <div class="title">Account Lease/Identity Pool</div>
-      <div class="meta" id="pool-summary">loading...</div>
-    </div>
-    <div class="pool-table-wrap">
-      <table class="pool-table">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Source</th>
-            <th>Host</th>
-            <th>Lease Bot</th>
-            <th>Cooldown</th>
-            <th>Uses</th>
-            <th>Last Used</th>
-          </tr>
-        </thead>
-        <tbody id="pool-table"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
+</main>
 
 <!-- Terminal modal -->
 <div class="term-modal-overlay" id="term-modal">
@@ -967,6 +1098,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=17"></script>
+<script src="/static/dashboard.js?v=18"></script>
 </body>
 </html>
