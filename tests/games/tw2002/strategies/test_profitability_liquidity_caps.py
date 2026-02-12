@@ -275,3 +275,85 @@ def test_explore_for_ports_waits_with_reason_when_no_warps_known() -> None:
 
     assert action == TradeAction.WAIT
     assert params.get("reason") == "no_warps"
+
+
+def test_low_cash_recovery_sells_local_cargo_before_buying() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    info = SectorInfo(has_port=True, port_class="BSS")
+    info.port_status = {"fuel_ore": "buying", "organics": "selling", "equipment": "selling"}
+    knowledge._sectors[55] = info
+
+    state = GameState(
+        context="sector_command",
+        sector=55,
+        has_port=True,
+        port_class="BSS",
+        credits=120,
+        holds_free=10,
+        cargo_fuel_ore=4,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[60, 61],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.TRADE
+    assert params.get("action") == "sell"
+    assert params.get("urgency") == "low_cash_recovery"
+    assert params["opportunity"].commodity == "fuel_ore"
+
+
+def test_low_cash_recovery_moves_to_known_buyer_when_not_at_port() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    knowledge._sectors[200] = SectorInfo(has_port=True, port_class="BBS")
+    knowledge.find_path = lambda start, end, max_hops=100: [100, end] if end == 200 else None  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=100,
+        has_port=False,
+        credits=150,
+        holds_free=10,
+        cargo_fuel_ore=3,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[101, 102],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.MOVE
+    assert params.get("target_sector") == 200
+    assert params.get("urgency") == "low_cash_recovery"
+
+
+def test_loop_break_avoids_abab_ping_pong_when_unproductive() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    # Simulate prolonged non-profitable movement pattern A-B-A-B.
+    strat._explore_since_profit = 8
+    strat._recent_sectors.extend([10, 20, 10])
+
+    state = GameState(
+        context="sector_command",
+        sector=20,
+        has_port=False,
+        credits=400,
+        holds_free=20,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[10, 30],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.EXPLORE
+    assert params.get("direction") == 30
+    assert params.get("urgency") == "loop_break"

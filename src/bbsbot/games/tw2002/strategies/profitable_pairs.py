@@ -9,7 +9,7 @@ the same commodity. Calculates expected profit before trading.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from time import time
 from typing import TYPE_CHECKING
 
@@ -65,6 +65,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._last_known_sectors: int = 0
         self._explore_since_profit: int = 0
         self._replan_explore_threshold: int = 10
+        self._recent_sectors: deque[int] = deque(maxlen=8)
 
     @property
     def name(self) -> str:
@@ -134,6 +135,182 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         return max(1, int(qty)) if qty > 0 else 0
 
+    def _effective_low_cash_threshold(self) -> int:
+        """Credits threshold below which we should prioritize liquidation/recovery."""
+        if self.policy == "conservative":
+            return 500
+        if self.policy == "aggressive":
+            return 250
+        return 350
+
+    def _cargo_map(self, state: GameState) -> dict[str, int]:
+        return {
+            "fuel_ore": int(getattr(state, "cargo_fuel_ore", 0) or 0),
+            "organics": int(getattr(state, "cargo_organics", 0) or 0),
+            "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
+        }
+
+    def _choose_sell_commodity_here(
+        self,
+        state: GameState,
+        cargo: dict[str, int],
+        statuses: dict[str, str] | None,
+    ) -> str | None:
+        if statuses:
+            for commodity in ("fuel_ore", "organics", "equipment"):
+                if cargo.get(commodity, 0) > 0 and str(statuses.get(commodity, "")).lower() == "buying":
+                    return commodity
+        if not state.port_class or len(state.port_class) != 3:
+            return None
+        mapping = [("fuel_ore", 0), ("organics", 1), ("equipment", 2)]
+        for commodity, idx in mapping:
+            if cargo.get(commodity, 0) > 0 and state.port_class[idx] == "B":
+                return commodity
+        return None
+
+    def _find_best_sell_target(self, state: GameState, cargo: dict[str, int], max_hops: int = 16) -> dict | None:
+        """Pick the closest known port that buys any onboard cargo commodity."""
+        if not state.sector:
+            return None
+        wants = [c for c, qty in cargo.items() if qty > 0]
+        if not wants:
+            return None
+        idx_map = {"fuel_ore": 0, "organics": 1, "equipment": 2}
+
+        best: dict | None = None
+        for sector in range(1, 1001):
+            info = self.knowledge.get_sector_info(sector)
+            if not info or not info.has_port:
+                continue
+            statuses = dict(info.port_status or {})
+            port_class = str(info.port_class or "").upper()
+            for commodity in wants:
+                is_buyer = str(statuses.get(commodity, "")).lower() == "buying"
+                if not is_buyer:
+                    idx = idx_map[commodity]
+                    if len(port_class) == 3:
+                        is_buyer = port_class[idx] == "B"
+                if not is_buyer:
+                    continue
+                path = self.knowledge.find_path(int(state.sector), int(sector), max_hops=max_hops)
+                if not path:
+                    continue
+                cand = {
+                    "sector": int(sector),
+                    "commodity": commodity,
+                    "path": path,
+                    "distance": len(path) - 1,
+                }
+                if best is None or cand["distance"] < best["distance"]:
+                    best = cand
+        return best
+
+    def _is_sector_ping_pong(self) -> bool:
+        """Detect short ABAB sector alternation loops."""
+        if len(self._recent_sectors) < 4:
+            return False
+        a, b, c, d = list(self._recent_sectors)[-4:]
+        return a == c and b == d and a != b
+
+    def _loop_break_action(self, state: GameState, cargo: dict[str, int]) -> tuple[TradeAction, dict] | None:
+        """Force an alternate direction when stuck in a non-productive ABAB loop."""
+        if not self._is_sector_ping_pong():
+            return None
+        credits = int(state.credits or 0)
+        low_cash = credits <= self._effective_low_cash_threshold()
+        # Valid pair-cycling can look like ABAB; only break it when it is likely unproductive.
+        if self._explore_since_profit < 6 and not low_cash and not any(v > 0 for v in cargo.values()):
+            return None
+
+        current = int(state.sector or 0)
+        previous = int(self._recent_sectors[-2]) if len(self._recent_sectors) >= 2 else 0
+        warps = [int(w) for w in (state.warps or [])]
+        if not warps and current > 0:
+            known = self.knowledge.get_warps(current)
+            if known:
+                warps = [int(w) for w in known]
+        candidates = [w for w in warps if w != current and w != previous and (current, w) not in self._failed_warps]
+        if not candidates:
+            return None
+        unseen = [w for w in candidates if self.knowledge.get_warps(w) is None]
+        target = sorted(unseen or candidates)[0]
+        logger.warning(
+            "Detected sector ping-pong loop (recent=%s), forcing explore to %s",
+            list(self._recent_sectors),
+            target,
+        )
+        self._current_pair = None
+        self._pair_phase = "idle"
+        self._pairs_dirty = True
+        self._explore_since_profit = 0
+        return TradeAction.EXPLORE, {"direction": target, "urgency": "loop_break"}
+
+    def _low_cash_recovery_action(self, state: GameState) -> tuple[TradeAction, dict] | None:
+        """When cash-starved, prioritize liquidation and anti-loop recovery."""
+        if state.context != "sector_command":
+            return None
+        credits = int(state.credits or 0)
+        cargo = self._cargo_map(state)
+        has_cargo = any(v > 0 for v in cargo.values())
+        low_cash = credits <= self._effective_low_cash_threshold()
+        if not has_cargo and not low_cash:
+            return None
+
+        current_sector = int(state.sector or 0)
+        info = self.knowledge.get_sector_info(current_sector) if current_sector > 0 else None
+        statuses = dict((info.port_status or {}) if info else {})
+
+        if has_cargo and bool(state.has_port):
+            sell_here = self._choose_sell_commodity_here(state, cargo, statuses)
+            if sell_here:
+                opp = TradeOpportunity(
+                    buy_sector=current_sector,
+                    sell_sector=current_sector,
+                    commodity=sell_here,
+                    expected_profit=0,
+                    distance=0,
+                )
+                logger.info(
+                    "Low-cash recovery: selling %s in sector %s (credits=%s)",
+                    sell_here,
+                    current_sector,
+                    credits,
+                )
+                self._current_pair = None
+                self._pair_phase = "idle"
+                return TradeAction.TRADE, {
+                    "opportunity": opp,
+                    "action": "sell",
+                    "max_quantity": int(cargo.get(sell_here, 0)),
+                    "urgency": "low_cash_recovery",
+                }
+
+        if has_cargo:
+            target = self._find_best_sell_target(state, cargo, max_hops=16)
+            if target and target.get("path") and len(target["path"]) > 1:
+                logger.info(
+                    "Low-cash recovery: moving to known buyer sector %s for %s",
+                    target["sector"],
+                    target["commodity"],
+                )
+                self._current_pair = None
+                self._pair_phase = "idle"
+                return TradeAction.MOVE, {
+                    "target_sector": int(target["sector"]),
+                    "path": target["path"],
+                    "urgency": "low_cash_recovery",
+                }
+
+        if low_cash:
+            self._current_pair = None
+            self._pair_phase = "idle"
+            self._pairs_dirty = True
+            forced = self._loop_break_action(state, cargo)
+            if forced is not None:
+                return forced
+            return self._explore_for_ports(state)
+        return None
+
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
         """Determine next action for profitable pairs trading.
 
@@ -160,6 +337,18 @@ class ProfitablePairsStrategy(TradingStrategy):
         should_upgrade, upgrade_type = self.should_upgrade(state)
         if should_upgrade:
             return TradeAction.UPGRADE, {"upgrade_type": upgrade_type}
+
+        current_sector = int(state.sector or 0)
+        if current_sector > 0:
+            self._recent_sectors.append(current_sector)
+
+        recovery = self._low_cash_recovery_action(state)
+        if recovery is not None:
+            return recovery
+
+        forced_break = self._loop_break_action(state, self._cargo_map(state))
+        if forced_break is not None:
+            return forced_break
 
         # If we keep exploring/moving without a profitable trade cycle, force
         # pair rediscovery and reset phase. This avoids long "explore-only" runs.

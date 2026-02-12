@@ -293,6 +293,10 @@ async def update_status(bot_id: str, update: dict):
         bot.cargo_organics = update["cargo_organics"]
     if "cargo_equipment" in update:
         bot.cargo_equipment = update["cargo_equipment"]
+    if "cargo_estimated_value" in update:
+        bot.cargo_estimated_value = int(update["cargo_estimated_value"])
+    if "net_worth_estimate" in update:
+        bot.net_worth_estimate = int(update["net_worth_estimate"])
     if "error_message" in update:
         bot.error_message = update["error_message"]
     if "error_type" in update:

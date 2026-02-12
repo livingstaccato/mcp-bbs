@@ -32,6 +32,8 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         haggle_accept=4,
         haggle_counter=1,
         haggle_too_low=1,
+        cargo_estimated_value=120,
+        net_worth_estimate=1354,
         credits_delta=300,
         credits_per_turn=7.14,
         strategy_id="profitable_pairs",
@@ -53,6 +55,8 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         haggle_accept=0,
         haggle_counter=2,
         haggle_too_high=3,
+        cargo_estimated_value=40,
+        net_worth_estimate=740,
         credits_delta=-50,
         credits_per_turn=-0.35,
         strategy_id="opportunistic",
@@ -72,6 +76,7 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     row = json.loads(path.read_text(encoding="utf-8").strip())
     assert row["reason"] == "test"
     assert row["total_bots"] == 2
+    assert row["total_net_worth_estimate"] == 2094
     assert row["trading_bots"] == 1
     assert row["profitable_bots"] == 1
     assert row["no_trade_120p"] == 1
@@ -94,6 +99,7 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert by_strategy["profitable_pairs(balanced)"]["trades_per_100_turns"] > 10.0
     assert by_strategy["opportunistic(conservative)"]["haggle_too_high"] == 3
     assert len(row["bots"]) == 2
+    assert row["bots"][0]["net_worth_estimate"] >= row["bots"][0]["credits"]
 
 
 def test_timeseries_recent_limit(tmp_path: Path) -> None:
@@ -128,6 +134,7 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
         turns_executed=10,
         credits=500,
         trades_executed=2,
+        net_worth_estimate=650,
         credits_delta=200,
         credits_per_turn=20.0,
         haggle_accept=2,
@@ -140,6 +147,7 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     manager.bots["bot_000"].turns_executed = 25
     manager.bots["bot_000"].credits = 900
     manager.bots["bot_000"].trades_executed = 5
+    manager.bots["bot_000"].net_worth_estimate = 1100
     manager.bots["bot_000"].credits_delta = 600
     manager.bots["bot_000"].credits_per_turn = 24.0
     manager.bots["bot_000"].haggle_accept = 5
@@ -152,6 +160,7 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     assert summary["rows"] == 2
     assert summary["delta"]["turns"] >= 15
     assert summary["delta"]["credits"] >= 400
+    assert summary["delta"]["net_worth_estimate"] >= 450
     assert summary["delta"]["trades_executed"] >= 3
     assert summary["delta"]["trades_per_100_turns"] > 0
     assert summary["delta"]["llm_wakeups"] >= 3

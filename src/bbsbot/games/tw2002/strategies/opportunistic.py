@@ -135,12 +135,6 @@ class OpportunisticStrategy(TradingStrategy):
                 if best.buy_sector and state.sector and best.buy_sector in (state.warps or []):
                     return TradeAction.MOVE, {"target_sector": best.buy_sector, "path": [state.sector, best.buy_sector]}
 
-        # Should we explore or wander?
-        if self._should_explore():
-            direction = self._pick_exploration_direction(state)
-            if direction:
-                return TradeAction.EXPLORE, {"direction": direction}
-
         # Check if we've wandered too long.
         # Important: don't just reset the counter; force fresh exploration so we can
         # discover new port classes instead of bouncing between known sectors.
@@ -156,6 +150,12 @@ class OpportunisticStrategy(TradingStrategy):
                     limit,
                     direction,
                 )
+                return TradeAction.EXPLORE, {"direction": direction}
+
+        # Should we explore or wander?
+        if self._should_explore():
+            direction = self._pick_exploration_direction(state)
+            if direction:
                 return TradeAction.EXPLORE, {"direction": direction}
 
         # Wander to a known sector

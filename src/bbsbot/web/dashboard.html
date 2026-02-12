@@ -192,6 +192,13 @@ body {
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
+.top-stat .sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--fg2);
+  font-variant-numeric: tabular-nums;
+}
 .top-stat .v.small {
   font-size: 12px;
   line-height: 1.2;
@@ -1241,8 +1248,9 @@ tbody tr:hover { background: var(--bg3); }
     <span class="v"><span class="blue" id="completed">-</span> / <span class="red" id="errors">-</span></span>
   </div>
   <div class="top-stat">
-    <span class="k">Credits / Turns</span>
-    <span class="v"><span class="cyan" id="credits">-</span> / <span id="turns">-</span></span>
+    <span class="k">Net Worth / Turns</span>
+    <span class="v"><span class="cyan" id="net-worth">-</span> / <span id="turns">-</span></span>
+    <span class="sub" id="credits-sub">credits: -</span>
   </div>
   <div class="top-stat">
     <span class="k">Haggle</span>

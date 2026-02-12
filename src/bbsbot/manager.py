@@ -16,13 +16,13 @@ import sys
 import time
 from collections import deque
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from starlette.types import Scope
 
 from bbsbot.api import log_routes, swarm_routes, term_routes
 from bbsbot.defaults import MANAGER_HOST, MANAGER_PORT
@@ -30,6 +30,9 @@ from bbsbot.log_service import LogService
 from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:
+    from starlette.types import Scope
 
 
 _NO_STORE_HEADERS = {
@@ -78,6 +81,8 @@ class BotStatus(BaseModel):
     cargo_fuel_ore: int | None = None
     cargo_organics: int | None = None
     cargo_equipment: int | None = None
+    cargo_estimated_value: int = 0
+    net_worth_estimate: int = 0
     # Error tracking
     error_type: str | None = None  # Exception class name (e.g., "TimeoutError")
     error_timestamp: float | None = None  # When error occurred
@@ -124,6 +129,7 @@ class SwarmStatus(BaseModel):
     errors: int
     stopped: int
     total_credits: int
+    total_net_worth_estimate: int
     total_turns: int
     uptime_seconds: float
     timeseries_file: str | None = None
@@ -383,6 +389,18 @@ class SwarmManager:
     def get_swarm_status(self) -> SwarmStatus:
         """Get overall swarm metrics."""
         bots = list(self.bots.values())
+        total_credits = sum(max(0, b.credits) for b in bots)
+        total_net_worth = sum(
+            max(
+                0,
+                int(
+                    b.net_worth_estimate
+                    if int(getattr(b, "net_worth_estimate", 0) or 0) > 0
+                    else (max(0, int(getattr(b, "credits", 0) or 0)) + max(0, int(getattr(b, "cargo_estimated_value", 0) or 0)))
+                ),
+            )
+            for b in bots
+        )
         return SwarmStatus(
             total_bots=len(bots),
             # "recovering"/"blocked" are live workers; the dashboard's Running card
@@ -394,7 +412,8 @@ class SwarmManager:
             errors=sum(1 for b in bots if b.state in ("error", "disconnected", "blocked")),
             stopped=sum(1 for b in bots if b.state == "stopped"),
             # credits=-1 means "unknown/uninitialized"; don't let it poison totals.
-            total_credits=sum(max(0, b.credits) for b in bots),
+            total_credits=total_credits,
+            total_net_worth_estimate=total_net_worth,
             total_turns=sum(b.turns_executed for b in bots),
             uptime_seconds=time.time() - self.start_time,
             timeseries_file=str(self._timeseries_path),
@@ -526,6 +545,7 @@ class SwarmManager:
         elapsed_s = float(last.get("ts") or now) - float(first.get("ts") or now)
         delta_turns = _rolling_counter_delta("total_turns")
         delta_credits = _rolling_counter_delta("total_credits")
+        delta_net_worth = _rolling_counter_delta("total_net_worth_estimate")
         delta_llm_wakeups = _rolling_counter_delta("llm_wakeups_total")
         delta_trades = _rolling_nested_counter_delta("trade_outcomes_overall", "trades_executed")
 
@@ -548,6 +568,8 @@ class SwarmManager:
                 "turns": delta_turns,
                 "credits": delta_credits,
                 "credits_per_turn": (float(delta_credits) / float(delta_turns)) if delta_turns > 0 else 0.0,
+                "net_worth_estimate": delta_net_worth,
+                "net_worth_per_turn": (float(delta_net_worth) / float(delta_turns)) if delta_turns > 0 else 0.0,
                 "trades_executed": delta_trades,
                 "trades_per_100_turns": (float(delta_trades) * 100.0 / float(delta_turns)) if delta_turns > 0 else 0.0,
                 "haggle_offers": _rolling_nested_counter_delta("trade_outcomes_overall", "haggle_offers"),
@@ -563,6 +585,7 @@ class SwarmManager:
                 "profitable_bots": _safe_int(last, "profitable_bots"),
                 "positive_cpt_bots": _safe_int(last, "positive_cpt_bots"),
                 "no_trade_120p": _safe_int(last, "no_trade_120p"),
+                "total_net_worth_estimate": _safe_int(last, "total_net_worth_estimate"),
                 "llm_wakeups_total": _safe_int(last, "llm_wakeups_total"),
                 "autopilot_turns_total": _safe_int(last, "autopilot_turns_total"),
                 "goal_contract_failures_total": _safe_int(last, "goal_contract_failures_total"),
@@ -677,6 +700,8 @@ class SwarmManager:
                     "status": bot.get("status_detail"),
                     "sector": int(bot.get("sector") or 0),
                     "credits": int(bot.get("credits") or 0),
+                    "cargo_estimated_value": int(bot.get("cargo_estimated_value") or 0),
+                    "net_worth_estimate": int(bot.get("net_worth_estimate") or 0),
                     "turns": turns,
                     "trades": trades,
                     "trades_per_100_turns": (float(trades) * 100.0 / float(turns)) if turns > 0 else 0.0,
@@ -737,6 +762,7 @@ class SwarmManager:
             "errors": status.errors,
             "stopped": status.stopped,
             "total_credits": status.total_credits,
+            "total_net_worth_estimate": status.total_net_worth_estimate,
             "total_turns": status.total_turns,
             "state_counts": state_counts,
             "trading_bots": trading_bots,
@@ -890,6 +916,22 @@ class SwarmManager:
                             ship_name=bot_data.get("ship_name"),
                             ship_level=bot_data.get("ship_level"),
                             port_location=bot_data.get("port_location"),
+                            cargo_fuel_ore=bot_data.get("cargo_fuel_ore"),
+                            cargo_organics=bot_data.get("cargo_organics"),
+                            cargo_equipment=bot_data.get("cargo_equipment"),
+                            cargo_estimated_value=bot_data.get("cargo_estimated_value", 0),
+                            net_worth_estimate=bot_data.get("net_worth_estimate", 0),
+                            haggle_accept=bot_data.get("haggle_accept", 0),
+                            haggle_counter=bot_data.get("haggle_counter", 0),
+                            haggle_too_high=bot_data.get("haggle_too_high", 0),
+                            haggle_too_low=bot_data.get("haggle_too_low", 0),
+                            trades_executed=bot_data.get("trades_executed", 0),
+                            credits_delta=bot_data.get("credits_delta", 0),
+                            credits_per_turn=bot_data.get("credits_per_turn", 0.0),
+                            llm_wakeups=bot_data.get("llm_wakeups", 0),
+                            autopilot_turns=bot_data.get("autopilot_turns", 0),
+                            goal_contract_failures=bot_data.get("goal_contract_failures", 0),
+                            llm_wakeups_per_100_turns=bot_data.get("llm_wakeups_per_100_turns", 0.0),
                         )
                 logger.info(f"Loaded {len(state.get('bots', {}))} bots from {self.state_file}")
         except Exception as e:

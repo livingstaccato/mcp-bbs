@@ -232,6 +232,44 @@ class WorkerBot(TradingBot):
         except Exception:
             pass
 
+    def _estimate_cargo_market_value(self, cargo: dict[str, int]) -> int:
+        """Estimate liquidation value from observed market data (best-effort)."""
+        knowledge = getattr(self, "sector_knowledge", None)
+        if not knowledge:
+            return 0
+
+        sectors = getattr(knowledge, "_sectors", {}) or {}
+        if not sectors:
+            return 0
+
+        best_buy: dict[str, int] = {"fuel_ore": 0, "organics": 0, "equipment": 0}
+        best_sell: dict[str, int] = {"fuel_ore": 0, "organics": 0, "equipment": 0}
+
+        for info in sectors.values():
+            prices = getattr(info, "port_prices", {}) or {}
+            for commodity in ("fuel_ore", "organics", "equipment"):
+                entry = prices.get(commodity) or {}
+                with contextlib.suppress(Exception):
+                    buy_unit = int(entry.get("buy") or 0)
+                    if buy_unit > best_buy[commodity]:
+                        best_buy[commodity] = buy_unit
+                with contextlib.suppress(Exception):
+                    sell_unit = int(entry.get("sell") or 0)
+                    if sell_unit > best_sell[commodity]:
+                        best_sell[commodity] = sell_unit
+
+        total = 0
+        for commodity, qty in cargo.items():
+            if qty <= 0:
+                continue
+            unit = int(best_buy.get(commodity) or 0)
+            # If we only know sell-side quotes, estimate a conservative liquidation value.
+            if unit <= 0:
+                fallback_sell = int(best_sell.get(commodity) or 0)
+                unit = int(fallback_sell * 0.7) if fallback_sell > 0 else 0
+            total += max(0, int(qty)) * max(0, unit)
+        return int(total)
+
     def _note_progress(self) -> None:
         self._last_progress_mono = time.monotonic()
 
@@ -338,6 +376,13 @@ class WorkerBot(TradingBot):
                 cargo_equipment = int(sem.get("cargo_equipment")) if sem.get("cargo_equipment") is not None else 0
             except Exception:
                 cargo_equipment = 0
+            cargo_map = {
+                "fuel_ore": int(cargo_fuel_ore),
+                "organics": int(cargo_organics),
+                "equipment": int(cargo_equipment),
+            }
+            cargo_estimated_value = self._estimate_cargo_market_value(cargo_map)
+            net_worth_estimate = max(0, int(credits_out if credits_out >= 0 else 0)) + int(cargo_estimated_value)
 
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)
@@ -663,6 +708,8 @@ class WorkerBot(TradingBot):
                 "cargo_fuel_ore": cargo_fuel_ore,
                 "cargo_organics": cargo_organics,
                 "cargo_equipment": cargo_equipment,
+                "cargo_estimated_value": int(cargo_estimated_value),
+                "net_worth_estimate": int(net_worth_estimate),
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
                 "haggle_accept": int(self.haggle_accept),
                 "haggle_counter": int(self.haggle_counter),

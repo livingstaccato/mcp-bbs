@@ -371,7 +371,14 @@
 	    $("#total").textContent = data.total_bots;
 	    $("#completed").textContent = data.completed;
 	    $("#errors").textContent = data.errors;
-	    $("#credits").textContent = formatCredits(data.total_credits);
+      const totalCredits = Number(data.total_credits || 0);
+      const totalNetWorth = Number(data.total_net_worth_estimate ?? totalCredits);
+      const netWorthEl = $("#net-worth");
+      if (netWorthEl) netWorthEl.textContent = formatCredits(totalNetWorth);
+      const creditsSubEl = $("#credits-sub");
+      if (creditsSubEl) creditsSubEl.textContent = `credits: ${formatCredits(totalCredits)}`;
+      const legacyCreditsEl = $("#credits");
+      if (legacyCreditsEl) legacyCreditsEl.textContent = formatCredits(totalCredits);
 	    $("#turns").textContent = formatCredits(data.total_turns);
     const uptimeText = formatUptime(data.uptime_seconds);
     const uptimeEl = $("#uptime");

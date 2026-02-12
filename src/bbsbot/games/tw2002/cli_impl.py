@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import random
 import re
+from collections import deque
 from typing import TYPE_CHECKING
 
 from bbsbot.games.tw2002.orientation import OrientationError
@@ -193,6 +194,50 @@ def _choose_no_trade_guard_action(
     return None
 
 
+def _is_sector_ping_pong(recent_sectors: list[int] | deque[int]) -> bool:
+    """Detect short ABAB alternation loops in sector movement."""
+    if len(recent_sectors) < 4:
+        return False
+    a, b, c, d = list(recent_sectors)[-4:]
+    return a == c and b == d and a != b
+
+
+def _choose_ping_pong_break_action(
+    *,
+    state,
+    knowledge,
+    recent_sectors: list[int] | deque[int],
+    turns_since_last_trade: int,
+) -> tuple[TradeAction, dict] | None:
+    """Return an alternate action when movement is stuck in ABAB loops."""
+    if getattr(state, "context", None) != "sector_command":
+        return None
+    if turns_since_last_trade < 8:
+        return None
+    if not _is_sector_ping_pong(recent_sectors):
+        return None
+
+    current = int(getattr(state, "sector", 0) or 0)
+    previous = int(list(recent_sectors)[-2]) if len(recent_sectors) >= 2 else 0
+    warps = [int(w) for w in (getattr(state, "warps", []) or [])]
+    if not warps and current > 0:
+        known_warps = knowledge.get_warps(current) if knowledge else None
+        if known_warps:
+            warps = [int(w) for w in known_warps]
+
+    if not warps:
+        return None
+
+    candidates = [w for w in warps if w != current and w != previous]
+    if not candidates:
+        return None
+
+    # Prefer unknown branches to maximize map/market discovery while escaping loops.
+    unseen = [w for w in candidates if knowledge and knowledge.get_warps(w) is None]
+    target = sorted(unseen or candidates)[0]
+    return TradeAction.EXPLORE, {"direction": target, "urgency": "loop_break"}
+
+
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     """Run the main trading loop using the configured strategy."""
     from bbsbot.games.tw2002.strategy_manager import StrategyManager
@@ -218,6 +263,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
     consecutive_orient_failures = 0
     goal_status_display: GoalStatusDisplay | None = None
     last_trade_turn = int(getattr(bot, "_last_trade_turn", 0) or 0)
+    recent_sectors: deque[int] = deque(maxlen=8)
 
     # End-state swarm behavior: never "finish" the process just because we hit a goal.
     # Goals become milestones; the bot keeps playing and self-heals if it gets knocked out.
@@ -314,6 +360,12 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             await bot.report_status()
 
         char_state.update_from_game_state(state)
+        try:
+            sector_now = int(getattr(state, "sector", 0) or 0)
+            if sector_now > 0:
+                recent_sectors.append(sector_now)
+        except Exception:
+            pass
 
         # Update bot's current credits from state (needed for trade quantity calculations)
         if state.credits is not None:
@@ -501,6 +553,26 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 )
                 with contextlib.suppress(Exception):
                     bot.strategy_intent = f"RECOVERY:TRADE_URGENCY {action.name}"
+
+        if action in (TradeAction.MOVE, TradeAction.EXPLORE, TradeAction.WAIT):
+            forced_loop_break = _choose_ping_pong_break_action(
+                state=state,
+                knowledge=bot.sector_knowledge,
+                recent_sectors=recent_sectors,
+                turns_since_last_trade=turns_since_last_trade,
+            )
+            if forced_loop_break is not None:
+                action, params = forced_loop_break
+                logger.warning(
+                    "loop_break_force_action: turns=%s turns_since_last_trade=%s recent=%s action=%s params=%s",
+                    turns_used,
+                    turns_since_last_trade,
+                    list(recent_sectors),
+                    action.name,
+                    params,
+                )
+                with contextlib.suppress(Exception):
+                    bot.strategy_intent = "RECOVERY:LOOP_BREAK"
 
         print(f"  Strategy: {action.name}")
 
