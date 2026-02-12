@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Fault-injection transport wrapper (deterministic).
 
 This is used for resilience testing. It wraps a real transport and injects

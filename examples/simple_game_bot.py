@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Example: Simple game bot using the extracted framework.
 
 This demonstrates how a future game can leverage the framework patterns

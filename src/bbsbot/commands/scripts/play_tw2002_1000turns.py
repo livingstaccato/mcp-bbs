@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """TW2002 Bot - 1000 Turn Playthrough with Prompt Detection.
 
 This bot plays Trade Wars 2002 for 1000 turns using intelligent prompt detection

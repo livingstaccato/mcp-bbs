@@ -7,7 +7,7 @@ This document records edge cases discovered during testing of the twbot login an
 ### 1. Pattern Matching Issues
 
 **Rules.json vs Prompts.json Priority**
-- The MCP-BBS learning engine loads patterns from `rules.json` first, falling back to `prompts.json`
+- The BBSBot learning engine loads patterns from `rules.json` first, falling back to `prompts.json`
 - When adding new patterns, they MUST be added to `rules.json` in the game namespace
 - Location: `games/tw2002/rules.json`
 

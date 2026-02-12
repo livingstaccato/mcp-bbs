@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Integration tests against localhost:2002.
 
 These tests require a BBS running on localhost:2002.

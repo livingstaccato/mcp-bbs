@@ -6,9 +6,9 @@
 - Auto-learn: enabled
 
 ## Storage
-- Screens: /Users/tim/Library/Application Support/mcp-bbs/shared/screens/
-- Prompts: /Users/tim/Library/Application Support/mcp-bbs/games/tw2002/prompts.json
-- Rules: /Users/tim/Library/Application Support/mcp-bbs/games/tw2002/rules.json
+- Screens: /Users/tim/Library/Application Support/bbsbot/shared/screens/
+- Prompts: /Users/tim/Library/Application Support/bbsbot/games/tw2002/prompts.json
+- Rules: /Users/tim/Library/Application Support/bbsbot/games/tw2002/rules.json
 
 ## Path
 - TWGS Admin → `E` Run TEDIT → `A` My Game → TEDIT main menu
@@ -124,7 +124,7 @@
 - Tried toggling `[` (Closed Game) multiple times in General Editor Two; no visible change. Possibly requires different input or another mode.
 
 ## Addon
-- Added `src/mcp_bbs/addons/tedit.py` to extract `<key> Label : Value` fields and prompts.
+- Added `src/bbsbot/addons/tedit.py` to extract `<key> Label : Value` fields and prompts.
 - Wired into `session_manager.py` for namespace `tedit`.
 
 ## Additional Changes (persistent)
@@ -203,7 +203,7 @@
 - 2026-02-04: Port Editor selection (P -> Port ID 2) jumped into Gold Planet Editor (Earth Type) instead of port detail screen; desync.
 - 2026-02-04: Corporation Editor ID 1 selection returned to main menu (no corp detail screen). Likely desync/bug persists.
 - 2026-02-04: Ship Editor ID 2 selection did not open ship detail (desync); screen returned to partial main menu.
-- 2026-02-04: Screen saving disabled after disk full error; deleted old screen captures from /Users/tim/Library/Application Support/mcp-bbs/shared/screens.
+- 2026-02-04: Screen saving disabled after disk full error; deleted old screen captures from /Users/tim/Library/Application Support/bbsbot/shared/screens.
 - 2026-02-04: Maintenance: Remove derelict spacecraft confirmed (Y).
 - 2026-02-04: User Editor selection (ID 7) returned to main menu without user detail screen (desync).
 - 2026-02-04: Screen saving disabled again after disk-full error when reconnecting; cleared /tmp and screen files to recover space.

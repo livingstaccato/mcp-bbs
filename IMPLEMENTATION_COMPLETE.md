@@ -9,7 +9,7 @@ Successfully implemented a two-layer screen content validation system for TW2002
 
 ## What Was Built
 
-### Layer 1: Infrastructure Validation (MCP-BBS)
+### Layer 1: Infrastructure Validation (BBSBot)
 
 **Files Modified:**
 - `src/mcp_bbs/learning/extractor.py` - Added validation engine
@@ -168,7 +168,7 @@ Result: {
                  │ Screen data
                  ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  MCP-BBS Session Layer (session.py)                         │
+│  BBSBot Session Layer (session.py)                         │
 │  • Captures screen text                                     │
 │  • Runs prompt detection                                    │
 │  • Calls learning engine                                    │
@@ -237,7 +237,7 @@ Result: ❌ Wrong action, navigation fails
 ```
 Bot: "I got prompt.sector_command with kv_data"
 Bot: "Checking validation..."
-MCP-BBS: "Sector is 499 (valid), Credits are 1,000,000 (valid)"
+BBSBot: "Sector is 499 (valid), Credits are 1,000,000 (valid)"
 Bot: "Game state confirmed, proceeding"
 Bot: Sends appropriate command
 Result: ✅ Correct action, navigation succeeds
@@ -266,7 +266,7 @@ debd014 Wire up validation checks in bot logic
 088161c Add validation rules to tw2002 config - Phase 3 (Rules & Validation)
 2d6dbb8 Add comprehensive validation and menu exploration tests
 34c4b40 Update type hints to Python 3.11+ pipe syntax
-acabb79 Add screen content validation to MCP-BBS - Phase 1-2 (Infrastructure + I/O)
+acabb79 Add screen content validation to BBSBot - Phase 1-2 (Infrastructure + I/O)
 ```
 
 ## Deployment Considerations
@@ -326,9 +326,9 @@ acabb79 Add screen content validation to MCP-BBS - Phase 1-2 (Infrastructure + I
 
 The screen content validation system is **fully implemented, tested, and ready for production use**. Bots can now:
 
-1. **Receive validated data** from MCP-BBS about extracted game state
+1. **Receive validated data** from BBSBot about extracted game state
 2. **Make informed decisions** based on validation status
 3. **Handle errors gracefully** with context about why validation failed
 4. **Navigate menus accurately** by confirming screen state before acting
 
-The system maintains clean separation between infrastructure (MCP-BBS) and business logic (bot), making it reusable across different games and bots.
+The system maintains clean separation between infrastructure (BBSBot) and business logic (bot), making it reusable across different games and bots.

@@ -1,14 +1,14 @@
-# Plan: Add Screen Content Validation to MCP-BBS (REVISED)
+# Plan: Add Screen Content Validation to BBSBot (REVISED)
 
 ## Problem Statement
 
 The TW2002 trading bot fails at menu navigation because it sends input based purely on `prompt_id` without validating that the screen state makes sense for that action. Example: the bot receives "prompt.login_name" and sends the username, but the screen actually says "Q to quit - login failed".
 
-**Core Issue**: MCP-BBS detects *what prompt this is* via regex, but doesn't validate *whether the extracted data makes sense* or *what context the prompt is in*.
+**Core Issue**: BBSBot detects *what prompt this is* via regex, but doesn't validate *whether the extracted data makes sense* or *what context the prompt is in*.
 
 ## Current State Analysis
 
-### What MCP-BBS Already Has
+### What BBSBot Already Has
 - ✅ K/V extraction infrastructure (extractor.py) - extracts values from screens
 - ✅ K/V extraction configs in rules (rules.json) - defines what to extract
 - ✅ PromptDetection.kv_data field - stores extracted values
@@ -43,7 +43,7 @@ Needed Flow:
 
 ## Solution: Two-Layer Validation Architecture
 
-### Layer 1: Infrastructure Validation (MCP-BBS)
+### Layer 1: Infrastructure Validation (BBSBot)
 **Purpose**: Ensure extracted data is well-formed and present
 
 **Where**: extractor.py & rules.py Pydantic models
@@ -400,7 +400,7 @@ if "port_quantity" in prompt_id:
 
 ## Critical Files Summary
 
-### MCP-BBS Infrastructure Changes
+### BBSBot Infrastructure Changes
 1. **`src/mcp_bbs/learning/extractor.py`** - Add validation method
 2. **`src/mcp_bbs/learning/rules.py`** - Extend Pydantic models for validation
 3. **`src/mcp_bbs/core/session.py`** - Surface kv_data in snapshot (1 line change)
@@ -495,7 +495,7 @@ python play_tw2002_trading.py --single-cycle
 ## What This Achieves
 
 ✅ **Bots make informed decisions** - they read and validate screen state before sending input
-✅ **Separation of concerns** - MCP-BBS handles extraction/validation, bots handle strategy
+✅ **Separation of concerns** - BBSBot handles extraction/validation, bots handle strategy
 ✅ **Backward compatible** - validation is optional, existing code still works
 ✅ **Reusable infrastructure** - any bot/game can use K/V extraction with validation
 ✅ **Reduced navigation failures** - screen context is validated before action

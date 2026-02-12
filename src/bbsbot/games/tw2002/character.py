@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Per-character state management for TW2002 bot.
 
 Tracks individual character data including resources, ship status,

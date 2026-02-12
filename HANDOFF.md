@@ -1,4 +1,4 @@
-# Handoff - MCP-BBS / bbsbot
+# Handoff - BBSBot
 
 ## Documentation
 
@@ -42,7 +42,7 @@
 
 ## How to Run (Quick)
 - `docker cp tw2002-dev:/opt/tw2002/data/tw*.dat /tmp/tw2002-data/`
-- `python /Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/commands/scripts/test_trading_integration.py`
+- `python /Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/commands/scripts/test_trading_integration.py`
 - Pipe a live screen into the semantic parser:
   - `uv run bbsbot watch --host localhost --port 2002 --once --no-clear --no-prompt | uv run bbsbot tw2002 parse-semantic --format kv`
 
@@ -50,22 +50,22 @@
 - MCP server must be launched with `serve` or the client will see `Connection closed`.
 - The validation system surfaces `kv_data` into snapshots and bot I/O now returns a 4-tuple.
 - Semantic extraction lives in:
-  - `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/tw2002/parsing.py`
-  - `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/tw2002/io.py`
-  - `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/tw2002/connection.py`
+  - `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/tw2002/parsing.py`
+  - `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/tw2002/io.py`
+  - `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/tw2002/connection.py`
 
 ## Important Files
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/IMPLEMENTATION_COMPLETE.md`
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/IMPLEMENTATION_PLAN.md`
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/specs/002-game-mcp-helpers/spec.md`
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/specs/002-game-mcp-helpers/plan.md` (template only)
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/game/tw2002/verification/trading_integration.py`
+- `/Users/tim/code/gh/livingstaccato/bbsbot/IMPLEMENTATION_COMPLETE.md`
+- `/Users/tim/code/gh/livingstaccato/bbsbot/IMPLEMENTATION_PLAN.md`
+- `/Users/tim/code/gh/livingstaccato/bbsbot/specs/002-game-mcp-helpers/spec.md`
+- `/Users/tim/code/gh/livingstaccato/bbsbot/specs/002-game-mcp-helpers/plan.md` (template only)
+- `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/game/tw2002/verification/trading_integration.py`
 
 ## Open TODOs (Code)
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/tw2002/colonization.py`: implement planet discovery (minimal done; verify).
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/tw2002/trading.py`: fix warp prompt handling and post‑warp anomaly checks.
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/tw2002/trading.py`: avoid docking at Special ports.
-- `/Users/tim/code/gh/livingstaccato/mcp-bbs/src/bbsbot/game/tw2002/verification/trading_integration.py`: reconcile routes = 0 issue.
+- `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/tw2002/colonization.py`: implement planet discovery (minimal done; verify).
+- `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/tw2002/trading.py`: fix warp prompt handling and post‑warp anomaly checks.
+- `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/tw2002/trading.py`: avoid docking at Special ports.
+- `/Users/tim/code/gh/livingstaccato/bbsbot/src/bbsbot/game/tw2002/verification/trading_integration.py`: reconcile routes = 0 issue.
 
 ## Detailed Checklist / Handoff Plan (Extremely Detailed)
 
@@ -79,7 +79,7 @@
   - `/tmp/tw2002-data/twuser.dat`
   - `/tmp/tw2002-data/twcfig.dat`
 - Confirm the **bot code path** is correct:
-  - Run from `/Users/tim/code/gh/livingstaccato/mcp-bbs`.
+  - Run from `/Users/tim/code/gh/livingstaccato/bbsbot`.
   - MCP server must be launched from `/Users/tim/code/gh/livingstaccato/bbsbot` if used.
 
 ### Phase 1 — Sanity Check (Parser & Semantic Logs)

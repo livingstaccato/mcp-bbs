@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 from bbsbot.games.tw2002.account_pool_store import AccountLeaseError, AccountPoolStore

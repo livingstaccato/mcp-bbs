@@ -30,8 +30,8 @@ Screen 2: Game selection menu
 Action: Send game letter (e.g., "B") (single_key input)
 ```
 
-### Type 2: MCP-BBS Direct Connection
-When connecting via MCP-BBS tools, the login prompt may be skipped:
+### Type 2: BBSBot Direct Connection
+When connecting via BBSBot tools, the login prompt may be skipped:
 
 ```
 Screen 1: Game selection menu (skips login prompt)
@@ -135,9 +135,9 @@ python debug_login_show_screens.py
 
 To manually trace:
 ```bash
-# Use MCP-BBS tools
-mcp__bbs__bbs_connect localhost 2002
-mcp__bbs__bbs_read
-mcp__bbs__bbs_send "B"
+# Use BBSBot tools
+bbsbot__bbs_connect localhost 2002
+bbsbot__bbs_read
+bbsbot__bbs_send "B"
 # etc.
 ```

@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Profitable pairs trading strategy (Mode A).
 
 Finds adjacent or nearby port pairs where one buys and another sells

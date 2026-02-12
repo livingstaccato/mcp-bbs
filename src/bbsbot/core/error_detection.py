@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Generic error detection and loop checking framework.
 
 This module provides reusable error detection patterns that can be used

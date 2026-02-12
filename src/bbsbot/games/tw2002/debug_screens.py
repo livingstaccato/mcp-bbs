@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Screen analysis and verification tool for TW2002 prompt detection.
 
 This module provides diagnostic tools to verify that game screens are properly

@@ -41,15 +41,15 @@ expect "Selection"
 '
 ```
 
-### MCP-BBS Issue
+### BBSBot Issue
 
-**IMPORTANT**: MCP-BBS has a bug where escape sequences like `\r` and `\n` are sent as literal characters instead of control codes. This causes the TWGS admin login to fail because:
+**IMPORTANT**: BBSBot has a bug where escape sequences like `\r` and `\n` are sent as literal characters instead of control codes. This causes the TWGS admin login to fail because:
 
 1. `\r` is echoed as `\r` (two characters) instead of submitting input
 2. The name prompt never receives a proper Enter keystroke
 3. All input accumulates as "password" characters
 
-**Workaround**: Use `expect` or standard telnet for TEDIT automation until MCP-BBS escape handling is fixed.
+**Workaround**: Use `expect` or standard telnet for TEDIT automation until BBSBot escape handling is fixed.
 
 ---
 
@@ -293,6 +293,6 @@ Controls game scheduling and timing.
    '
    ```
 
-5. **MCP-BBS Limitation**: MCP-BBS currently does not properly convert `\r` and `\n` escape sequences to control characters. Use `expect` or native telnet until this is fixed.
+5. **BBSBot Limitation**: BBSBot currently does not properly convert `\r` and `\n` escape sequences to control characters. Use `expect` or native telnet until this is fixed.
 
-6. **Keepalive Consideration**: If using MCP-BBS, disable keepalive (`bbs_keepalive` with `interval_s=0`) to prevent `\r` interference during TEDIT sessions.
+6. **Keepalive Consideration**: If using BBSBot, disable keepalive (`bbs_keepalive` with `interval_s=0`) to prevent `\r` interference during TEDIT sessions.

@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Multi-character management for TW2002 bot.
 
 Supports multiple characters with configurable knowledge sharing modes.

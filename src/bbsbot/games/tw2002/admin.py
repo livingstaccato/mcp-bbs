@@ -1,8 +1,11 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Unified admin interface for TW2002 - supports direct file access and remote terminal.
 
 Two access methods:
 - "direct": Uses twerk library for direct file access (local server, fastest, most precise)
-- "remote": Uses MCP-BBS terminal automation (remote servers, legacy systems)
+- "remote": Uses BBSBot terminal automation (remote servers, legacy systems)
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ if TYPE_CHECKING:
 
 
 class TW2002Admin(BaseModel):
-    """Unified admin interface - uses twerk (direct) or MCP-BBS (remote).
+    """Unified admin interface - uses twerk (direct) or BBSBot (remote).
 
     Examples:
         # Direct file access (local server)
@@ -32,7 +35,7 @@ class TW2002Admin(BaseModel):
         config = await admin.get_config()
     """
 
-    mode: str = "direct"  # "direct" (twerk) or "remote" (MCP-BBS terminal)
+    mode: str = "direct"  # "direct" (twerk) or "remote" (BBSBot terminal)
     data_dir: Path | None = None
 
     # Remote mode connection settings

@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Hypothesis-based property tests for orientation system.
 
 Uses property-based testing to verify orientation handles:

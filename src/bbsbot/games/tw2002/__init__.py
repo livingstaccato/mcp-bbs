@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """TW2002 Trading Bot - Automated credit accumulation via configurable trading strategies.
 
 This bot implements metadata-driven prompt handling to reliably automate the

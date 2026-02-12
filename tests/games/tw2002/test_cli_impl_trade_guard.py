@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from bbsbot.games.tw2002.cli_impl import _choose_no_trade_guard_action
 from bbsbot.games.tw2002.orientation import GameState, SectorInfo, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import TradeAction

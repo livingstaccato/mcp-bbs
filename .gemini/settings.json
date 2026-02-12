@@ -1,8 +1,18 @@
 {
   "mcpServers": {
-    "bbs": {
-      "command": "mcp-bbs",
-      "args": []
+    "bbsbot": {
+      "command": "bbstbot",
+      "args": [
+        "serve"
+      ]
+    },
+    "twbot": {
+      "command": "bbsbot",
+      "args": [
+        "serve",
+        "--tools",
+        "tw2002"
+      ]
     }
   }
 }

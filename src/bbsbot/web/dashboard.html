@@ -70,6 +70,8 @@ body {
   align-items: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .spawn-field {
   display: flex;
@@ -111,8 +113,49 @@ body {
 }
 .header-actions {
   display: flex;
+  flex-direction: column;
   align-items: flex-end;
+  gap: 4px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.header-actions-row {
+  display: flex;
+  align-items: center;
   gap: 6px;
+}
+.header-count-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 64px;
+}
+.header-count-dock label {
+  font-size: 10px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  text-align: right;
+}
+.header-count-dock input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  width: 100%;
+  text-align: center;
+}
+.header .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.header .status .sep {
+  color: var(--border);
 }
 .header-note {
   font-size: 11px;
@@ -121,7 +164,7 @@ body {
 .top-stats {
   margin: 12px 20px 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px;
 }
 .top-stat {
@@ -129,6 +172,10 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .top-stat .k {
   display: block;
@@ -158,6 +205,27 @@ body {
 .top-stat .yellow { color: var(--yellow); }
 .top-stat .cyan { color: var(--cyan); }
 .top-stat.wide { grid-column: span 2; }
+.strategy-strip {
+  margin: 8px 20px 0;
+  background: linear-gradient(180deg, rgba(22,27,34,0.95), rgba(13,17,23,0.96));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.strategy-strip .k {
+  display: block;
+  font-size: 10px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+}
+.strategy-strip .v {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.25;
+  min-height: 16px;
+}
 .status-pool-wrap { padding: 0; }
 .pool-section-title {
   font-size: 11px;
@@ -226,11 +294,13 @@ body {
   font-size: 10px;
   letter-spacing: 0.4px;
 }
-.pool-table th:nth-child(1), .pool-table td:nth-child(1) { width: 24%; }
-.pool-table th:nth-child(2), .pool-table td:nth-child(2) { width: 24%; }
-.pool-table th:nth-child(3), .pool-table td:nth-child(3) { width: 24%; }
-.pool-table th:nth-child(4), .pool-table td:nth-child(4) { width: 12%; text-align: center; font-variant-numeric: tabular-nums; }
-.pool-table th:nth-child(5), .pool-table td:nth-child(5) { width: 16%; text-align: right; font-variant-numeric: tabular-nums; }
+.pool-table th:nth-child(1), .pool-table td:nth-child(1) { width: 20%; }
+.pool-table th:nth-child(2), .pool-table td:nth-child(2) { width: 16%; }
+.pool-table th:nth-child(3), .pool-table td:nth-child(3) { width: 10%; }
+.pool-table th:nth-child(4), .pool-table td:nth-child(4) { width: 10%; }
+.pool-table th:nth-child(5), .pool-table td:nth-child(5) { width: 8%; text-align: center; font-variant-numeric: tabular-nums; }
+.pool-table th:nth-child(6), .pool-table td:nth-child(6) { width: 22%; }
+.pool-table th:nth-child(7), .pool-table td:nth-child(7) { width: 14%; text-align: right; font-variant-numeric: tabular-nums; }
 .pool-table td.num {
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -258,25 +328,16 @@ body {
   padding: 16px 20px 20px;
 }
 .dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 14px;
-  align-items: start;
-}
-.left-pane,
-.right-pane {
-  min-width: 0;
-}
-.right-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: block;
 }
 .panel {
   background: linear-gradient(180deg, rgba(22,27,34,0.95), rgba(13,17,23,0.96));
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
+}
+.panel + .panel {
+  margin-top: 14px;
 }
 .section-head {
   display: flex;
@@ -334,7 +395,7 @@ body {
 }
 .table-wrap {
   padding: 0;
-  overflow-x: hidden;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -356,25 +417,25 @@ thead th, tbody td {
 .strategy-main { font-weight: 600; }
 .strategy-intent { color: var(--fg2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   cursor: pointer;
 }
 .activity-primary {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-}
-.activity-age {
-  color: var(--fg2);
-  font-size: 11px;
+  gap: 6px;
   flex: 0 0 auto;
-  margin-left: auto;
 }
 .activity-secondary {
-  margin-top: 2px;
-  font-size: 11px;
+  margin-top: 0;
+  font-size: 10px;
+  line-height: 1.1;
   color: var(--fg2);
+  min-width: 0;
+  flex: 1 1 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -396,60 +457,49 @@ thead th, tbody td {
 }
 .chip.sid { color: var(--cyan); border-color: rgba(57,197,207,0.45); }
 .chip.mode { color: var(--yellow); border-color: rgba(210,153,34,0.45); }
-.state-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1px 8px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+.state-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--fg2);
+  box-shadow: 0 0 0 1px rgba(13, 17, 23, 0.9), 0 0 6px rgba(139,148,158,0.28);
 }
-.state-pill.running { color: var(--green); border-color: rgba(63,185,80,0.5); }
-.state-pill.completed { color: var(--blue); border-color: rgba(88,166,255,0.5); }
-.state-pill.error { color: var(--red); border-color: rgba(248,81,73,0.5); }
-.state-pill.blocked,
-.state-pill.warning { color: #f0883e; border-color: rgba(240,136,62,0.5); }
-.state-pill.recovering,
-.state-pill.queued { color: var(--yellow); border-color: rgba(210,153,34,0.5); }
-.state-pill.stopped,
-.state-pill.disconnected { color: var(--fg2); border-color: rgba(139,148,158,0.45); }
-/* Keep Actions visible within the fixed table */
-table thead th:last-child,
-table tbody td:last-child {
-  position: sticky;
-  right: 0;
-  z-index: 2;
-  background: var(--bg2);
-  border-left: 1px solid var(--border);
-}
-table thead th:last-child {
-  background: var(--bg3);
-}
+.state-dot.running { background: var(--green); box-shadow: 0 0 0 1px rgba(13, 17, 23, 0.9), 0 0 6px rgba(63,185,80,0.42); }
+.state-dot.completed { background: var(--blue); box-shadow: 0 0 0 1px rgba(13, 17, 23, 0.9), 0 0 6px rgba(88,166,255,0.42); }
+.state-dot.error { background: var(--red); box-shadow: 0 0 0 1px rgba(13, 17, 23, 0.9), 0 0 6px rgba(248,81,73,0.45); }
+.state-dot.blocked,
+.state-dot.warning { background: #f0883e; box-shadow: 0 0 0 1px rgba(13, 17, 23, 0.9), 0 0 6px rgba(240,136,62,0.42); }
+.state-dot.recovering,
+.state-dot.queued { background: var(--yellow); box-shadow: 0 0 0 1px rgba(13, 17, 23, 0.9), 0 0 6px rgba(210,153,34,0.42); }
+.state-dot.stopped,
+.state-dot.disconnected { background: var(--fg2); }
 /* Proportional column widths for dense table scanning */
-table thead th:nth-child(1), table tbody td:nth-child(1) { width: 10%; } /* Bot ID */
-table thead th:nth-child(2), table tbody td:nth-child(2) { width: 6%; }  /* State */
-table thead th:nth-child(3), table tbody td:nth-child(3) { width: 24%; } /* Activity+Status */
-table thead th:nth-child(4), table tbody td:nth-child(4) { width: 10%; } /* Strategy */
-table thead th:nth-child(5), table tbody td:nth-child(5) { width: 6%; }  /* Sector */
-table thead th:nth-child(6), table tbody td:nth-child(6) { width: 9%; }  /* Credits */
-table thead th:nth-child(7), table tbody td:nth-child(7) { width: 5%; }  /* Fuel */
-table thead th:nth-child(8), table tbody td:nth-child(8) { width: 5%; }  /* Org */
-table thead th:nth-child(9), table tbody td:nth-child(9) { width: 5%; }  /* Equip */
-table thead th:nth-child(10), table tbody td:nth-child(10) { width: 10%; } /* Turns */
-table thead th:nth-child(11), table tbody td:nth-child(11) { width: 8%; } /* Actions */
-table tbody td.actions {
+.bot-table thead th:nth-child(1), .bot-table tbody td:nth-child(1) { width: 10%; }  /* Bot ID */
+.bot-table thead th:nth-child(2), .bot-table tbody td:nth-child(2) { width: 3%; }   /* State */
+.bot-table thead th:nth-child(3), .bot-table tbody td:nth-child(3) { width: 18%; }  /* Activity+Status */
+.bot-table thead th:nth-child(4), .bot-table tbody td:nth-child(4) { width: 16%; }  /* Strategy */
+.bot-table thead th:nth-child(5), .bot-table tbody td:nth-child(5) { width: 5%; }   /* Sector */
+.bot-table thead th:nth-child(6), .bot-table tbody td:nth-child(6) { width: 8%; }   /* Credits */
+.bot-table thead th:nth-child(7), .bot-table tbody td:nth-child(7) { width: 4%; }  /* Fuel */
+.bot-table thead th:nth-child(8), .bot-table tbody td:nth-child(8) { width: 4%; }  /* Org */
+.bot-table thead th:nth-child(9), .bot-table tbody td:nth-child(9) { width: 4%; }  /* Equip */
+.bot-table thead th:nth-child(10), .bot-table tbody td:nth-child(10) { width: 7%; } /* Turns */
+.bot-table thead th:nth-child(11), .bot-table tbody td:nth-child(11) { width: 13%; } /* Updated */
+.bot-table thead th:nth-child(12), .bot-table tbody td:nth-child(12) { width: 4%; }  /* Actions */
+.bot-table tbody td.actions {
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
   text-align: center;
 }
+.bot-table tbody td:nth-child(2),
+.bot-table thead th:nth-child(2) {
+  text-align: center;
+}
 thead th {
   text-align: left;
-  padding: 10px 14px;
+  padding: 9px 10px;
   background: var(--bg3);
   color: var(--fg2);
   font-size: 11px;
@@ -459,18 +509,19 @@ thead th {
   cursor: pointer;
   user-select: none;
 }
-table thead th:nth-child(6),
-table thead th:nth-child(7),
-table thead th:nth-child(8),
-table thead th:nth-child(9),
-table thead th:nth-child(10),
-table thead th:nth-child(5) {
+.bot-table thead th:nth-child(6),
+.bot-table thead th:nth-child(7),
+.bot-table thead th:nth-child(8),
+.bot-table thead th:nth-child(9),
+.bot-table thead th:nth-child(10),
+.bot-table thead th:nth-child(11),
+.bot-table thead th:nth-child(5) {
   text-align: center;
 }
 thead th:hover { color: var(--fg); }
 thead th:last-child { cursor: default; }
 tbody td {
-  padding: 8px 14px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
@@ -511,13 +562,24 @@ tbody tr:hover { background: var(--bg3); }
 /* Action buttons */
 .actions { white-space: nowrap; }
 .actions .btn {
-  padding: 1px 6px;
+  padding: 1px 7px;
   margin-right: 0;
 }
 .btn.more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-color: var(--blue);
   color: var(--blue);
-  min-width: 30px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  line-height: 1;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  border-radius: 4px;
 }
 .btn.more:hover {
   background: rgba(88,166,255,0.14);
@@ -571,10 +633,7 @@ tbody tr:hover { background: var(--bg3); }
   font-variant-numeric: tabular-nums;
 }
 .pool-telemetry {
-  display: grid;
-  grid-template-columns: 1fr 120px;
-  gap: 8px;
-  align-items: center;
+  display: block;
   margin-bottom: 8px;
 }
 .pool-rate {
@@ -586,23 +645,47 @@ tbody tr:hover { background: var(--bg3); }
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.pool-sparkline {
-  width: 100%;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: rgba(255,255,255,0.015);
+.pool-row-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
-.pool-sparkline polyline {
+.pool-row-rate .rate {
+  font-size: 10px;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+.pool-row-spark {
+  width: 38px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+.pool-row-spark polyline {
   fill: none;
   stroke: var(--cyan);
-  stroke-width: 2;
+  stroke-width: 1.35;
   vector-effect: non-scaling-stroke;
 }
-.pool-sparkline .baseline {
-  stroke: var(--border);
+.pool-row-spark .baseline {
+  stroke: rgba(139,148,158,0.35);
   stroke-width: 1;
 }
+.pool-source-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(139,148,158,0.35);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: var(--fg2);
+}
+.pool-source-chip.generated { color: var(--cyan); border-color: rgba(57,197,207,0.42); }
+.pool-source-chip.pool { color: var(--green); border-color: rgba(63,185,80,0.42); }
+.pool-source-chip.persisted { color: var(--yellow); border-color: rgba(210,153,34,0.42); }
+.pool-source-chip.config { color: var(--blue); border-color: rgba(88,166,255,0.42); }
 
 /* Log modal */
 .modal-overlay {
@@ -855,9 +938,9 @@ tbody tr:hover { background: var(--bg3); }
 /* Activity badge */
 .activity-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1006,7 +1089,6 @@ tbody tr:hover { background: var(--bg3); }
 .toast.success { border-color: var(--green); color: var(--green); }
 .toast.error { border-color: var(--red); color: var(--red); }
 @media (max-width: 1260px) {
-  .dashboard-grid { grid-template-columns: minmax(0, 1fr) 320px; }
   .header {
     flex-wrap: wrap;
     align-items: flex-start;
@@ -1019,18 +1101,10 @@ tbody tr:hover { background: var(--bg3); }
     margin-left: auto;
   }
 }
-@media (max-width: 1560px) {
-  .dashboard-grid { grid-template-columns: 1fr; }
-  .right-pane {
-    order: 2;
-  }
-  .top-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .top-stat.wide { grid-column: span 2; }
-}
 @media (max-width: 940px) {
   .dashboard-main { padding: 14px 16px 18px; }
   .top-stats { margin: 12px 16px 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .top-stat.wide { grid-column: span 2; }
+  .strategy-strip { margin: 8px 16px 0; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .header {
     padding: 12px 16px;
@@ -1056,30 +1130,48 @@ tbody tr:hover { background: var(--bg3); }
   }
   .header-actions {
     width: 100%;
+    align-items: flex-end;
+    margin-left: 0;
+  }
+  .header-actions-row {
+    width: 100%;
+    justify-content: flex-end;
   }
   .header .status {
     width: 100%;
     text-align: right;
   }
 }
-@media (max-width: 1360px) {
-  table thead th:nth-child(4), table tbody td:nth-child(4) { display: none; } /* strat */
+@media (max-width: 1120px) {
+  .bot-table thead th:nth-child(4), .bot-table tbody td:nth-child(4) { display: none; } /* strat */
+}
+@media (max-width: 1400px) {
+  .bot-table thead th:nth-child(3), .bot-table tbody td:nth-child(3) { width: 15%; } /* activity first */
+  .activity-secondary { display: none; } /* collapse activity detail first */
 }
 @media (max-width: 1240px) {
   .activity-secondary { display: none; } /* status detail */
 }
-@media (max-width: 1120px) {
-  table thead th:nth-child(7), table tbody td:nth-child(7) { display: none; } /* fuel */
+@media (max-width: 1160px) {
+  .bot-table thead th:nth-child(7), .bot-table tbody td:nth-child(7) { display: none; } /* fuel */
 }
-@media (max-width: 1040px) {
-  table thead th:nth-child(8), table tbody td:nth-child(8) { display: none; } /* org */
+@media (max-width: 1080px) {
+  .bot-table thead th:nth-child(8), .bot-table tbody td:nth-child(8) { display: none; } /* org */
 }
-@media (max-width: 980px) {
-  table thead th:nth-child(9), table tbody td:nth-child(9) { display: none; } /* equip */
+@media (max-width: 1000px) {
+  .bot-table thead th:nth-child(9), .bot-table tbody td:nth-child(9) { display: none; } /* equip */
+}
+@media (max-width: 920px) {
+  .bot-table thead th:nth-child(5), .bot-table tbody td:nth-child(5) { display: none; } /* sector */
+}
+@media (max-width: 840px) {
+  .bot-table thead th:nth-child(11), .bot-table tbody td:nth-child(11) { display: none; } /* updated */
+}
+@media (max-width: 760px) {
+  .bot-table thead th:nth-child(10), .bot-table tbody td:nth-child(10) { display: none; } /* turns */
 }
 @media (max-width: 760px) {
   .pool-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pool-telemetry { grid-template-columns: 1fr; }
   .pool-head {
     flex-direction: column;
     align-items: flex-start;
@@ -1110,10 +1202,6 @@ tbody tr:hover { background: var(--bg3); }
         <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
         </select>
       </div>
-      <div class="spawn-field compact" title="Used only when Preset is custom">
-        <label for="spawn-count">Count</label>
-        <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
-      </div>
       <div class="spawn-field" title="Display labels map to stable config directories">
         <label for="spawn-config">Config</label>
         <select id="spawn-config">
@@ -1121,17 +1209,25 @@ tbody tr:hover { background: var(--bg3); }
           <option value="swarm_demo_ai">tw2002_ai</option>
         </select>
       </div>
-      <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
     </div>
     <div class="header-separator"></div>
     <div class="header-actions">
-      <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
-      <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
+      <div class="header-actions-row">
+        <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
+        <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
+        <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
+      </div>
+      <div class="header-count-dock" title="Used only when Mix is custom">
+        <label for="spawn-count">Count</label>
+        <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
+      </div>
     </div>
   </div>
   <div class="status">
     <span class="dot disconnected" id="dot"></span>
     <span id="conn-status">Connecting...</span>
+    <span class="sep">|</span>
+    <span id="connected-for">-</span>
   </div>
 </div>
 
@@ -1150,26 +1246,21 @@ tbody tr:hover { background: var(--bg3); }
   </div>
   <div class="top-stat">
     <span class="k">Haggle</span>
-    <span class="v"><span class="green" id="accept-rate">-</span></span>
+    <span class="v"><span class="green" id="accept-rate">-</span> / <span class="yellow" id="too-high-rate">-</span> / <span class="blue" id="too-low-rate">-</span></span>
   </div>
   <div class="top-stat">
-    <span class="k">High / Low / NoTrade</span>
-    <span class="v"><span class="yellow" id="too-high-rate">-</span> / <span class="blue" id="too-low-rate">-</span> / <span class="red" id="no-trade-120">-</span></span>
+    <span class="k">No Trade 120+</span>
+    <span class="v"><span class="red" id="no-trade-120">-</span></span>
   </div>
-  <div class="top-stat">
-    <span class="k">Connected</span>
-    <span class="v small" id="connected-for">-</span>
-  </div>
-  <div class="top-stat wide">
-    <span class="k">Strategy CPT</span>
-    <span class="v small" id="strategy-cpt">-</span>
-  </div>
+</section>
+<section class="strategy-strip">
+  <span class="k">Strategy CPT</span>
+  <span class="v" id="strategy-cpt">-</span>
 </section>
 
 <main class="dashboard-main">
   <div class="dashboard-grid">
-    <section class="left-pane">
-      <div class="panel">
+      <section class="panel">
         <div class="section-head">
           <div class="pool-section-title">Bot List</div>
           <div class="section-meta" id="bot-list-meta">0 visible</div>
@@ -1193,11 +1284,11 @@ tbody tr:hover { background: var(--bg3); }
           </label>
         </div>
         <div class="table-wrap">
-          <table>
+          <table class="bot-table">
             <thead>
               <tr>
                 <th data-sort="bot_id">Bot ID</th>
-                <th data-sort="state">State</th>
+                <th data-sort="state">St</th>
                 <th>Activity / Status</th>
                 <th data-sort="strategy">Strat</th>
                 <th data-sort="sector">Sect</th>
@@ -1206,15 +1297,14 @@ tbody tr:hover { background: var(--bg3); }
                 <th data-sort="cargo_organics">Org</th>
                 <th data-sort="cargo_equipment">Equip</th>
                 <th data-sort="turns_executed">Turns</th>
-                <th>Actions</th>
+                <th data-sort="last_action_time">Updated</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="bot-table"></tbody>
           </table>
         </div>
-      </div>
-    </section>
-    <aside class="right-pane">
+      </section>
       <section class="panel pool-panel-wrap">
         <div class="section-head">
           <div class="pool-section-title">Bot Pool</div>
@@ -1227,11 +1317,7 @@ tbody tr:hover { background: var(--bg3); }
           <div class="pool-metric"><span class="k">Identity</span><span class="v" id="pool-kpi-identity">-</span></div>
         </div>
         <div class="pool-telemetry">
-          <div class="pool-rate">Lease Rate <strong id="pool-rate">-</strong></div>
-          <svg class="pool-sparkline" id="pool-sparkline" viewBox="0 0 120 28" preserveAspectRatio="none" aria-label="Pool rate sparkline">
-            <line class="baseline" x1="0" y1="27" x2="120" y2="27"></line>
-            <polyline id="pool-sparkline-line" points=""></polyline>
-          </svg>
+          <div class="pool-rate">Lease Rate <strong id="pool-rate">-</strong> <span class="header-note">(all accounts / min)</span></div>
         </div>
         <div class="pool-panel">
           <div class="pool-head">
@@ -1243,8 +1329,10 @@ tbody tr:hover { background: var(--bg3); }
                 <tr>
                   <th>User</th>
                   <th>Lease</th>
-                  <th>Host</th>
+                  <th>Game</th>
+                  <th>Source</th>
                   <th>Uses</th>
+                  <th title="Leases per minute trend (recent polls)">Rate</th>
                   <th>Last</th>
                 </tr>
               </thead>
@@ -1253,7 +1341,6 @@ tbody tr:hover { background: var(--bg3); }
           </div>
         </div>
       </section>
-    </aside>
   </div>
 </main>
 

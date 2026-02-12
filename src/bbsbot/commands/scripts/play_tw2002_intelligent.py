@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Intelligent TW2002 bot using prompt detection system.
 
 This bot implements a hybrid reactive approach:

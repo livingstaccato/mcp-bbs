@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import json
@@ -74,12 +77,11 @@ def _register_bbs_tools(mcp_app: FastMCP, allowed_prefixes: set[str] | None = No
         for tool_name, tool in default_tools.items():
             if tool_name.startswith("bbs_"):
                 mcp_app.add_tool(tool)
-                log.debug(f"mcp_bbs_tool_registered: {tool_name}")
+                log.debug(f"bbsbot_tool_registered: {tool_name}")
 
-    except Exception as e:
-        log.warning(f"mcp_bbs_tools_registration_failed: {e}")
-
-
+            except Exception as e:
+                log.warning(f"bbsbot_tools_registration_failed: {e}")
+    
 def _register_game_tools(mcp_app: FastMCP, tool_prefixes: str | None = None) -> None:
     """Register game-specific MCP tools.
 

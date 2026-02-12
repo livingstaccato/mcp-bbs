@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """TW2002 intervention system MCP tools.
 
 Provides MCP tools for monitoring and controlling the intervention system.

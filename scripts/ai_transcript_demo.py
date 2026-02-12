@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Live transcript demo: watch gemma3 decide what the bot does next.
 
 Shows the full prompt → response → parse pipeline with color output.

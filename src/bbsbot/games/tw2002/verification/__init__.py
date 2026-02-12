@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Verification flows for TW2002."""
 
 from bbsbot.games.tw2002.verification.game_entry import main as game_entry_main

@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Terminal spy/hijack routes for the Swarm Dashboard and MCP takeover.
 
 This hub bridges:

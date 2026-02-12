@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Session-level TW2002 MCP tools (connect/login/join).
 
 These tools are meant for "one-off" interactive sessions where you want to:

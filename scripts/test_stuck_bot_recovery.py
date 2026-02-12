@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Test intervention system recovery from deliberately stuck situations.
 
 This script creates scenarios where bots get stuck and verifies that:

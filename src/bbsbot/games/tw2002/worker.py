@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Bot worker process entry point for swarm management.
 
 Runs a single bot instance and reports status to swarm manager.

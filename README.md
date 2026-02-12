@@ -806,6 +806,6 @@ Results saved to `.provide/intelligent-bot-{timestamp}.json`
 
 ## License
 
-MIT License - Copyright (c) 2026 Tim Perkins
+GNU Affero General Public License v3 or later - Copyright (c) 2025-2026 provide.io llc
 
-See [LICENSE](https://github.com/livingstaccato/bbsbot/blob/main/LICENSE) for details.
+See [LICENSE](LICENSE) for details.

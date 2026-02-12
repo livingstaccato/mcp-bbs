@@ -1,6 +1,9 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """TEDIT Session Manager for TW2002 admin interface.
 
-Provides high-level methods to interact with TEDIT (Sysop Editor) via MCP-BBS.
+Provides high-level methods to interact with TEDIT (Sysop Editor) via BBSBot.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ _PROMPT_PATTERN = re.compile(r"\[.\]\s*[:\?]?\s*$")
 
 
 class TEDITManager(BaseModel):
-    """Manage TEDIT sessions via MCP-BBS."""
+    """Manage TEDIT sessions via BBSBot."""
 
     host: str = "localhost"
     port: int = 2003  # Admin port

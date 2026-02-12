@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Integration test: twerk analysis + terminal execution.
 
 This test proves the full trading integration works:
@@ -131,13 +134,13 @@ async def test_twerk_analysis(data_dir: Path) -> dict:
 
 
 async def test_terminal_login(host: str, port: int) -> TradingBot | None:
-    """Test terminal login via MCP-BBS.
+    """Test terminal login via BBSBot.
 
     Returns:
         Connected and logged-in TradingBot, or None on failure
     """
     print("\n" + "=" * 80)
-    print("PHASE 2: Terminal Login (MCP-BBS)")
+    print("PHASE 2: Terminal Login (BBSBot)")
     print("=" * 80)
 
     if not is_port_open(host, port):

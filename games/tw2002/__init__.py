@@ -1,11 +1,14 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """TW2002 game utilities and TEDIT integration.
 
-This package provides tools for interacting with Trade Wars 2002 via MCP-BBS,
+This package provides tools for interacting with Trade Wars 2002 via BBSBot,
 including TEDIT (Sysop Editor) automation and game settings management.
 
 Two access methods are supported:
 - Direct file access via twerk library (for local servers)
-- Terminal automation via MCP-BBS (for remote/legacy servers)
+- Terminal automation via BBSBot (for remote/legacy servers)
 
 Modules:
     tedit_manager: High-level session management for TEDIT

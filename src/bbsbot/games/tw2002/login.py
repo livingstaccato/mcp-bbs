@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Login sequence handling for TW2002.
 
 IMPORTANT: See games/tw2002/TWGS_LOGIN_FLOW.md for the complete TWGS flow documentation.

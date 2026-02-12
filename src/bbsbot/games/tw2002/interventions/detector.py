@@ -1,3 +1,6 @@
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Intervention detector for identifying behavioral anomalies and opportunities.
 
 This module implements detection algorithms that analyze bot behavior patterns

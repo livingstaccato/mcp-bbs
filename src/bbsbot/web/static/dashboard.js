@@ -246,26 +246,28 @@
     return "idle";
   }
 
+  function compactStatusText(status) {
+    const raw = String(status || "").trim();
+    if (!raw || raw === "-") return "";
+    const normalized = raw
+      .replaceAll(" | ", " · ")
+      .replace(/\bRECOVERING\b/g, "REC")
+      .replace(/\bDISCONNECTED\b/g, "DISC")
+      .replace(/\bCOMPLETED\b/g, "DONE")
+      .replace(/\bHIJACKED\b/g, "HJK")
+      .replace(/\bORIENTING:/g, "ORI:")
+      .replace(/\bprompt\./g, "");
+    const limit = 34;
+    if (normalized.length <= limit) return normalized;
+    return `${normalized.slice(0, limit - 1)}…`;
+  }
+
   function getStrategyLabel(bot) {
     const strategy =
       (bot.strategy && String(bot.strategy).trim()) ||
       ((bot.strategy_id ? String(bot.strategy_id).trim() : "") +
         (bot.strategy_mode ? `(${String(bot.strategy_mode).trim()})` : ""));
     return strategy || "-";
-  }
-
-  function getStateCode(state) {
-    return {
-      running: "RUN",
-      recovering: "REC",
-      blocked: "BLK",
-      completed: "CMP",
-      error: "ERR",
-      stopped: "STP",
-      queued: "QUE",
-      warning: "WRN",
-      disconnected: "DSC",
-    }[String(state || "").toLowerCase()] || "UNK";
   }
 
   function getStrategyCompact(bot) {
@@ -283,6 +285,21 @@
       unknown: "unk",
     }[rawMode] || rawMode || "");
     return { id, mode, full: getStrategyLabel(bot) };
+  }
+
+  function getStrategyNote(bot) {
+    const candidates = [
+      bot.strategy_intent,
+      bot.strategy_note,
+      bot.strategy_reason,
+      bot.last_trade_note,
+      bot.last_action,
+    ];
+    for (const candidate of candidates) {
+      const note = String(candidate || "").trim();
+      if (note) return note;
+    }
+    return "";
   }
 
   function matchesTextFilter(bot, q) {
@@ -441,13 +458,10 @@
         }
 
         const activityClass = getActivityClass(activity);
-        let activityPrimary = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
-        if (b.last_action_time && isRunning) {
-          activityPrimary += `<span class="activity-age">${formatRelativeTime(b.last_action_time)}</span>`;
-        }
+        const activityPrimary = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
 
         const stateClass = String(b.state || "unknown").toLowerCase();
-        const stateHtml = `<span class="state-pill ${esc(stateClass)}" title="${esc(String(b.state || "unknown"))}">${esc(getStateCode(b.state))}</span>`;
+        const stateHtml = `<span class="state-dot ${esc(stateClass)}" title="${esc(String(b.state || "unknown"))}"></span>`;
 
         // Status: phase/prompt detail (Paused, Username/Password, Port Haggle, etc.)
         // Hijack is additive; it shouldn't replace the bot's true activity.
@@ -494,9 +508,11 @@
           }
         }
         const statusText = statusParts.length ? statusParts.join(" | ") : "-";
-        const activityHtml = `<div class="activity-cell" onclick="window._openInspector('${esc(b.bot_id)}','activity')" title="${esc(statusText)}"><div class="activity-primary">${activityPrimary}</div><div class="activity-secondary">${esc(statusText)}${exitInfo ? " " + esc(exitInfo) : ""}</div></div>`;
+        const compactStatus = compactStatusText(`${statusText}${exitInfo ? " " + exitInfo : ""}`);
+        const activityHtml = `<div class="activity-cell" onclick="window._openInspector('${esc(b.bot_id)}','activity')" title="${esc(statusText)}"><span class="activity-primary">${activityPrimary}</span>${compactStatus ? `<span class="activity-secondary">${esc(compactStatus)}</span>` : ""}</div>`;
 
         const turnsDisplay = `${b.turns_executed}`;
+        const updatedDisplay = b.last_action_time ? formatRelativeTime(b.last_action_time) : "-";
 
         // Display "-" for uninitialized numeric fields
         const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
@@ -505,12 +521,17 @@
         const equipDisplay = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? "-" : formatCredits(b.cargo_equipment);
 
         const compact = getStrategyCompact(b);
+        const strategyNote = getStrategyNote(b);
+        const strategyTitle = strategyNote ? `${compact.full} | ${strategyNote}` : compact.full;
         const strategyHtml = compact.id === "-"
           ? "-"
-          : `<span class="strategy-chip-row" title="${esc(compact.full)}">` +
-              `<span class="chip sid">${esc(compact.id)}</span>` +
-              (compact.mode ? `<span class="chip mode">${esc(compact.mode)}</span>` : "") +
-            `</span>`;
+          : `<div class="strategy-cell" title="${esc(strategyTitle)}">` +
+              `<span class="strategy-chip-row">` +
+                `<span class="chip sid">${esc(compact.id)}</span>` +
+                (compact.mode ? `<span class="chip mode">${esc(compact.mode)}</span>` : "") +
+              `</span>` +
+              (strategyNote ? `<div class="strategy-intent">${esc(strategyNote)}</div>` : "") +
+            `</div>`;
 
         return `<tr>
 	        <td title="${esc(b.bot_id)}">${esc(shortBotId(b.bot_id))}</td>
@@ -523,6 +544,7 @@
 	        <td class="numeric">${orgDisplay}</td>
 	        <td class="numeric">${equipDisplay}</td>
 	        <td class="numeric">${turnsDisplay}</td>
+	        <td class="timecell">${updatedDisplay}</td>
 	        <td class="actions">
 	          <button class="btn more" onclick="window._openInspector('${esc(b.bot_id)}')" title="Inspect">...</button>
         </td>
@@ -1149,29 +1171,53 @@
   const poolKpiCooldown = $("#pool-kpi-cooldown");
   const poolKpiIdentity = $("#pool-kpi-identity");
   const poolRate = $("#pool-rate");
-  const poolSparkline = $("#pool-sparkline-line");
 
   let poolLastSample = null;
-  const poolRateHistory = [];
+  let poolAccountLastSample = null;
+  const poolAccountRateHistory = new Map();
 
-  function pushPoolRateSample(v) {
-    poolRateHistory.push(Math.max(0, Number(v) || 0));
-    while (poolRateHistory.length > 32) poolRateHistory.shift();
-    if (!poolSparkline) return;
-    const n = poolRateHistory.length;
-    if (n === 0) {
-      poolSparkline.setAttribute("points", "");
-      return;
-    }
-    const w = 120;
-    const h = 28;
-    const maxV = Math.max(...poolRateHistory, 0.0001);
-    const points = poolRateHistory.map((val, i) => {
+  function pushAccountRateSample(accountId, rate) {
+    const key = String(accountId || "");
+    if (!key) return;
+    const history = poolAccountRateHistory.get(key) || [];
+    history.push(Math.max(0, Number(rate) || 0));
+    while (history.length > 18) history.shift();
+    poolAccountRateHistory.set(key, history);
+  }
+
+  function formatGameName(account) {
+    const letter = String(account.game_letter || "").trim().toUpperCase();
+    if (letter) return `TW2002-${letter}`;
+    return "TW2002";
+  }
+
+  function formatSourceName(source) {
+    const raw = String(source || "unknown").trim().toLowerCase();
+    const label = {
+      generated: "gen",
+      persisted: "persist",
+      config: "config",
+      pool: "pool",
+      unknown: "unk",
+    }[raw] || raw.slice(0, 8);
+    return { raw: raw || "unknown", label };
+  }
+
+  function buildInlineSparkline(history) {
+    const vals = Array.isArray(history) && history.length ? history : [0];
+    const n = vals.length;
+    const w = 38;
+    const h = 12;
+    const maxV = Math.max(...vals, 0.0001);
+    const points = vals.map((val, i) => {
       const x = n === 1 ? w : (i / (n - 1)) * w;
       const y = h - 1 - (val / maxV) * (h - 4);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(" ");
-    poolSparkline.setAttribute("points", points);
+    return `<svg class="pool-row-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">` +
+      `<line class="baseline" x1="0" y1="${h - 1}" x2="${w}" y2="${h - 1}"></line>` +
+      `<polyline points="${points}"></polyline>` +
+    `</svg>`;
   }
 
   function _buildRange(configDir, count, startAt) {
@@ -1248,22 +1294,59 @@
       }
       poolLastSample = { time: now, totalUses };
       if (poolRate) poolRate.textContent = `${leasesPerMin.toFixed(2)}/min`;
-      pushPoolRateSample(leasesPerMin);
+
+      const accountUses = new Map(accounts.map((a) => [String(a.account_id || ""), Number(a.use_count || 0)]));
+      const accountRates = new Map();
+      if (poolAccountLastSample && now > poolAccountLastSample.time) {
+        const dtMin = (now - poolAccountLastSample.time) / 60;
+        if (dtMin > 0) {
+          for (const a of accounts) {
+            const accountId = String(a.account_id || "");
+            const currentUses = Number(a.use_count || 0);
+            const previousUses = Number(poolAccountLastSample.uses.get(accountId) || 0);
+            const perMin = Math.max(0, (currentUses - previousUses) / dtMin);
+            accountRates.set(accountId, perMin);
+            pushAccountRateSample(accountId, perMin);
+          }
+        }
+      }
+      if (!poolAccountLastSample) {
+        for (const a of accounts) {
+          const accountId = String(a.account_id || "");
+          accountRates.set(accountId, 0);
+          pushAccountRateSample(accountId, 0);
+        }
+      }
+      poolAccountLastSample = { time: now, uses: accountUses };
+      const activeAccountIds = new Set(accounts.map((a) => String(a.account_id || "")));
+      for (const accountId of Array.from(poolAccountRateHistory.keys())) {
+        if (!activeAccountIds.has(accountId)) poolAccountRateHistory.delete(accountId);
+      }
 
       poolTable.innerHTML = accounts.map((a) => {
-        const host = [a.host || "-", a.port != null ? a.port : "-"].join(":");
+        const accountId = String(a.account_id || "");
         const leaseBot = (a.lease && a.lease.bot_id) ? a.lease.bot_id : "-";
+        const game = formatGameName(a);
+        const source = formatSourceName(a.source);
         const lastUsed = a.last_used_at ? formatAgeSeconds(a.last_used_at) : "-";
+        const accountRate = Number(accountRates.get(accountId) || 0);
+        const history = poolAccountRateHistory.get(accountId) || [0];
+        const rateCell = `<div class="pool-row-rate" title="Leases per minute trend for this account (recent polls)">` +
+          `<span class="rate">${accountRate.toFixed(2)}/m</span>` +
+          `${buildInlineSparkline(history)}` +
+        `</div>`;
         return `<tr>
           <td title="${esc(a.username || "-")}">${esc(a.username || "-")}</td>
           <td title="${esc(leaseBot)}">${esc(leaseBot)}</td>
-          <td title="${esc(host)}">${esc(host)}</td>
+          <td title="${esc(game)}">${esc(game)}</td>
+          <td><span class="pool-source-chip ${esc(source.raw)}" title="${esc(source.raw)}">${esc(source.label)}</span></td>
           <td class="num">${esc(String(a.use_count || 0))}</td>
+          <td>${rateCell}</td>
           <td class="num">${esc(lastUsed)}</td>
         </tr>`;
       }).join("");
       if (!accounts.length) {
-        poolTable.innerHTML = `<tr><td colspan="5" style="color: var(--fg2);">No pooled accounts yet</td></tr>`;
+        poolTable.innerHTML = `<tr><td colspan="7" style="color: var(--fg2);">No pooled accounts yet</td></tr>`;
       }
     } catch (_) {
       poolSummary.textContent = "unavailable";

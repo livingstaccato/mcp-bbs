@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026 provide.io llc
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Systematic testing of all 13 TW2002 prompt patterns.
 
 This script validates each pattern definition against live BBS screens.
