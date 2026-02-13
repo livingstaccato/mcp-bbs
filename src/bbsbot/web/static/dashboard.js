@@ -8,6 +8,16 @@
   let updateTimer = null;  // Debounce timer for table updates
   let tablePointerActive = false;
   let pendingTableData = null;
+  let swarmPingTimer = null;
+  let swarmPollTimer = null;
+  const strategyCptRegistry = new Map();
+  const runMetricHistory = [];
+  const RUN_TREND_SAMPLE_INTERVAL_S = 60;
+  let lastRunMetricSampleTs = 0;
+  let activeRunStartTs = null;
+  let lastRunTotalTurns = 0;
+  let lastRunTotalBots = 0;
+  let runHistoryHydrated = false;
 
   const $ = (sel) => document.querySelector(sel);
   const dot = $("#dot");
@@ -18,6 +28,11 @@
   const filterSearchEl = $("#filter-search");
   const filterNoTradeEl = $("#filter-no-trade");
   const strategyFilterOptionSet = new Set();
+  const testRuntimeValueEl = $("#test-runtime-value");
+  const testRuntimeSinceEl = $("#test-runtime-since");
+  const testRuntimeFillEl = $("#test-runtime-fill");
+  const strategyTrendMetaEl = $("#strategy-trend-meta");
+  const strategyTrendSvgEl = $("#strategy-trend-svg");
 
   function renderOrDeferTable(data) {
     if (tablePointerActive) {
@@ -102,6 +117,26 @@
     return Math.floor(age / 3600) + "h ago";
   }
 
+  function formatClockDuration(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const hh = Math.floor(total / 3600);
+    const mm = Math.floor((total % 3600) / 60);
+    const ss = total % 60;
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  }
+
+  function formatTimeOnly(ts) {
+    if (!ts) return "-";
+    return new Date(Number(ts) * 1000).toLocaleTimeString();
+  }
+
+  function formatSigned(n, digits = 2) {
+    const v = Number(n || 0);
+    if (!isFinite(v)) return "-";
+    const sign = v > 0 ? "+" : "";
+    return `${sign}${v.toFixed(digits)}`;
+  }
+
   function esc(s) {
     const d = document.createElement("div");
     d.textContent = s;
@@ -111,6 +146,29 @@
   function percent(v) {
     if (!isFinite(v)) return "0.0%";
     return (v * 100).toFixed(1) + "%";
+  }
+
+  function creditColor(credits) {
+    const value = Number(credits);
+    if (!isFinite(value) || value < 0) return "";
+    // Subtle red -> green ramp tuned for early-game credit ranges.
+    const min = 0;
+    const max = 1500;
+    const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    const eased = t * t * (3 - 2 * t);
+    const hue = 6 + (136 * eased);
+    return `hsl(${hue.toFixed(1)} 60% 62%)`;
+  }
+
+  function strategyCptColor(cpt) {
+    const value = Number(cpt);
+    if (!isFinite(value)) return "";
+    const min = -1.5;
+    const max = 1.5;
+    const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    const eased = t * t * (3 - 2 * t);
+    const hue = 8 + (132 * eased);
+    return `hsl(${hue.toFixed(1)} 58% 64%)`;
   }
 
   function computeAggregateMetrics(data) {
@@ -125,8 +183,7 @@
     let noTrade120 = 0;
     const nowS = Date.now() / 1000;
     const activeStates = new Set(["running", "recovering", "blocked"]);
-    const activeByStrategy = new Map();
-    const historicalByStrategy = new Map();
+    const byStrategy = new Map();
 
     for (const b of bots) {
       const a = Number(b.haggle_accept || 0);
@@ -154,11 +211,23 @@
       const state = String(b.state || "").toLowerCase();
       const lastUpdate = Number(b.last_update_time || 0);
       const isFresh = lastUpdate > 0 && nowS - lastUpdate <= 120;
-      const bucketMap = (activeStates.has(state) && isFresh) ? activeByStrategy : historicalByStrategy;
-      if (!bucketMap.has(key)) {
-        bucketMap.set(key, { sumCpt: 0, n: 0, sumDelta: 0, sumTurns: 0, samplesSkipped: 0 });
+      if (!byStrategy.has(key)) {
+        byStrategy.set(key, {
+          key,
+          n: 0,
+          sumCpt: 0,
+          sumDelta: 0,
+          sumTurns: 0,
+          sumTradesAll: 0,
+          sumTurnsAll: 0,
+          activeBots: 0,
+          samplesSkipped: 0,
+        });
       }
-      const bucket = bucketMap.get(key);
+      const bucket = byStrategy.get(key);
+      if (isFinite(turnsExec) && turnsExec > 0) bucket.sumTurnsAll += turnsExec;
+      if (isFinite(tradesExec) && tradesExec > 0) bucket.sumTradesAll += tradesExec;
+      if (activeStates.has(state) && isFresh) bucket.activeBots += 1;
 
       const hasSufficientTurns = isFinite(turnsExec) && turnsExec >= MIN_TURNS_FOR_CPT;
       const hasTrades = isFinite(tradesExec) && tradesExec >= MIN_TRADES_FOR_CPT;
@@ -181,29 +250,275 @@
     const tooHighRate = offers > 0 ? tooHigh / offers : 0;
     const tooLowRate = offers > 0 ? tooLow / offers : 0;
 
-    const toLines = (label, byStrategy) =>
-      Array.from(byStrategy.entries())
-      .map(([k, v]) => {
+    const strategyRows = Array.from(byStrategy.values())
+      .map((v) => {
         const weighted = v.sumTurns > 0 ? v.sumDelta / v.sumTurns : NaN;
         const unweighted = v.n > 0 ? v.sumCpt / v.n : 0;
-        const avg = isFinite(weighted) ? weighted : unweighted;
-        return { key: k, avg, n: v.n, turns: v.sumTurns, samplesSkipped: v.samplesSkipped || 0 };
+        const cpt = isFinite(weighted) ? weighted : unweighted;
+        const tradesPer100 = v.sumTurnsAll > 0 ? (v.sumTradesAll * 100) / v.sumTurnsAll : 0;
+        return {
+          key: v.key,
+          cpt,
+          n: v.n,
+          turns: v.sumTurns,
+          tradesPer100,
+          activeNow: v.activeBots > 0,
+          lowConfidence: v.n < 3 || v.sumTurns < 200,
+          samplesSkipped: v.samplesSkipped || 0,
+        };
       })
-      .filter((x) => x.n > 0)
-      .filter((x) => !(x.avg === 0 && x.key.toLowerCase().includes("(unknown)")))
-      .sort((a, b) => b.avg - a.avg)
-      .slice(0, 3)
-      .map((x) => ({
-        text: `${label} ${x.key}: ${x.avg.toFixed(2)} (n=${x.n}${x.samplesSkipped ? `, skip=${x.samplesSkipped}` : ""})`,
-        lowConfidence: x.n < 3 || x.turns < 200,
-      }));
+      .filter((x) => !(x.key.toLowerCase().includes("(unknown)") && x.n === 0 && x.tradesPer100 === 0))
+      .sort((a, b) => b.cpt - a.cpt);
 
-    const strategyLines = [
-      ...toLines("ACTIVE", activeByStrategy),
-      ...toLines("HIST", historicalByStrategy),
-    ];
+    return { acceptRate, tooHighRate, tooLowRate, noTrade120, strategyRows };
+  }
 
-    return { acceptRate, tooHighRate, tooLowRate, noTrade120, strategyLines };
+  function renderStrategyCpt(rowsNow) {
+    const strategyEl = $("#strategy-cpt");
+    if (!strategyEl) return;
+
+    const nowS = Date.now() / 1000;
+    const seen = new Set();
+    for (const row of (rowsNow || [])) {
+      const key = String(row.key || "").trim();
+      if (!key) continue;
+      seen.add(key);
+      const prev = strategyCptRegistry.get(key) || {};
+      strategyCptRegistry.set(key, {
+        ...prev,
+        key,
+        cpt: Number(row.cpt || 0),
+        n: Number(row.n || 0),
+        turns: Number(row.turns || 0),
+        tradesPer100: Number(row.tradesPer100 || 0),
+        lowConfidence: !!row.lowConfidence,
+        samplesSkipped: Number(row.samplesSkipped || 0),
+        activeNow: !!row.activeNow,
+        lastSeen: nowS,
+      });
+    }
+
+    for (const [key, rec] of strategyCptRegistry.entries()) {
+      if (seen.has(key)) continue;
+      strategyCptRegistry.set(key, { ...rec, activeNow: false });
+    }
+
+    const stateRank = { ACTIVE: 0, WARM: 1, FADED: 2 };
+    const rows = Array.from(strategyCptRegistry.values())
+      .map((rec) => {
+        const age = Math.max(0, nowS - Number(rec.lastSeen || nowS));
+        let state = "FADED";
+        if (rec.activeNow && age <= 20) state = "ACTIVE";
+        else if (age <= 180) state = "WARM";
+        return { ...rec, age, state };
+      })
+      .sort((a, b) => {
+        const sr = (stateRank[a.state] ?? 9) - (stateRank[b.state] ?? 9);
+        if (sr !== 0) return sr;
+        const c = Number(b.cpt || 0) - Number(a.cpt || 0);
+        if (c !== 0) return c;
+        return Number(b.lastSeen || 0) - Number(a.lastSeen || 0);
+      })
+      .slice(0, 24);
+
+    if (!rows.length) {
+      strategyEl.textContent = "-";
+      return;
+    }
+
+    strategyEl.innerHTML = `
+      <div class="strategy-cpt-table-wrap">
+        <table class="strategy-cpt-table">
+          <thead>
+            <tr>
+              <th>Strategy</th>
+              <th>CPT</th>
+              <th>N</th>
+              <th>T/100</th>
+              <th>State</th>
+              <th>Age</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map((row) => {
+                const cpt = Number(row.cpt || 0);
+                const cptText = `${cpt >= 0 ? "+" : ""}${cpt.toFixed(2)}`;
+                const t100 = Number(row.tradesPer100 || 0).toFixed(1);
+                const color = strategyCptColor(cpt);
+                const stateCls = row.state.toLowerCase();
+                const title = `${row.key} | n=${row.n} | turns=${row.turns}${row.samplesSkipped ? ` | skip=${row.samplesSkipped}` : ""}`;
+                return `
+                  <tr class="strategy-cpt-row ${stateCls}${row.lowConfidence ? " low-confidence" : ""}" title="${esc(title)}">
+                    <td class="strategy-key">${esc(row.key)}</td>
+                    <td class="strategy-cpt-num"${color ? ` style="color:${color}"` : ""}>${esc(cptText)}</td>
+                    <td class="strategy-n">${esc(String(row.n))}</td>
+                    <td class="strategy-t100">${esc(t100)}</td>
+                    <td><span class="strategy-state strategy-state-${stateCls}">${esc(row.state)}</span></td>
+                    <td class="strategy-age">${esc(formatAgeSeconds(row.lastSeen))}</td>
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function computeRunMetrics(data) {
+    const bots = data.bots || [];
+    const includeStates = new Set(["running", "recovering", "blocked", "completed", "error", "disconnected"]);
+    let turns = 0;
+    let creditsDelta = 0;
+    let trades = 0;
+    let runStart = Number.POSITIVE_INFINITY;
+    let activeBots = 0;
+    let totalNetWorth = Number(data.total_net_worth_estimate || 0);
+    let totalLiquid = Number(data.total_credits || 0);
+
+    for (const b of bots) {
+      const state = String(b.state || "").toLowerCase();
+      if (!includeStates.has(state)) continue;
+      activeBots += 1;
+      turns += Number(b.turns_executed || 0);
+      creditsDelta += Number(b.credits_delta || 0);
+      trades += Number(b.trades_executed || 0);
+      const started = Number(b.started_at || 0);
+      if (started > 0 && started < runStart) runStart = started;
+    }
+
+    const trueCpt = turns > 0 ? (creditsDelta / turns) : 0;
+    const tradesPer100 = turns > 0 ? ((trades * 100) / turns) : 0;
+    return {
+      runStart: isFinite(runStart) ? runStart : null,
+      turns,
+      creditsDelta,
+      trades,
+      trueCpt,
+      tradesPer100,
+      activeBots,
+      totalNetWorth,
+      totalLiquid,
+    };
+  }
+
+  async function hydrateRunHistoryFromTimeseries() {
+    if (runHistoryHydrated || runMetricHistory.length > 1) return;
+    runHistoryHydrated = true;
+    try {
+      const resp = await fetch("/swarm/timeseries/recent?limit=180");
+      if (!resp.ok) return;
+      const payload = await resp.json();
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      if (rows.length < 2) return;
+      rows.sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+      const first = rows[0];
+      const baseTurns = Number(first.total_turns || 0);
+      const baseCredits = Number(first.total_credits || 0);
+      const baseNetWorth = Number((first.total_net_worth_estimate ?? first.total_credits) || 0);
+      const baseTrades = Number(((first.trade_outcomes_overall || {}).trades_executed) || 0);
+      let lastKeepTs = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowTs = Number(row.ts || 0);
+        const isLast = i === (rows.length - 1);
+        if (!isLast && lastKeepTs > 0 && (rowTs - lastKeepTs) < RUN_TREND_SAMPLE_INTERVAL_S) {
+          continue;
+        }
+        const turns = Number(row.total_turns || 0);
+        const credits = Number(row.total_credits || 0);
+        const netWorth = Number((row.total_net_worth_estimate ?? row.total_credits) || 0);
+        const trades = Number(((row.trade_outcomes_overall || {}).trades_executed) || 0);
+        const deltaTurns = turns >= baseTurns ? (turns - baseTurns) : turns;
+        const deltaCredits = credits >= baseCredits ? (credits - baseCredits) : credits;
+        const deltaTrades = trades >= baseTrades ? (trades - baseTrades) : trades;
+        runMetricHistory.push({
+          ts: Number(row.ts || 0),
+          trueCpt: deltaTurns > 0 ? (deltaCredits / deltaTurns) : 0,
+          tradesPer100: deltaTurns > 0 ? ((deltaTrades * 100) / deltaTurns) : 0,
+          turns: deltaTurns,
+          netWorth: netWorth >= baseNetWorth ? netWorth : baseNetWorth,
+          liquid: credits,
+        });
+        lastKeepTs = rowTs;
+      }
+      while (runMetricHistory.length > 240) runMetricHistory.shift();
+      const last = runMetricHistory[runMetricHistory.length - 1];
+      if (last) lastRunMetricSampleTs = Number(last.ts || 0);
+    } catch (_) {
+      // Optional hydration: ignore errors and rely on live samples.
+    }
+  }
+
+  function renderRunTrend(runtimeSec, metrics) {
+    if (strategyTrendMetaEl) {
+      const deltaNetWorth = runMetricHistory.length
+        ? (Number(metrics.totalNetWorth || 0) - Number(runMetricHistory[0].netWorth || 0))
+        : 0;
+      const dnwText = `${deltaNetWorth >= 0 ? "+" : ""}${formatCredits(Math.round(deltaNetWorth))}`;
+      strategyTrendMetaEl.textContent = `ΔNW ${dnwText} · CPT ${metrics.trueCpt.toFixed(2)} · T/100 ${metrics.tradesPer100.toFixed(2)} · ${formatClockDuration(runtimeSec)}`;
+    }
+    if (!strategyTrendSvgEl) return;
+    if (runMetricHistory.length < 2) {
+      strategyTrendSvgEl.innerHTML = `<text x="8" y="22" class="trend-empty">Collecting run samples...</text>`;
+      return;
+    }
+
+    const tail = runMetricHistory.slice(-180);
+    const w = 320;
+    const h = 72;
+    const pad = 3;
+    const n = tail.length;
+    const xAt = (i) => pad + ((w - (pad * 2)) * (n <= 1 ? 0 : i / (n - 1)));
+    const cptVals = tail.map((x) => Number(x.trueCpt || 0));
+    const nw0 = Number(tail[0].netWorth || 0);
+    const moneyVals = tail.map((x) => Number(x.netWorth || 0) - nw0);
+
+    // Two compact lanes: CPT (top) and money delta (bottom).
+    const cTop = 6;
+    const cBottom = 31;
+    const mTop = 40;
+    const mBottom = 66;
+
+    function robustBounds(values, zeroRef, minSpan) {
+      const vals = values.filter((v) => isFinite(v)).slice().sort((a, b) => a - b);
+      if (!vals.length) return [zeroRef - (minSpan / 2), zeroRef + (minSpan / 2)];
+      const q = (p) => vals[Math.max(0, Math.min(vals.length - 1, Math.floor((vals.length - 1) * p)))];
+      let lo = Math.min(q(0.05), zeroRef);
+      let hi = Math.max(q(0.95), zeroRef);
+      if ((hi - lo) < minSpan) {
+        const mid = (hi + lo) / 2;
+        lo = mid - (minSpan / 2);
+        hi = mid + (minSpan / 2);
+      }
+      return [lo, hi];
+    }
+
+    let [cMin, cMax] = robustBounds(cptVals, 0, 0.08);
+    const cSpan = Math.max(0.0001, cMax - cMin);
+    const cY = (v) => cTop + (((cMax - v) / cSpan) * (cBottom - cTop));
+    const cZeroY = cY(0);
+    const cPts = cptVals.map((v, i) => `${xAt(i).toFixed(2)},${cY(v).toFixed(2)}`);
+
+    let [mMin, mMax] = robustBounds(moneyVals, 0, 5);
+    const mSpan = Math.max(0.0001, mMax - mMin);
+    const mY = (v) => mTop + (((mMax - v) / mSpan) * (mBottom - mTop));
+    const mZeroY = mY(0);
+    const mPts = moneyVals.map((v, i) => `${xAt(i).toFixed(2)},${mY(v).toFixed(2)}`);
+
+    const lastX = xAt(n - 1).toFixed(2);
+    const cLastY = cY(cptVals[n - 1]).toFixed(2);
+    const mLastY = mY(moneyVals[n - 1]).toFixed(2);
+
+    strategyTrendSvgEl.innerHTML = `
+      <line class="trend-baseline" x1="${pad}" y1="${cZeroY.toFixed(2)}" x2="${(w - pad)}" y2="${cZeroY.toFixed(2)}"></line>
+      <line class="trend-baseline-secondary" x1="${pad}" y1="${mZeroY.toFixed(2)}" x2="${(w - pad)}" y2="${mZeroY.toFixed(2)}"></line>
+      <polyline class="trend-line trend-line-cpt" points="${cPts.join(" ")}"></polyline>
+      <polyline class="trend-line trend-line-money" points="${mPts.join(" ")}"></polyline>
+      <circle class="trend-last trend-last-cpt" cx="${lastX}" cy="${cLastY}" r="1.9"></circle>
+      <circle class="trend-last trend-last-money" cx="${lastX}" cy="${mLastY}" r="1.9"></circle>
+    `;
   }
 
   function shortBotId(botId) {
@@ -369,45 +684,125 @@
 	    // Update stats immediately (lightweight)
 	    $("#running").textContent = data.running;
 	    $("#total").textContent = data.total_bots;
-	    $("#completed").textContent = data.completed;
-	    $("#errors").textContent = data.errors;
+      $("#completed").textContent = data.completed;
+      $("#errors").textContent = data.errors;
       const totalCredits = Number(data.total_credits || 0);
+      const totalBankCredits = Number(data.total_bank_credits || 0);
       const totalNetWorth = Number(data.total_net_worth_estimate ?? totalCredits);
       const netWorthEl = $("#net-worth");
       if (netWorthEl) netWorthEl.textContent = formatCredits(totalNetWorth);
       const creditsSubEl = $("#credits-sub");
-      if (creditsSubEl) creditsSubEl.textContent = `credits: ${formatCredits(totalCredits)}`;
+      if (creditsSubEl) {
+        creditsSubEl.textContent = `liquid ${formatCredits(totalCredits)} · bank ${formatCredits(totalBankCredits)}`;
+        const avgPerBot = Number(data.total_bots || 0) > 0
+          ? ((totalCredits + totalBankCredits) / Number(data.total_bots || 1))
+          : (totalCredits + totalBankCredits);
+        creditsSubEl.style.color = creditColor(avgPerBot) || "";
+      }
       const legacyCreditsEl = $("#credits");
       if (legacyCreditsEl) legacyCreditsEl.textContent = formatCredits(totalCredits);
 	    $("#turns").textContent = formatCredits(data.total_turns);
+      const run = computeRunMetrics(data);
+
+      const returnPerTurnEl = $("#return-per-turn");
+      const returnPerTradeEl = $("#return-per-trade");
+      const tradesPer100El = $("#trades-per-100");
+      const profitableRateSubEl = $("#profitable-rate-sub");
+
+      const returnPerTrade = run.trades > 0 ? (run.creditsDelta / run.trades) : 0;
+      if (returnPerTurnEl) {
+        returnPerTurnEl.textContent = formatSigned(run.trueCpt, 2);
+        returnPerTurnEl.style.color = strategyCptColor(run.trueCpt) || "";
+      }
+      if (returnPerTradeEl) {
+        returnPerTradeEl.textContent = formatSigned(returnPerTrade, 1);
+        returnPerTradeEl.style.color = strategyCptColor(returnPerTrade / 50) || "";
+      }
+      if (tradesPer100El) {
+        tradesPer100El.textContent = `${run.tradesPer100.toFixed(2)}`;
+        tradesPer100El.style.color = run.tradesPer100 >= 3 ? "var(--green)" : (run.tradesPer100 >= 1.5 ? "var(--yellow)" : "var(--red)");
+      }
+      if (profitableRateSubEl) {
+        const bots = data.bots || [];
+        let active = 0;
+        let profitable = 0;
+        const activeStates = new Set(["running", "recovering", "blocked"]);
+        for (const b of bots) {
+          const state = String(b.state || "").toLowerCase();
+          if (!activeStates.has(state)) continue;
+          active += 1;
+          if (Number(b.credits_delta || 0) > 0) profitable += 1;
+        }
+        const pct = active > 0 ? ((profitable * 100) / active) : 0;
+        profitableRateSubEl.textContent = `profitable: ${pct.toFixed(1)}% (${profitable}/${active || 0})`;
+      }
+
     const uptimeText = formatUptime(data.uptime_seconds);
     const uptimeEl = $("#uptime");
     if (uptimeEl) uptimeEl.textContent = " | " + uptimeText;
     const connectedForEl = $("#connected-for");
     if (connectedForEl) connectedForEl.textContent = uptimeText;
 
+      const nowS = Date.now() / 1000;
+      let resetRun = false;
+      const totalBotsNow = Number(data.total_bots || 0);
+      if (totalBotsNow === 0) {
+        resetRun = true;
+        activeRunStartTs = null;
+      }
+      if (run.runStart && activeRunStartTs && run.runStart > (activeRunStartTs + 120)) resetRun = true;
+      if (lastRunTotalTurns > 0 && run.turns < (lastRunTotalTurns * 0.25)) resetRun = true;
+      if (lastRunTotalBots > 0 && totalBotsNow < (lastRunTotalBots * 0.25)) resetRun = true;
+      if (resetRun) {
+        runMetricHistory.length = 0;
+        lastRunMetricSampleTs = 0;
+      }
+      if (run.runStart) activeRunStartTs = run.runStart;
+      lastRunTotalTurns = run.turns;
+      lastRunTotalBots = totalBotsNow;
+
+      const runtimeSec = activeRunStartTs ? Math.max(0, nowS - activeRunStartTs) : 0;
+      if (testRuntimeValueEl) testRuntimeValueEl.textContent = formatClockDuration(runtimeSec);
+      if (testRuntimeSinceEl) testRuntimeSinceEl.textContent = activeRunStartTs ? `since ${formatTimeOnly(activeRunStartTs)}` : "since -";
+      if (testRuntimeFillEl) {
+        const pct = Math.max(0, Math.min(100, (runtimeSec / 3600) * 100));
+        testRuntimeFillEl.style.width = `${pct.toFixed(1)}%`;
+      }
+
+      if (runMetricHistory.length < 2) {
+        hydrateRunHistoryFromTimeseries();
+      }
+
+      const shouldSample =
+        run.activeBots > 0
+        && (
+          runMetricHistory.length === 0
+          || (nowS - lastRunMetricSampleTs) >= RUN_TREND_SAMPLE_INTERVAL_S
+        );
+      if (shouldSample) {
+        runMetricHistory.push({
+          ts: nowS,
+          trueCpt: run.trueCpt,
+          tradesPer100: run.tradesPer100,
+          turns: run.turns,
+          netWorth: Number(run.totalNetWorth || 0),
+          liquid: Number(run.totalLiquid || 0),
+        });
+        while (runMetricHistory.length > 240) runMetricHistory.shift();
+        lastRunMetricSampleTs = nowS;
+      }
+      renderRunTrend(runtimeSec, run);
+
       const metrics = computeAggregateMetrics(data);
       const acceptEl = $("#accept-rate");
       const highEl = $("#too-high-rate");
       const lowEl = $("#too-low-rate");
       const noTradeEl = $("#no-trade-120");
-      const strategyEl = $("#strategy-cpt");
       if (acceptEl) acceptEl.textContent = percent(metrics.acceptRate);
       if (highEl) highEl.textContent = percent(metrics.tooHighRate);
       if (lowEl) lowEl.textContent = percent(metrics.tooLowRate);
       if (noTradeEl) noTradeEl.textContent = String(metrics.noTrade120);
-      if (strategyEl) {
-        if (metrics.strategyLines.length) {
-          strategyEl.innerHTML = `<span class="strategy-cpt-lines">${metrics.strategyLines
-            .map((line) => {
-              const cls = line.lowConfidence ? "strategy-cpt-line low-confidence" : "strategy-cpt-line";
-              return `<span class="${cls}" title="${esc(line.text)}">${esc(line.text)}</span>`;
-            })
-            .join("")}</span>`;
-        } else {
-          strategyEl.textContent = "-";
-        }
-      }
+      renderStrategyCpt(metrics.strategyRows);
 
 	    // Throttle (not debounce) table re-render.
 	    // Under high-frequency status broadcasts, a debounce can starve the table
@@ -440,7 +835,7 @@
 
     const tbody = $("#bot-table");
     tbody.innerHTML = bots
-      .map((b) => {
+      .map((b, idx) => {
         const isRunning = b.state === "running";
         const isQueued = b.state === "queued";
 
@@ -516,9 +911,11 @@
         }
         const statusText = statusParts.length ? statusParts.join(" | ") : "-";
         const compactStatus = compactStatusText(`${statusText}${exitInfo ? " " + exitInfo : ""}`);
-        const activityHtml = `<div class="activity-cell" onclick="window._openInspector('${esc(b.bot_id)}','activity')" title="${esc(statusText)}"><span class="activity-primary">${activityPrimary}</span>${compactStatus ? `<span class="activity-secondary">${esc(compactStatus)}</span>` : ""}</div>`;
+        const activityLine2 = compactStatus || "—";
+        const activityHtml = `<div class="activity-cell" onclick="window._openInspector('${esc(b.bot_id)}','activity')" title="${esc(statusText)}"><span class="activity-primary">${activityPrimary}</span><span class="activity-secondary${compactStatus ? "" : " subtle-empty"}">${esc(activityLine2)}</span></div>`;
 
         const turnsDisplay = `${b.turns_executed}`;
+        const tradesDisplay = `${Number(b.trades_executed || 0)}`;
         const updatedDisplay = b.last_action_time ? formatRelativeTime(b.last_action_time) : "-";
 
         // Display "-" for uninitialized numeric fields
@@ -529,31 +926,32 @@
 
         const compact = getStrategyCompact(b);
         const strategyNote = getStrategyNote(b);
+        const strategyLine2 = strategyNote || "—";
         const strategyTitle = strategyNote ? `${compact.full} | ${strategyNote}` : compact.full;
-        const strategyHtml = compact.id === "-"
-          ? "-"
-          : `<div class="strategy-cell" title="${esc(strategyTitle)}">` +
-              `<span class="strategy-chip-row">` +
-                `<span class="chip sid">${esc(compact.id)}</span>` +
-                (compact.mode ? `<span class="chip mode">${esc(compact.mode)}</span>` : "") +
-              `</span>` +
-              (strategyNote ? `<div class="strategy-intent">${esc(strategyNote)}</div>` : "") +
-            `</div>`;
+        const strategyHtml = `<div class="strategy-cell" title="${esc(strategyTitle)}">` +
+            `<span class="strategy-chip-row">` +
+              `<span class="chip sid">${esc(compact.id || "-")}</span>` +
+              (compact.mode ? `<span class="chip mode">${esc(compact.mode)}</span>` : "") +
+            `</span>` +
+            `<div class="strategy-intent${strategyNote ? "" : " subtle-empty"}">${esc(strategyLine2)}</div>` +
+          `</div>`;
 
+        const creditsColor = b.credits >= 0 ? creditColor(b.credits) : "";
         return `<tr>
-	        <td title="${esc(b.bot_id)}">${esc(shortBotId(b.bot_id))}</td>
+	        <td title="${esc(b.bot_id)}">${idx + 1}</td>
 	        <td>${stateHtml}</td>
 	        <td>${activityHtml}</td>
 	        <td>${strategyHtml}</td>
 	        <td class="numeric">${b.sector}</td>
-	        <td class="numeric">${creditsDisplay}</td>
+	        <td class="numeric credit-cell"${creditsColor ? ` style="color:${creditsColor}"` : ""}>${creditsDisplay}</td>
 	        <td class="numeric">${fuelDisplay}</td>
 	        <td class="numeric">${orgDisplay}</td>
 	        <td class="numeric">${equipDisplay}</td>
 	        <td class="numeric">${turnsDisplay}</td>
+	        <td class="numeric">${tradesDisplay}</td>
 	        <td class="timecell">${updatedDisplay}</td>
 	        <td class="actions">
-	          <button class="btn more" onclick="window._openInspector('${esc(b.bot_id)}')" title="Inspect">...</button>
+	          <button type="button" class="btn more" onclick="window._openInspector('${esc(b.bot_id)}')" title="Inspect" aria-label="Inspect bot menu">⋯</button>
         </td>
       </tr>`;
       })
@@ -875,20 +1273,6 @@
     `;
   }
 
-  function renderInspectorTerminalTab(botId) {
-    logContent.innerHTML = `
-      <div class="field">
-        <div class="label">Terminal Control</div>
-        <div class="value">Live spy/hijack stays in the dedicated terminal panel.</div>
-      </div>
-      <div class="field">
-        <button class="btn logs" id="inspector-open-terminal">Open Live Terminal</button>
-      </div>
-    `;
-    const btn = $("#inspector-open-terminal");
-    if (btn) btn.addEventListener("click", () => window._openTerminal(botId));
-  }
-
   async function loadInspectorTab(botId, tab) {
     setInspectorTab(tab);
     if (tab !== "logs") closeLogStream();
@@ -928,8 +1312,10 @@
     }
 
     if (tab === "terminal") {
-      logStatus.textContent = "Terminal";
-      renderInspectorTerminalTab(botId);
+      // Direct handoff to live terminal; no extra click in inspector.
+      closeLogs();
+      window._openTerminal(botId);
+      return;
     }
   }
 
@@ -1109,7 +1495,8 @@
     ws.onopen = () => {
       dot.className = "dot connected";
       connStatus.textContent = "Connected";
-      setInterval(() => {
+      if (swarmPingTimer) clearInterval(swarmPingTimer);
+      swarmPingTimer = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send("ping");
       }, 2000);
     };
@@ -1121,6 +1508,10 @@
     };
 
     ws.onclose = () => {
+      if (swarmPingTimer) {
+        clearInterval(swarmPingTimer);
+        swarmPingTimer = null;
+      }
       dot.className = "dot disconnected";
       connStatus.textContent = "Disconnected - reconnecting...";
       setTimeout(connect, 2000);
@@ -1176,6 +1567,7 @@
   const poolKpiLeased = $("#pool-kpi-leased");
   const poolKpiAvailable = $("#pool-kpi-available");
   const poolKpiCooldown = $("#pool-kpi-cooldown");
+  const poolKpiStale = $("#pool-kpi-stale");
   const poolKpiIdentity = $("#pool-kpi-identity");
   const poolRate = $("#pool-rate");
 
@@ -1276,23 +1668,27 @@
       const data = await resp.json();
       const pool = data.pool || {};
       const identities = data.identities || {};
-      const accounts = Array.isArray(pool.accounts) ? pool.accounts.slice(0, 12) : [];
+      const allAccounts = Array.isArray(pool.accounts) ? pool.accounts : [];
+      const accounts = allAccounts.slice(0, 30);
       const total = Number(pool.accounts_total || 0);
       const leased = Number(pool.leased || 0);
+      const leasedActive = Number(pool.leased_active ?? leased);
+      const leasedStale = Number(pool.leased_stale ?? Math.max(0, leased - leasedActive));
       const cooldown = Number(pool.cooldown || 0);
       const available = Number(pool.available || 0);
       const identityTotal = Number(identities.total || 0);
       const identityActive = Number(identities.active || 0);
 
       poolSummary.textContent =
-        `${total} | leased ${leased} | avail ${available} | cool ${cooldown} | id ${identityActive}/${identityTotal}`;
+        `accounts ${total} | leased ${leasedActive}/${leased} | stale ${leasedStale} | available ${available} | cooldown ${cooldown} | identities ${identityActive}/${identityTotal}`;
 
-      if (poolKpiLeased) poolKpiLeased.textContent = `${leased}/${total}`;
+      if (poolKpiLeased) poolKpiLeased.textContent = `${leasedActive}/${leased}`;
       if (poolKpiAvailable) poolKpiAvailable.textContent = String(available);
       if (poolKpiCooldown) poolKpiCooldown.textContent = String(cooldown);
+      if (poolKpiStale) poolKpiStale.textContent = String(leasedStale);
       if (poolKpiIdentity) poolKpiIdentity.textContent = `${identityActive}/${identityTotal}`;
 
-      const totalUses = accounts.reduce((sum, a) => sum + Number(a.use_count || 0), 0);
+      const totalUses = allAccounts.reduce((sum, a) => sum + Number(a.use_count || 0), 0);
       const now = Date.now() / 1000;
       let leasesPerMin = 0;
       if (poolLastSample && now > poolLastSample.time) {
@@ -1417,6 +1813,8 @@
 
 	  poll();
 	  connect();
+  if (swarmPollTimer) clearInterval(swarmPollTimer);
+  swarmPollTimer = setInterval(poll, 3000);
 	  installTableInteractionGuards();
     refreshAccountPool();
     setInterval(refreshAccountPool, 10000);

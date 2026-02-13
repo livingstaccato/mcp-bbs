@@ -330,3 +330,50 @@ class SectorKnowledge:
             Set of sector numbers that have been scanned
         """
         return {sector for sector, info in self._sectors.items() if info.last_scanned is not None}
+
+    def clear_port_intel(self, *, clear_has_port: bool = True) -> int:
+        """Clear cached port market/pricing intelligence across known sectors.
+
+        This is used when a server/universe reset invalidates cached port data.
+        Warps and non-port metadata are preserved.
+
+        Args:
+            clear_has_port: If True, also clear has_port/port_class assertions.
+
+        Returns:
+            Number of sectors whose cached port intel was changed.
+        """
+        changed = 0
+        for info in self._sectors.values():
+            before = (
+                bool(info.has_port),
+                str(info.port_class or ""),
+                len(info.port_status or {}),
+                len(info.port_prices or {}),
+                len(info.port_trading_units or {}),
+                len(info.port_pct_max or {}),
+                len(info.port_market_ts or {}),
+            )
+            if clear_has_port:
+                info.has_port = False
+                info.port_class = None
+            info.port_status = {}
+            info.port_prices = {}
+            info.port_prices_ts = {}
+            info.port_trading_units = {}
+            info.port_pct_max = {}
+            info.port_market_ts = {}
+            after = (
+                bool(info.has_port),
+                str(info.port_class or ""),
+                len(info.port_status or {}),
+                len(info.port_prices or {}),
+                len(info.port_trading_units or {}),
+                len(info.port_pct_max or {}),
+                len(info.port_market_ts or {}),
+            )
+            if before != after:
+                changed += 1
+        if changed > 0:
+            self._save_cache()
+        return changed

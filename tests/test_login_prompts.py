@@ -164,6 +164,13 @@ You have chosen to name your ship:
 Is what you want?"""
         assert _get_actual_prompt(screen) == "name_confirm"
 
+    def test_name_confirm_with_echoed_no(self) -> None:
+        """Name confirmation should remain active even if previous answer is echoed."""
+        screen = """
+Commander Cdx1de3f1 is attacking with 10,000 fighters!
+Cdx1de3f1 is what you want? (Y/N) No"""
+        assert _get_actual_prompt(screen) == "name_confirm"
+
     def test_ship_name_prompt(self) -> None:
         """Test detection of ship naming prompt."""
         screen = """
@@ -181,6 +188,16 @@ Congratulations! You are now a trader.
 What do you want to name your ship?
 testbot's S"""
         # Should still detect ship_name_prompt by checking last_lines
+        assert _get_actual_prompt(screen) == "ship_name_prompt"
+
+    def test_ship_name_prompt_with_stale_name_confirm_text(self) -> None:
+        """Ship naming prompt should win when stale confirm text remains in buffer."""
+        screen = """
+Your ship is being initialized.
+What do you want to name your ship? (30 letters)
+Bot Ship
+Bot Ship is what you want? No
+What do you want to name your ship? (30 letters)"""
         assert _get_actual_prompt(screen) == "ship_name_prompt"
 
     def test_any_key_prompt(self) -> None:

@@ -134,6 +134,10 @@ async def timeseries_summary(window_minutes: int = 120):
 async def account_pool_summary():
     """Get pooled account lease/cooldown state + identity lifecycle summary."""
     pool = _account_pool_store.summary()
+    active_bot_ids: set[str] = set()
+    if _manager is not None:
+        active_states = {"running", "recovering", "blocked", "disconnected", "queued"}
+        active_bot_ids = {bid for bid, status in _manager.bots.items() if status.state in active_states}
     redacted_accounts = []
     for account in pool.get("accounts", []):
         lease = account.get("lease") or None
@@ -161,6 +165,16 @@ async def account_pool_summary():
             }
         )
 
+    leased_total = int(pool.get("leased") or 0)
+    leased_active = 0
+    if active_bot_ids:
+        for account in redacted_accounts:
+            lease = account.get("lease") or {}
+            bot_id = str(lease.get("bot_id") or "")
+            if bot_id and bot_id in active_bot_ids:
+                leased_active += 1
+    leased_stale = max(0, leased_total - leased_active)
+
     identity_records = _identity_store.list_records()
     by_source: dict[str, int] = {}
     active_sessions = 0
@@ -173,7 +187,9 @@ async def account_pool_summary():
     return {
         "pool": {
             "accounts_total": int(pool.get("accounts_total") or 0),
-            "leased": int(pool.get("leased") or 0),
+            "leased": leased_total,
+            "leased_active": leased_active,
+            "leased_stale": leased_stale,
             "cooldown": int(pool.get("cooldown") or 0),
             "available": int(pool.get("available") or 0),
             "accounts": redacted_accounts,
@@ -295,6 +311,8 @@ async def update_status(bot_id: str, update: dict):
         bot.cargo_equipment = update["cargo_equipment"]
     if "cargo_estimated_value" in update:
         bot.cargo_estimated_value = int(update["cargo_estimated_value"])
+    if "bank_balance" in update:
+        bot.bank_balance = int(update["bank_balance"])
     if "net_worth_estimate" in update:
         bot.net_worth_estimate = int(update["net_worth_estimate"])
     if "error_message" in update:

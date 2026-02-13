@@ -65,8 +65,8 @@ Benefits:
 ### Reference Files
 
 - `.bbs-knowledge/games/tw2002/prompts.json` - 13 pattern definitions
-- `src/mcp_bbs/learning/detector.py` - PromptDetector implementation
-- `src/mcp_bbs/app.py` - MCP tools
+- `src/bbsbot/learning/detector.py` - PromptDetector implementation
+- `src/bbsbot/app.py` - MCP tools
 
 ## 13 Prompt Patterns to Test
 
@@ -421,7 +421,7 @@ class PredictiveBot(IntelligentBot):
 - Pattern definitions: `.bbs-knowledge/games/tw2002/prompts.json`
 - Saved screens: `.bbs-knowledge/games/tw2002/screens/`
 - Test results: `.provide/intelligent-bot-*.json`
-- Detector code: `src/mcp_bbs/learning/detector.py`
+- Detector code: `src/bbsbot/learning/detector.py`
 
 ## Contributing
 

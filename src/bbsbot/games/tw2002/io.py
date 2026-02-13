@@ -130,19 +130,29 @@ async def wait_and_respond(
             ]
         ):
             error_type = _detect_error_in_screen(screen)
-            if error_type:
+            if error_type and error_type != "invalid_password":
                 # "invalid_password" is commonly shown inline on the password prompt
                 # ("Invalid password, try again"). Raising here prevents the login
                 # flow from simply re-sending the configured password and recovering.
                 #
                 # Treat it as a recoverable condition; if it's truly wrong, the
                 # loop detector will fire and the worker will classify it as auth.
-                if error_type != "invalid_password":
-                    bot.error_count += 1
-                    raise RuntimeError(f"Error detected: {error_type}")
+                bot.error_count += 1
+                raise RuntimeError(f"Error detected: {error_type}")
 
         # Check for loop (skip for prompts expected to repeat)
-        loop_ignore = {"prompt.pause_space_or_enter", "prompt.pause_simple", "prompt.corporate_listings"}
+        loop_ignore = {
+            "prompt.pause_space_or_enter",
+            "prompt.pause_simple",
+            "prompt.corporate_listings",
+            # Stable command prompts can legitimately repeat while we poll for
+            # the next actionable state; treat them as non-looping.
+            "prompt.sector_command",
+            "prompt.command_generic",
+            "prompt.planet_command",
+            "prompt.citadel_command",
+            "prompt.port_menu",
+        }
         if ignore_loop_for:
             loop_ignore = loop_ignore | set(ignore_loop_for)
         if prompt_id not in loop_ignore and _check_for_loop(bot, prompt_id):
@@ -179,8 +189,8 @@ async def wait_and_respond(
             result["screen"],
             result["kv_data"],
         )
-    except TimeoutError:
-        raise TimeoutError(f"No prompt detected within {timeout_ms}ms")
+    except TimeoutError as err:
+        raise TimeoutError(f"No prompt detected within {timeout_ms}ms") from err
 
 
 async def send_input(bot, keys: str, input_type: str | None, wait_after: float = 0.2):

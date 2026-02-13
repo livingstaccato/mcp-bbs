@@ -85,3 +85,56 @@ def test_wander_prefers_seller_ports_when_no_cargo() -> None:
 
     target = strat._pick_wander_target(state)
     assert target == 30
+
+
+def test_opportunistic_local_sell_includes_action_and_quantity() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = OpportunisticStrategy(cfg, knowledge)
+
+    state = GameState(
+        context="sector_command",
+        sector=7,
+        credits=300,
+        has_port=True,
+        port_class="BSS",
+        warps=[9],
+        cargo_fuel_ore=4,
+        cargo_organics=0,
+        cargo_equipment=0,
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.TRADE
+    assert params.get("action") == "sell"
+    assert int(params.get("max_quantity", 0)) == 4
+
+
+def test_opportunistic_local_buy_includes_action_and_quantity() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = OpportunisticStrategy(cfg, knowledge)
+
+    # Current port sells fuel ore, nearby sector buys it.
+    knowledge._sectors[10] = SectorInfo(has_port=True, port_class="SSS")
+    knowledge._sectors[11] = SectorInfo(has_port=True, port_class="BSS")
+    knowledge.find_path = lambda src, dst, max_hops=None: [src, dst] if dst == 11 else None  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=10,
+        credits=700,
+        has_port=True,
+        port_class="SSS",
+        holds_total=20,
+        holds_free=None,
+        warps=[11],
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.TRADE
+    assert params.get("action") == "buy"
+    assert int(params.get("max_quantity", 0)) >= 1

@@ -14,7 +14,9 @@ The TWGS login flow is complex:
 """
 
 import asyncio
+import contextlib
 import os
+import random
 from pathlib import Path
 
 from bbsbot.games.tw2002.io import send_input, send_masked_password, wait_and_respond
@@ -24,6 +26,41 @@ from bbsbot.games.tw2002.parsing import _extract_game_options, _select_trade_war
 
 class GameFullError(RuntimeError):
     """Raised when the game rejects new-character creation due to capacity."""
+
+
+_SHIP_NAME_WORDS_A = [
+    "Iron",
+    "Solar",
+    "Crimson",
+    "Silent",
+    "Nova",
+    "Rapid",
+    "Lucky",
+    "Stellar",
+    "Shadow",
+    "Rogue",
+]
+_SHIP_NAME_WORDS_B = [
+    "Falcon",
+    "Runner",
+    "Comet",
+    "Merchant",
+    "Voyager",
+    "Drifter",
+    "Pioneer",
+    "Nomad",
+    "Freighter",
+    "Sparrow",
+]
+
+
+def _random_ship_name() -> str:
+    """Generate a short random-word ship name (<= 30 chars)."""
+    for _ in range(12):
+        name = f"{random.choice(_SHIP_NAME_WORDS_A)} {random.choice(_SHIP_NAME_WORDS_B)}"
+        if len(name) <= 30:
+            return name
+    return "Nova Runner"
 
 
 def _is_game_full_screen(screen: str) -> bool:
@@ -89,6 +126,42 @@ def _maybe_patch_local_twcfig_for_new_players(game_letter: str) -> bool:
         return False
 
 
+async def _prime_stats_from_quick_command(bot) -> None:
+    """Best-effort immediate stat refresh once command prompt is available.
+
+    Sends "/" and reparses sector/credits so reused characters report current
+    bankroll promptly instead of waiting for later orientation cycles.
+    """
+    try:
+        send_result = bot.session.send("/\r")
+        if asyncio.iscoroutine(send_result):
+            await send_result
+        await asyncio.sleep(0.35)
+        screen_result = bot.session.get_screen()
+        if asyncio.iscoroutine(screen_result):
+            screen_result = await screen_result
+        screen = screen_result or ""
+    except Exception:
+        return
+    try:
+        from bbsbot.games.tw2002.parsing import (
+            _parse_credits_from_screen,
+            _parse_sector_from_screen,
+            extract_semantic_kv,
+        )
+
+        bot.current_sector = _parse_sector_from_screen(bot, screen)
+        bot.current_credits = _parse_credits_from_screen(bot, screen)
+        sem = extract_semantic_kv(screen)
+        if sem and hasattr(bot, "last_semantic_data"):
+            try:
+                bot.last_semantic_data = sem
+            except Exception:
+                pass
+    except Exception:
+        return
+
+
 def _check_kv_validation(kv_data: dict | None, prompt_id: str) -> str:
     """Check if extracted K/V data passed validation.
 
@@ -130,7 +203,7 @@ def _get_actual_prompt(screen: str) -> str:
     Returns a prompt identifier based on last-line content, or empty string if unknown.
     """
     # Get the last 5 non-empty lines
-    lines = [l.strip() for l in screen.split("\n") if l.strip()]
+    lines = [line.strip() for line in screen.split("\n") if line.strip()]
     if not lines:
         return ""
 
@@ -167,13 +240,10 @@ def _get_actual_prompt(screen: str) -> str:
     if "alias" in last_line and ("want to use" in last_line or "do you want" in last_line):
         return "alias_prompt"
 
-    # Name/alias confirmation prompt - check EARLY.
-    # Guard against stale scrollback: after we've answered, TWGS often echoes "Yes"/"No"
-    # on the same line, which should NOT be treated as an active prompt.
-    for line in lines[-3:]:
-        ll = line.lower()
-        if "is what you want?" in ll and "yes" not in ll and "no" not in ll:
-            return "name_confirm"
+    # Name/alias confirmation prompt.
+    # This can include echoed "Yes/No" text.
+    if "is what you want?" in last_line:
+        return "name_confirm"
 
     # Ship/planet naming prompts (new character creation).
     # IMPORTANT: these screens can retain stale "(N)ew Name or (B)BS Name" text
@@ -298,7 +368,7 @@ async def login_sequence(
             print("⚠ Timeout in Phase 1, checking screen content...")
             try:
                 timeout_screen = bot.session.snapshot().get("screen", "")
-                lines = [l.strip() for l in timeout_screen.split("\n") if l.strip()]
+                lines = [line.strip() for line in timeout_screen.split("\n") if line.strip()]
                 print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
                 for line in lines[-10:]:
                     print(f"        | {line[:75]}")
@@ -419,6 +489,8 @@ async def login_sequence(
 
             bot.current_sector = _parse_sector_from_screen(bot, screen)
             bot.current_credits = _parse_credits_from_screen(bot, screen)
+            if int(bot.current_credits or 0) <= 0:
+                await _prime_stats_from_quick_command(bot)
             print(
                 f"\n✓ Login complete (existing character) - Sector {bot.current_sector}, "
                 f"Credits: {bot.current_credits:,}"
@@ -500,6 +572,7 @@ async def login_sequence(
 
     # Increased loop limit to handle slow game loading (can take 10+ seconds after pressing T)
     reached_game = False
+    pending_ship_name: str | None = None
     for step_in_phase3 in range(200):
         step += 1
         try:
@@ -512,10 +585,16 @@ async def login_sequence(
                 "prompt.planet_name",
                 "prompt.menu_selection",
                 "prompt.corporate_listings",
+                "prompt.twgs_real_name",
+                "prompt.twgs_gender",
+                "prompt.twgs_ship_selection",
+                "prompt.twgs_begin_adventure",
                 # Password prompts can repeat (set + verify, or retries on invalid).
                 "prompt.character_password",
                 "prompt.game_password",
                 "prompt.private_game_password",
+                # Character creation/name confirmations can legitimately cycle.
+                "prompt.yes_no",
             }
             input_type, prompt_id, screen, phase3_kv_data = await wait_and_respond(
                 bot, timeout_ms=90000, ignore_loop_for=ignore_loop
@@ -530,7 +609,7 @@ async def login_sequence(
             # Print screen on timeout for debugging
             try:
                 timeout_screen = bot.session.snapshot().get("screen", "")
-                lines = [l.strip() for l in timeout_screen.split("\n") if l.strip()]
+                lines = [line.strip() for line in timeout_screen.split("\n") if line.strip()]
                 print(f"      [TIMEOUT DEBUG] Screen ({len(lines)} lines), last 10:")
                 for line in lines[-10:]:
                     print(f"        | {line[:75]}")
@@ -554,15 +633,19 @@ async def login_sequence(
             # Only force "ship_name_prompt" when the heuristic is clearly wrong.
             if actual_prompt in ("name_selection", "alias_prompt", "alias_input", ""):
                 actual_prompt = "ship_name_prompt"
-        elif prompt_id == "prompt.planet_name":
-            if actual_prompt in ("name_selection", "alias_prompt", "alias_input", ""):
-                actual_prompt = "planet_name_prompt"
+        elif prompt_id == "prompt.planet_name" and actual_prompt in (
+            "name_selection",
+            "alias_prompt",
+            "alias_input",
+            "",
+        ):
+            actual_prompt = "planet_name_prompt"
 
         print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}", flush=True)
 
         # Debug: Show screen content periodically (more frequently now)
         if step_in_phase3 % 5 == 0 or step_in_phase3 < 10 or step_in_phase3 >= 28:
-            lines = [l.strip() for l in screen.split("\n") if l.strip()]
+            lines = [line.strip() for line in screen.split("\n") if line.strip()]
             print(f"      [DEBUG] Screen ({len(lines)} lines), last 8:")
             for line in lines[-8:]:
                 print(f"        | {line[:75]}")
@@ -587,11 +670,9 @@ async def login_sequence(
                 capacity_retries,
             )
             await asyncio.sleep(sleep_s)
-            try:
+            with contextlib.suppress(Exception):
                 # Re-try selecting the configured game letter.
                 await bot.session.send(game_letter)
-            except Exception:
-                pass
             continue
 
         if actual_prompt == "command_prompt" or actual_prompt == "planet_prompt":
@@ -661,10 +742,20 @@ async def login_sequence(
             await send_input(bot, alias, "multi_key")
 
         elif actual_prompt == "ship_name_prompt":
-            # Use simple ship name without special characters
-            ship_name = "Bot Ship"
+            ship_name = pending_ship_name or _random_ship_name()
             print(f"      → Ship naming prompt, entering: {ship_name}")
             await send_input(bot, ship_name, "multi_key")
+            pending_ship_name = ship_name
+            # Some servers immediately transition to a confirm prompt that can be
+            # missed by idle-gated polling. Confirm once proactively when visible.
+            with contextlib.suppress(Exception):
+                await asyncio.sleep(0.15)
+                s2 = bot.session.snapshot().get("screen", "")
+                if _get_actual_prompt(s2) == "name_confirm":
+                    print("      → Immediate ship-name confirmation, answering Y")
+                    await bot.session.send("Y")
+                    pending_ship_name = None
+                    await asyncio.sleep(0.2)
 
         elif actual_prompt == "planet_name_prompt":
             planet_name = f"{username}'s World"
@@ -674,6 +765,7 @@ async def login_sequence(
         elif actual_prompt == "name_confirm":
             print("      → Confirming name/alias: Y")
             await bot.session.send("Y")
+            pending_ship_name = None
             await asyncio.sleep(0.3)
 
         elif actual_prompt == "password_prompt":
@@ -775,6 +867,9 @@ async def login_sequence(
                 print("      → Y/N new-character prompt, answering Y")
                 _maybe_patch_local_twcfig_for_new_players(game_letter)
                 await bot.session.send("Y")
+            elif "is what you want?" in screen_lower:
+                print("      → Name confirmation prompt, answering Y")
+                await bot.session.send("Y")
             else:
                 print("      → Generic Y/N prompt, answering N")
                 await bot.session.send("N")
@@ -812,6 +907,24 @@ async def login_sequence(
             print("      → Begin adventure prompt, pressing Enter")
             await bot.session.send("\r")
             await asyncio.sleep(0.3)
+
+        elif "twgs_ship_selection" in prompt_id:
+            print("      → Ship/sector selection prompt, choosing 1")
+            await send_input(bot, "1", input_type)
+
+        elif "twgs_gender" in prompt_id:
+            print("      → Gender prompt, sending M+Enter")
+            await bot.session.send("M\r")
+            await asyncio.sleep(0.3)
+
+        elif "twgs_real_name" in prompt_id:
+            if "enter for none" in screen_lower:
+                print("      → Real name prompt (ENTER for none), sending Enter")
+                await bot.session.send("\r")
+                await asyncio.sleep(0.3)
+            else:
+                print(f"      → Real name prompt, sending: {username}")
+                await send_input(bot, username, input_type)
 
         elif "what_is_your_name" in prompt_id:
             print(f"      → Entering character name (pattern): {username}")
@@ -874,6 +987,8 @@ async def login_sequence(
     bot.current_sector = _parse_sector_from_screen(bot, screen)
     print("  [DEBUG] Parsing credits...", flush=True)
     bot.current_credits = _parse_credits_from_screen(bot, screen)
+    if int(bot.current_credits or 0) <= 0:
+        await _prime_stats_from_quick_command(bot)
 
     # Note: Bots login on planet command prompts where credits aren't visible.
     # The orient() function (called on first trading turn) will establish accurate state

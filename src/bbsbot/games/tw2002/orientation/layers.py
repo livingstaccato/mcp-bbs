@@ -106,9 +106,13 @@ async def _reach_safe_state(
             consecutive_blank += 1
             _set_orient_progress(bot, attempt + 1, max_attempts, "blank_wake")
             # After 3 blank screens, check if connection is dead
-            if consecutive_blank >= 3 and hasattr(bot, "session") and hasattr(bot.session, "is_connected"):
-                if not bot.session.is_connected():
-                    raise ConnectionError("Session disconnected during orientation (blank screen)")
+            if (
+                consecutive_blank >= 3
+                and hasattr(bot, "session")
+                and hasattr(bot.session, "is_connected")
+                and not bot.session.is_connected()
+            ):
+                raise ConnectionError("Session disconnected during orientation (blank screen)")
             # SAFE keys only - no Enter/CR which could confirm trades or trigger warps
             # NUL first: true no-op but proves TCP socket is alive
             wake_keys = ["\x00", " ", "\x1b", "?", " ", "\x7f"]
@@ -141,11 +145,17 @@ async def _reach_safe_state(
             await asyncio.sleep(0.8)  # Longer wait for screen to update (was 0.15s)
             continue
 
-        if context in ("menu", "port_menu"):
-            # CRITICAL FIX: If we have a stored game letter, ALWAYS try to re-enter game first
-            # This handles the case where screen buffer doesn't show full menu text
+        if context == "port_menu":
+            # Port menu is inside the game. Re-sending the game letter here can
+            # trigger unintended actions; always back out with Q.
+            print("  [Orient] At port menu, sending Q to return to sector command...")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.4)
+            continue
+
+        if context == "menu":
+            # True game-selection menu: if we have a stored game letter, re-enter.
             if hasattr(bot, "last_game_letter") and bot.last_game_letter:
-                # Track menu re-entries to detect if bot is being ejected
                 bot.menu_reentry_count += 1
                 bot.last_menu_reentry_time = time()
 
@@ -157,26 +167,21 @@ async def _reach_safe_state(
                         attempts=attempt + 1,
                     )
 
-                # Try to re-enter the game using stored game letter
                 print(f"  [Orient] At menu (re-entry #{bot.menu_reentry_count}), selecting game {bot.last_game_letter}")
                 await bot.session.send(bot.last_game_letter + "\r")
                 await asyncio.sleep(1.0)
                 continue
 
-            # No game letter stored - check if this is corporate listings
-            elif context == "corporate_listings":
-                # Corporate Listings menu - send Q to quit
-                print("  [Orient] At Corporate Listings menu, sending Q to exit...")
-                await bot.session.send("Q")
-                await asyncio.sleep(0.3)
-                continue
+            print("  [Orient] At menu without stored game letter, sending Q to back out...")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.2)
+            continue
 
-            # Generic menu without game letter - try Q to exit
-            else:
-                print(f"  [Orient] In {context}, sending Q to back out...")
-                await bot.session.send("Q")
-                await asyncio.sleep(0.2)
-                continue
+        if context == "corporate_listings":
+            print("  [Orient] At Corporate Listings menu, sending Q to exit...")
+            await bot.session.send("Q")
+            await asyncio.sleep(0.3)
+            continue
 
         # Unknown or unrecognized - try gentle escape
         if attempt < len(gentle_keys):
@@ -271,7 +276,6 @@ async def _gather_state(
 
     try:
         bot_semantic_before = getattr(bot, "last_semantic_data", {}) or {}
-        stats_refreshed = bool(getattr(bot, "_stats_refreshed", False))
         stats_refresh_attempts = int(getattr(bot, "_stats_refresh_attempts", 0))
         last_stats_refresh_ts = float(getattr(bot, "_last_stats_refresh_ts", 0.0))
 

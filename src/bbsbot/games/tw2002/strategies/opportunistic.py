@@ -99,6 +99,7 @@ class OpportunisticStrategy(TradingStrategy):
             if state.has_port and state.context == "sector_command" and state.port_class:
                 sell_here = self._choose_sell_commodity_here(state, cargo)
                 if sell_here:
+                    qty = int(cargo.get(sell_here, 0) or 0)
                     opp = TradeOpportunity(
                         buy_sector=0,
                         sell_sector=state.sector or 0,
@@ -107,7 +108,11 @@ class OpportunisticStrategy(TradingStrategy):
                         distance=0,
                         confidence=0.8,
                     )
-                    return TradeAction.TRADE, {"opportunity": opp}
+                    return TradeAction.TRADE, {
+                        "opportunity": opp,
+                        "action": "sell",
+                        "max_quantity": max(1, qty),
+                    }
 
             # Otherwise, move toward the closest known port that buys one of our cargo commodities.
             target = self._find_best_sell_target(state, cargo)
@@ -130,7 +135,13 @@ class OpportunisticStrategy(TradingStrategy):
             if opportunities:
                 best = opportunities[0]
                 if best.buy_sector == (state.sector or best.buy_sector):
-                    return TradeAction.TRADE, {"opportunity": best}
+                    qty = self._recommended_buy_qty(state, best.commodity)
+                    if qty > 0:
+                        return TradeAction.TRADE, {"opportunity": best, "action": "buy", "max_quantity": qty}
+                if best.sell_sector == (state.sector or best.sell_sector):
+                    qty = int(cargo.get(best.commodity, 0) or 0)
+                    if qty > 0:
+                        return TradeAction.TRADE, {"opportunity": best, "action": "sell", "max_quantity": qty}
                 # Otherwise move toward the opportunity sector.
                 if best.buy_sector and state.sector and best.buy_sector in (state.warps or []):
                     return TradeAction.MOVE, {"target_sector": best.buy_sector, "path": [state.sector, best.buy_sector]}
@@ -276,6 +287,54 @@ class OpportunisticStrategy(TradingStrategy):
             "organics": int(state.cargo_organics or 0),
             "equipment": int(state.cargo_equipment or 0),
         }
+
+    def _effective_holds_free(self, state: GameState) -> int:
+        if state.holds_free is not None:
+            return max(0, int(state.holds_free))
+        cargo = self._get_cargo(state)
+        used = int(cargo["fuel_ore"]) + int(cargo["organics"]) + int(cargo["equipment"])
+        if state.holds_total is not None:
+            return max(0, int(state.holds_total) - used)
+        return max(1, 20 - used) if used > 0 else 6
+
+    def _recommended_buy_qty(self, state: GameState, commodity: str) -> int:
+        """Size opportunistic buys to improve throughput while preserving bankroll."""
+        credits = int(state.credits or 0)
+        holds_free = self._effective_holds_free(state)
+        if credits <= 0 or holds_free <= 0:
+            return 0
+
+        if self.policy == "conservative":
+            qty_cap = 3
+            reserve_ratio = 0.30
+        elif self.policy == "aggressive":
+            qty_cap = 10
+            reserve_ratio = 0.12
+        else:
+            qty_cap = 6
+            reserve_ratio = 0.20
+
+        quote: int | None = None
+        info = self.knowledge.get_sector_info(int(state.sector or 0)) if state.sector else None
+        try:
+            if info:
+                raw = ((info.port_prices or {}).get(commodity) or {}).get("sell")
+                if raw is not None:
+                    quote = int(raw)
+        except Exception:
+            quote = None
+
+        qty = min(holds_free, qty_cap)
+        if quote and quote > 0:
+            reserve = max(80, int(credits * reserve_ratio))
+            spend_cap = max(0, credits - reserve)
+            affordable = int(spend_cap // quote)
+            qty = min(qty, affordable)
+        else:
+            # Unknown quote: keep probe size modest but not single-unit only.
+            qty = min(qty, 3 if credits < 1_000 else 5)
+
+        return max(1, int(qty)) if qty > 0 else 0
 
     def _choose_sell_commodity_here(self, state: GameState, cargo: dict[str, int]) -> str | None:
         """If the current port buys something we have onboard, sell that first."""

@@ -365,3 +365,28 @@ class TestSectorKnowledge:
         knowledge._sectors[2] = SectorInfo(warps=[1])
 
         assert knowledge.known_sector_count() == 2
+
+    def test_clear_port_intel_preserves_warps_and_clears_market_data(self) -> None:
+        """Clearing stale market intel should keep topology but drop port assumptions."""
+        knowledge = SectorKnowledge()
+        knowledge._sectors[77] = SectorInfo(
+            warps=[1, 2, 3],
+            has_port=True,
+            port_class="BBS",
+            port_prices={"fuel_ore": {"buy": 45, "sell": 38}},
+            port_status={"fuel_ore": "buying"},
+            port_trading_units={"fuel_ore": 1200},
+            port_pct_max={"fuel_ore": 87},
+            port_market_ts={"fuel_ore": 123.0},
+        )
+
+        changed = knowledge.clear_port_intel(clear_has_port=True)
+        assert changed == 1
+        info = knowledge.get_sector_info(77)
+        assert info is not None
+        assert info.warps == [1, 2, 3]
+        assert info.has_port is False
+        assert info.port_class is None
+        assert info.port_prices == {}
+        assert info.port_status == {}
+        assert info.port_trading_units == {}

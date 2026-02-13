@@ -242,6 +242,9 @@ def test_account_pool_endpoint_redacts_passwords_and_summarizes_identities(tmp_p
 
     assert data["pool"]["accounts_total"] == 1
     assert data["pool"]["leased"] == 1
+    assert "leased_active" in data["pool"]
+    assert "leased_stale" in data["pool"]
+    assert data["pool"]["leased_active"] + data["pool"]["leased_stale"] == data["pool"]["leased"]
     assert data["identities"]["total"] >= 1
     first = data["pool"]["accounts"][0]
     assert first["username"] == "pilot_pool"

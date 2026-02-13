@@ -54,6 +54,22 @@ You have 2,223 credits and 18 empty cargo holds.
     assert data["credits"] == 2223
 
 
+def test_extract_semantic_kv_parses_total_holds_cargo_assignments_correctly() -> None:
+    screen = """
+Turns left       : 65,381
+Total Holds      : 20 - Organics=2 Empty=18
+You have 12 credits and 18 empty cargo holds.
+Command [TL=00:00:00]:[181] (?=Help)? :
+"""
+    data = extract_semantic_kv(screen)
+
+    assert data["turns_left"] == 65381
+    assert data["holds_total"] == 20
+    assert data["holds_free"] == 18
+    assert data["cargo_organics"] == 2
+    assert data["credits"] == 12
+
+
 def test_extract_semantic_kv_uses_owned_fighters_not_price() -> None:
     screen = """
 Commerce report for: 02:09:47 PM Mon Feb 09, 2054

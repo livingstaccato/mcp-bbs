@@ -294,8 +294,13 @@ class TradingConfig(BaseModel):
     class DynamicPolicyConfig(BaseModel):
         """Thresholds for dynamic policy switching."""
 
-        conservative_under_credits: int = 5_000
-        aggressive_over_credits: int = 50_000
+        # Keep bots in balanced mode longer; early conservative downshifts
+        # reduce trade cadence and hurt recovery after small drawdowns.
+        conservative_under_credits: int = 180
+        aggressive_over_credits: int = 20_000
+        # Keep a deliberate spread across risk lanes in the mid-band so swarms
+        # don't collapse to one policy and lose exploration diversity.
+        spread_enabled: bool = True
 
         model_config = ConfigDict(extra="ignore")
 
@@ -316,12 +321,27 @@ class TradingConfig(BaseModel):
 
     # Anti-waste guardrail: if a bot burns turns without enough trades, force a
     # profit-first strategy/mode to recover.
-    no_trade_guard_turns: int = 60
+    no_trade_guard_turns: int = 45
     # Also trigger guard if too many turns pass since the last completed trade.
-    no_trade_guard_stale_turns: int = 60
+    no_trade_guard_stale_turns: int = 45
     no_trade_guard_min_trades: int = 1
     no_trade_guard_strategy: Literal["profitable_pairs", "opportunistic"] = "profitable_pairs"
     no_trade_guard_mode: Literal["conservative", "balanced", "aggressive"] = "balanced"
+    # Adaptive guard behavior:
+    # - relax guard while profitable/actively trading
+    # - tighten guard while unprofitable/stalled
+    no_trade_guard_dynamic: bool = True
+    no_trade_guard_dynamic_warmup_turns: int = 12
+    no_trade_guard_turns_min: int = 24
+    no_trade_guard_turns_max: int = 180
+    no_trade_guard_stale_turns_min: int = 24
+    no_trade_guard_stale_turns_max: int = 240
+    no_trade_guard_stale_disable_after_trades: int = 5
+    no_trade_guard_stale_resume_turns: int = 180
+    trade_stall_reroute_streak: int = 2
+    # Force early anti-stall behavior so fresh bots execute at least one trade
+    # before long explore-only runs can develop.
+    bootstrap_trade_turns: int = 12
 
     model_config = ConfigDict(extra="ignore")
 

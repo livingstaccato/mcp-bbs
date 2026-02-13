@@ -45,6 +45,37 @@ def test_low_credit_min_profit_gate_is_relaxed() -> None:
     assert min_ppt <= 5
 
 
+def test_recommended_buy_qty_uses_holds_total_when_holds_free_missing() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    buy_info = SectorInfo(has_port=True, port_class="SSS")
+    buy_info.port_prices = {"fuel_ore": {"sell": 50}}
+    buy_info.port_trading_units = {"fuel_ore": 500}
+    sell_info = SectorInfo(has_port=True, port_class="BSS")
+    sell_info.port_prices = {"fuel_ore": {"buy": 80}}
+    sell_info.port_trading_units = {"fuel_ore": 500}
+    knowledge._sectors[2] = buy_info
+    knowledge._sectors[3] = sell_info
+
+    from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
+    pair = PortPair(buy_sector=2, sell_sector=3, commodity="fuel_ore", distance=1, path=[2, 3], estimated_profit=0)
+    state = GameState(
+        context="sector_command",
+        sector=2,
+        credits=600,
+        holds_total=20,
+        holds_free=None,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+    )
+    qty = strat._recommended_buy_qty(state, pair)
+    assert qty >= 3
+
+
 def test_select_best_pair_scans_beyond_first_twenty_candidates() -> None:
     cfg = BotConfig()
     knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
@@ -102,6 +133,91 @@ def test_known_unprofitable_pair_is_skipped() -> None:
         knowledge.find_path = orig_find_path  # type: ignore[assignment]
 
 
+def test_select_best_pair_skips_far_reposition_for_low_credit_bots() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
+    near_pair = PortPair(buy_sector=2, sell_sector=3, commodity="fuel_ore", distance=1, path=[2, 3])
+    far_pair = PortPair(buy_sector=99, sell_sector=100, commodity="fuel_ore", distance=1, path=[99, 100])
+    strat._pairs = [near_pair, far_pair]
+
+    near_buy = SectorInfo(has_port=True, port_class="SSS")
+    near_buy.port_prices = {"fuel_ore": {"sell": 10}}
+    near_sell = SectorInfo(has_port=True, port_class="BSS")
+    near_sell.port_prices = {"fuel_ore": {"buy": 14}}
+    far_buy = SectorInfo(has_port=True, port_class="SSS")
+    far_buy.port_prices = {"fuel_ore": {"sell": 10}}
+    far_sell = SectorInfo(has_port=True, port_class="BSS")
+    far_sell.port_prices = {"fuel_ore": {"buy": 20}}
+    knowledge._sectors[2] = near_buy
+    knowledge._sectors[3] = near_sell
+    knowledge._sectors[99] = far_buy
+    knowledge._sectors[100] = far_sell
+
+    orig_find_path = knowledge.find_path
+    try:
+        def _find_path(src: int, dst: int, max_hops: int | None = None):
+            if dst == 2:
+                return [1, 2]
+            if dst == 99:
+                return [1, 11, 22, 33, 44, 55, 66, 77, 88, 99]
+            if src == 2 and dst == 3:
+                return [2, 3]
+            if src == 99 and dst == 100:
+                return [99, 100]
+            return None
+
+        knowledge.find_path = _find_path  # type: ignore[assignment]
+        low_credit_state = GameState(context="sector_command", sector=1, credits=300, holds_free=20)
+        best = strat._select_best_pair(low_credit_state)
+        assert best is not None
+        assert best.buy_sector == 2
+    finally:
+        knowledge.find_path = orig_find_path  # type: ignore[assignment]
+
+
+def test_select_best_pair_prefers_affordable_unpriced_commodity() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
+    # Both pairs are structurally valid but have no price quotes.
+    # Low-credit bot should avoid equipment-heavy unpriced probes.
+    fuel_pair = PortPair(buy_sector=2, sell_sector=3, commodity="fuel_ore", distance=1, path=[2, 3])
+    equip_pair = PortPair(buy_sector=4, sell_sector=5, commodity="equipment", distance=1, path=[4, 5])
+    strat._pairs = [equip_pair, fuel_pair]
+
+    knowledge._sectors[2] = SectorInfo(has_port=True, port_class="SSS")
+    knowledge._sectors[3] = SectorInfo(has_port=True, port_class="BSS")
+    knowledge._sectors[4] = SectorInfo(has_port=True, port_class="SSS")
+    knowledge._sectors[5] = SectorInfo(has_port=True, port_class="SSB")
+
+    orig_find_path = knowledge.find_path
+    try:
+
+        def _find_path(src: int, dst: int, max_hops: int | None = None):
+            if dst in {2, 4}:
+                return [1, dst]
+            if src == 2 and dst == 3:
+                return [2, 3]
+            if src == 4 and dst == 5:
+                return [4, 5]
+            return None
+
+        knowledge.find_path = _find_path  # type: ignore[assignment]
+        low_credit_state = GameState(context="sector_command", sector=1, credits=300, holds_total=20, holds_free=None)
+        best = strat._select_best_pair(low_credit_state)
+        assert best is not None
+        assert best.commodity == "fuel_ore"
+    finally:
+        knowledge.find_path = orig_find_path  # type: ignore[assignment]
+
+
 def test_local_bootstrap_trade_prefers_selling_held_cargo() -> None:
     cfg = BotConfig()
     knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
@@ -126,6 +242,74 @@ def test_local_bootstrap_trade_prefers_selling_held_cargo() -> None:
     assert action == TradeAction.TRADE
     assert params.get("action") == "sell"
     assert params["opportunity"].commodity == "fuel_ore"
+
+
+def test_pair_buy_leg_replans_when_local_port_no_longer_selling_target() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
+    pair = PortPair(buy_sector=10, sell_sector=20, commodity="fuel_ore", distance=1, path=[10, 20])
+    strat._pairs = [pair]
+    strat._current_pair = pair
+    strat._pair_phase = "going_to_buy"
+
+    # BSS means fuel_ore is buying (not selling) -> invalid for buy leg.
+    knowledge._sectors[10] = SectorInfo(has_port=True, port_class="BSS")
+    state = GameState(
+        context="sector_command",
+        sector=10,
+        has_port=True,
+        port_class="BSS",
+        credits=300,
+        holds_free=20,
+        warps=[11],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action in {TradeAction.EXPLORE, TradeAction.MOVE, TradeAction.WAIT}
+    assert strat._pair_phase == "idle"
+    assert strat._current_pair is None
+
+
+def test_pair_sell_leg_reroutes_liquidation_when_local_port_not_buying() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    from bbsbot.games.tw2002.strategies.profitable_pairs import PortPair
+
+    pair = PortPair(buy_sector=10, sell_sector=20, commodity="fuel_ore", distance=1, path=[10, 20])
+    strat._pairs = [pair]
+    strat._current_pair = pair
+    strat._pair_phase = "going_to_sell"
+
+    # Sell leg target now invalid: SSS means port sells all commodities.
+    knowledge._sectors[20] = SectorInfo(has_port=True, port_class="SSS")
+    # Nearby known buyer for fuel_ore.
+    knowledge._sectors[21] = SectorInfo(has_port=True, port_class="BSS")
+    knowledge.find_path = lambda start, end, max_hops=100: [20, 21] if end == 21 else None  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=20,
+        has_port=True,
+        port_class="SSS",
+        credits=300,
+        holds_free=15,
+        cargo_fuel_ore=5,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[21],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.MOVE
+    assert int(params.get("target_sector", 0)) == 21
+    assert strat._pair_phase == "idle"
+    assert strat._current_pair is None
 
 
 def test_local_bootstrap_trade_does_not_speculatively_buy_without_pair() -> None:
@@ -176,6 +360,43 @@ def test_local_bootstrap_trade_uses_port_class_when_market_rows_missing() -> Non
     )
 
     assert strat._local_bootstrap_trade(state) is None  # type: ignore[misc]
+
+
+def test_local_bootstrap_trade_safe_buy_requires_nearby_known_buyer() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    # Current port sells fuel ore.
+    sell_here = SectorInfo(has_port=True, port_class="SSS")
+    sell_here.port_status = {"fuel_ore": "selling", "organics": "selling", "equipment": "selling"}
+    sell_here.port_prices = {"fuel_ore": {"sell": 40}}
+    sell_here.port_trading_units = {"fuel_ore": 300}
+    knowledge._sectors[50] = sell_here
+
+    # Nearby known buyer for fuel ore.
+    buyer = SectorInfo(has_port=True, port_class="BSS")
+    buyer.port_status = {"fuel_ore": "buying", "organics": "selling", "equipment": "selling"}
+    knowledge._sectors[51] = buyer
+
+    knowledge.find_path = lambda start, end, max_hops=100: [50, 51] if end == 51 else None  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=50,
+        credits=500,
+        holds_free=10,
+        has_port=True,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+    )
+
+    action, params = strat._local_bootstrap_trade(state)  # type: ignore[misc]
+    assert action == TradeAction.TRADE
+    assert params.get("action") == "buy"
+    assert params["opportunity"].commodity == "fuel_ore"
+    assert int(params.get("max_quantity", 0)) >= 1
 
 
 def test_unknown_holds_free_still_allows_minimum_trade_planning() -> None:
@@ -357,3 +578,59 @@ def test_loop_break_avoids_abab_ping_pong_when_unproductive() -> None:
     assert action == TradeAction.EXPLORE
     assert params.get("direction") == 30
     assert params.get("urgency") == "loop_break"
+
+
+def test_cargo_liquidation_sells_local_when_not_low_cash() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    info = SectorInfo(has_port=True, port_class="BSS")
+    info.port_status = {"fuel_ore": "buying", "organics": "selling", "equipment": "selling"}
+    knowledge._sectors[88] = info
+
+    state = GameState(
+        context="sector_command",
+        sector=88,
+        has_port=True,
+        port_class="BSS",
+        credits=800,
+        holds_free=10,
+        cargo_fuel_ore=5,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[89, 90],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.TRADE
+    assert params.get("action") == "sell"
+    assert params.get("urgency") == "cargo_liquidation"
+    assert params["opportunity"].commodity == "fuel_ore"
+
+
+def test_cargo_liquidation_moves_to_buyer_before_new_buys() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    # Sector 200 buys fuel ore; from 100 we can route there.
+    knowledge._sectors[200] = SectorInfo(has_port=True, port_class="BBS")
+    knowledge.find_path = lambda start, end, max_hops=100: [100, end] if end == 200 else None  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=100,
+        has_port=False,
+        credits=700,
+        holds_free=10,
+        cargo_fuel_ore=4,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[101, 102],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.MOVE
+    assert params.get("target_sector") == 200
+    assert params.get("urgency") == "cargo_liquidation"

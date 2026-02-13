@@ -1,0 +1,14 @@
+connection:
+  host: localhost
+  port: 2002
+  game_password: game
+  game_letter: B
+character:
+  password: trade123
+  name_complexity: medium
+  generate_ship_names: true
+trading:
+  policy: dynamic
+  strategy: profitable_pairs
+session:
+  max_turns_per_session: 0

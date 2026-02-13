@@ -41,6 +41,7 @@ def extract_semantic_kv(screen: str) -> dict:
     """Extract semantic key/value data from a screen snapshot."""
     data: dict = {}
     tail = _tail_for_current_prompt(screen)
+    semantic_text = tail or screen
 
     # Sector
     sector_matches = re.findall(r"[Ss]ector\s*:\s*(\d+)", tail)
@@ -107,24 +108,38 @@ def extract_semantic_kv(screen: str) -> dict:
             data["planet_names"] = names
 
     # Credits
-    credit_match = re.search(r"You have\s+([\d,]+)\s+credits", screen, re.IGNORECASE)
-    if not credit_match:
-        credit_match = re.search(r"You only have\s+([\d,]+)\s+credits", screen, re.IGNORECASE)
+    credit_match = re.search(
+        r"(?im)^\s*you (?:only )?have\s+([\d,]+)\s+credits(?:\b|[^\w])",
+        semantic_text,
+    )
     if not credit_match:
         # Strict "Credits: 123" style lines only. Avoid poisoning bankroll from:
         # - "237 credits per fighter"
         # - "594 credits / next hold"
         credit_match = re.search(
             r"(?im)^\s*credits(?!\s*(?:per|/))\s*:?\s*([\d,]+)\s*$",
-            screen,
+            semantic_text,
         )
     if credit_match:
         data["credits"] = int(credit_match.group(1).replace(",", ""))
 
+    # Banked credits (when on banking-related screens).
+    bank_match = re.search(
+        r"(?im)^\s*you have\s+([\d,]+)\s+credits?\s+in\s+the\s+bank\b",
+        semantic_text,
+    )
+    if not bank_match:
+        bank_match = re.search(
+            r"(?im)\bbank(?:\s+account)?(?:\s+balance)?\s*:?\s*([\d,]+)\s*credits?\b",
+            semantic_text,
+        )
+    if bank_match:
+        data["bank_balance"] = int(bank_match.group(1).replace(",", ""))
+
     # Quick-stats line from "/" command, e.g.:
     # "Sect 599³Turns 65,520³Creds 300³Figs 30³Shlds 0³Hlds 20³Ore 0³Org 0³Equ 0 ..."
     # The separator is often CP437 vertical line rendered as "³".
-    quick_text = screen.replace("³", " ").replace("|", " ")
+    quick_text = semantic_text.replace("³", " ").replace("|", " ")
     if "sect" in quick_text.lower() and "creds" in quick_text.lower():
         quick_map = {
             "Sect": "sector",
@@ -161,32 +176,34 @@ def extract_semantic_kv(screen: str) -> dict:
             pass
 
     # Turns left
-    turns_match = re.search(r"([\d,]+)\s+turns\s+left", screen, re.IGNORECASE)
+    turns_match = re.search(r"([\d,]+)\s+turns\s+left", semantic_text, re.IGNORECASE)
+    if not turns_match:
+        turns_match = re.search(r"(?im)^\s*turns(?:\s+left)?\s*:\s*([\d,]+)\s*$", semantic_text)
     if turns_match:
         data["turns_left"] = int(turns_match.group(1).replace(",", ""))
 
     # Player / ship identity
-    if trader_name_match := re.search(r"(?im)^\s*trader\s+name\s*:\s*(.+?)\s*$", screen):
+    if trader_name_match := re.search(r"(?im)^\s*trader\s+name\s*:\s*(.+?)\s*$", semantic_text):
         data["player_name"] = trader_name_match.group(1).strip()
-    if ship_type_match := re.search(r"(?im)^\s*ship\s+type\s*:\s*(.+?)\s*$", screen):
+    if ship_type_match := re.search(r"(?im)^\s*ship\s+type\s*:\s*(.+?)\s*$", semantic_text):
         data["ship_type"] = ship_type_match.group(1).strip()
-    if ship_name_match := re.search(r"(?im)^\s*(?:your\s+)?ship\s*:\s*(.+?)\s*$", screen):
+    if ship_name_match := re.search(r"(?im)^\s*(?:your\s+)?ship\s*:\s*(.+?)\s*$", semantic_text):
         ship_name = ship_name_match.group(1).strip()
         if ship_name and not ship_name.lower().startswith("type"):
             data["ship_name"] = ship_name
 
     # Player progression
-    if alignment_match := re.search(r"(?im)^\s*alignment\s*:\s*(-?\d+)\s*$", screen):
+    if alignment_match := re.search(r"(?im)^\s*alignment\s*:\s*(-?\d+)\s*$", semantic_text):
         data["alignment"] = int(alignment_match.group(1))
-    if experience_match := re.search(r"(?im)^\s*experience\s*:\s*([\d,]+)\s*$", screen):
+    if experience_match := re.search(r"(?im)^\s*experience\s*:\s*([\d,]+)\s*$", semantic_text):
         data["experience"] = int(experience_match.group(1).replace(",", ""))
-    if corp_match := re.search(r"(?im)^\s*corporation\s*:\s*(\d+)\s*$", screen):
+    if corp_match := re.search(r"(?im)^\s*corporation\s*:\s*(\d+)\s*$", semantic_text):
         data["corp_id"] = int(corp_match.group(1))
 
     # Fighters
     fighter_match = re.search(
         r"(?im)^\s*(?:[A-Z]\s+)?fighters\s*:\s*(?:[\d,]+\s+credits\s+per\s+fighter\s+)?([\d,]+)\s*$",
-        screen,
+        semantic_text,
     )
     if fighter_match:
         data["fighters"] = int(fighter_match.group(1).replace(",", ""))
@@ -194,51 +211,61 @@ def extract_semantic_kv(screen: str) -> dict:
     # Shields
     shield_match = re.search(
         r"(?im)^\s*(?:[A-Z]\s+)?shields?\s*:\s*(?:[\d,]+\s+credits\s+per\s+point\s+)?([\d,]+)\s*$",
-        screen,
+        semantic_text,
     )
     if not shield_match:
         shield_match = re.search(
             r"(?im)^\s*(?:[A-Z]\s+)?shield\s+points?\s*:\s*(?:[\d,]+\s+credits\s+per\s+point\s+)?([\d,]+)\s*$",
-            screen,
+            semantic_text,
         )
     if shield_match:
         data["shields"] = int(shield_match.group(1).replace(",", ""))
 
     # Holds
-    holds_match = re.search(r"Total Holds\s*:\s*(\d+)", screen)
+    holds_match = re.search(r"Total Holds\s*:\s*(\d+)", semantic_text)
     if holds_match:
         data["holds_total"] = int(holds_match.group(1))
-    empty_match = re.search(r"Empty\s*=\s*(\d+)", screen)
+    empty_match = re.search(r"Empty\s*=\s*(\d+)", semantic_text)
     if empty_match:
         data["holds_free"] = int(empty_match.group(1))
-    empty_holds_match = re.search(r"You have\s+(\d+)\s+empty cargo holds", screen)
+    empty_holds_match = re.search(r"You have\s+(\d+)\s+empty cargo holds", semantic_text)
     if empty_holds_match:
         data["holds_free"] = int(empty_holds_match.group(1))
 
     # Cargo onboard (port/commodity tables and status screens)
-    # Example table row:
-    # "Fuel Ore   Buying     820    100%       0"
-    # We take the last integer on the line as onboard qty.
     # Use cleaned display text to avoid ANSI artifacts.
-    plain_lines = clean_screen_for_display(screen)
+    plain_lines = clean_screen_for_display(semantic_text)
     # screen_utils.clean_screen_for_display returns list[str]
     iter_lines = plain_lines if isinstance(plain_lines, list) else str(plain_lines).splitlines()
     for line in iter_lines:
         line_stripped = line.strip()
         if not line_stripped:
             continue
-        if re.search(r"\bfuel\s+ore\b", line_stripped, re.IGNORECASE):
-            nums = re.findall(r"\b\d+\b", line_stripped)
-            if nums:
-                data["cargo_fuel_ore"] = int(nums[-1])
-        elif re.search(r"\borganics\b", line_stripped, re.IGNORECASE):
-            nums = re.findall(r"\b\d+\b", line_stripped)
-            if nums:
-                data["cargo_organics"] = int(nums[-1])
-        elif re.search(r"\bequipment\b", line_stripped, re.IGNORECASE):
-            nums = re.findall(r"\b\d+\b", line_stripped)
-            if nums:
-                data["cargo_equipment"] = int(nums[-1])
+        if re.search(r"(?i)\btotal\s+holds\b", line_stripped):
+            for commodity, label in (("fuel_ore", "fuel ore"), ("organics", "organics"), ("equipment", "equipment")):
+                match = re.search(rf"(?i)\b{re.escape(label)}\s*=\s*([\d,]+)", line_stripped)
+                if match:
+                    data[f"cargo_{commodity}"] = int(match.group(1).replace(",", ""))
+
+    # Quantity prompt context:
+    # "We are buying up to 2230.  You have 3 in your holds."
+    # "How many holds of Fuel Ore do you want to sell [3]?"
+    qty_prompt_re = re.compile(
+        r"(?i)how\s+many\s+holds\s+of\s+(fuel\s+ore|organics|equipment)\s+do\s+you\s+want\s+to\s+(buy|sell)\s*\[[\d,]+\]\s*\?"
+    )
+    holds_re = re.compile(r"(?i)\byou have\s+([\d,]+)\s+in your holds\b")
+    commodity_map = {"fuel ore": "fuel_ore", "organics": "organics", "equipment": "equipment"}
+    for idx, line in enumerate(iter_lines):
+        m_qty = qty_prompt_re.search(line.strip())
+        if not m_qty:
+            continue
+        commodity = commodity_map.get(m_qty.group(1).lower().strip())
+        if not commodity:
+            continue
+        nearby = "\n".join(iter_lines[max(0, idx - 3) : idx + 1])
+        m_holds = holds_re.search(nearby)
+        if m_holds:
+            data[f"cargo_{commodity}"] = int(m_holds.group(1).replace(",", ""))
 
     # Port report market table (supply/demand + indicative price)
     # Header:
@@ -246,7 +273,8 @@ def extract_semantic_kv(screen: str) -> dict:
     # Rows:
     # "Fuel Ore   Buying     820    100%       0"
     port_header_seen = any(
-        re.search(r"(?i)\bitems\b.*\bstatus\b.*\btrading\b.*%\s*of\s*max\b.*\bonboard\b", l) for l in iter_lines
+        re.search(r"(?i)\bitems\b.*\bstatus\b.*\btrading\b.*%\s*of\s*max\b.*\bonboard\b", line)
+        for line in iter_lines
     )
     if port_header_seen:
         data["has_port"] = True

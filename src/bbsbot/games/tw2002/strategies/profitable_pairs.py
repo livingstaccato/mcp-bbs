@@ -9,6 +9,7 @@ the same commodity. Calculates expected profit before trading.
 
 from __future__ import annotations
 
+import contextlib
 from collections import defaultdict, deque
 from time import time
 from typing import TYPE_CHECKING
@@ -95,6 +96,55 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         return max_hops, min_ppt
 
+    def _effective_holds_free(self, state: GameState) -> int:
+        """Best-effort free holds with robust fallbacks when parsing is incomplete."""
+        with contextlib.suppress(Exception):
+            if state.holds_free is not None:
+                return max(0, int(state.holds_free))
+
+        cargo_used = int(getattr(state, "cargo_fuel_ore", 0) or 0)
+        cargo_used += int(getattr(state, "cargo_organics", 0) or 0)
+        cargo_used += int(getattr(state, "cargo_equipment", 0) or 0)
+
+        with contextlib.suppress(Exception):
+            if state.holds_total is not None:
+                return max(0, int(state.holds_total) - max(0, cargo_used))
+
+        # Fallback for early sessions before / quick-stats data fully populates.
+        # Keep this conservative but above 1 so strategies don't get trapped in
+        # perpetual single-unit churn.
+        if cargo_used > 0:
+            return max(1, 20 - cargo_used)
+        return 6
+
+    def _estimated_unit_price(self, commodity: str) -> int:
+        """Conservative per-unit price prior when quote data is missing."""
+        return {
+            "fuel_ore": 40,
+            "organics": 70,
+            "equipment": 120,
+        }.get(str(commodity or "").strip().lower(), 60)
+
+    def _estimated_affordable_qty_without_quotes(self, state: GameState, commodity: str) -> int:
+        """Estimate a safe buy quantity when we have no reliable quote yet."""
+        credits = int(state.credits or 0)
+        holds_free = self._effective_holds_free(state)
+        if credits <= 0 or holds_free <= 0:
+            return 0
+
+        reserve = max(70, int(credits * 0.18))
+        spend_cap = max(0, credits - reserve)
+        unit_guess = max(1, int(self._estimated_unit_price(commodity)))
+        affordable = int(spend_cap // unit_guess)
+        qty = min(holds_free, affordable)
+        if self.policy == "conservative":
+            qty = min(qty, 3)
+        elif self.policy == "balanced":
+            qty = min(qty, 5)
+        else:
+            qty = min(qty, 8)
+        return max(0, int(qty))
+
     def _recommended_buy_qty(self, state: GameState, pair: PortPair) -> int:
         """Choose a safe buy quantity.
 
@@ -102,7 +152,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         - If priced and profitable, size up bounded by holds, credits, and liquidity.
         """
         credits = int(state.credits or 0)
-        holds_free = int(state.holds_free) if state.holds_free is not None else 1
+        holds_free = self._effective_holds_free(state)
         if credits <= 0 or holds_free <= 0:
             return 0
 
@@ -111,7 +161,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         buy_unit = ((buy_info.port_prices or {}).get(pair.commodity) or {}).get("sell") if buy_info else None
         sell_unit = ((sell_info.port_prices or {}).get(pair.commodity) or {}).get("buy") if sell_info else None
         if not buy_unit or not sell_unit:
-            return 1
+            return self._estimated_affordable_qty_without_quotes(state, pair.commodity)
 
         profit_per_unit = int(sell_unit) - int(buy_unit)
         if profit_per_unit <= 0:
@@ -129,9 +179,9 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # Avoid going all-in early; keep some slack for turns/upgrades.
         if self.policy == "conservative":
-            qty = min(qty, max(1, holds_free // 2))
+            qty = min(qty, max(2, holds_free // 2))
         elif self.policy == "balanced":
-            qty = min(qty, max(1, (holds_free * 2) // 3))
+            qty = min(qty, max(3, (holds_free * 3) // 4))
 
         return max(1, int(qty)) if qty > 0 else 0
 
@@ -149,6 +199,28 @@ class ProfitablePairsStrategy(TradingStrategy):
             "organics": int(getattr(state, "cargo_organics", 0) or 0),
             "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
         }
+
+    def _local_port_side(self, state: GameState, commodity: str) -> str | None:
+        """Best-effort local port side for one commodity: buying/selling/None."""
+        current_sector = int(state.sector or 0)
+        info = self.knowledge.get_sector_info(current_sector) if current_sector > 0 else None
+        statuses = dict((info.port_status or {}) if info else {})
+        side = str(statuses.get(commodity, "")).lower()
+        if side in {"buying", "selling"}:
+            return side
+
+        port_class = str(state.port_class or (info.port_class if info else "") or "").upper()
+        if len(port_class) != 3:
+            return None
+        idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
+        if idx is None:
+            return None
+        code = port_class[idx]
+        if code == "B":
+            return "buying"
+        if code == "S":
+            return "selling"
+        return None
 
     def _choose_sell_commodity_here(
         self,
@@ -245,6 +317,55 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._explore_since_profit = 0
         return TradeAction.EXPLORE, {"direction": target, "urgency": "loop_break"}
 
+    def _cargo_liquidation_action(self, state: GameState, cargo: dict[str, int]) -> tuple[TradeAction, dict] | None:
+        """Prioritize selling onboard cargo before opening fresh buy positions."""
+        if state.context != "sector_command":
+            return None
+        if not any(int(v or 0) > 0 for v in cargo.values()):
+            return None
+
+        current_sector = int(state.sector or 0)
+        info = self.knowledge.get_sector_info(current_sector) if current_sector > 0 else None
+        statuses = dict((info.port_status or {}) if info else {})
+
+        if state.has_port:
+            sell_here = self._choose_sell_commodity_here(state, cargo, statuses)
+            if sell_here:
+                qty = int(cargo.get(sell_here, 0) or 0)
+                opp = TradeOpportunity(
+                    buy_sector=current_sector,
+                    sell_sector=current_sector,
+                    commodity=sell_here,
+                    expected_profit=0,
+                    distance=0,
+                )
+                logger.info(
+                    "Cargo liquidation: selling %s qty=%s in sector %s",
+                    sell_here,
+                    qty,
+                    current_sector,
+                )
+                return TradeAction.TRADE, {
+                    "opportunity": opp,
+                    "action": "sell",
+                    "max_quantity": max(1, qty),
+                    "urgency": "cargo_liquidation",
+                }
+
+        target = self._find_best_sell_target(state, cargo, max_hops=20)
+        if target and target.get("path") and len(target["path"]) > 1:
+            logger.info(
+                "Cargo liquidation: moving to sector %s to sell %s",
+                target["sector"],
+                target["commodity"],
+            )
+            return TradeAction.MOVE, {
+                "target_sector": int(target["sector"]),
+                "path": target["path"],
+                "urgency": "cargo_liquidation",
+            }
+        return None
+
     def _low_cash_recovery_action(self, state: GameState) -> tuple[TradeAction, dict] | None:
         """When cash-starved, prioritize liquidation and anti-loop recovery."""
         if state.context != "sector_command":
@@ -253,7 +374,9 @@ class ProfitablePairsStrategy(TradingStrategy):
         cargo = self._cargo_map(state)
         has_cargo = any(v > 0 for v in cargo.values())
         low_cash = credits <= self._effective_low_cash_threshold()
-        if not has_cargo and not low_cash:
+        # This hook is only for low-credit recovery; normal cargo liquidation is
+        # handled separately so non-starved bots can still optimize routing.
+        if not low_cash:
             return None
 
         current_sector = int(state.sector or 0)
@@ -346,7 +469,16 @@ class ProfitablePairsStrategy(TradingStrategy):
         if recovery is not None:
             return recovery
 
-        forced_break = self._loop_break_action(state, self._cargo_map(state))
+        cargo = self._cargo_map(state)
+        active_pair_sell_phase = self._pair_phase == "going_to_sell" and self._current_pair is not None
+        if any(cargo.values()) and not active_pair_sell_phase:
+            liquidation = self._cargo_liquidation_action(state, cargo)
+            if liquidation is not None:
+                return liquidation
+            logger.info("Cargo onboard with no known buyer path; exploring to find buyer")
+            return self._explore_for_ports(state)
+
+        forced_break = self._loop_break_action(state, cargo)
         if forced_break is not None:
             return forced_break
 
@@ -421,6 +553,19 @@ class ProfitablePairsStrategy(TradingStrategy):
         # Execute pair trading phases
         if self._pair_phase == "going_to_buy":
             if current == pair.buy_sector:
+                # Validate local side before committing to buy leg.
+                side = self._local_port_side(state, pair.commodity)
+                if side != "selling":
+                    logger.warning(
+                        "Pair buy-side invalid at sector=%s commodity=%s side=%s; replanning",
+                        current,
+                        pair.commodity,
+                        side,
+                    )
+                    self._invalidate_pair(pair)
+                    self._pair_phase = "idle"
+                    self._pairs_dirty = True
+                    return self._explore_for_ports(state)
                 # At buy port - create trade opportunity
                 self._pair_phase = "going_to_sell"
                 opp = TradeOpportunity(
@@ -460,6 +605,25 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         elif self._pair_phase == "going_to_sell":
             if current == pair.sell_sector:
+                # Validate local side before committing to sell leg.
+                side = self._local_port_side(state, pair.commodity)
+                if side != "buying":
+                    logger.warning(
+                        "Pair sell-side invalid at sector=%s commodity=%s side=%s; rerouting liquidation",
+                        current,
+                        pair.commodity,
+                        side,
+                    )
+                    self._invalidate_pair(pair)
+                    self._pair_phase = "idle"
+                    self._current_pair = None
+                    self._pairs_dirty = True
+                    cargo = self._cargo_map(state)
+                    if any(cargo.values()):
+                        liquidation = self._cargo_liquidation_action(state, cargo)
+                        if liquidation is not None:
+                            return liquidation
+                    return self._explore_for_ports(state)
                 # At sell port - sell and complete cycle
                 self._pair_phase = "idle"
                 self._current_pair = None
@@ -588,7 +752,7 @@ class ProfitablePairsStrategy(TradingStrategy):
     def _estimate_profit_for_pair(self, state: GameState, pair: PortPair) -> int:
         """Estimate profit using observed per-unit prices when available."""
         credits = state.credits or 0
-        holds_free = state.holds_free if state.holds_free is not None else 1
+        holds_free = self._effective_holds_free(state)
         if credits <= 0 or holds_free <= 0:
             return 0
 
@@ -632,6 +796,24 @@ class ProfitablePairsStrategy(TradingStrategy):
         if current is None:
             return self._pairs[0] if self._pairs else None
 
+        credits_now = int(state.credits or 0)
+        # Keep early-game bots from burning turns on distant repositioning.
+        if credits_now < 1_000:
+            max_reposition_hops = 8
+            max_total_turns = 12
+        elif credits_now < 5_000:
+            max_reposition_hops = 14
+            max_total_turns = 20
+        else:
+            max_reposition_hops = 24
+            max_total_turns = 32
+        if self.policy == "aggressive":
+            max_reposition_hops = max_reposition_hops + 4
+            max_total_turns = max_total_turns + 6
+        elif self.policy == "conservative":
+            max_reposition_hops = max(6, max_reposition_hops - 2)
+            max_total_turns = max(10, max_total_turns - 2)
+
         # Find pair with best profit/turn ratio from current position.
         # Prefer viable price-known pairs over structural unknown-price pairs.
         best_priced_pair = None
@@ -646,7 +828,10 @@ class ProfitablePairsStrategy(TradingStrategy):
                 continue
 
             total_distance = len(path) - 1 + pair.distance
+            reposition_hops = len(path) - 1
             turns = total_distance + 2  # +2 for buy/sell actions
+            if reposition_hops > int(max_reposition_hops) or turns > int(max_total_turns):
+                continue
 
             buy_info = self.knowledge.get_sector_info(pair.buy_sector)
             sell_info = self.knowledge.get_sector_info(pair.sell_sector)
@@ -669,7 +854,11 @@ class ProfitablePairsStrategy(TradingStrategy):
                     best_priced_pair = pair
             else:
                 # Unknown pricing: explore the closest structural pair to collect prices.
-                score = 1.0 / float(max(turns, 1))
+                est_qty = self._estimated_affordable_qty_without_quotes(state, pair.commodity)
+                if est_qty <= 0:
+                    continue
+                commodity_bias = {"fuel_ore": 1.25, "organics": 1.0, "equipment": 0.75}.get(pair.commodity, 1.0)
+                score = (float(est_qty) * float(commodity_bias)) / float(max(turns, 1))
                 if score > best_unpriced_score:
                     best_unpriced_score = score
                     best_unpriced_pair = pair
@@ -765,7 +954,81 @@ class ProfitablePairsStrategy(TradingStrategy):
                 logger.info("Bootstrap local sell: %s at sector %s", comm, state.sector)
                 return TradeAction.TRADE, {"opportunity": opp, "action": "sell"}
 
-        # Without a viable pair, do not force speculative buys; that bleeds credits.
+        # Safe bootstrap buy:
+        # only buy when we know a nearby buyer path for that commodity.
+        credits = int(state.credits or 0)
+        holds_free = int(state.holds_free) if state.holds_free is not None else 0
+        if credits <= 0 or holds_free <= 0:
+            return None
+
+        prices = dict(getattr(info, "port_prices", {}) or {})
+        units = dict(getattr(info, "port_trading_units", {}) or {})
+        candidates: list[tuple[int, str, int | None]] = []
+        rank = {"fuel_ore": 0, "organics": 1, "equipment": 2}
+        for comm in ("fuel_ore", "organics", "equipment"):
+            if str(statuses.get(comm, "")).lower() != "selling":
+                continue
+            supply = units.get(comm)
+            with contextlib.suppress(Exception):
+                if supply is not None and int(supply) <= 0:
+                    continue
+            quote = (prices.get(comm) or {}).get("sell")
+            quote_int: int | None = None
+            with contextlib.suppress(Exception):
+                if quote is not None:
+                    quote_int = int(quote)
+            price_rank = int(quote_int) if quote_int and quote_int > 0 else (10**9 + rank.get(comm, 99))
+            candidates.append((price_rank, comm, quote_int))
+
+        for _price_rank, comm, quote in sorted(candidates, key=lambda x: x[0]):
+            # Require a known nearby buyer to avoid speculative dead-end holds.
+            target = self._find_best_sell_target(
+                state,
+                {"fuel_ore": 1 if comm == "fuel_ore" else 0, "organics": 1 if comm == "organics" else 0, "equipment": 1 if comm == "equipment" else 0},
+                max_hops=8,
+            )
+            if not target or str(target.get("commodity")) != comm:
+                continue
+            if int(target.get("distance") or 99) > 6:
+                continue
+
+            qty = 1
+            if quote and quote > 0:
+                reserve = max(90, int(credits * 0.20))
+                spend_cap = max(0, credits - reserve)
+                affordable = int(spend_cap // int(quote))
+                if affordable <= 0:
+                    continue
+                near = int(target.get("distance") or 99) <= 3
+                qty_cap = 4 if near else 2
+                qty = min(qty_cap, holds_free, affordable)
+            else:
+                # Unknown quote: allow only tiny probe with healthy bankroll.
+                if credits < 280:
+                    continue
+                qty = 1
+
+            if qty <= 0:
+                continue
+            opp = TradeOpportunity(
+                buy_sector=int(state.sector),
+                sell_sector=int(target["sector"]),
+                commodity=comm,
+                expected_profit=0,
+                distance=int(target.get("distance") or 0),
+                path_to_buy=[],
+                path_to_sell=list(target.get("path") or []),
+            )
+            logger.info(
+                "Bootstrap safe buy: %s qty=%s at sector %s (buyer=%s dist=%s)",
+                comm,
+                qty,
+                state.sector,
+                target["sector"],
+                target.get("distance"),
+            )
+            return TradeAction.TRADE, {"opportunity": opp, "action": "buy", "max_quantity": int(qty)}
+
         return None
 
     def _find_safe_sector(self, state: GameState) -> int | None:

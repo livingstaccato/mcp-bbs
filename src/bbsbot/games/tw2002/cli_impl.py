@@ -45,6 +45,105 @@ def _is_port_qty_prompt(line: str) -> bool:
     return bool(re.search(r"(?i)\bhow\s+many\b.*\[[\d,]+\]\s*\?\s*$", ll))
 
 
+def _extract_port_qty_cap(
+    prompt_line: str,
+    screen_text: str | None = None,
+    *,
+    is_sell: bool | None = None,
+) -> int | None:
+    """Extract a safe max qty from the active quantity prompt/screen.
+
+    We prefer prompt-confirmed limits over stale strategy/state values.
+    For sell prompts, if the screen explicitly says "You have X in your holds",
+    clamp to that value.
+    """
+    ll = (prompt_line or "").strip().lower()
+    if not ll:
+        return None
+
+    cap: int | None = None
+    m_default = re.search(r"\[([\d,]+)\]", ll)
+    if m_default:
+        with contextlib.suppress(Exception):
+            cap = max(0, int(m_default.group(1).replace(",", "")))
+
+    if is_sell is None:
+        is_sell = " sell" in ll
+
+    if is_sell and screen_text:
+        m_have = re.search(r"\byou have\s+([\d,]+)\s+in your holds\b", screen_text.lower())
+        if m_have:
+            with contextlib.suppress(Exception):
+                have = max(0, int(m_have.group(1).replace(",", "")))
+                cap = have if cap is None else min(cap, have)
+
+    return cap
+
+
+def _get_cargo_ledger(bot) -> dict[str, int]:
+    """Get or initialize deterministic cargo ledger on the bot."""
+    ledger = getattr(bot, "_cargo_ledger", None)
+    if not isinstance(ledger, dict):
+        ledger = {"fuel_ore": 0, "organics": 0, "equipment": 0}
+        bot._cargo_ledger = ledger
+    for key in ("fuel_ore", "organics", "equipment"):
+        try:
+            ledger[key] = max(0, int(ledger.get(key, 0) or 0))
+        except Exception:
+            ledger[key] = 0
+    return ledger
+
+
+def _apply_cargo_ledger_to_state(bot, state) -> None:
+    """Project deterministic ledger values into state/semantic structures."""
+    ledger = _get_cargo_ledger(bot)
+    with contextlib.suppress(Exception):
+        state.cargo_fuel_ore = int(ledger.get("fuel_ore", 0))
+    with contextlib.suppress(Exception):
+        state.cargo_organics = int(ledger.get("organics", 0))
+    with contextlib.suppress(Exception):
+        state.cargo_equipment = int(ledger.get("equipment", 0))
+    with contextlib.suppress(Exception):
+        if getattr(bot, "game_state", None) is not None:
+            bot.game_state.cargo_fuel_ore = int(ledger.get("fuel_ore", 0))
+            bot.game_state.cargo_organics = int(ledger.get("organics", 0))
+            bot.game_state.cargo_equipment = int(ledger.get("equipment", 0))
+    with contextlib.suppress(Exception):
+        sem = getattr(bot, "last_semantic_data", None)
+        if isinstance(sem, dict):
+            sem["cargo_fuel_ore"] = int(ledger.get("fuel_ore", 0))
+            sem["cargo_organics"] = int(ledger.get("organics", 0))
+            sem["cargo_equipment"] = int(ledger.get("equipment", 0))
+
+
+def _record_cargo_ledger_trade(bot, commodity: str | None, is_buy: bool | None, qty: int | None) -> None:
+    """Apply a completed trade qty to deterministic cargo ledger."""
+    if not commodity or is_buy is None:
+        return
+    if commodity not in {"fuel_ore", "organics", "equipment"}:
+        return
+    try:
+        qty_val = max(0, int(qty or 0))
+    except Exception:
+        qty_val = 0
+    if qty_val <= 0:
+        return
+    ledger = _get_cargo_ledger(bot)
+    current = max(0, int(ledger.get(commodity, 0) or 0))
+    ledger[commodity] = current + qty_val if is_buy else max(0, current - qty_val)
+    with contextlib.suppress(Exception):
+        if getattr(bot, "game_state", None) is not None:
+            bot.game_state.cargo_fuel_ore = int(ledger.get("fuel_ore", 0))
+            bot.game_state.cargo_organics = int(ledger.get("organics", 0))
+            bot.game_state.cargo_equipment = int(ledger.get("equipment", 0))
+    with contextlib.suppress(Exception):
+        sem = getattr(bot, "last_semantic_data", None)
+        if isinstance(sem, dict):
+            sem["cargo_fuel_ore"] = int(ledger.get("fuel_ore", 0))
+            sem["cargo_organics"] = int(ledger.get("organics", 0))
+            sem["cargo_equipment"] = int(ledger.get("equipment", 0))
+
+
 def _create_strategy_instance(strategy_name: str, config: BotConfig, knowledge):
     """Create a strategy instance by name (fallback to opportunistic)."""
     from bbsbot.games.tw2002.strategies.ai_strategy import AIStrategy
@@ -101,7 +200,10 @@ def _choose_no_trade_guard_action(
     knowledge,
     credits_now: int,
     *,
+    allow_buy: bool = True,
     guard_overage: int = 0,
+    previous_sector: int | None = None,
+    recent_sectors: list[int] | deque[int] | None = None,
 ) -> tuple[TradeAction, dict] | None:
     """Hard trade-urgency override when the no-trade guard is active."""
     if state.context != "sector_command":
@@ -109,17 +211,31 @@ def _choose_no_trade_guard_action(
 
     current_sector = int(state.sector or 0)
     info = knowledge.get_sector_info(current_sector) if current_sector > 0 else None
-    statuses = _derive_port_statuses(getattr(state, "port_class", None), info)
+    has_port_now = bool(getattr(state, "has_port", False))
+    has_port_known_here = bool(getattr(info, "has_port", False))
+    local_port_available = current_sector > 0 and (has_port_now or has_port_known_here)
+    statuses = _derive_port_statuses(getattr(state, "port_class", None) or getattr(info, "port_class", None), info)
     cargo = {
         "fuel_ore": int(getattr(state, "cargo_fuel_ore", 0) or 0),
         "organics": int(getattr(state, "cargo_organics", 0) or 0),
         "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
     }
+    cargo_total = sum(max(0, int(v or 0)) for v in cargo.values())
+    primary_cargo = max(cargo.items(), key=lambda kv: int(kv[1] or 0))[0] if cargo_total > 0 else None
+    units = (getattr(info, "port_trading_units", {}) or {}) if info else {}
+    holds_free = max(0, int(getattr(state, "holds_free", 0) or 0))
 
-    if bool(getattr(state, "has_port", False)) and current_sector > 0:
+    if local_port_available:
         # First priority: sell whatever we already hold into local demand.
         for commodity, qty in cargo.items():
-            if qty > 0 and statuses.get(commodity) == "buying":
+            if qty <= 0 or statuses.get(commodity) != "buying":
+                continue
+            demand_units = units.get(commodity)
+            if demand_units is not None:
+                with contextlib.suppress(Exception):
+                    if int(demand_units) <= 0:
+                        continue
+            if qty > 0:
                 return TradeAction.TRADE, {
                     "commodity": commodity,
                     "action": "sell",
@@ -127,35 +243,126 @@ def _choose_no_trade_guard_action(
                     "urgency": "no_trade_guard",
                 }
 
+        # If we have cargo and status hints are missing, probe one sell commodity.
+        # Dock failure/non-port is handled by execute_port_trade() and cached.
+        if not statuses:
+            for commodity, qty in cargo.items():
+                if qty > 0:
+                    return TradeAction.TRADE, {
+                        "commodity": commodity,
+                        "action": "sell",
+                        "max_quantity": qty,
+                        "urgency": "no_trade_guard",
+                    }
+
+        # If local port doesn't buy what we carry, route to a better sell target.
+        if cargo_total > 0:
+            reroute = _choose_guard_reroute_action(
+                state=state,
+                knowledge=knowledge,
+                previous_sector=previous_sector,
+                recent_sectors=list(recent_sectors or []),
+                commodity=primary_cargo,
+                trade_action="sell",
+            )
+            if reroute is not None:
+                return reroute
+
         # Second priority: buy the cheapest local commodity the port is selling.
-        holds_free = max(0, int(getattr(state, "holds_free", 0) or 0))
-        allow_local_buy_attempt = guard_overage <= 1
-        if allow_local_buy_attempt and holds_free > 0 and int(credits_now or 0) > 0:
-            sellables = [c for c in ("fuel_ore", "organics", "equipment") if statuses.get(c) == "selling"]
+        # Bootstrap mode can disable forced buys to avoid draining bankroll
+        # before we have stable sell paths.
+        if allow_buy and holds_free > 0 and int(credits_now or 0) > 0:
+            sellables: list[str] = []
+            for commodity in ("fuel_ore", "organics", "equipment"):
+                if statuses.get(commodity) != "selling":
+                    continue
+                supply_units = units.get(commodity)
+                if supply_units is not None:
+                    with contextlib.suppress(Exception):
+                        if int(supply_units) <= 0:
+                            continue
+                sellables.append(commodity)
+            if not sellables:
+                # If units are unknown, keep a fallback to avoid deadlock.
+                sellables = [c for c in ("fuel_ore", "organics", "equipment") if statuses.get(c) == "selling"]
+            # Only force local buys when we already know a nearby buyer path.
+            # This avoids filling holds with dead-end cargo and burning turns.
+            current_sector_for_buy = int(current_sector or 0)
+            buyer_paths: dict[str, list[int]] = {}
+            if current_sector_for_buy > 0:
+                for comm in list(sellables):
+                    path = _find_nearest_market_path(
+                        state=state,
+                        knowledge=knowledge,
+                        commodity=comm,
+                        desired_side="buying",
+                        max_hops=8,
+                    )
+                    if path:
+                        buyer_paths[comm] = path
+            if buyer_paths:
+                sellables = [c for c in sellables if c in buyer_paths]
+            elif guard_overage < 8:
+                sellables = []
             if sellables:
                 prices = (getattr(info, "port_prices", {}) or {}) if info else {}
+                commodity_priority = {"fuel_ore": 0, "organics": 1, "equipment": 2}
 
                 def _rank_buy(comm: str) -> tuple[int, str]:
                     quoted = (prices.get(comm) or {}).get("sell")
                     try:
-                        p = int(quoted) if quoted is not None else 10**9
+                        # Unknown quote: prioritize traditionally cheaper holds.
+                        p = int(quoted) if quoted is not None else (10**9) + int(commodity_priority.get(comm, 99))
                     except Exception:
-                        p = 10**9
+                        p = (10**9) + int(commodity_priority.get(comm, 99))
                     return (p, comm)
 
                 commodity = sorted(sellables, key=_rank_buy)[0]
                 quoted = (prices.get(commodity) or {}).get("sell")
                 qty = 1
-                with contextlib.suppress(Exception):
+                credits_val = max(0, int(credits_now or 0))
+                try:
                     qv = int(quoted) if quoted is not None else 0
-                    if qv > 0:
-                        affordable = int(credits_now // qv)
-                        # If we cannot afford even one unit, do not force a local buy
-                        # and fall back to movement/exploration below.
-                        qty = min(holds_free, affordable) if affordable > 0 else 0
+                except Exception:
+                    qv = 0
+                if qv > 0:
+                    # Preserve a bankroll reserve so guard mode doesn't zero out
+                    # the ship on expensive single-unit buys.
+                    reserve_floor = max(40, int(credits_val * 0.35))
+                    spend_cap = min(max(0, credits_val - reserve_floor), max(0, int(credits_val * 0.5)))
+                    affordable = int(spend_cap // qv)
+                    # If we cannot afford even one unit, do not force a local buy
+                    # and fall back to movement/exploration below.
+                    # Buy more than one unit when possible so guard-mode bots
+                    # can recover CPT instead of getting stuck in 1-unit churn.
+                    if affordable > 0:
+                        if guard_overage >= 20:
+                            buy_cap = min(holds_free, 12)
+                        elif guard_overage >= 8:
+                            buy_cap = min(holds_free, 8)
+                        else:
+                            buy_cap = min(holds_free, 4)
+                        qty = min(buy_cap, affordable)
                     else:
-                        # Unknown price: keep buys small until we build market intel.
-                        qty = min(holds_free, 2 if int(credits_now) < 2000 else 4)
+                        qty = 0
+                else:
+                    # Unknown price: only probe if bankroll can support a
+                    # conservative minimum per-commodity estimate.
+                    # Below 500 credits, avoid blind organics/equipment probes.
+                    if credits_val < 500 and commodity != "fuel_ore":
+                        qty = 0
+                    else:
+                        min_probe_credit = {
+                            "fuel_ore": 35,
+                            "organics": 45,
+                            "equipment": 80,
+                        }.get(commodity, 40)
+                        if credits_val < int(min_probe_credit):
+                            qty = 0
+                        elif credits_val < 300:
+                            qty = min(holds_free, 1)
+                        else:
+                            qty = min(holds_free, 4 if guard_overage >= 20 else 2)
                 if qty > 0:
                     return TradeAction.TRADE, {
                         "commodity": commodity,
@@ -163,43 +370,343 @@ def _choose_no_trade_guard_action(
                         "max_quantity": qty,
                         "urgency": "no_trade_guard",
                     }
+            else:
+                # Move to a known nearby seller before forcing speculative buys.
+                reroute_buy = _choose_guard_reroute_action(
+                    state=state,
+                    knowledge=knowledge,
+                    previous_sector=previous_sector,
+                    recent_sectors=list(recent_sectors or []),
+                    commodity="fuel_ore",
+                    trade_action="buy",
+                )
+                if reroute_buy is not None:
+                    return reroute_buy
+        # If guard has been active for a while and we still cannot construct a
+        # local buy/sell, perform a minimal trade probe. This forces a dock
+        # attempt which updates no-port knowledge on failure and breaks stale
+        # move-only loops.
+        if guard_overage >= 4:
+            credits_val = max(0, int(credits_now or 0))
+            if cargo_total > 0:
+                probe_commodity = str(primary_cargo or "fuel_ore")
+                reroute = _choose_guard_reroute_action(
+                    state=state,
+                    knowledge=knowledge,
+                    previous_sector=previous_sector,
+                    recent_sectors=list(recent_sectors or []),
+                    commodity=probe_commodity,
+                    trade_action="sell",
+                )
+                if reroute is not None:
+                    return reroute
+                # If local market status is known and this port is not buying the
+                # commodity we hold, skip futile local sell probes.
+                if statuses and str(statuses.get(probe_commodity, "")).lower() != "buying":
+                    probe_commodity = ""
+                if not probe_commodity:
+                    # Fall through to movement/exploration below.
+                    pass
+                else:
+                    return TradeAction.TRADE, {
+                        "commodity": probe_commodity,
+                        "action": "sell",
+                        "max_quantity": 1,
+                        "urgency": "no_trade_probe",
+                    }
+
+            # With empty holds, "sell probes" are pure waste and can loop forever.
+            # In bootstrap/allow_buy=False mode, permit a guarded 1-unit buy only
+            # after persistent stall; otherwise fall back to movement/exploration.
+            sellables = [c for c in ("fuel_ore", "organics", "equipment") if statuses.get(c) == "selling"]
+            can_probe_buy = (
+                bool(sellables)
+                and holds_free > 0
+                and (
+                    (allow_buy and credits_val >= 120)
+                    or ((not allow_buy) and guard_overage >= 10 and credits_val >= 260)
+                )
+            )
+            if can_probe_buy:
+                prices = (getattr(info, "port_prices", {}) or {}) if info else {}
+
+                def _probe_rank(comm: str) -> tuple[int, str]:
+                    quoted = (prices.get(comm) or {}).get("sell")
+                    try:
+                        return (int(quoted), comm) if quoted is not None else (10**9, comm)
+                    except Exception:
+                        return (10**9, comm)
+
+                probe_commodity = sorted(sellables, key=_probe_rank)[0]
+                return TradeAction.TRADE, {
+                    "commodity": probe_commodity,
+                    "action": "buy",
+                    "max_quantity": 1,
+                    "urgency": "no_trade_probe",
+                }
+            # No safe probe available here; fall through to movement/explore.
+
+    # Severe stale/no-trade recovery: when we have no confirmed local port intel,
+    # actively probe for one instead of explore-only wandering.
+    if not local_port_available and guard_overage >= 12:
+        credits_val = max(0, int(credits_now or 0))
+        if cargo_total > 0:
+            probe_sell = str(primary_cargo or "fuel_ore")
+            return TradeAction.TRADE, {
+                "commodity": probe_sell,
+                "action": "sell",
+                "max_quantity": 1,
+                "urgency": "no_trade_probe",
+            }
+        if holds_free > 0 and credits_val >= 120:
+            probe_order = ["fuel_ore", "organics", "equipment"]
+            probe_index = abs(int(current_sector) + int(guard_overage)) % len(probe_order)
+            probe_commodity = probe_order[probe_index]
+            return TradeAction.TRADE, {
+                "commodity": probe_commodity,
+                "action": "buy",
+                "max_quantity": 1,
+                "urgency": "no_trade_probe",
+            }
 
     # Not at a usable port: force movement to nearest known port.
     if current_sector > 0:
-        best_path: list[int] | None = None
-        best_sector: int | None = None
-        known = getattr(knowledge, "_sectors", {}) or {}
-        for sector, sector_info in known.items():
-            if int(sector) == current_sector:
-                continue
-            if not getattr(sector_info, "has_port", False):
-                continue
-            path = knowledge.find_path(current_sector, int(sector), max_hops=20)
-            if not path or len(path) < 2:
-                continue
-            if best_path is None or len(path) < len(best_path):
-                best_path = path
-                best_sector = int(sector)
-        if best_path and best_sector:
-            return TradeAction.MOVE, {
-                "target_sector": best_sector,
-                "path": best_path,
-                "urgency": "no_trade_guard",
-            }
+        reroute = _choose_guard_reroute_action(
+            state=state,
+            knowledge=knowledge,
+            previous_sector=previous_sector,
+            recent_sectors=list(recent_sectors or []),
+            commodity=primary_cargo,
+            trade_action="sell" if cargo_total > 0 else None,
+        )
+        if reroute is not None:
+            action, params = reroute
+            if action == TradeAction.MOVE:
+                params = dict(params)
+                params.setdefault("urgency", "no_trade_guard")
+                return action, params
 
     warps = [int(w) for w in (state.warps or []) if int(w) != current_sector]
+    # Hard stall escape: if guard has been over threshold for a long time and we
+    # still cannot resolve a trade/reroute, force a long-jump move. Non-adjacent
+    # sector moves are handled by warp_to_sector() via autopilot and help break
+    # deterministic ABAB local loops.
+    if guard_overage >= 6 and current_sector > 0:
+        jump_target = _choose_guard_escape_jump_target(
+            current_sector=current_sector,
+            recent_sectors=list(recent_sectors or []),
+        )
+        if jump_target and jump_target != current_sector:
+            return TradeAction.MOVE, {
+                "target_sector": int(jump_target),
+                "path": [int(current_sector), int(jump_target)],
+                "urgency": "no_trade_escape_jump",
+            }
     if warps:
-        target = sorted(warps)[0]
-        return TradeAction.EXPLORE, {"direction": target, "urgency": "no_trade_guard"}
+        target = sorted(w for w in warps if int(w) != int(previous_sector or 0)) or sorted(warps)
+        chosen = int(target[0])
+        return TradeAction.EXPLORE, {"direction": chosen, "urgency": "no_trade_guard"}
     return None
 
 
+def _choose_guard_reroute_action(
+    *,
+    state,
+    knowledge,
+    previous_sector: int | None = None,
+    recent_sectors: list[int] | deque[int] | None = None,
+    commodity: str | None = None,
+    trade_action: str | None = None,
+) -> tuple[TradeAction, dict] | None:
+    """Move away from a local no-trade loop to a different known port."""
+    current_sector = int(getattr(state, "sector", 0) or 0)
+    if current_sector <= 0:
+        return None
+
+    target_commodity = str(commodity or "").strip().lower()
+    if target_commodity not in {"fuel_ore", "organics", "equipment"}:
+        target_commodity = ""
+    desired_side = None
+    action_side = str(trade_action or "").strip().lower()
+    if target_commodity and action_side == "sell":
+        desired_side = "buying"
+    elif target_commodity and action_side == "buy":
+        desired_side = "selling"
+
+    recent_tail = list(recent_sectors or [])
+    recent_avoid = {int(s) for s in recent_tail[-8:] if int(s) != current_sector}
+
+    best_pref: tuple[tuple[int, int, int, int, int], list[int]] | None = None
+    best_any: tuple[tuple[int, int, int, int], list[int]] | None = None
+    for sector, info in (getattr(knowledge, "_sectors", {}) or {}).items():
+        try:
+            target_sector = int(sector)
+        except Exception:
+            continue
+        if target_sector <= 0 or target_sector == current_sector:
+            continue
+        if previous_sector is not None and target_sector == int(previous_sector):
+            continue
+        if not getattr(info, "has_port", False):
+            continue
+        path = knowledge.find_path(current_sector, target_sector, max_hops=20)
+        # Guard mode can safely use non-adjacent direct jump requests; the game
+        # autopilot resolves full routes server-side even when local map knowledge
+        # is sparse. Keep these candidates, but score them as more expensive than
+        # known-map paths.
+        if not path or len(path) < 2:
+            path = [current_sector, target_sector]
+            hops = 25
+        else:
+            hops = len(path) - 1
+        recent_penalty = 1 if target_sector in recent_avoid else 0
+        quality = 0
+        with contextlib.suppress(Exception):
+            quality += 1 if getattr(info, "port_status", None) else 0
+            quality += 1 if getattr(info, "port_prices", None) else 0
+
+        any_key = (recent_penalty, hops, -quality, target_sector)
+        if best_any is None or any_key < best_any[0]:
+            best_any = (any_key, path)
+
+        if desired_side:
+            statuses = _derive_port_statuses(getattr(info, "port_class", None), info)
+            side = statuses.get(target_commodity)
+            if side == desired_side:
+                comm_penalty = 0
+            elif side is None:
+                comm_penalty = 1
+            else:
+                comm_penalty = 3
+            pref_key = (comm_penalty, recent_penalty, hops, -quality, target_sector)
+            if comm_penalty < 3 and (best_pref is None or pref_key < best_pref[0]):
+                best_pref = (pref_key, path)
+
+    # Prefer side-matched targets when possible; otherwise fall back to any known
+    # port so stale/partial market intel doesn't trap guard mode in pure explores.
+    best = best_pref if best_pref is not None else best_any
+    if best is not None:
+        path = best[1]
+        return TradeAction.MOVE, {
+            "target_sector": int(path[-1]),
+            "path": list(path),
+            "urgency": "no_trade_reroute",
+        }
+
+    warps = [int(w) for w in (getattr(state, "warps", []) or []) if int(w) != current_sector]
+    if warps:
+        target = sorted(w for w in warps if int(w) != int(previous_sector or 0)) or sorted(warps)
+        return TradeAction.EXPLORE, {"direction": int(target[0]), "urgency": "no_trade_reroute"}
+    return None
+
+
+def _choose_guard_escape_jump_target(*, current_sector: int, recent_sectors: list[int] | deque[int] | None) -> int:
+    """Pick a deterministic far sector to break local no-trade loops.
+
+    Uses coprime strides across the 1..1000 sector range while avoiding the most
+    recent cycle tail when possible.
+    """
+    current = int(current_sector or 0)
+    if current <= 0:
+        return 1
+    recent = [int(s) for s in (recent_sectors or []) if int(s) > 0]
+    avoid = {int(s) for s in recent[-12:]}
+    for stride in (137, 271, 389, 523, 719):
+        candidate = ((current + stride - 1) % 1000) + 1
+        if candidate != current and candidate not in avoid:
+            return int(candidate)
+    # Fall back to any different sector if everything in the tail is saturated.
+    fallback = ((current + 137 - 1) % 1000) + 1
+    return int(fallback if fallback != current else ((current % 1000) + 1))
+
+
+def _find_nearest_market_path(
+    *,
+    state,
+    knowledge,
+    commodity: str,
+    desired_side: str,
+    max_hops: int = 12,
+) -> list[int] | None:
+    """Return shortest known path to a port matching commodity market side."""
+    current_sector = int(getattr(state, "sector", 0) or 0)
+    if current_sector <= 0:
+        return None
+    target_commodity = str(commodity or "").strip().lower()
+    if target_commodity not in {"fuel_ore", "organics", "equipment"}:
+        return None
+    want_side = str(desired_side or "").strip().lower()
+    if want_side not in {"buying", "selling"}:
+        return None
+
+    best: list[int] | None = None
+    for sector, info in (getattr(knowledge, "_sectors", {}) or {}).items():
+        try:
+            target_sector = int(sector)
+        except Exception:
+            continue
+        if target_sector <= 0 or target_sector == current_sector:
+            continue
+        if not getattr(info, "has_port", False):
+            continue
+        statuses = _derive_port_statuses(getattr(info, "port_class", None), info)
+        if statuses.get(target_commodity) != want_side:
+            continue
+        path = knowledge.find_path(current_sector, target_sector, max_hops=max_hops)
+        if not path or len(path) < 2:
+            continue
+        if best is None or len(path) < len(best):
+            best = list(path)
+    return best
+
+
+def _get_zero_trade_streak(bot, sector: int, commodity: str | None = None, trade_action: str | None = None) -> int:
+    """Return tracked zero-delta trade streak for a sector/commodity/action.
+
+    If commodity/action are omitted, returns the highest streak seen in the sector.
+    """
+    try:
+        zero_map = getattr(bot, "_zero_trade_streak", {}) or {}
+    except Exception:
+        return 0
+    if not isinstance(zero_map, dict):
+        return 0
+    if int(sector or 0) <= 0:
+        return 0
+
+    if commodity is not None and trade_action is not None:
+        with contextlib.suppress(Exception):
+            return max(0, int(zero_map.get((int(sector), str(commodity), str(trade_action)), 0) or 0))
+
+    best = 0
+    for key, value in zero_map.items():
+        try:
+            sig_sector = int(key[0])
+        except Exception:
+            continue
+        if sig_sector != int(sector):
+            continue
+        with contextlib.suppress(Exception):
+            best = max(best, int(value or 0))
+    return max(0, best)
+
+
 def _is_sector_ping_pong(recent_sectors: list[int] | deque[int]) -> bool:
-    """Detect short ABAB alternation loops in sector movement."""
-    if len(recent_sectors) < 4:
+    """Detect short repeating movement loops (ABAB, ABCABC)."""
+    seq = list(recent_sectors)
+    if len(seq) < 4:
         return False
-    a, b, c, d = list(recent_sectors)[-4:]
-    return a == c and b == d and a != b
+
+    def _repeats(cycle_len: int) -> bool:
+        if len(seq) < cycle_len * 2:
+            return False
+        tail = seq[-(cycle_len * 2) :]
+        pattern = tail[:cycle_len]
+        if len(set(pattern)) <= 1:
+            return False
+        return tail[cycle_len:] == pattern
+
+    return _repeats(2) or _repeats(3)
 
 
 def _choose_ping_pong_break_action(
@@ -228,7 +735,11 @@ def _choose_ping_pong_break_action(
     if not warps:
         return None
 
-    candidates = [w for w in warps if w != current and w != previous]
+    recent_tail = list(recent_sectors)[-6:]
+    recent_block = {int(s) for s in recent_tail if int(s) != current}
+    candidates = [w for w in warps if w != current and w not in recent_block]
+    if not candidates:
+        candidates = [w for w in warps if w != current and w != previous]
     if not candidates:
         return None
 
@@ -236,6 +747,126 @@ def _choose_ping_pong_break_action(
     unseen = [w for w in candidates if knowledge and knowledge.get_warps(w) is None]
     target = sorted(unseen or candidates)[0]
     return TradeAction.EXPLORE, {"direction": target, "urgency": "loop_break"}
+
+
+def _resolve_no_trade_guard_thresholds(
+    *,
+    config: BotConfig,
+    turns_used: int,
+    turns_since_last_trade: int,
+    trades_done: int,
+    credits_per_turn: float,
+    trades_per_100_turns: float,
+) -> tuple[int, int, bool]:
+    """Return adaptive guard thresholds and whether stale-guard is enabled."""
+    base_turns = max(1, int(getattr(config.trading, "no_trade_guard_turns", 60)))
+    base_stale = max(1, int(getattr(config.trading, "no_trade_guard_stale_turns", base_turns)))
+    if not bool(getattr(config.trading, "no_trade_guard_dynamic", True)):
+        return base_turns, base_stale, True
+
+    min_turns = max(1, int(getattr(config.trading, "no_trade_guard_turns_min", 24)))
+    max_turns = max(min_turns, int(getattr(config.trading, "no_trade_guard_turns_max", 180)))
+    min_stale = max(1, int(getattr(config.trading, "no_trade_guard_stale_turns_min", 24)))
+    max_stale = max(min_stale, int(getattr(config.trading, "no_trade_guard_stale_turns_max", 240)))
+    warmup_turns = max(0, int(getattr(config.trading, "no_trade_guard_dynamic_warmup_turns", 30)))
+    stale_disable_after_trades = max(0, int(getattr(config.trading, "no_trade_guard_stale_disable_after_trades", 5)))
+    stale_resume_turns = max(1, int(getattr(config.trading, "no_trade_guard_stale_resume_turns", 180)))
+
+    # Multipliers: tighten on clear failure, relax on sustained healthy behavior.
+    scale = 1.0
+    if turns_used <= warmup_turns:
+        scale = 2.0
+    elif credits_per_turn >= 0.8 and trades_per_100_turns >= 8.0:
+        scale = 2.4
+    elif credits_per_turn >= 0.35 and trades_per_100_turns >= 4.0:
+        scale = 1.8
+    elif credits_per_turn >= 0.12 and trades_per_100_turns >= 2.0:
+        scale = 1.35
+    elif credits_per_turn < -0.25 and trades_per_100_turns < 1.5:
+        scale = 0.70
+    elif credits_per_turn < 0.0 and trades_per_100_turns < 2.5:
+        scale = 0.85
+    elif trades_done == 0 and turns_since_last_trade >= base_stale:
+        scale = 0.65
+
+    guard_turns = int(round(base_turns * scale))
+    guard_stale_turns = int(round(base_stale * scale))
+    guard_turns = max(min_turns, min(max_turns, guard_turns))
+    guard_stale_turns = max(min_stale, min(max_stale, guard_stale_turns))
+
+    stale_guard_enabled = True
+    if (
+        trades_done >= stale_disable_after_trades
+        and trades_per_100_turns >= 2.0
+        and credits_per_turn > -0.05
+    ):
+        stale_guard_enabled = False
+        guard_stale_turns = max(guard_stale_turns, min(max_stale, int(round(base_stale * 2.0))))
+
+    # Safety catch: always re-enable stale guard if we have been dry for a long time.
+    if turns_since_last_trade >= max(stale_resume_turns, int(round(base_stale * 2.0))):
+        stale_guard_enabled = True
+
+    return guard_turns, guard_stale_turns, stale_guard_enabled
+
+
+def _should_force_bootstrap_trade(
+    *,
+    config: BotConfig,
+    turns_used: int,
+    trades_done: int,
+    guard_min_trades: int,
+    force_guard: bool,
+) -> bool:
+    """Return True when we should force an early first-trade action."""
+    if force_guard:
+        return False
+    bootstrap_turns = max(0, int(getattr(config.trading, "bootstrap_trade_turns", 12)))
+    if turns_used < bootstrap_turns:
+        return False
+    return int(trades_done) < int(max(1, guard_min_trades))
+
+
+def _is_effective_trade_change(
+    *,
+    credit_change: int,
+    trade_action: str | None = None,
+    is_buy: bool | None = None,
+) -> bool:
+    """Return True when credit delta matches the intended trade direction.
+
+    BUY legs should reduce credits, SELL legs should increase credits.
+    If side is unknown, any non-zero delta is treated as effective.
+    """
+    delta = int(credit_change)
+    side_is_buy = is_buy
+    if side_is_buy is None:
+        side = str(trade_action or "").strip().lower()
+        if side == "buy":
+            side_is_buy = True
+        elif side == "sell":
+            side_is_buy = False
+
+    if side_is_buy is True:
+        return delta < 0
+    if side_is_buy is False:
+        return delta > 0
+    return delta != 0
+
+
+def _should_count_trade_completion(
+    *,
+    trade_interaction_seen: bool,
+    credit_change: int,
+    trade_action: str | None = None,
+    is_buy: bool | None = None,
+) -> bool:
+    """Count completed trade telemetry only for effective executions."""
+    if _is_effective_trade_change(credit_change=credit_change, trade_action=trade_action, is_buy=is_buy):
+        return True
+    if not trade_interaction_seen:
+        return False
+    return False
 
 
 async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
@@ -278,6 +909,12 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         turns_used += 1
         bot.turns_used = turns_used
 
+        def _refund_turn_counter() -> None:
+            """Undo local turn accounting for non-turn-consuming housekeeping steps."""
+            nonlocal turns_used
+            turns_used = max(0, turns_used - 1)
+            bot.turns_used = turns_used
+
         # Get current state (with scan optimization)
         orient_retries = 0
         max_orient_retries = 3
@@ -300,7 +937,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     else:
                         print("  ✗ Could not escape loop, skipping turn")
                         break
-                elif isinstance(e, (TimeoutError, ConnectionError, OrientationError)):
+                transport_lost = isinstance(e, (AttributeError, RuntimeError)) and "send" in str(e).lower() and (
+                    "none" in str(e).lower() or "disconnected" in str(e).lower()
+                )
+                if isinstance(e, (TimeoutError, ConnectionError, OrientationError)) or transport_lost:
                     # Retry on network timeouts, connection errors, and orientation failures
                     orient_retries += 1
                     if orient_retries < max_orient_retries:
@@ -320,7 +960,18 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             # Track consecutive orient failures - try reconnection instead of exiting
             consecutive_orient_failures += 1
             if consecutive_orient_failures >= 10:
-                if hasattr(bot, "session") and hasattr(bot.session, "is_connected") and not bot.session.is_connected():
+                session_obj = getattr(bot, "session", None)
+                is_connected = False
+                if session_obj is not None:
+                    fn = getattr(session_obj, "is_connected", None)
+                    if callable(fn):
+                        with contextlib.suppress(Exception):
+                            result = fn()
+                            if not asyncio.iscoroutine(result):
+                                is_connected = bool(result)
+                    else:
+                        is_connected = True
+                if not is_connected:
                     # Connection lost - attempt reconnection instead of exiting
                     print(f"\n⚠️  Connection lost after {consecutive_orient_failures} failures, attempting reconnect...")
                     try:
@@ -343,10 +994,14 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 except Exception:
                     print("✗ Recovery failed, waiting before retry...")
                     await asyncio.sleep(3)
+            _refund_turn_counter()
             continue
 
         # Successful orient - reset failure counter
         consecutive_orient_failures = 0
+
+        # Keep strategy inputs stable even when semantic extraction misses cargo rows.
+        _apply_cargo_ledger_to_state(bot, state)
 
         # Detect server maximum turns on first orient (if configured to use server max)
         if turns_used == 1 and max_turns_config == 0 and state.turns_left is not None:
@@ -391,7 +1046,33 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 await bot.session.send(bot.last_game_letter + "\r")
                 await asyncio.sleep(2.0)
                 # Skip to next turn to re-orient inside the game
+                _refund_turn_counter()
                 continue
+
+        # Strategy loop runs from sector command. If we're in another in-game
+        # menu, send the minimal escape key and re-orient without counting a turn.
+        if state.context != "sector_command":
+            ctx = str(state.context or "")
+            if ctx == "planet_command":
+                logger.info("Exiting planet command to sector command (Q)")
+                await bot.session.send("Q")
+                await asyncio.sleep(0.6)
+                _refund_turn_counter()
+                continue
+            if ctx in {"known_universe_display", "prompt.pause_simple", "pause_simple"}:
+                await bot.session.send(" ")
+                await asyncio.sleep(0.35)
+                _refund_turn_counter()
+                continue
+            if ctx in {"port_menu", "bank_menu", "corporation_menu", "computer_menu", "citadel_command"}:
+                await bot.session.send("Q")
+                await asyncio.sleep(0.6)
+                _refund_turn_counter()
+                continue
+            with contextlib.suppress(Exception):
+                await bot.recover()
+            _refund_turn_counter()
+            continue
 
         # Show compact goal status every N turns (AI strategy only).
         try:
@@ -450,6 +1131,17 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             continue
 
         # Policy: per-bot selectable and can auto-switch dynamically based on bankroll.
+        def _dynamic_spread_lane() -> str:
+            raw = str(getattr(bot, "bot_id", "") or "")
+            m = re.search(r"(\d+)\s*$", raw)
+            if m:
+                idx = int(m.group(1))
+            elif raw:
+                idx = abs(hash(raw))
+            else:
+                idx = 0
+            return ("conservative", "balanced", "aggressive")[idx % 3]
+
         def _compute_policy(credits_now: int | None) -> str:
             policy = getattr(config.trading, "policy", "dynamic")
             if policy and policy != "dynamic":
@@ -457,15 +1149,19 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             credits_val = int(credits_now or 0)
             dyn = getattr(config.trading, "dynamic_policy", None)
             try:
-                conservative_under = int(getattr(dyn, "conservative_under_credits", 5000)) if dyn else 5000
-                aggressive_over = int(getattr(dyn, "aggressive_over_credits", 50000)) if dyn else 50000
+                conservative_under = int(getattr(dyn, "conservative_under_credits", 300)) if dyn else 300
+                aggressive_over = int(getattr(dyn, "aggressive_over_credits", 20000)) if dyn else 20000
+                spread_enabled = bool(getattr(dyn, "spread_enabled", True)) if dyn else True
             except Exception:
-                conservative_under = 5000
-                aggressive_over = 50000
+                conservative_under = 300
+                aggressive_over = 20000
+                spread_enabled = True
             if credits_val < conservative_under:
                 return "conservative"
             if credits_val >= aggressive_over:
                 return "aggressive"
+            if spread_enabled:
+                return _dynamic_spread_lane()
             return "balanced"
 
         try:
@@ -478,15 +1174,43 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         # Anti-waste guardrail: if we have burned many turns with very few trades,
         # force a profit-first strategy/mode to avoid long explore-only runs.
-        guard_turns = int(getattr(config.trading, "no_trade_guard_turns", 60))
         guard_min_trades = int(getattr(config.trading, "no_trade_guard_min_trades", 1))
-        guard_stale_turns = int(getattr(config.trading, "no_trade_guard_stale_turns", guard_turns))
         guard_strategy = str(getattr(config.trading, "no_trade_guard_strategy", "profitable_pairs"))
         guard_mode = str(getattr(config.trading, "no_trade_guard_mode", "balanced"))
         trades_done = int(getattr(bot, "trades_executed", 0) or 0)
         turns_since_last_trade = turns_used if last_trade_turn <= 0 else max(0, turns_used - last_trade_turn)
+        session_start_credits = getattr(bot, "_session_start_credits", None)
+        credits_now = int(getattr(state, "credits", 0) or 0)
+        if credits_now >= 0 and session_start_credits is None:
+            with contextlib.suppress(Exception):
+                bot._session_start_credits = credits_now
+                session_start_credits = credits_now
+        credits_per_turn = 0.0
+        if credits_now >= 0 and session_start_credits is not None and turns_used > 0:
+            with contextlib.suppress(Exception):
+                credits_per_turn = float(int(credits_now) - int(session_start_credits)) / float(turns_used)
+        if credits_per_turn == 0.0 and turns_used > 0:
+            with contextlib.suppress(Exception):
+                credits_per_turn = float(getattr(bot, "credits_per_turn", 0.0) or 0.0)
+        trades_per_100_turns = (float(trades_done) * 100.0 / float(turns_used)) if turns_used > 0 else 0.0
+
+        guard_turns, guard_stale_turns, stale_guard_enabled = _resolve_no_trade_guard_thresholds(
+            config=config,
+            turns_used=turns_used,
+            turns_since_last_trade=turns_since_last_trade,
+            trades_done=trades_done,
+            credits_per_turn=credits_per_turn,
+            trades_per_100_turns=trades_per_100_turns,
+        )
         force_guard = (turns_used >= guard_turns and trades_done < guard_min_trades) or (
-            turns_since_last_trade >= guard_stale_turns
+            stale_guard_enabled and turns_since_last_trade >= guard_stale_turns
+        )
+        force_bootstrap_trade = _should_force_bootstrap_trade(
+            config=config,
+            turns_used=turns_used,
+            trades_done=trades_done,
+            guard_min_trades=guard_min_trades,
+            force_guard=force_guard,
         )
 
         if force_guard:
@@ -511,6 +1235,8 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 with contextlib.suppress(Exception):
                     bot._strategy = strategy
             effective_policy = guard_mode
+            if trades_done <= 0 and turns_since_last_trade >= max(120, int(guard_stale_turns * 2)):
+                effective_policy = "aggressive"
             with contextlib.suppress(Exception):
                 bot.strategy_intent = f"RECOVERY:FORCE_{guard_strategy.upper()}"
         elif ai_policy_locked:
@@ -518,6 +1244,25 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             effective_policy = str(getattr(strategy, "policy", None) or "balanced")
         else:
             effective_policy = _compute_policy(getattr(state, "credits", None))
+            # Bootstrap bias: before first completed trade, avoid conservative mode
+            # so new ships actually enter trading loops early.
+            if trades_done <= 0 and effective_policy == "conservative":
+                effective_policy = "balanced"
+            # Throughput-aware policy overrides for dynamic mode.
+            # If trade velocity is weak, bias to aggressive to increase execution.
+            if (
+                turns_used >= 40
+                and trades_per_100_turns < 1.2
+                and credits_per_turn <= 0.25
+            ):
+                effective_policy = "aggressive"
+            # If we're losing badly on a thin bankroll, de-risk to reduce bleed.
+            if (
+                turns_used >= 30
+                and credits_now < 1_500
+                and credits_per_turn < -1.0
+            ):
+                effective_policy = "conservative"
 
         try:
             if hasattr(strategy, "set_policy"):
@@ -536,14 +1281,39 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             action, params = strategy.get_next_action(state)
 
         if force_guard:
+            allow_guard_buy = bool(
+                turns_since_last_trade >= max(20, int(guard_stale_turns // 2))
+                or trades_done <= 1
+            )
             forced = _choose_no_trade_guard_action(
                 state=state,
                 knowledge=bot.sector_knowledge,
-                credits_now=int(getattr(state, "credits", 0) or 0),
+                credits_now=credits_now,
+                allow_buy=allow_guard_buy,
                 guard_overage=max(0, int(turns_since_last_trade - guard_stale_turns)),
+                previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                recent_sectors=list(recent_sectors),
             )
             if forced is not None:
                 action, params = forced
+                probe_urgency = str((params or {}).get("urgency") or "")
+                if action == TradeAction.TRADE and probe_urgency == "no_trade_probe":
+                    probe_cooldown_turns = max(1, int(getattr(config.trading, "no_trade_probe_cooldown_turns", 5) or 5))
+                    last_probe_turn = int(getattr(bot, "_last_no_trade_probe_turn", -10_000) or -10_000)
+                    if (int(turns_used) - last_probe_turn) < probe_cooldown_turns:
+                        reroute = _choose_guard_reroute_action(
+                            state=state,
+                            knowledge=bot.sector_knowledge,
+                            previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                            recent_sectors=list(recent_sectors),
+                        )
+                        if reroute is not None:
+                            action, params = reroute
+                            with contextlib.suppress(Exception):
+                                bot.strategy_intent = "RECOVERY:PROBE_COOLDOWN_REROUTE"
+                    else:
+                        with contextlib.suppress(Exception):
+                            bot._last_no_trade_probe_turn = int(turns_used)
                 logger.warning(
                     "no_trade_guard_force_action: turns=%s trades=%s action=%s params=%s",
                     turns_used,
@@ -553,6 +1323,102 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 )
                 with contextlib.suppress(Exception):
                     bot.strategy_intent = f"RECOVERY:TRADE_URGENCY {action.name}"
+                # If the exact local forced trade has produced zero-change outcomes repeatedly,
+                # reroute away from this sector instead of hammering the same prompt.
+                if action == TradeAction.TRADE:
+                    try:
+                        comm = str(params.get("commodity") or "")
+                        act = str(params.get("action") or "")
+                        sig = (int(getattr(state, "sector", 0) or 0), comm, act)
+                        zero_map = getattr(bot, "_zero_trade_streak", {}) or {}
+                        zero_streak = int(zero_map.get(sig, 0) or 0)
+                    except Exception:
+                        zero_streak = 0
+                    if zero_streak >= 2:
+                        reroute = _choose_guard_reroute_action(
+                            state=state,
+                            knowledge=bot.sector_knowledge,
+                            previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                            recent_sectors=list(recent_sectors),
+                            commodity=(comm or None),
+                            trade_action=(act or None),
+                        )
+                        if reroute is not None:
+                            action, params = reroute
+                            logger.warning(
+                                "no_trade_guard_reroute: sector=%s commodity=%s action=%s zero_streak=%s -> %s %s",
+                                int(getattr(state, "sector", 0) or 0),
+                                comm,
+                                act,
+                                zero_streak,
+                                action.name,
+                                params,
+                            )
+                            with contextlib.suppress(Exception):
+                                bot.strategy_intent = "RECOVERY:REROUTE_STALE_PORT"
+        elif force_bootstrap_trade:
+            bootstrap_turns_cfg = max(0, int(getattr(config.trading, "bootstrap_trade_turns", 12)))
+            bootstrap_overage = max(0, int(turns_used - bootstrap_turns_cfg))
+            forced = _choose_no_trade_guard_action(
+                state=state,
+                knowledge=bot.sector_knowledge,
+                credits_now=credits_now,
+                # Fresh bots with empty holds must be able to do a small guarded
+                # buy to bootstrap the first sell cycle; disabling buys here
+                # can create long move-only loops with zero trades.
+                allow_buy=True,
+                guard_overage=bootstrap_overage,
+                previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                recent_sectors=list(recent_sectors),
+            )
+            if forced is not None:
+                action, params = forced
+                logger.info(
+                    "bootstrap_trade_force_action: turns=%s trades=%s action=%s params=%s",
+                    turns_used,
+                    trades_done,
+                    action.name,
+                    params,
+                )
+                with contextlib.suppress(Exception):
+                    bot.strategy_intent = f"BOOTSTRAP:FORCE_{action.name}"
+
+        # Even outside no-trade guard, don't hammer a dead port with repeated
+        # zero-delta trades. Reroute after several consecutive no-op trades.
+        if action == TradeAction.TRADE:
+            try:
+                sector_now = int(getattr(state, "sector", 0) or 0)
+                comm = str(params.get("commodity") or "")
+                act = str(params.get("action") or "")
+                exact_streak = _get_zero_trade_streak(bot, sector_now, comm, act) if (comm and act) else 0
+                sector_streak = _get_zero_trade_streak(bot, sector_now)
+                trade_stall_reroute_streak = int(getattr(config.trading, "trade_stall_reroute_streak", 4) or 4)
+                zero_streak = max(exact_streak, sector_streak)
+            except Exception:
+                zero_streak = 0
+                trade_stall_reroute_streak = 4
+                comm = ""
+                act = ""
+            if zero_streak >= trade_stall_reroute_streak:
+                reroute = _choose_guard_reroute_action(
+                    state=state,
+                    knowledge=bot.sector_knowledge,
+                    previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                    recent_sectors=list(recent_sectors),
+                    commodity=(comm or None),
+                    trade_action=(act or None),
+                )
+                if reroute is not None:
+                    action, params = reroute
+                    logger.warning(
+                        "trade_stall_reroute: sector=%s zero_streak=%s -> %s %s",
+                        int(getattr(state, "sector", 0) or 0),
+                        zero_streak,
+                        action.name,
+                        params,
+                    )
+                    with contextlib.suppress(Exception):
+                        bot.strategy_intent = "RECOVERY:TRADE_STALL_REROUTE"
 
         if action in (TradeAction.MOVE, TradeAction.EXPLORE, TradeAction.WAIT):
             forced_loop_break = _choose_ping_pong_break_action(
@@ -769,14 +1635,26 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     if known_warps:
                         warps = list(known_warps)
                 if warps:
+                    with contextlib.suppress(Exception):
+                        bot._wait_no_warp_streak = 0
                     target = random.choice(warps)
                     print(f"  WAIT fallback move to sector {target}")
                     success = await warp_to_sector(bot, target)
                 else:
-                    # No actionable movement data: avoid burning a synthetic turn.
-                    turns_counted = 0
+                    # No actionable movement data. Rescan local sector to recover
+                    # warps/port context and avoid indefinite WAIT deadlocks.
+                    wait_streak = int(getattr(bot, "_wait_no_warp_streak", 0) or 0) + 1
+                    with contextlib.suppress(Exception):
+                        bot._wait_no_warp_streak = wait_streak
+                    # Avoid burning synthetic turns for a brief recovery window.
+                    # If recovery keeps failing, count the turn so stale-guard can fire.
+                    turns_counted = 0 if wait_streak <= 2 else 1
                     success = False
-                    print("  No warps available; attempting recovery")
+                    print(f"  No warps available; attempting recovery scan (streak={wait_streak})")
+                    with contextlib.suppress(Exception):
+                        await bot.session.send("d")
+                        await asyncio.sleep(0.4)
+                        await bot.session.wait_for_update(timeout_ms=1200)
                     with contextlib.suppress(Exception):
                         await bot.recover()
 
@@ -910,6 +1788,44 @@ async def execute_port_trade(
     haggle_attempts: int = 0
     last_default_offer: int | None = None
     last_offer_sent: int | None = None
+    trade_interaction_seen: bool = False
+    last_requested_qty: int | None = None
+    attempted_trade: bool = False
+
+    def _safe_buy_qty(
+        *,
+        desired_qty: int,
+        commodity_name: str | None,
+        credits_hint: int | None,
+    ) -> int:
+        """Choose a buy quantity that is safe but not overly throttled."""
+        qty = max(0, int(desired_qty))
+        if qty <= 0:
+            return 0
+        if credits_hint is None:
+            # Unknown credits: keep a modest probe size instead of hard-clamping to 1.
+            return min(qty, 3)
+        credits_val = max(0, int(credits_hint))
+        if credits_val <= 0:
+            return 0
+        # Early-game bankrolls need constrained sizing to avoid insufficient-credit loops.
+        # Use known local unit price when available; otherwise cap to a small probe batch.
+        if credits_val < 1000:
+            unit_price = None
+            with contextlib.suppress(Exception):
+                if commodity_name and getattr(bot, "sector_knowledge", None) and getattr(bot, "current_sector", None):
+                    info = bot.sector_knowledge.get_sector_info(int(bot.current_sector))
+                    if info:
+                        quote = ((info.port_prices or {}).get(commodity_name) or {}).get("sell")
+                        if quote is not None:
+                            unit_price = int(quote)
+            if unit_price and unit_price > 0:
+                affordable = max(0, credits_val // unit_price)
+                if affordable <= 0:
+                    return 0
+                return max(1, min(qty, affordable))
+            return min(qty, 3)
+        return qty
 
     # Dock at port
     await bot.session.send("P")
@@ -919,12 +1835,60 @@ async def execute_port_trade(
     screen = bot.session.snapshot().get("screen", "").lower()
 
     if "no port" in screen:
+        # Universe/server resets can invalidate cached port data.
+        # Mark this sector as non-port to avoid repeated forced-trade loops here.
+        with contextlib.suppress(Exception):
+            sector_now = int(getattr(bot, "current_sector", 0) or 0)
+            if sector_now <= 0 and getattr(bot, "game_state", None) is not None:
+                sector_now = int(getattr(bot.game_state, "sector", 0) or 0)
+            if sector_now > 0 and getattr(bot, "sector_knowledge", None) is not None:
+                known_info = bot.sector_knowledge.get_sector_info(sector_now)
+                was_known_port = bool(getattr(known_info, "has_port", False))
+                bot.sector_knowledge.update_sector(
+                    sector_now,
+                    {
+                        "has_port": False,
+                        "port_class": None,
+                        "port_status": {},
+                        "port_prices": {},
+                        "port_trading_units": {},
+                        "port_pct_max": {},
+                        "port_market_ts": {},
+                    },
+                )
+                logger.info("Marked sector as no-port after dock failure: sector=%s", sector_now)
+                if was_known_port:
+                    mismatch_count = int(getattr(bot, "_port_mismatch_count", 0) or 0) + 1
+                    mismatch_sectors = set(getattr(bot, "_port_mismatch_sectors", set()) or set())
+                    mismatch_sectors.add(sector_now)
+                    bot._port_mismatch_count = mismatch_count
+                    bot._port_mismatch_sectors = mismatch_sectors
+
+                    # Repeated "known port -> no port" mismatches indicate stale market cache
+                    # (common after server reset). Reset cached port intel once per session.
+                    if (
+                        not bool(getattr(bot, "_market_intel_reset_done", False))
+                        and mismatch_count >= 6
+                        and len(mismatch_sectors) >= 4
+                    ):
+                        changed = int(bot.sector_knowledge.clear_port_intel(clear_has_port=True) or 0)
+                        bot._market_intel_reset_done = True
+                        with contextlib.suppress(Exception):
+                            if hasattr(getattr(bot, "_strategy", None), "invalidate_pairs"):
+                                bot._strategy.invalidate_pairs()
+                        logger.warning(
+                            "market_intel_reset_due_to_port_mismatch: mismatches=%s sectors=%s cleared=%s",
+                            mismatch_count,
+                            len(mismatch_sectors),
+                            changed,
+                        )
         await bot.recover()
         return 0
 
     # Start trading (T for transaction)
     await bot.session.send("T")
     await asyncio.sleep(1.5)
+    attempted_trade = True
 
     for step in range(30):
         await bot.session.wait_for_update(timeout_ms=2000)
@@ -962,6 +1926,7 @@ async def execute_port_trade(
 
         # Quantity prompt: "How many holds of X do you want to buy/sell?"
         if _is_qty_prompt(last_line):
+            attempted_trade = True
             offered_all_credits = False
             insufficient_haggle_loops = 0
             haggle_attempts = 0
@@ -972,6 +1937,7 @@ async def execute_port_trade(
             prompt_line = last_line
             is_buy = " buy" in prompt_line or prompt_line.strip().startswith("how many") and " buy" in prompt_line
             is_sell = " sell" in prompt_line
+            prompt_qty_cap = _extract_port_qty_cap(prompt_line, screen, is_sell=is_sell)
             last_trade_is_buy = True if is_buy else (False if is_sell else None)
             last_trade_qty = None
 
@@ -1013,15 +1979,35 @@ async def execute_port_trade(
                         continue
 
                     if max_quantity > 0:
-                        # If we are buying and credits are unknown/low, never accept a large max_quantity.
-                        if is_buy and (credits_available is None or credits_available < 1000):
-                            qty_str = "1"
+                        effective_max_quantity = max_quantity
+                        if prompt_qty_cap is not None:
+                            effective_max_quantity = min(effective_max_quantity, int(prompt_qty_cap))
+                        if is_buy:
+                            qty_val = _safe_buy_qty(
+                                desired_qty=effective_max_quantity,
+                                commodity_name=last_trade_commodity,
+                                credits_hint=credits_available,
+                            )
+                            qty_str = str(qty_val) if qty_val > 0 else "0"
                         else:
-                            qty_str = str(max_quantity)
+                            qty_str = str(effective_max_quantity)
                     else:
-                        # If we are buying and credits are unknown/low, do not accept the game's default.
-                        # Default quantities frequently lead to "Your offer [X] ?" loops when broke.
-                        qty_str = "1" if is_buy and (credits_available is None or credits_available < 1000) else ""
+                        # Always send an explicit buy quantity; default/max can be too
+                        # large and causes low-credit haggle loops on many servers.
+                        if is_buy:
+                            desired_qty = int(prompt_qty_cap) if prompt_qty_cap is not None else 6
+                            qty_val = _safe_buy_qty(
+                                desired_qty=max(1, desired_qty),
+                                commodity_name=last_trade_commodity,
+                                credits_hint=credits_available,
+                            )
+                            qty_str = str(qty_val) if qty_val > 0 else "0"
+                        else:
+                            qty_str = ""
+                    with contextlib.suppress(Exception):
+                        if qty_str.strip():
+                            last_requested_qty = max(0, int(qty_str.strip()))
+                            trade_interaction_seen = last_requested_qty > 0
                     await bot.session.send(f"{qty_str}\r")
                     pending_trade = True
                     logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
@@ -1034,13 +2020,40 @@ async def execute_port_trade(
             else:
                 # Trade all: avoid buys when credits are very low; still allow sells.
                 if max_quantity > 0:
-                    if is_buy and (credits_available is None or credits_available < 1000):
-                        await bot.session.send("1\r")
+                    effective_max_quantity = max_quantity
+                    if prompt_qty_cap is not None:
+                        effective_max_quantity = min(effective_max_quantity, int(prompt_qty_cap))
+                    if is_buy:
+                        qty_val = _safe_buy_qty(
+                            desired_qty=effective_max_quantity,
+                            commodity_name=last_trade_commodity,
+                            credits_hint=credits_available,
+                        )
+                        with contextlib.suppress(Exception):
+                            last_requested_qty = max(0, int(qty_val))
+                            trade_interaction_seen = last_requested_qty > 0
+                        await bot.session.send(f"{qty_val}\r" if qty_val > 0 else "0\r")
                     else:
-                        await bot.session.send(f"{max_quantity}\r")
+                        with contextlib.suppress(Exception):
+                            last_requested_qty = max(0, int(effective_max_quantity))
+                            trade_interaction_seen = last_requested_qty > 0
+                        await bot.session.send(f"{effective_max_quantity}\r")
                 else:
-                    # If we are buying and credits are unknown/low, do not accept the default.
-                    qty_str = "1" if (is_buy and (credits_available is None or credits_available < 1000)) else ""
+                    # Always send explicit buy quantity to avoid default/max over-asks.
+                    if is_buy:
+                        desired_qty = int(prompt_qty_cap) if prompt_qty_cap is not None else 6
+                        qty_val = _safe_buy_qty(
+                            desired_qty=max(1, desired_qty),
+                            commodity_name=last_trade_commodity,
+                            credits_hint=credits_available,
+                        )
+                        qty_str = str(qty_val) if qty_val > 0 else "0"
+                    else:
+                        qty_str = ""
+                    with contextlib.suppress(Exception):
+                        if qty_str.strip():
+                            last_requested_qty = max(0, int(qty_str.strip()))
+                            trade_interaction_seen = last_requested_qty > 0
                     await bot.session.send(f"{qty_str}\r")
                 pending_trade = True
 
@@ -1052,9 +2065,13 @@ async def execute_port_trade(
         if m_agreed:
             with contextlib.suppress(Exception):
                 last_trade_qty = int(m_agreed.group(1).replace(",", ""))
+                if int(last_trade_qty or 0) > 0:
+                    trade_interaction_seen = True
 
         # Price/offer negotiation - only respond if we have a pending trade
         if pending_trade and ("offer" in last_lines or "price" in last_lines or "haggl" in last_lines):
+            attempted_trade = True
+            trade_interaction_seen = True
             # Avoid getting stuck at "Your offer [X] ?" when credits are insufficient.
             default_offer: int | None = None
             m_offer = re.search(r"your offer\s*\[(\d+)\]", last_lines)
@@ -1275,6 +2292,7 @@ async def execute_port_trade(
         if pending_trade:
             m_total = re.search(r"(?i)we'll\s+(sell|buy)\s+them\s+for\s+([\d,]+)\s+credits", screen)
             if m_total:
+                trade_interaction_seen = True
                 side = m_total.group(1).lower()
                 try:
                     total = int(m_total.group(2).replace(",", ""))
@@ -1357,14 +2375,60 @@ async def execute_port_trade(
     new_credits = new_state.credits or 0
 
     credit_change = new_credits - initial_credits
-    if credit_change != 0 and hasattr(bot, "note_trade_telemetry"):
+    resolved_qty = int(last_trade_qty or 0)
+    if resolved_qty <= 0:
+        resolved_qty = int(last_requested_qty or 0)
+    resolved_is_buy = last_trade_is_buy
+    if resolved_is_buy is None and trade_action in ("buy", "sell"):
+        resolved_is_buy = trade_action == "buy"
+    resolved_commodity = last_trade_commodity or commodity
+    effective_trade = _is_effective_trade_change(
+        credit_change=int(credit_change),
+        trade_action=trade_action,
+        is_buy=resolved_is_buy,
+    )
+    if _should_count_trade_completion(
+        trade_interaction_seen=bool(trade_interaction_seen),
+        credit_change=int(credit_change),
+        trade_action=trade_action,
+        is_buy=resolved_is_buy,
+    ) and hasattr(bot, "note_trade_telemetry"):
         bot.note_trade_telemetry("trades_executed", 1)
+    if trade_interaction_seen and resolved_qty > 0 and effective_trade:
+        _record_cargo_ledger_trade(bot, resolved_commodity, resolved_is_buy, resolved_qty)
+
+    # Track local zero-change trade loops so guard mode can reroute away from bad ports.
+    with contextlib.suppress(Exception):
+        sig_sector = int(getattr(new_state, "sector", 0) or getattr(bot, "current_sector", 0) or 0)
+        sig_commodity = str(resolved_commodity or "")
+        if resolved_is_buy is True:
+            sig_action = "buy"
+        elif resolved_is_buy is False:
+            sig_action = "sell"
+        else:
+            sig_action = str(trade_action or "")
+        sig = (sig_sector, sig_commodity, sig_action)
+        zero_map = getattr(bot, "_zero_trade_streak", None)
+        if not isinstance(zero_map, dict):
+            zero_map = {}
+            bot._zero_trade_streak = zero_map
+        if attempted_trade:
+            prev = int(zero_map.get(sig, 0) or 0)
+            zero_map[sig] = 0 if effective_trade else max(0, prev + 1)
+            bot._last_trade_signature = sig
+            bot._last_trade_credit_change = int(credit_change)
+
     logger.info(
         "Trade complete: %+d credits (was %d, now %d)",
         credit_change,
         initial_credits,
         new_credits,
     )
+    with contextlib.suppress(Exception):
+        # Successful trades imply current market intel is live.
+        if int(credit_change) != 0:
+            bot._port_mismatch_count = 0
+            bot._port_mismatch_sectors = set()
     return credit_change
 
 
@@ -1396,9 +2460,27 @@ async def warp_to_sector(bot, target: int) -> bool:
             break
 
         # Autopilot confirmation
-        if "(y/n)" in screen and ("autopilot" in screen or "engage" in screen):
-            await bot.session.send("Y")
+        if ("autopilot" in screen or "engage" in screen) and ("(y/n" in screen or "[y]" in screen):
+            # Prefer express mode to avoid repeated "Stop in this sector" prompts.
+            await bot.session.send("E")
             await asyncio.sleep(1.0)
+            continue
+
+        # Autopilot route checkpoint prompt.
+        if "stop in this sector" in screen and "(y,n" in screen:
+            await bot.session.send("N")
+            await asyncio.sleep(0.3)
+            continue
+
+        # During non-adjacent routing the game may print progress screens.
+        if "computing shortest path" in screen or "auto warping to sector" in screen:
+            await asyncio.sleep(0.3)
+            continue
+
+        # If an accidental quit confirmation appears, reject it and continue navigation.
+        if "confirmed? (y/n)" in screen and "<quit>" in screen:
+            await bot.session.send("N")
+            await asyncio.sleep(0.3)
             continue
 
         # Pause/press key

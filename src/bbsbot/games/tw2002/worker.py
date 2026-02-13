@@ -381,8 +381,26 @@ class WorkerBot(TradingBot):
                 "organics": int(cargo_organics),
                 "equipment": int(cargo_equipment),
             }
+            bank_balance = 0
+            # Prefer explicit semantic extraction when present (e.g., after bank screens).
+            try:
+                if sem.get("bank_balance") is not None:
+                    bank_balance = max(0, int(sem.get("bank_balance")))
+            except Exception:
+                bank_balance = 0
+            # Fallback to the banking manager's tracked balance.
+            try:
+                mgr = getattr(self, "_banking", None)
+                if mgr is not None:
+                    bank_balance = max(bank_balance, int(getattr(mgr, "bank_balance", 0) or 0))
+            except Exception:
+                pass
             cargo_estimated_value = self._estimate_cargo_market_value(cargo_map)
-            net_worth_estimate = max(0, int(credits_out if credits_out >= 0 else 0)) + int(cargo_estimated_value)
+            net_worth_estimate = (
+                max(0, int(credits_out if credits_out >= 0 else 0))
+                + int(bank_balance)
+                + int(cargo_estimated_value)
+            )
 
             # Determine turns_max from config if available
             # 0 = auto-detect server maximum (persistent mode)
@@ -708,6 +726,7 @@ class WorkerBot(TradingBot):
                 "cargo_fuel_ore": cargo_fuel_ore,
                 "cargo_organics": cargo_organics,
                 "cargo_equipment": cargo_equipment,
+                "bank_balance": int(bank_balance),
                 "cargo_estimated_value": int(cargo_estimated_value),
                 "net_worth_estimate": int(net_worth_estimate),
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
@@ -719,6 +738,11 @@ class WorkerBot(TradingBot):
                 "credits_delta": int(credits_delta),
                 "credits_per_turn": float(credits_per_turn),
             }
+            if actual_state == "running":
+                # Clear stale error banners once the bot has recovered and resumed.
+                status_data["error_message"] = None
+                status_data["error_type"] = None
+                status_data["error_timestamp"] = None
             try:
                 s_stats = self.strategy.stats if self.strategy else {}
             except Exception:
