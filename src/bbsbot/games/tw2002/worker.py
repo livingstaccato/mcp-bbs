@@ -376,6 +376,14 @@ class WorkerBot(TradingBot):
                 cargo_equipment = int(sem.get("cargo_equipment")) if sem.get("cargo_equipment") is not None else 0
             except Exception:
                 cargo_equipment = 0
+            hostile_fighters = 0
+            try:
+                if self.game_state and getattr(self.game_state, "hostile_fighters", None) is not None:
+                    hostile_fighters = max(0, int(getattr(self.game_state, "hostile_fighters", 0) or 0))
+                elif sem.get("hostile_fighters") is not None:
+                    hostile_fighters = max(0, int(sem.get("hostile_fighters") or 0))
+            except Exception:
+                hostile_fighters = 0
             cargo_map = {
                 "fuel_ore": int(cargo_fuel_ore),
                 "organics": int(cargo_organics),
@@ -582,6 +590,17 @@ class WorkerBot(TradingBot):
             if prompt_id == "prompt.stardock_buy":
                 activity = "SHOPPING"
 
+            # Surface combat/attack state explicitly for dashboard visibility.
+            try:
+                danger_threshold = int(getattr(self.config.combat, "danger_threshold", 100))
+            except Exception:
+                danger_threshold = 100
+            under_attack = bool(current_context == "combat" or hostile_fighters > danger_threshold)
+            if under_attack and not status_detail:
+                status_detail = "UNDER_ATTACK"
+            elif hostile_fighters > 0 and not status_detail and in_game_now:
+                status_detail = f"THREAT:{hostile_fighters}"
+
             # Pause screens should show as Status, not Activity.
             if current_context == "pause":
                 status_detail = "PAUSED"
@@ -737,6 +756,8 @@ class WorkerBot(TradingBot):
                 "trades_executed": int(self.trades_executed),
                 "credits_delta": int(credits_delta),
                 "credits_per_turn": float(credits_per_turn),
+                "hostile_fighters": int(hostile_fighters),
+                "under_attack": bool(under_attack),
             }
             if actual_state == "running":
                 # Clear stale error banners once the bot has recovered and resumed.

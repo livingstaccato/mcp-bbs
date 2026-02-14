@@ -115,6 +115,8 @@ class BotStatus(BaseModel):
     autopilot_turns: int = 0
     goal_contract_failures: int = 0
     llm_wakeups_per_100_turns: float = 0.0
+    hostile_fighters: int = 0
+    under_attack: bool = False
     # Hijack/MCP control tracking
     is_hijacked: bool = False  # Whether bot is under MCP control
     hijacked_at: float | None = None  # Timestamp when hijack started

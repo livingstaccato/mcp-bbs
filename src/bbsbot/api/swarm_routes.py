@@ -363,6 +363,10 @@ async def update_status(bot_id: str, update: dict):
         bot.goal_contract_failures = int(update["goal_contract_failures"])
     if "llm_wakeups_per_100_turns" in update:
         bot.llm_wakeups_per_100_turns = float(update["llm_wakeups_per_100_turns"])
+    if "hostile_fighters" in update:
+        bot.hostile_fighters = int(update["hostile_fighters"])
+    if "under_attack" in update:
+        bot.under_attack = bool(update["under_attack"])
     import time
 
     bot.last_update_time = time.time()
@@ -502,6 +506,8 @@ async def get_bot_events(bot_id: str):
                 "autopilot_turns": bot.autopilot_turns,
                 "goal_contract_failures": bot.goal_contract_failures,
                 "llm_wakeups_per_100_turns": bot.llm_wakeups_per_100_turns,
+                "hostile_fighters": bot.hostile_fighters,
+                "under_attack": bot.under_attack,
                 "started_at": bot.started_at,
                 "stopped_at": bot.stopped_at,
             }

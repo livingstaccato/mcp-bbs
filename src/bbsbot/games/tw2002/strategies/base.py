@@ -230,6 +230,12 @@ class TradingStrategy(ABC):
         if not self.config.combat.enabled:
             return False
 
+        # Avoid retreat ping-pong loops from noisy hostile-fighter readings while
+        # trading at normal prompts. Retreat is reserved for explicit combat
+        # contexts where danger is immediate.
+        if str(getattr(state, "context", "") or "") != "combat":
+            return False
+
         # Check hostile fighters
         if state.hostile_fighters > self.config.combat.danger_threshold:
             return True

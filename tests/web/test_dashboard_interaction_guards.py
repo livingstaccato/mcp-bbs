@@ -57,3 +57,11 @@ def test_strategy_cpt_filters_small_samples_and_outliers() -> None:
     assert "MIN_TRADES_FOR_CPT" in js
     assert "MAX_ABS_CPT_PER_BOT" in js
     assert "samplesSkipped" in js
+
+
+def test_dashboard_shows_threat_and_attack_signals() -> None:
+    js = _dashboard_js()
+    assert "hostile_fighters" in js
+    assert "under_attack" in js
+    assert "UNDER_ATTACK" in js
+    assert "THREAT" in js

@@ -41,3 +41,21 @@ def test_should_upgrade_enabled_when_execution_flag_true() -> None:
     should, kind = strat.should_upgrade(state)
     assert should is True
     assert kind in {"holds", "fighters", "shields"}
+
+
+def test_should_retreat_ignored_outside_combat_context() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = _DummyStrategy(cfg, knowledge)
+    state = GameState(context="sector_command", hostile_fighters=10_000, shields=100)
+
+    assert strat.should_retreat(state) is False
+
+
+def test_should_retreat_in_combat_when_hostiles_exceed_threshold() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = _DummyStrategy(cfg, knowledge)
+    state = GameState(context="combat", hostile_fighters=cfg.combat.danger_threshold + 1, shields=100)
+
+    assert strat.should_retreat(state) is True

@@ -569,7 +569,9 @@
     const lower = context.toLowerCase();
     // Simplify activity names (no emojis)
     if (lower.includes("trading") || lower.includes("bank")) return "TRADING";
+    if (lower.includes("retreat") || lower.includes("evad")) return "EVADING";
     if (lower.includes("battle") || lower.includes("combat")) return "BATTLING";
+    if (lower.includes("attack") || lower.includes("threat")) return "BATTLING";
     if (lower.includes("explore") || lower.includes("navigation") || lower.includes("warp")) return "EXPLORING";
     if (lower.includes("thinking")) return "THINKING";
     if (lower.includes("orienting")) return context.replace("ORIENTING: ", "Orient: ");
@@ -586,6 +588,7 @@
     const lower = (activity || "").toLowerCase();
     if (lower.includes("trade")) return "trading";
     if (lower.includes("battle")) return "battling";
+    if (lower.includes("evad")) return "battling";
     if (lower.includes("explore")) return "exploring";
     if (lower.includes("orient")) return "orienting";
     if (lower.includes("select")) return "selecting";
@@ -661,6 +664,8 @@
       bot.state,
       bot.activity_context,
       bot.status_detail,
+      bot.hostile_fighters,
+      bot.under_attack,
       bot.prompt_id,
       bot.strategy,
       bot.strategy_id,
@@ -881,6 +886,8 @@
         let activity;
         let exitInfo = "";
 
+        const strategyIntent = String(b.strategy_intent || "");
+        const isUnderAttack = !!b.under_attack;
         if (b.state === "completed") {
           activity = b.completed_at ? "FINISHED" : "COMPLETED";
         } else if (b.state === "stopped") {
@@ -895,6 +902,11 @@
         } else {
           activity = getActivityBadge(b.activity_context || (isQueued ? "QUEUED" : "IDLE"));
         }
+        if (isUnderAttack) {
+          activity = "BATTLING";
+        } else if (strategyIntent.toUpperCase().startsWith("RETREAT")) {
+          activity = "EVADING";
+        }
 
         const activityClass = getActivityClass(activity);
         const activityPrimary = `<span class="activity-badge ${activityClass}">${esc(activity)}</span>`;
@@ -907,6 +919,13 @@
         const statusParts = [];
         if (b.is_hijacked) {
           statusParts.push("HIJACKED");
+        }
+        if (isUnderAttack) {
+          statusParts.push("UNDER_ATTACK");
+        }
+        const hostileFighters = Number(b.hostile_fighters || 0);
+        if (hostileFighters > 0) {
+          statusParts.push(`THREAT ${hostileFighters}`);
         }
         const lifecycleLabel = {
           blocked: "BLOCKED",
