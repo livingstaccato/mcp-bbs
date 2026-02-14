@@ -708,11 +708,7 @@
   function getStrategyCompact(bot) {
     const rawId = String(bot.strategy_id || bot.strategy || "").trim();
     const rawMode = String(bot.strategy_mode || "").trim();
-    const id = ({
-      profitable_pairs: "pairs",
-      opportunistic: "opp",
-      ai_strategy: "ai",
-    }[rawId] || rawId || "-");
+    const id = rawId ? rawId.toUpperCase() : "-";
     const mode = ({
       conservative: "con",
       balanced: "bal",

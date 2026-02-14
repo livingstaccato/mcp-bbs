@@ -4,19 +4,58 @@
 from collections import deque
 
 from bbsbot.games.tw2002.cli_impl import (
-    _compute_no_trade_guard_flags,
     _choose_no_trade_guard_action,
     _choose_ping_pong_break_action,
+    _compute_no_trade_guard_flags,
     _get_zero_trade_streak,
     _is_effective_trade_change,
+    _is_futile_sell_trade,
     _is_sector_ping_pong,
     _resolve_no_trade_guard_thresholds,
     _should_count_trade_completion,
     _should_force_bootstrap_trade,
+    _state_cargo_for_commodity,
 )
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.orientation import GameState, SectorInfo, SectorKnowledge
 from bbsbot.games.tw2002.strategies.base import TradeAction
+
+
+def test_state_cargo_for_commodity_returns_known_hold_counts() -> None:
+    state = GameState(
+        context="sector_command",
+        sector=77,
+        has_port=True,
+        port_class="BBS",
+        credits=300,
+        holds_free=20,
+        cargo_fuel_ore=6,
+        cargo_organics=2,
+        cargo_equipment=1,
+        warps=[10, 11],
+    )
+    assert _state_cargo_for_commodity(state, "fuel_ore") == 6
+    assert _state_cargo_for_commodity(state, "organics") == 2
+    assert _state_cargo_for_commodity(state, "equipment") == 1
+    assert _state_cargo_for_commodity(state, "unknown") is None
+
+
+def test_is_futile_sell_trade_detects_zero_cargo_sell() -> None:
+    state = GameState(
+        context="sector_command",
+        sector=77,
+        has_port=True,
+        port_class="BBS",
+        credits=300,
+        holds_free=20,
+        cargo_fuel_ore=0,
+        cargo_organics=1,
+        cargo_equipment=0,
+        warps=[10, 11],
+    )
+    assert _is_futile_sell_trade(state, {"action": "sell", "commodity": "fuel_ore"}) is True
+    assert _is_futile_sell_trade(state, {"action": "sell", "commodity": "organics"}) is False
+    assert _is_futile_sell_trade(state, {"action": "buy", "commodity": "fuel_ore"}) is False
 
 
 def test_trade_guard_sells_cargo_at_local_buying_port() -> None:

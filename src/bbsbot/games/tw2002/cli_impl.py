@@ -600,6 +600,33 @@ def _choose_guard_reroute_action(
     return None
 
 
+def _state_cargo_for_commodity(state, commodity: str | None) -> int | None:
+    """Return on-board cargo amount for a normalized commodity token."""
+    key = str(commodity or "").strip().lower()
+    attr = {
+        "fuel_ore": "cargo_fuel_ore",
+        "organics": "cargo_organics",
+        "equipment": "cargo_equipment",
+    }.get(key)
+    if not attr:
+        return None
+    with contextlib.suppress(Exception):
+        return int(getattr(state, attr, 0) or 0)
+    return 0
+
+
+def _is_futile_sell_trade(state, params: dict | None) -> bool:
+    """True when a targeted sell request has no corresponding cargo in state."""
+    if not isinstance(params, dict):
+        return False
+    action = str(params.get("action") or "").strip().lower()
+    if action != "sell":
+        return False
+    commodity = str(params.get("commodity") or "").strip().lower()
+    qty = _state_cargo_for_commodity(state, commodity)
+    return qty is not None and qty <= 0
+
+
 def _choose_guard_escape_jump_target(*, current_sector: int, recent_sectors: list[int] | deque[int] | None) -> int:
     """Pick a deterministic far sector to break local no-trade loops.
 
@@ -1487,6 +1514,43 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     with contextlib.suppress(Exception):
                         bot.strategy_intent = "RECOVERY:TRADE_STALL_REROUTE"
 
+        if action == TradeAction.TRADE and _is_futile_sell_trade(state, params):
+            commodity = str((params or {}).get("commodity") or "").strip().lower()
+            reroute = _choose_guard_reroute_action(
+                state=state,
+                knowledge=bot.sector_knowledge,
+                previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                recent_sectors=list(recent_sectors),
+                commodity=(commodity or None),
+                trade_action="sell",
+            )
+            if reroute is not None:
+                action, params = reroute
+                logger.warning(
+                    "skip_futile_sell_trade: sector=%s commodity=%s cargo=0 -> %s %s",
+                    int(getattr(state, "sector", 0) or 0),
+                    commodity,
+                    action.name,
+                    params,
+                )
+                with contextlib.suppress(Exception):
+                    bot.strategy_intent = "RECOVERY:EMPTY_SELL_REROUTE"
+            else:
+                fallback_warps = [int(w) for w in (getattr(state, "warps", []) or []) if int(w) > 0]
+                if fallback_warps:
+                    previous = int(recent_sectors[-2]) if len(recent_sectors) >= 2 else 0
+                    choices = [w for w in sorted(fallback_warps) if w != previous] or sorted(fallback_warps)
+                    action = TradeAction.EXPLORE
+                    params = {"direction": int(choices[0]), "urgency": "empty_sell_escape"}
+                    logger.warning(
+                        "skip_futile_sell_trade: sector=%s commodity=%s cargo=0 -> EXPLORE %s",
+                        int(getattr(state, "sector", 0) or 0),
+                        commodity,
+                        params,
+                    )
+                    with contextlib.suppress(Exception):
+                        bot.strategy_intent = "RECOVERY:EMPTY_SELL_EXPLORE"
+
         if action in (TradeAction.MOVE, TradeAction.EXPLORE, TradeAction.WAIT):
             forced_loop_break = _choose_ping_pong_break_action(
                 state=state,
@@ -1858,6 +1922,8 @@ async def execute_port_trade(
     trade_interaction_seen: bool = False
     last_requested_qty: int | None = None
     attempted_trade: bool = False
+    target_action_mismatch_count: int = 0
+    target_action_mismatch_limit: int = 2
 
     def _safe_buy_qty(
         *,
@@ -2022,18 +2088,37 @@ async def execute_port_trade(
                 # Targeted trading: only trade the target commodity
                 is_target = bool(target_re.search(prompt_line))
                 if is_target:
-
                     # If the caller specified buy/sell, enforce it.
                     if trade_action == "buy" and not is_buy:
                         await bot.session.send("0\r")
                         pending_trade = False
+                        target_action_mismatch_count += 1
                         logger.debug("Skipping target commodity due to action mismatch (wanted=buy)")
+                        if target_action_mismatch_count >= target_action_mismatch_limit:
+                            logger.warning(
+                                "Aborting targeted trade after repeated action mismatch: target=%s action=%s",
+                                commodity,
+                                trade_action,
+                            )
+                            await bot.session.send("Q\r")
+                            await asyncio.sleep(0.5)
+                            break
                         await asyncio.sleep(0.3)
                         continue
                     if trade_action == "sell" and not is_sell:
                         await bot.session.send("0\r")
                         pending_trade = False
+                        target_action_mismatch_count += 1
                         logger.debug("Skipping target commodity due to action mismatch (wanted=sell)")
+                        if target_action_mismatch_count >= target_action_mismatch_limit:
+                            logger.warning(
+                                "Aborting targeted trade after repeated action mismatch: target=%s action=%s",
+                                commodity,
+                                trade_action,
+                            )
+                            await bot.session.send("Q\r")
+                            await asyncio.sleep(0.5)
+                            break
                         await asyncio.sleep(0.3)
                         continue
 
@@ -2045,6 +2130,7 @@ async def execute_port_trade(
                         await asyncio.sleep(0.3)
                         continue
 
+                    target_action_mismatch_count = 0
                     if max_quantity > 0:
                         effective_max_quantity = max_quantity
                         if prompt_qty_cap is not None:
