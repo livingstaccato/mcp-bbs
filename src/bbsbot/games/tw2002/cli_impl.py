@@ -1397,12 +1397,18 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 turns_since_last_trade >= max(20, int(guard_stale_turns // 2))
                 or trades_done <= 1
             )
+            guard_overage = max(0, int(turns_since_last_trade - guard_stale_turns))
+            if hard_no_trade_guard and trades_done <= 0:
+                # Fresh bots can hit hard guard before stale thresholds.
+                # Treat excess over hard-guard threshold as overage so recovery
+                # logic can escalate to trade probes instead of move-only loops.
+                guard_overage = max(guard_overage, max(0, int(turns_used - guard_turns)))
             forced = _choose_no_trade_guard_action(
                 state=state,
                 knowledge=bot.sector_knowledge,
                 credits_now=credits_now,
                 allow_buy=allow_guard_buy,
-                guard_overage=max(0, int(turns_since_last_trade - guard_stale_turns)),
+                guard_overage=guard_overage,
                 previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
                 recent_sectors=list(recent_sectors),
             )
