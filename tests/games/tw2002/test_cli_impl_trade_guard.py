@@ -4,6 +4,7 @@
 from collections import deque
 
 from bbsbot.games.tw2002.cli_impl import (
+    _choose_guard_reroute_action,
     _choose_no_trade_guard_action,
     _choose_ping_pong_break_action,
     _compute_no_trade_guard_flags,
@@ -766,6 +767,93 @@ def test_trade_guard_move_avoids_recent_cycle_targets_when_possible() -> None:
     ) or (None, {})
     assert action == TradeAction.MOVE
     assert params["target_sector"] == 300
+
+
+def test_guard_reroute_prefers_explicit_market_side_over_unknown() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    # Unknown side (no class/status) but near.
+    knowledge._sectors[200] = SectorInfo(has_port=True, port_class=None, port_status={})
+    # Explicit buyer for fuel_ore (BSS).
+    knowledge._sectors[300] = SectorInfo(has_port=True, port_class="BSS")
+
+    def _find_path(start: int, end: int, max_hops: int = 100):
+        if end == 200:
+            return [100, 200]
+        if end == 300:
+            return [100, 250, 300]
+        return None
+
+    knowledge.find_path = _find_path  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=100,
+        has_port=False,
+        port_class=None,
+        credits=300,
+        holds_free=19,
+        cargo_fuel_ore=1,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[101, 102],
+    )
+
+    action, params = _choose_guard_reroute_action(
+        state=state,
+        knowledge=knowledge,
+        commodity="fuel_ore",
+        trade_action="sell",
+    ) or (None, {})
+    assert action == TradeAction.MOVE
+    assert params["target_sector"] == 300
+
+
+def test_trade_guard_tiny_stale_cargo_can_resume_local_buy_bootstrap() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    # Local port sells fuel_ore.
+    knowledge._sectors[88] = SectorInfo(
+        has_port=True,
+        port_class="SSS",
+        port_status={
+            "fuel_ore": "selling",
+            "organics": "selling",
+            "equipment": "selling",
+        },
+        port_prices={"fuel_ore": {"sell": 20}},
+    )
+    # Nearby known buyer for fuel_ore.
+    knowledge._sectors[90] = SectorInfo(has_port=True, port_class="BSS")
+
+    def _find_path(src: int, dst: int, max_hops: int | None = None):
+        if src == 88 and dst == 90:
+            return [88, 90]
+        if src == 88 and dst in {91, 92, 93}:
+            return [88, dst]
+        return None
+
+    knowledge.find_path = _find_path  # type: ignore[assignment]
+    state = GameState(
+        context="sector_command",
+        sector=88,
+        has_port=True,
+        port_class="SSS",
+        credits=300,
+        holds_free=20,
+        cargo_fuel_ore=0,
+        cargo_organics=1,
+        cargo_equipment=0,
+        warps=[91, 92, 93],
+    )
+
+    action, params = _choose_no_trade_guard_action(
+        state,
+        knowledge,
+        credits_now=300,
+        guard_overage=20,
+    ) or (None, {})
+    assert action == TradeAction.TRADE
+    assert params["action"] == "buy"
+    assert params["commodity"] == "fuel_ore"
 
 
 def test_trade_guard_prefers_port_that_buys_held_cargo_when_rerouting() -> None:

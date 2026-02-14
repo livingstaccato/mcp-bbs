@@ -222,6 +222,7 @@ def _choose_no_trade_guard_action(
     }
     cargo_total = sum(max(0, int(v or 0)) for v in cargo.values())
     primary_cargo = max(cargo.items(), key=lambda kv: int(kv[1] or 0))[0] if cargo_total > 0 else None
+    tiny_cargo_stall = bool(cargo_total > 0 and cargo_total <= 3 and int(guard_overage or 0) >= 12)
     units = (getattr(info, "port_trading_units", {}) or {}) if info else {}
     holds_free = 0
     with contextlib.suppress(Exception):
@@ -276,7 +277,9 @@ def _choose_no_trade_guard_action(
                 commodity=primary_cargo,
                 trade_action="sell",
             )
-            if reroute is not None:
+            # Tiny stale cargo can trap bots in endless sell reroutes.
+            # Once overage is high, allow guarded buy bootstrap to resume instead.
+            if reroute is not None and not tiny_cargo_stall:
                 return reroute
 
         # Second priority: buy the cheapest local commodity the port is selling.
@@ -408,7 +411,7 @@ def _choose_no_trade_guard_action(
         # move-only loops.
         if guard_overage >= 4:
             credits_val = max(0, int(credits_now or 0))
-            if cargo_total > 0:
+            if cargo_total > 0 and not tiny_cargo_stall:
                 probe_commodity = str(primary_cargo or "fuel_ore")
                 reroute = _choose_guard_reroute_action(
                     state=state,
@@ -424,10 +427,7 @@ def _choose_no_trade_guard_action(
                 # commodity we hold, skip futile local sell probes.
                 if statuses and str(statuses.get(probe_commodity, "")).lower() != "buying":
                     probe_commodity = ""
-                if not probe_commodity:
-                    # Fall through to movement/exploration below.
-                    pass
-                else:
+                if probe_commodity:
                     return TradeAction.TRADE, {
                         "commodity": probe_commodity,
                         "action": "sell",
@@ -592,14 +592,11 @@ def _choose_guard_reroute_action(
         if desired_side:
             statuses = _derive_port_statuses(getattr(info, "port_class", None), info)
             side = statuses.get(target_commodity)
-            if side == desired_side:
-                comm_penalty = 0
-            elif side is None:
-                comm_penalty = 1
-            else:
-                comm_penalty = 3
+            comm_penalty = 0 if side == desired_side else 3
             pref_key = (comm_penalty, recent_penalty, hops, -quality, target_sector)
-            if comm_penalty < 3 and (best_pref is None or pref_key < best_pref[0]):
+            # Prefer explicit market-side matches only; unknown side can trap
+            # stale guard in repeated non-buying/non-selling loops.
+            if comm_penalty == 0 and (best_pref is None or pref_key < best_pref[0]):
                 best_pref = (pref_key, path)
 
     # Prefer side-matched targets when possible; otherwise fall back to any known
