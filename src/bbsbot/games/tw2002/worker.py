@@ -201,6 +201,7 @@ class WorkerBot(TradingBot):
         self.haggle_too_high: int = 0
         self.haggle_too_low: int = 0
         self.trades_executed: int = 0
+        self._metrics_initialized: bool = False
 
     def reset_runtime_session_metrics(self) -> None:
         """Reset per-runtime-session metrics before a new login/run cycle."""
@@ -1246,7 +1247,11 @@ async def _run_worker(config: str, bot_id: str, manager_url: str) -> None:
 
             active_session = identity_store.start_session(bot_id=bot_id, state="starting")
             active_session_id = active_session.id
-            worker.reset_runtime_session_metrics()
+            # Preserve run counters across reconnect cycles in the same worker process.
+            # Reset only once at process start.
+            if not bool(getattr(worker, "_metrics_initialized", False)):
+                worker.reset_runtime_session_metrics()
+                worker._metrics_initialized = True
             try:
                 # Ensure watchdog is running once per process.
                 worker.start_watchdog(stuck_timeout_s=120.0, check_interval_s=5.0)

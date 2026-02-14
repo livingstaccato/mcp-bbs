@@ -272,14 +272,15 @@ async def update_status(bot_id: str, update: dict):
     if "credits" in update and update["credits"] >= 0:
         bot.credits = update["credits"]
     if "turns_executed" in update:
-        # Update turns directly - worker knows the correct value
-        new_turns = update["turns_executed"]
+        # Keep counters monotonic within a bot process lifetime.
+        # Reconnect churn can emit stale/lower snapshots and should not drag totals backward.
+        new_turns = int(update["turns_executed"] or 0)
         if new_turns != bot.turns_executed:
             from bbsbot.logging import get_logger
 
             logger = get_logger(__name__)
             logger.debug(f"Bot {bot_id} turns: {bot.turns_executed} → {new_turns}")
-        bot.turns_executed = new_turns
+        bot.turns_executed = max(int(bot.turns_executed or 0), new_turns)
     if "turns_max" in update:
         bot.turns_max = update["turns_max"]
     if "state" in update:
@@ -350,7 +351,7 @@ async def update_status(bot_id: str, update: dict):
     if "haggle_too_low" in update:
         bot.haggle_too_low = int(update["haggle_too_low"])
     if "trades_executed" in update:
-        bot.trades_executed = int(update["trades_executed"])
+        bot.trades_executed = max(int(bot.trades_executed or 0), int(update["trades_executed"] or 0))
     if "credits_delta" in update:
         bot.credits_delta = int(update["credits_delta"])
     if "credits_per_turn" in update:

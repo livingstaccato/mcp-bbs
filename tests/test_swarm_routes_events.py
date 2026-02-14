@@ -114,6 +114,45 @@ def test_update_status_normalizes_detail_values(tmp_path: Path) -> None:
     assert bot.status_detail == "PORT HAGGLE"
 
 
+def test_update_status_keeps_turn_and_trade_counters_monotonic(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_011"] = BotStatus(
+        bot_id="bot_011",
+        pid=911,
+        config="config/swarm_demo/bot_011.yaml",
+        state="running",
+        turns_executed=120,
+        trades_executed=9,
+    )
+
+    with TestClient(manager.app) as client:
+        # Newer report with lower counters should not regress totals.
+        resp1 = client.post(
+            "/bot/bot_011/status",
+            json={
+                "reported_at": 100.0,
+                "turns_executed": 40,
+                "trades_executed": 3,
+            },
+        )
+        assert resp1.status_code == 200
+
+        # Higher counters should still advance normally.
+        resp2 = client.post(
+            "/bot/bot_011/status",
+            json={
+                "reported_at": 101.0,
+                "turns_executed": 140,
+                "trades_executed": 11,
+            },
+        )
+        assert resp2.status_code == 200
+
+    bot = manager.bots["bot_011"]
+    assert bot.turns_executed == 140
+    assert bot.trades_executed == 11
+
+
 def test_bot_events_include_structured_action_metadata(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path)
     manager.bots["bot_001"] = BotStatus(
