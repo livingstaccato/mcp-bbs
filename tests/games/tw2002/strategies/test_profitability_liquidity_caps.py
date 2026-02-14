@@ -362,6 +362,29 @@ def test_local_bootstrap_trade_uses_port_class_when_market_rows_missing() -> Non
     assert strat._local_bootstrap_trade(state) is None  # type: ignore[misc]
 
 
+def test_discover_pairs_prefers_live_port_status_over_static_port_class() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    # Static class says sector 20 sells fuel_ore, but live status says buying.
+    a = SectorInfo(has_port=True, port_class="SBB")
+    a.port_status = {"fuel_ore": "buying"}
+    knowledge._sectors[20] = a
+
+    # Static class says sector 21 buys fuel_ore, but live status says selling.
+    b = SectorInfo(has_port=True, port_class="BSS")
+    b.port_status = {"fuel_ore": "selling"}
+    knowledge._sectors[21] = b
+
+    knowledge.find_path = lambda start, end, max_hops=100: [start, end]  # type: ignore[assignment]
+    strat._discover_pairs(max_hops=3)  # type: ignore[misc]
+
+    fuel_pairs = [p for p in strat._pairs if p.commodity == "fuel_ore"]  # type: ignore[attr-defined]
+    assert fuel_pairs
+    assert any(p.buy_sector == 21 and p.sell_sector == 20 for p in fuel_pairs)
+
+
 def test_local_bootstrap_trade_safe_buy_requires_nearby_known_buyer() -> None:
     cfg = BotConfig()
     knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
@@ -551,6 +574,39 @@ def test_low_cash_recovery_moves_to_known_buyer_when_not_at_port() -> None:
     assert action == TradeAction.MOVE
     assert params.get("target_sector") == 200
     assert params.get("urgency") == "low_cash_recovery"
+
+
+def test_low_cash_without_cargo_uses_bootstrap_instead_of_forced_explore() -> None:
+    cfg = BotConfig()
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    strat = ProfitablePairsStrategy(cfg, knowledge)
+
+    expected = (
+        TradeAction.TRADE,
+        {
+            "action": "buy",
+            "urgency": "bootstrap_trade",
+        },
+    )
+    strat._local_bootstrap_trade = lambda _state: expected  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=40,
+        has_port=True,
+        port_class="SSB",
+        credits=300,
+        holds_free=20,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[41, 42],
+    )
+
+    action, params = strat.get_next_action(state)
+    assert action == TradeAction.TRADE
+    assert params.get("action") == "buy"
+    assert params.get("urgency") == "bootstrap_trade"
 
 
 def test_loop_break_avoids_abab_ping_pong_when_unproductive() -> None:

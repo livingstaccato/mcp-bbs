@@ -1349,9 +1349,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 effective_policy = "aggressive"
             # If we're losing badly on a thin bankroll, de-risk to reduce bleed.
             if (
-                turns_used >= 30
+                turns_used >= 80
+                and trades_done >= 3
                 and credits_now < 1_500
-                and credits_per_turn < -1.0
+                and credits_per_turn < -1.5
             ):
                 effective_policy = "conservative"
 

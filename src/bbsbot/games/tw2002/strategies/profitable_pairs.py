@@ -77,9 +77,9 @@ class ProfitablePairsStrategy(TradingStrategy):
         max_hops = int(getattr(self._settings, "max_hop_distance", 2))
         min_ppt = int(getattr(self._settings, "min_profit_per_turn", 100))
         if self.policy == "conservative":
-            max_hops, min_ppt = max(1, min(max_hops, 1)), max(min_ppt, 250)
+            max_hops, min_ppt = max(2, min(max_hops, 2)), max(min_ppt, 220)
         elif self.policy == "aggressive":
-            max_hops, min_ppt = max(max_hops, 3), max(50, min_ppt // 2)
+            max_hops, min_ppt = max(max_hops, 4), max(50, min_ppt // 2)
         else:
             max_hops, min_ppt = max_hops, min_ppt
 
@@ -378,6 +378,10 @@ class ProfitablePairsStrategy(TradingStrategy):
         # handled separately so non-starved bots can still optimize routing.
         if not low_cash:
             return None
+        # Fresh/empty-hold bots at low bankroll still need normal bootstrap/pair
+        # logic to run; forcing explore here starves early trading.
+        if not has_cargo:
+            return None
 
         current_sector = int(state.sector or 0)
         info = self.knowledge.get_sector_info(current_sector) if current_sector > 0 else None
@@ -424,15 +428,13 @@ class ProfitablePairsStrategy(TradingStrategy):
                     "urgency": "low_cash_recovery",
                 }
 
-        if low_cash:
-            self._current_pair = None
-            self._pair_phase = "idle"
-            self._pairs_dirty = True
-            forced = self._loop_break_action(state, cargo)
-            if forced is not None:
-                return forced
-            return self._explore_for_ports(state)
-        return None
+        self._current_pair = None
+        self._pair_phase = "idle"
+        self._pairs_dirty = True
+        forced = self._loop_break_action(state, cargo)
+        if forced is not None:
+            return forced
+        return self._explore_for_ports(state)
 
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
         """Determine next action for profitable pairs trading.
@@ -532,6 +534,8 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # If no pairs found, explore to find more ports
         if not self._pairs:
+            self._current_pair = None
+            self._pair_phase = "idle"
             bootstrap = self._local_bootstrap_trade(state)
             if bootstrap is not None:
                 return bootstrap
@@ -708,9 +712,19 @@ class ProfitablePairsStrategy(TradingStrategy):
             port_class = info.port_class
             if len(port_class) != 3:
                 continue
+            status_rows = {k: str(v or "").strip().lower() for k, v in dict(info.port_status or {}).items()}
 
             for i, char in enumerate(port_class):
                 commodity = commodities[i]
+                side = status_rows.get(commodity, "")
+                if side.startswith("buy"):
+                    buys[commodity].append((sector, info))
+                    continue
+                if side.startswith("sell"):
+                    sells[commodity].append((sector, info))
+                    continue
+                # Fall back to static class semantics when dynamic status rows
+                # are missing or unparseable.
                 if char == "B":
                     buys[commodity].append((sector, info))
                 elif char == "S":

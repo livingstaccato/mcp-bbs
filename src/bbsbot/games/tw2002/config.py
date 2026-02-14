@@ -159,7 +159,7 @@ class CharacterConfig(BaseModel):
 class ProfitablePairsConfig(BaseModel):
     """Settings for profitable pairs trading strategy (Mode A)."""
 
-    max_hop_distance: int = 2
+    max_hop_distance: int = 3
     min_profit_per_turn: int = 100
 
     model_config = ConfigDict(extra="ignore")

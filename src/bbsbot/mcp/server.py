@@ -79,9 +79,9 @@ def _register_bbs_tools(mcp_app: FastMCP, allowed_prefixes: set[str] | None = No
                 mcp_app.add_tool(tool)
                 log.debug(f"bbsbot_tool_registered: {tool_name}")
 
-            except Exception as e:
-                log.warning(f"bbsbot_tools_registration_failed: {e}")
-    
+    except Exception as e:
+        log.warning(f"bbsbot_tools_registration_failed: {e}")
+
 def _register_game_tools(mcp_app: FastMCP, tool_prefixes: str | None = None) -> None:
     """Register game-specific MCP tools.
 
@@ -514,9 +514,12 @@ async def bbs_send(keys: str) -> str:
     newline_count = normalized.count("\n") + normalized.count("\r")
     if newline_count > 1:
         return "error: multiple newline sequences in one send; send one prompt response at a time"
-    if ("\n" in normalized or "\r" in normalized) and len(normalized.strip("\r\n")) > 0:
-        if not (normalized.endswith("\n") or normalized.endswith("\r")):
-            return "error: newline must be the final character in a send"
+    if (
+        ("\n" in normalized or "\r" in normalized)
+        and len(normalized.strip("\r\n")) > 0
+        and not (normalized.endswith("\n") or normalized.endswith("\r"))
+    ):
+        return "error: newline must be the final character in a send"
 
     if session.is_awaiting_read():
         return "error: send blocked until remote output arrives (one prompt -> one input -> wait)"
@@ -1021,7 +1024,7 @@ async def bbs_debug_session_events(
     events: list[dict[str, Any]] = []
 
     try:
-        with open(log_path) as f:
+        with log_path.open(encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
