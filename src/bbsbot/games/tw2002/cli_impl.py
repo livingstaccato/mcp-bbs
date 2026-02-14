@@ -223,7 +223,18 @@ def _choose_no_trade_guard_action(
     cargo_total = sum(max(0, int(v or 0)) for v in cargo.values())
     primary_cargo = max(cargo.items(), key=lambda kv: int(kv[1] or 0))[0] if cargo_total > 0 else None
     units = (getattr(info, "port_trading_units", {}) or {}) if info else {}
-    holds_free = max(0, int(getattr(state, "holds_free", 0) or 0))
+    holds_free = 0
+    with contextlib.suppress(Exception):
+        if getattr(state, "holds_free", None) is not None:
+            holds_free = max(0, int(getattr(state, "holds_free", 0) or 0))
+        else:
+            holds_total = getattr(state, "holds_total", None)
+            if holds_total is not None:
+                holds_free = max(0, int(holds_total) - int(cargo_total))
+            else:
+                # Orientation can miss quick-stats rows transiently; keep a safe
+                # fallback so no-trade guard can still bootstrap local buys.
+                holds_free = max(1, 20 - int(cargo_total)) if int(cargo_total) > 0 else 6
 
     if local_port_available:
         # First priority: sell whatever we already hold into local demand.
@@ -326,11 +337,20 @@ def _choose_no_trade_guard_action(
                 except Exception:
                     qv = 0
                 if qv > 0:
-                    # Preserve a bankroll reserve so guard mode doesn't zero out
-                    # the ship on expensive single-unit buys.
-                    reserve_floor = max(40, int(credits_val * 0.35))
-                    spend_cap = min(max(0, credits_val - reserve_floor), max(0, int(credits_val * 0.5)))
+                    # Preserve a bankroll reserve, but relax as stale pressure
+                    # grows so low-credit bots can still execute recovery buys.
+                    if guard_overage >= 16:
+                        reserve_floor = max(20, int(credits_val * 0.08))
+                    elif guard_overage >= 8:
+                        reserve_floor = max(30, int(credits_val * 0.12))
+                    else:
+                        reserve_floor = max(40, int(credits_val * 0.18))
+                    spend_cap = max(0, credits_val - reserve_floor)
                     affordable = int(spend_cap // qv)
+                    if affordable <= 0 and guard_overage >= 16:
+                        emergency_floor = max(10, int(credits_val * 0.03))
+                        if credits_val >= (qv + emergency_floor):
+                            affordable = 1
                     # If we cannot afford even one unit, do not force a local buy
                     # and fall back to movement/exploration below.
                     # Buy more than one unit when possible so guard-mode bots

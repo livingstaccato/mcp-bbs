@@ -661,6 +661,84 @@ def test_trade_guard_preserves_bankroll_when_quote_would_nearly_zero_credits() -
     assert params["direction"] == 91
 
 
+def test_trade_guard_uses_holds_total_fallback_when_holds_free_missing() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    knowledge._sectors[88] = SectorInfo(
+        has_port=True,
+        port_class="SSS",
+        port_status={"fuel_ore": "selling"},
+        port_prices={"fuel_ore": {"sell": 20}},
+    )
+    knowledge._sectors[91] = SectorInfo(has_port=True, port_class="BSS")
+
+    def _find_path(src: int, dst: int, max_hops: int | None = None):
+        if src == 88 and dst == 91:
+            return [88, 91]
+        return None
+
+    knowledge.find_path = _find_path  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=88,
+        has_port=True,
+        port_class="SSS",
+        credits=300,
+        holds_free=None,
+        holds_total=20,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[91, 92, 93],
+    )
+
+    action, params = _choose_no_trade_guard_action(state, knowledge, credits_now=300) or (None, {})
+    assert action == TradeAction.TRADE
+    assert params["action"] == "buy"
+    assert params["commodity"] == "fuel_ore"
+
+
+def test_trade_guard_allows_emergency_single_buy_when_stale_overage_high() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    knowledge._sectors[30] = SectorInfo(
+        has_port=True,
+        port_class="SSS",
+        port_status={
+            "fuel_ore": "selling",
+            "organics": "selling",
+            "equipment": "selling",
+        },
+        port_prices={
+            "fuel_ore": {"sell": 288},
+            "organics": {"sell": 320},
+            "equipment": {"sell": 540},
+        },
+    )
+    state = GameState(
+        context="sector_command",
+        sector=30,
+        has_port=True,
+        port_class="SSS",
+        credits=297,
+        holds_free=20,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[91, 92, 93],
+    )
+
+    action, params = _choose_no_trade_guard_action(
+        state,
+        knowledge,
+        credits_now=297,
+        guard_overage=20,
+    ) or (None, {})
+    assert action == TradeAction.TRADE
+    assert params["action"] == "buy"
+    assert params["commodity"] == "fuel_ore"
+    assert int(params["max_quantity"]) == 1
+
+
 def test_trade_guard_move_avoids_recent_cycle_targets_when_possible() -> None:
     knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
     knowledge._sectors[200] = SectorInfo(has_port=True, port_class="BBS")

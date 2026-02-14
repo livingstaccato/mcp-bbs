@@ -345,7 +345,7 @@ class TradingConfig(BaseModel):
     # Do not force stale-guard actions every single turn; allow strategy turns
     # between interventions to avoid reroute churn loops.
     no_trade_guard_stale_force_interval_turns: int = 4
-    trade_stall_reroute_streak: int = 2
+    trade_stall_reroute_streak: int = 4
     # Force early anti-stall behavior so fresh bots execute at least one trade
     # before long explore-only runs can develop.
     bootstrap_trade_turns: int = 12
