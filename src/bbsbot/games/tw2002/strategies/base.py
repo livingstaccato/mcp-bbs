@@ -193,6 +193,8 @@ class TradingStrategy(ABC):
         """
         if not self.config.upgrades.enabled:
             return False, None
+        if not bool(getattr(self.config.upgrades, "execution_enabled", False)):
+            return False, None
 
         # Need credits to upgrade - don't recommend with unknown or zero credits
         credits = state.credits

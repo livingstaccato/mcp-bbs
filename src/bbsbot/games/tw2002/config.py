@@ -377,6 +377,9 @@ class UpgradesConfig(BaseModel):
     """Ship upgrade settings."""
 
     enabled: bool = True
+    # Upgrade actions are currently planning-only; execution in cli_impl is a stub.
+    # Keep this off by default so upgrade recommendations don't starve trading loops.
+    execution_enabled: bool = False
     auto_buy_holds: bool = True
     max_holds: int = 75
     auto_buy_fighters: bool = True
