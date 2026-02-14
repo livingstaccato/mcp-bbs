@@ -37,7 +37,7 @@
   const testRuntimeValueEl = $("#test-runtime-value");
   const testRuntimeSinceEl = $("#test-runtime-since");
   const testRuntimeFillEl = $("#test-runtime-fill");
-  const strategyTrendMetaEl = $("#strategy-trend-meta");
+  const strategyTrendMetricsEl = $("#strategy-trend-metrics");
   const strategyTrendSvgEl = $("#strategy-trend-svg");
 
   function renderOrDeferTable(data) {
@@ -374,6 +374,7 @@
               <th>Strategy</th>
               <th>CPT</th>
               <th>N</th>
+              <th>Turns</th>
               <th>T/100</th>
               <th>State</th>
               <th>Age</th>
@@ -399,11 +400,11 @@
                           <span class="chip sid">${esc(sid)}</span>
                           <span class="chip mode">${esc(mode)}</span>
                         </span>
-                        <span class="strategy-key-meta">turns ${esc(formatCredits(Math.round(Number(row.turns || 0))))}</span>
                       </div>
                     </td>
                     <td class="strategy-cpt-num"${color ? ` style="color:${color}"` : ""}>${esc(cptText)}</td>
                     <td class="strategy-n">${esc(String(row.n))}</td>
+                    <td class="strategy-turns">${esc(formatCredits(Math.round(Number(row.turns || 0))))}</td>
                     <td class="strategy-t100">${esc(t100)}</td>
                     <td><span class="strategy-state strategy-state-${stateCls}">${esc(row.state)}</span></td>
                     <td class="strategy-age">${esc(formatAgeSeconds(row.lastSeen))}</td>
@@ -515,15 +516,52 @@
   }
 
   function renderRunTrend(runtimeSec, metrics) {
-    if (strategyTrendMetaEl) {
-      strategyTrendMetaEl.textContent = (
-        `C/T ${metrics.trueCpt.toFixed(2)} · T/100 ${metrics.tradesPer100.toFixed(2)} · `
-        + `CR ${formatCredits(Math.round(metrics.totalLiquid || 0))} · `
-        + `ORE ${Math.round(metrics.totalCargoFuelOre || 0)} · `
-        + `ORG ${Math.round(metrics.totalCargoOrganics || 0)} · `
-        + `EQU ${Math.round(metrics.totalCargoEquipment || 0)} · `
-        + `${formatClockDuration(runtimeSec)}`
-      );
+    if (strategyTrendMetricsEl) {
+      const metricCards = [
+        {
+          label: "C/T",
+          value: formatSigned(Number(metrics.trueCpt || 0), 2),
+          color: strategyCptColor(Number(metrics.trueCpt || 0)) || "",
+        },
+        {
+          label: "T/100",
+          value: Number(metrics.tradesPer100 || 0).toFixed(2),
+          color: Number(metrics.tradesPer100 || 0) >= 3 ? "var(--green)" : (Number(metrics.tradesPer100 || 0) >= 1.5 ? "var(--yellow)" : "var(--red)"),
+        },
+        {
+          label: "Turns",
+          value: formatCredits(Math.round(Number(metrics.deltaTurns || 0))),
+          color: "",
+        },
+        {
+          label: "Trades",
+          value: formatCredits(Math.round(Number(metrics.deltaTrades || 0))),
+          color: "",
+        },
+        {
+          label: "Credits",
+          value: formatCredits(Math.round(Number(metrics.totalLiquid || 0))),
+          color: creditColor(Number(metrics.totalLiquid || 0)) || "",
+        },
+        {
+          label: "Ore",
+          value: formatCredits(Math.round(Number(metrics.totalCargoFuelOre || 0))),
+          color: "var(--green)",
+        },
+        {
+          label: "Org",
+          value: formatCredits(Math.round(Number(metrics.totalCargoOrganics || 0))),
+          color: "var(--yellow)",
+        },
+        {
+          label: "Equip",
+          value: formatCredits(Math.round(Number(metrics.totalCargoEquipment || 0))),
+          color: "var(--blue)",
+        },
+      ];
+      strategyTrendMetricsEl.innerHTML = metricCards
+        .map((m) => `<div class="trend-metric"><span class="k">${esc(m.label)}</span><span class="v"${m.color ? ` style="color:${m.color}"` : ""}>${esc(m.value)}</span></div>`)
+        .join("");
     }
     if (!strategyTrendSvgEl) return;
     if (runMetricHistory.length < 2) {

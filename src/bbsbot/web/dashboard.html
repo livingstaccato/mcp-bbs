@@ -251,9 +251,9 @@ body {
 .strategy-trend-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .strategy-trend-title {
   font-size: 9px;
@@ -261,10 +261,33 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
-.strategy-trend-meta {
-  font-size: 10px;
+.strategy-trend-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 5px;
+}
+.trend-metric {
+  min-width: 0;
+  border: 1px solid rgba(48, 54, 61, 0.72);
+  border-radius: 4px;
+  padding: 3px 5px;
+  background: rgba(17, 24, 34, 0.55);
+}
+.trend-metric .k {
+  font-size: 8px;
   color: var(--fg2);
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
+}
+.trend-metric .v {
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .strategy-trend-svg {
   display: block;
@@ -381,6 +404,7 @@ body {
   font-weight: 700;
 }
 .strategy-n,
+.strategy-turns,
 .strategy-t100,
 .strategy-age {
   text-align: center;
@@ -396,19 +420,15 @@ body {
   min-width: 0;
 }
 .strategy-key-block .strategy-chip-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
 }
 .strategy-key-block .chip {
-  padding: 1px 4px;
-}
-.strategy-key-meta {
-  display: block;
-  font-size: 10px;
-  line-height: 1.1;
-  color: var(--fg2);
+  padding: 1px 5px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1452,6 +1472,9 @@ tbody tr:hover { background: var(--bg3); }
     padding-top: 8px;
   }
   .dashboard-grid { grid-template-columns: 1fr; }
+  .strategy-trend-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .header {
     padding: 10px 16px;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1532,6 +1555,9 @@ tbody tr:hover { background: var(--bg3); }
     text-align: right;
   }
   .bot-table col.col-actions { width: 5%; }
+  .strategy-trend-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 620px) {
   .bot-table col.col-state { display: none; }
@@ -1642,8 +1668,8 @@ tbody tr:hover { background: var(--bg3); }
     <div class="strategy-trend-wrap">
       <div class="strategy-trend-head">
         <span class="strategy-trend-title">Run Resources (1m)</span>
-        <span class="strategy-trend-meta" id="strategy-trend-meta">-</span>
       </div>
+      <div class="strategy-trend-metrics" id="strategy-trend-metrics"></div>
       <svg class="strategy-trend-svg" id="strategy-trend-svg" viewBox="0 0 320 96" preserveAspectRatio="xMidYMid meet" aria-label="run-trend"></svg>
     </div>
   </div>

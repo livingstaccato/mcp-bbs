@@ -73,10 +73,14 @@ def test_dashboard_run_resource_timeseries_is_labeled() -> None:
     assert "Run Resources (1m)" in html
     assert "strategy-panel-cpt" in html
     assert "strategy-panel-trend" in html
+    assert 'id="strategy-trend-metrics"' in html
     assert "runBaselineCredits" in js
     assert "computeRunDeltas" in js
     assert "parseStrategyKey" in js
     assert "strategyLabelFull" in js
+    assert "<th>Turns</th>" in js
+    assert "strategyTrendMetricsEl" in js
+    assert "trend-metric" in js
     assert "trend-line-credits" in js
     assert "trend-line-fuel" in js
     assert "trend-line-org" in js
