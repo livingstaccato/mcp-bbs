@@ -25,9 +25,12 @@
   const botListMeta = $("#bot-list-meta");
   const filterStateEl = $("#filter-state");
   const filterStrategyEl = $("#filter-strategy");
+  const filterLayoutEl = $("#filter-layout");
   const filterSearchEl = $("#filter-search");
   const filterNoTradeEl = $("#filter-no-trade");
   const strategyFilterOptionSet = new Set();
+  const TABLE_VIEW_STORAGE_KEY = "bbsbot.dashboard.table_view";
+  const TABLE_VIEWS = new Set(["balanced", "compact", "trader", "ops", "full"]);
   const testRuntimeValueEl = $("#test-runtime-value");
   const testRuntimeSinceEl = $("#test-runtime-since");
   const testRuntimeFillEl = $("#test-runtime-fill");
@@ -88,6 +91,40 @@
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     return h + "h" + String(m).padStart(2, "0") + "m";
+  }
+
+  function normalizeTableView(view) {
+    const value = String(view || "").trim().toLowerCase();
+    return TABLE_VIEWS.has(value) ? value : "balanced";
+  }
+
+  function applyTableView(view, persist = true, rerender = true) {
+    const selected = normalizeTableView(view);
+    if (document.body) {
+      document.body.setAttribute("data-table-view", selected);
+    }
+    if (filterLayoutEl && filterLayoutEl.value !== selected) {
+      filterLayoutEl.value = selected;
+    }
+    if (persist) {
+      try {
+        localStorage.setItem(TABLE_VIEW_STORAGE_KEY, selected);
+      } catch (_) {}
+    }
+    if (rerender && lastData) {
+      renderOrDeferTable(lastData);
+    }
+  }
+
+  function initTableView() {
+    let saved = "balanced";
+    try {
+      saved = normalizeTableView(localStorage.getItem(TABLE_VIEW_STORAGE_KEY) || "balanced");
+    } catch (_) {}
+    if (filterLayoutEl && filterLayoutEl.value) {
+      saved = normalizeTableView(filterLayoutEl.value);
+    }
+    applyTableView(saved, false, false);
   }
 
   function formatRelativeTime(timestamp) {
@@ -979,9 +1016,12 @@
 	    });
 	  });
 
-  [filterStateEl, filterStrategyEl, filterNoTradeEl].forEach((el) => {
+  [filterStateEl, filterStrategyEl, filterNoTradeEl, filterLayoutEl].forEach((el) => {
     if (!el) return;
     el.addEventListener("change", () => {
+      if (el === filterLayoutEl) {
+        applyTableView(filterLayoutEl.value, true, false);
+      }
       if (lastData) renderOrDeferTable(lastData);
     });
   });
@@ -1811,7 +1851,8 @@
     syncSpawnPresetUi();
   }
 
-	  poll();
+  initTableView();
+  poll();
 	  connect();
   if (swarmPollTimer) clearInterval(swarmPollTimer);
   swarmPollTimer = setInterval(poll, 3000);

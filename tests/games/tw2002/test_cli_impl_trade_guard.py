@@ -4,6 +4,7 @@
 from collections import deque
 
 from bbsbot.games.tw2002.cli_impl import (
+    _compute_no_trade_guard_flags,
     _choose_no_trade_guard_action,
     _choose_ping_pong_break_action,
     _get_zero_trade_streak,
@@ -841,6 +842,49 @@ def test_dynamic_guard_reenables_stale_after_long_drought() -> None:
     assert guard_turns >= int(cfg.trading.no_trade_guard_turns)
     assert stale_turns >= int(cfg.trading.no_trade_guard_stale_turns)
     assert stale_enabled is True
+
+
+def test_guard_flags_hold_off_stale_force_for_healthy_traders() -> None:
+    cfg = BotConfig()
+    cfg.trading.no_trade_guard_stale_soft_holdoff = True
+    cfg.trading.no_trade_guard_stale_soft_holdoff_multiplier = 2.2
+    force_guard, force_action, stale_holdoff = _compute_no_trade_guard_flags(
+        config=cfg,
+        turns_used=260,
+        turns_since_last_trade=70,
+        trades_done=9,
+        guard_min_trades=1,
+        guard_turns=45,
+        guard_stale_turns=45,
+        stale_guard_enabled=True,
+        credits_per_turn=0.25,
+        trades_per_100_turns=3.0,
+        last_stale_force_turn=250,
+    )
+    assert stale_holdoff is True
+    assert force_guard is False
+    assert force_action is False
+
+
+def test_guard_flags_throttle_stale_force_action_interval() -> None:
+    cfg = BotConfig()
+    cfg.trading.no_trade_guard_stale_force_interval_turns = 4
+    force_guard, force_action, stale_holdoff = _compute_no_trade_guard_flags(
+        config=cfg,
+        turns_used=100,
+        turns_since_last_trade=80,
+        trades_done=1,
+        guard_min_trades=1,
+        guard_turns=45,
+        guard_stale_turns=45,
+        stale_guard_enabled=True,
+        credits_per_turn=-0.3,
+        trades_per_100_turns=0.5,
+        last_stale_force_turn=98,
+    )
+    assert stale_holdoff is False
+    assert force_guard is True
+    assert force_action is False
 
 
 def test_get_zero_trade_streak_returns_exact_signature_when_present() -> None:

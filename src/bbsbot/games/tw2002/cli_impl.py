@@ -810,6 +810,53 @@ def _resolve_no_trade_guard_thresholds(
     return guard_turns, guard_stale_turns, stale_guard_enabled
 
 
+def _compute_no_trade_guard_flags(
+    *,
+    config: BotConfig,
+    turns_used: int,
+    turns_since_last_trade: int,
+    trades_done: int,
+    guard_min_trades: int,
+    guard_turns: int,
+    guard_stale_turns: int,
+    stale_guard_enabled: bool,
+    credits_per_turn: float,
+    trades_per_100_turns: float,
+    last_stale_force_turn: int = -10_000,
+) -> tuple[bool, bool, bool]:
+    """Return guard activation and force-action flags.
+
+    Returns: (force_guard, force_guard_action, stale_soft_holdoff)
+    """
+    hard_no_trade_guard = turns_used >= int(guard_turns) and trades_done < int(guard_min_trades)
+    stale_guard_trigger = bool(stale_guard_enabled) and turns_since_last_trade >= int(guard_stale_turns)
+    stale_soft_holdoff = False
+    if stale_guard_trigger and not hard_no_trade_guard:
+        soft_holdoff_enabled = bool(getattr(config.trading, "no_trade_guard_stale_soft_holdoff", True))
+        soft_holdoff_multiplier = max(
+            1.0,
+            float(getattr(config.trading, "no_trade_guard_stale_soft_holdoff_multiplier", 2.2) or 2.2),
+        )
+        holdoff_limit = int(round(float(guard_stale_turns) * soft_holdoff_multiplier))
+        healthy_history = (
+            int(trades_done) >= max(3, int(guard_min_trades) + 2)
+            and float(trades_per_100_turns) >= 1.4
+            and float(credits_per_turn) >= -0.05
+        )
+        stale_soft_holdoff = soft_holdoff_enabled and healthy_history and turns_since_last_trade < holdoff_limit
+
+    force_guard = hard_no_trade_guard or (stale_guard_trigger and not stale_soft_holdoff)
+    force_guard_action = force_guard
+    if force_guard and not hard_no_trade_guard:
+        stale_force_interval = max(
+            1,
+            int(getattr(config.trading, "no_trade_guard_stale_force_interval_turns", 4) or 4),
+        )
+        if (int(turns_used) - int(last_stale_force_turn or -10_000)) < stale_force_interval:
+            force_guard_action = False
+    return force_guard, force_guard_action, stale_soft_holdoff
+
+
 def _should_force_bootstrap_trade(
     *,
     config: BotConfig,
@@ -1202,8 +1249,19 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             credits_per_turn=credits_per_turn,
             trades_per_100_turns=trades_per_100_turns,
         )
-        force_guard = (turns_used >= guard_turns and trades_done < guard_min_trades) or (
-            stale_guard_enabled and turns_since_last_trade >= guard_stale_turns
+        hard_no_trade_guard = turns_used >= guard_turns and trades_done < guard_min_trades
+        force_guard, force_guard_action, stale_soft_holdoff = _compute_no_trade_guard_flags(
+            config=config,
+            turns_used=turns_used,
+            turns_since_last_trade=turns_since_last_trade,
+            trades_done=trades_done,
+            guard_min_trades=guard_min_trades,
+            guard_turns=guard_turns,
+            guard_stale_turns=guard_stale_turns,
+            stale_guard_enabled=stale_guard_enabled,
+            credits_per_turn=credits_per_turn,
+            trades_per_100_turns=trades_per_100_turns,
+            last_stale_force_turn=int(getattr(bot, "_last_no_trade_stale_force_turn", -10_000) or -10_000),
         )
         force_bootstrap_trade = _should_force_bootstrap_trade(
             config=config,
@@ -1212,6 +1270,9 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             guard_min_trades=guard_min_trades,
             force_guard=force_guard,
         )
+        if stale_soft_holdoff:
+            with contextlib.suppress(Exception):
+                bot.strategy_intent = "RECOVERY:STALE_HOLDOFF"
 
         if force_guard:
             current_name = getattr(strategy, "name", "unknown")
@@ -1238,7 +1299,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             if trades_done <= 0 and turns_since_last_trade >= max(120, int(guard_stale_turns * 2)):
                 effective_policy = "aggressive"
             with contextlib.suppress(Exception):
-                bot.strategy_intent = f"RECOVERY:FORCE_{guard_strategy.upper()}"
+                if force_guard_action:
+                    bot.strategy_intent = f"RECOVERY:FORCE_{guard_strategy.upper()}"
+                else:
+                    bot.strategy_intent = "RECOVERY:GUARD_MONITOR"
         elif ai_policy_locked:
             # End-state AI behavior: policy is controlled by AI supervisor decisions.
             effective_policy = str(getattr(strategy, "policy", None) or "balanced")
@@ -1280,7 +1344,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             # Synchronous strategy
             action, params = strategy.get_next_action(state)
 
-        if force_guard:
+        if force_guard_action:
             allow_guard_buy = bool(
                 turns_since_last_trade >= max(20, int(guard_stale_turns // 2))
                 or trades_done <= 1
@@ -1296,6 +1360,9 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             )
             if forced is not None:
                 action, params = forced
+                if not hard_no_trade_guard:
+                    with contextlib.suppress(Exception):
+                        bot._last_no_trade_stale_force_turn = int(turns_used)
                 probe_urgency = str((params or {}).get("urgency") or "")
                 if action == TradeAction.TRADE and probe_urgency == "no_trade_probe":
                     probe_cooldown_turns = max(1, int(getattr(config.trading, "no_trade_probe_cooldown_turns", 5) or 5))

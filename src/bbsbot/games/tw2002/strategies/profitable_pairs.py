@@ -495,6 +495,11 @@ class ProfitablePairsStrategy(TradingStrategy):
             self._explore_since_profit = 0
             # Failed warp history can become stale after map updates.
             self._failed_warps.clear()
+            # Before another roam cycle, opportunistically try a local bootstrap
+            # trade if we're already dockable.
+            bootstrap = self._local_bootstrap_trade(state)
+            if bootstrap is not None:
+                return bootstrap
 
         # Refresh pairs if needed
         # Important: after a server reset, knowledge fills in gradually. If we
@@ -799,17 +804,17 @@ class ProfitablePairsStrategy(TradingStrategy):
         credits_now = int(state.credits or 0)
         # Keep early-game bots from burning turns on distant repositioning.
         if credits_now < 1_000:
-            max_reposition_hops = 8
-            max_total_turns = 12
+            max_reposition_hops = 3
+            max_total_turns = 8
         elif credits_now < 5_000:
-            max_reposition_hops = 14
-            max_total_turns = 20
+            max_reposition_hops = 8
+            max_total_turns = 14
         else:
-            max_reposition_hops = 24
-            max_total_turns = 32
+            max_reposition_hops = 18
+            max_total_turns = 28
         if self.policy == "aggressive":
-            max_reposition_hops = max_reposition_hops + 4
-            max_total_turns = max_total_turns + 6
+            max_reposition_hops = max_reposition_hops + 2
+            max_total_turns = max_total_turns + 4
         elif self.policy == "conservative":
             max_reposition_hops = max(6, max_reposition_hops - 2)
             max_total_turns = max(10, max_total_turns - 2)
@@ -854,6 +859,12 @@ class ProfitablePairsStrategy(TradingStrategy):
                     best_priced_pair = pair
             else:
                 # Unknown pricing: explore the closest structural pair to collect prices.
+                if credits_now < 1_500 and reposition_hops > 2:
+                    continue
+                if credits_now < 5_000 and reposition_hops > 4:
+                    continue
+                if self._explore_since_profit >= self._replan_explore_threshold and reposition_hops > 2:
+                    continue
                 est_qty = self._estimated_affordable_qty_without_quotes(state, pair.commodity)
                 if est_qty <= 0:
                     continue

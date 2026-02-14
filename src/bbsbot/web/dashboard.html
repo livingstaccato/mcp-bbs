@@ -518,6 +518,9 @@ body {
   font-size: 12px;
   min-width: 130px;
 }
+.table-filters select#filter-layout {
+  min-width: 150px;
+}
 .table-filters input[type="search"] {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -689,6 +692,83 @@ thead th, tbody td {
   padding-left: 1px;
   padding-right: 1px;
 }
+
+/* User-selectable table views */
+body[data-table-view="compact"] .bot-table col.col-activity { width: 16%; }
+body[data-table-view="compact"] .bot-table col.col-strategy { width: 12%; }
+body[data-table-view="compact"] .bot-table col.col-sector { display: none; }
+body[data-table-view="compact"] .bot-table col.col-fuel { display: none; }
+body[data-table-view="compact"] .bot-table col.col-org { display: none; }
+body[data-table-view="compact"] .bot-table col.col-equip { display: none; }
+body[data-table-view="compact"] .bot-table col.col-trades { display: none; }
+body[data-table-view="compact"] .bot-table col.col-updated { display: none; }
+body[data-table-view="compact"] .bot-table thead th:nth-child(5),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(5),
+body[data-table-view="compact"] .bot-table thead th:nth-child(7),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(7),
+body[data-table-view="compact"] .bot-table thead th:nth-child(8),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(8),
+body[data-table-view="compact"] .bot-table thead th:nth-child(9),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(9),
+body[data-table-view="compact"] .bot-table thead th:nth-child(11),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(11),
+body[data-table-view="compact"] .bot-table thead th:nth-child(12),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(12) { display: none; }
+
+body[data-table-view="trader"] .bot-table col.col-fuel { display: none; }
+body[data-table-view="trader"] .bot-table col.col-org { display: none; }
+body[data-table-view="trader"] .bot-table col.col-equip { display: none; }
+body[data-table-view="trader"] .bot-table col.col-updated { display: none; }
+body[data-table-view="trader"] .bot-table col.col-activity { width: 18%; }
+body[data-table-view="trader"] .bot-table col.col-strategy { width: 14%; }
+body[data-table-view="trader"] .bot-table col.col-turns { width: 7%; }
+body[data-table-view="trader"] .bot-table col.col-trades { width: 7%; }
+body[data-table-view="trader"] .bot-table thead th:nth-child(7),
+body[data-table-view="trader"] .bot-table tbody td:nth-child(7),
+body[data-table-view="trader"] .bot-table thead th:nth-child(8),
+body[data-table-view="trader"] .bot-table tbody td:nth-child(8),
+body[data-table-view="trader"] .bot-table thead th:nth-child(9),
+body[data-table-view="trader"] .bot-table tbody td:nth-child(9),
+body[data-table-view="trader"] .bot-table thead th:nth-child(12),
+body[data-table-view="trader"] .bot-table tbody td:nth-child(12) { display: none; }
+
+body[data-table-view="ops"] .bot-table col.col-fuel { display: none; }
+body[data-table-view="ops"] .bot-table col.col-org { display: none; }
+body[data-table-view="ops"] .bot-table col.col-equip { display: none; }
+body[data-table-view="ops"] .bot-table col.col-trades { display: none; }
+body[data-table-view="ops"] .bot-table col.col-activity { width: 22%; }
+body[data-table-view="ops"] .bot-table col.col-strategy { width: 10%; }
+body[data-table-view="ops"] .bot-table col.col-updated { width: 11%; }
+body[data-table-view="ops"] .bot-table thead th:nth-child(7),
+body[data-table-view="ops"] .bot-table tbody td:nth-child(7),
+body[data-table-view="ops"] .bot-table thead th:nth-child(8),
+body[data-table-view="ops"] .bot-table tbody td:nth-child(8),
+body[data-table-view="ops"] .bot-table thead th:nth-child(9),
+body[data-table-view="ops"] .bot-table tbody td:nth-child(9),
+body[data-table-view="ops"] .bot-table thead th:nth-child(11),
+body[data-table-view="ops"] .bot-table tbody td:nth-child(11) { display: none; }
+
+body[data-table-view="full"] .bot-table col.col-sector,
+body[data-table-view="full"] .bot-table col.col-fuel,
+body[data-table-view="full"] .bot-table col.col-org,
+body[data-table-view="full"] .bot-table col.col-equip,
+body[data-table-view="full"] .bot-table col.col-turns,
+body[data-table-view="full"] .bot-table col.col-trades,
+body[data-table-view="full"] .bot-table col.col-updated { display: table-column !important; }
+body[data-table-view="full"] .bot-table thead th:nth-child(5),
+body[data-table-view="full"] .bot-table tbody td:nth-child(5),
+body[data-table-view="full"] .bot-table thead th:nth-child(7),
+body[data-table-view="full"] .bot-table tbody td:nth-child(7),
+body[data-table-view="full"] .bot-table thead th:nth-child(8),
+body[data-table-view="full"] .bot-table tbody td:nth-child(8),
+body[data-table-view="full"] .bot-table thead th:nth-child(9),
+body[data-table-view="full"] .bot-table tbody td:nth-child(9),
+body[data-table-view="full"] .bot-table thead th:nth-child(10),
+body[data-table-view="full"] .bot-table tbody td:nth-child(10),
+body[data-table-view="full"] .bot-table thead th:nth-child(11),
+body[data-table-view="full"] .bot-table tbody td:nth-child(11),
+body[data-table-view="full"] .bot-table thead th:nth-child(12),
+body[data-table-view="full"] .bot-table tbody td:nth-child(12) { display: table-cell !important; }
 thead th {
   text-align: left;
   padding: 7px 8px;
@@ -1506,6 +1586,13 @@ tbody tr:hover { background: var(--bg3); }
           <select id="filter-strategy">
             <option value="all">strategy: all</option>
           </select>
+          <select id="filter-layout">
+            <option value="balanced">view: balanced</option>
+            <option value="compact">view: compact</option>
+            <option value="trader">view: trader</option>
+            <option value="ops">view: ops</option>
+            <option value="full">view: full</option>
+          </select>
           <input id="filter-search" type="search" placeholder="search bot/status/strategy/sector">
           <label class="filter-badge">
             <input type="checkbox" id="filter-no-trade">
@@ -1653,6 +1740,6 @@ tbody tr:hover { background: var(--bg3); }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="/static/dashboard.js?v=36"></script>
+<script src="/static/dashboard.js?v=37"></script>
 </body>
 </html>

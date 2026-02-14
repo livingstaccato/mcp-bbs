@@ -18,11 +18,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Communications",
     "Topic :: System :: Networking",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later",
 ]
 
 dependencies = [
     "fastmcp>=0.1.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "websockets>=12.0",
     "click>=8.1.7",
     "pexpect>=4.9.0",
     "pydantic>=2.6.0",
@@ -41,9 +43,7 @@ dependencies = [
 # Used by bbsbot for direct file access to TW2002 game data
 
 [project.optional-dependencies]
-swarm = [
-    "websockets>=12.0",
-]
+swarm = []
 dev = [
     "ty>=0.0.12",
     "mypy>=1.8.0",
