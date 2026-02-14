@@ -1034,6 +1034,21 @@ def test_dynamic_guard_tightens_for_unprofitable_stalled_bot() -> None:
     assert stale_enabled is True
 
 
+def test_dynamic_guard_does_not_relax_with_sparse_trade_history() -> None:
+    cfg = BotConfig()
+    guard_turns, stale_turns, stale_enabled = _resolve_no_trade_guard_thresholds(
+        config=cfg,
+        turns_used=220,
+        turns_since_last_trade=80,
+        trades_done=1,
+        credits_per_turn=0.9,
+        trades_per_100_turns=8.4,
+    )
+    assert guard_turns <= int(cfg.trading.no_trade_guard_turns)
+    assert stale_turns <= int(cfg.trading.no_trade_guard_stale_turns)
+    assert stale_enabled is True
+
+
 def test_dynamic_guard_reenables_stale_after_long_drought() -> None:
     cfg = BotConfig()
     guard_turns, stale_turns, stale_enabled = _resolve_no_trade_guard_thresholds(

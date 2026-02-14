@@ -833,6 +833,16 @@ def _resolve_no_trade_guard_thresholds(
     elif trades_done == 0 and turns_since_last_trade >= base_stale:
         scale = 0.65
 
+    # Sparse trade history should not relax guard windows aggressively.
+    # One early profitable trade can otherwise postpone recovery too long.
+    if trades_done <= 1:
+        scale = min(scale, 1.0)
+        early_floor_turns = max(int(warmup_turns) + 8, 20)
+        if turns_used >= early_floor_turns and turns_since_last_trade >= max(16, int(round(base_stale * 0.5))):
+            scale = min(scale, 0.85)
+        if trades_done == 0 and turns_since_last_trade >= max(24, int(round(base_stale * 0.6))):
+            scale = min(scale, 0.70)
+
     guard_turns = int(round(base_turns * scale))
     guard_stale_turns = int(round(base_stale * scale))
     guard_turns = max(min_turns, min(max_turns, guard_turns))
