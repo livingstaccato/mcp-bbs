@@ -387,10 +387,21 @@
                 const t100 = Number(row.tradesPer100 || 0).toFixed(1);
                 const color = strategyCptColor(cpt);
                 const stateCls = row.state.toLowerCase();
+                const parsed = parseStrategyKey(row.key);
+                const sid = strategyLabelFull(parsed.id || "unknown");
+                const mode = strategyLabelFull(parsed.mode || "unknown");
                 const title = `${row.key} | n=${row.n} | turns=${row.turns}${row.samplesSkipped ? ` | skip=${row.samplesSkipped}` : ""}`;
                 return `
                   <tr class="strategy-cpt-row ${stateCls}${row.lowConfidence ? " low-confidence" : ""}" title="${esc(title)}">
-                    <td class="strategy-key">${esc(row.key)}</td>
+                    <td class="strategy-key">
+                      <div class="strategy-key-block">
+                        <span class="strategy-chip-row">
+                          <span class="chip sid">${esc(sid)}</span>
+                          <span class="chip mode">${esc(mode)}</span>
+                        </span>
+                        <span class="strategy-key-meta">turns ${esc(formatCredits(Math.round(Number(row.turns || 0))))}</span>
+                      </div>
+                    </td>
                     <td class="strategy-cpt-num"${color ? ` style="color:${color}"` : ""}>${esc(cptText)}</td>
                     <td class="strategy-n">${esc(String(row.n))}</td>
                     <td class="strategy-t100">${esc(t100)}</td>
@@ -638,6 +649,22 @@
       ((bot.strategy_id ? String(bot.strategy_id).trim() : "") +
         (bot.strategy_mode ? `(${String(bot.strategy_mode).trim()})` : ""));
     return strategy || "-";
+  }
+
+  function parseStrategyKey(key) {
+    const raw = String(key || "").trim();
+    const m = raw.match(/^([^()]+?)(?:\(([^)]+)\))?$/);
+    if (!m) return { id: raw || "unknown", mode: "" };
+    return {
+      id: String(m[1] || "").trim() || "unknown",
+      mode: String(m[2] || "").trim(),
+    };
+  }
+
+  function strategyLabelFull(token) {
+    return String(token || "")
+      .replace(/_/g, " ")
+      .trim();
   }
 
   function getStrategyCompact(bot) {

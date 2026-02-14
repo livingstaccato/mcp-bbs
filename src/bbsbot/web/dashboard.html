@@ -135,7 +135,7 @@ body {
 .top-stats {
   margin: 12px 20px 0;
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -208,12 +208,26 @@ body {
 .top-stat .yellow { color: var(--yellow); }
 .top-stat .cyan { color: var(--cyan); }
 .top-stat.wide { grid-column: span 2; }
+.top-stat-no-trade .k {
+  letter-spacing: 0.2px;
+}
 .strategy-strip {
   margin: 8px 20px 0;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 7px 10px 8px;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.strategy-panel {
+  min-width: 0;
+}
+.strategy-panel + .strategy-panel {
+  border-left: 1px solid rgba(48, 54, 61, 0.7);
+  padding-left: 10px;
 }
 .strategy-strip .k {
   display: block;
@@ -230,9 +244,9 @@ body {
   min-height: 14px;
 }
 .strategy-trend-wrap {
-  margin-top: 6px;
-  border-top: 1px solid rgba(48, 54, 61, 0.7);
-  padding: 5px 0 0;
+  margin-top: 0;
+  border-top: none;
+  padding: 0;
 }
 .strategy-trend-head {
   display: flex;
@@ -324,7 +338,7 @@ body {
   table-layout: fixed;
 }
 .strategy-cpt-table thead th {
-  text-align: left;
+  text-align: center;
   font-size: 9px;
   color: var(--fg2);
   text-transform: uppercase;
@@ -336,10 +350,16 @@ body {
   padding: 5px 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 11px;
+  text-align: center;
+  vertical-align: middle;
   font-variant-numeric: tabular-nums;
 }
 .strategy-cpt-table tbody tr:last-child td {
   border-bottom: none;
+}
+.strategy-cpt-table thead th:first-child,
+.strategy-cpt-table tbody td:first-child {
+  text-align: left;
 }
 .strategy-cpt-row.warm {
   opacity: 0.72;
@@ -352,19 +372,46 @@ body {
   text-underline-offset: 2px;
 }
 .strategy-key {
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 .strategy-cpt-num {
-  text-align: right;
+  text-align: center;
   font-weight: 700;
 }
 .strategy-n,
 .strategy-t100,
 .strategy-age {
-  text-align: right;
+  text-align: center;
   color: var(--fg2);
+}
+.strategy-key-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 2px;
+  min-height: 30px;
+  line-height: 1.05;
+  min-width: 0;
+}
+.strategy-key-block .strategy-chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.strategy-key-block .chip {
+  padding: 1px 4px;
+}
+.strategy-key-meta {
+  display: block;
+  font-size: 10px;
+  line-height: 1.1;
+  color: var(--fg2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .strategy-state {
   display: inline-flex;
@@ -1380,11 +1427,30 @@ tbody tr:hover { background: var(--bg3); }
   .header {
     padding: 10px 16px;
   }
+  .top-stats {
+    margin: 12px 16px 0;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1100px) {
+  .top-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 @media (max-width: 940px) {
   .dashboard-main { padding: 14px 16px 18px; }
   .top-stats { margin: 12px 16px 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .strategy-strip { margin: 8px 16px 0; }
+  .strategy-strip {
+    margin: 8px 16px 0;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .strategy-panel + .strategy-panel {
+    border-left: none;
+    border-top: 1px solid rgba(48, 54, 61, 0.7);
+    padding-left: 0;
+    padding-top: 8px;
+  }
   .dashboard-grid { grid-template-columns: 1fr; }
   .header {
     padding: 10px 16px;
@@ -1562,20 +1628,24 @@ tbody tr:hover { background: var(--bg3); }
     <span class="k">Haggle</span>
     <span class="v"><span class="green" id="accept-rate">-</span> / <span class="yellow" id="too-high-rate">-</span> / <span class="blue" id="too-low-rate">-</span></span>
   </div>
-  <div class="top-stat">
-    <span class="k" title="Bots with 120+ turns and zero completed trades">No Trade >=120T</span>
+  <div class="top-stat top-stat-no-trade">
+    <span class="k" title="Bots with 120+ turns and zero completed trades">No Trade 120+</span>
     <span class="v"><span class="red" id="no-trade-120">-</span></span>
   </div>
 </section>
 <section class="strategy-strip">
-  <span class="k">Strategy CPT</span>
-  <span class="v" id="strategy-cpt">-</span>
-  <div class="strategy-trend-wrap">
-    <div class="strategy-trend-head">
-      <span class="strategy-trend-title">Run Resources (1m)</span>
-      <span class="strategy-trend-meta" id="strategy-trend-meta">-</span>
+  <div class="strategy-panel strategy-panel-cpt">
+    <span class="k">Strategy CPT</span>
+    <span class="v" id="strategy-cpt">-</span>
+  </div>
+  <div class="strategy-panel strategy-panel-trend">
+    <div class="strategy-trend-wrap">
+      <div class="strategy-trend-head">
+        <span class="strategy-trend-title">Run Resources (1m)</span>
+        <span class="strategy-trend-meta" id="strategy-trend-meta">-</span>
+      </div>
+      <svg class="strategy-trend-svg" id="strategy-trend-svg" viewBox="0 0 320 96" preserveAspectRatio="xMidYMid meet" aria-label="run-trend"></svg>
     </div>
-    <svg class="strategy-trend-svg" id="strategy-trend-svg" viewBox="0 0 320 96" preserveAspectRatio="xMidYMid meet" aria-label="run-trend"></svg>
   </div>
 </section>
 
