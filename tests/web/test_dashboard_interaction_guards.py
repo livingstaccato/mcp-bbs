@@ -65,3 +65,15 @@ def test_dashboard_shows_threat_and_attack_signals() -> None:
     assert "under_attack" in js
     assert "UNDER_ATTACK" in js
     assert "THREAT" in js
+
+
+def test_dashboard_run_resource_timeseries_is_labeled() -> None:
+    html = _dashboard_html()
+    js = _dashboard_js()
+    assert "Run Resources (1m)" in html
+    assert "runBaselineCredits" in js
+    assert "computeRunDeltas" in js
+    assert "trend-line-credits" in js
+    assert "trend-line-fuel" in js
+    assert "trend-line-org" in js
+    assert "trend-line-equip" in js

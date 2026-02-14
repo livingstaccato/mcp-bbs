@@ -631,6 +631,9 @@ class SwarmManager:
         llm_wakeups_total = 0
         autopilot_turns_total = 0
         goal_contract_failures_total = 0
+        total_cargo_fuel_ore = 0
+        total_cargo_organics = 0
+        total_cargo_equipment = 0
         trade_outcomes_overall = {
             "trades_executed": 0,
             "haggle_accept": 0,
@@ -669,11 +672,17 @@ class SwarmManager:
             llm_wakeups = int(bot.get("llm_wakeups") or 0)
             autopilot_turns = int(bot.get("autopilot_turns") or 0)
             goal_contract_failures = int(bot.get("goal_contract_failures") or 0)
+            cargo_fuel_ore = int(bot.get("cargo_fuel_ore") or 0)
+            cargo_organics = int(bot.get("cargo_organics") or 0)
+            cargo_equipment = int(bot.get("cargo_equipment") or 0)
             haggle_low_total += low
             haggle_high_total += high
             llm_wakeups_total += llm_wakeups
             autopilot_turns_total += autopilot_turns
             goal_contract_failures_total += goal_contract_failures
+            total_cargo_fuel_ore += max(0, cargo_fuel_ore)
+            total_cargo_organics += max(0, cargo_organics)
+            total_cargo_equipment += max(0, cargo_equipment)
 
             trade_outcomes_overall["trades_executed"] += trades
             trade_outcomes_overall["turns_executed"] = int(trade_outcomes_overall.get("turns_executed") or 0) + turns
@@ -780,6 +789,9 @@ class SwarmManager:
             "total_bank_credits": status.total_bank_credits,
             "total_net_worth_estimate": status.total_net_worth_estimate,
             "total_turns": status.total_turns,
+            "total_cargo_fuel_ore": total_cargo_fuel_ore,
+            "total_cargo_organics": total_cargo_organics,
+            "total_cargo_equipment": total_cargo_equipment,
             "state_counts": state_counts,
             "trading_bots": trading_bots,
             "profitable_bots": profitable_bots,

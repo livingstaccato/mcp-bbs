@@ -255,7 +255,7 @@ body {
 .strategy-trend-svg {
   display: block;
   width: 100%;
-  height: 72px;
+  height: 96px;
 }
 .trend-baseline {
   stroke: rgba(139, 148, 158, 0.2);
@@ -278,17 +278,29 @@ body {
 .trend-last {
   fill: rgba(57, 197, 207, 0.86);
 }
-.trend-line-cpt {
+.trend-line-credits {
   stroke: rgba(57, 197, 207, 0.92);
 }
-.trend-line-money {
+.trend-line-fuel {
   stroke: rgba(63, 185, 80, 0.92);
 }
-.trend-last-cpt {
+.trend-line-org {
+  stroke: rgba(245, 158, 11, 0.92);
+}
+.trend-line-equip {
+  stroke: rgba(96, 165, 250, 0.92);
+}
+.trend-last-credits {
   fill: rgba(57, 197, 207, 0.95);
 }
-.trend-last-money {
+.trend-last-fuel {
   fill: rgba(63, 185, 80, 0.95);
+}
+.trend-last-org {
+  fill: rgba(245, 158, 11, 0.95);
+}
+.trend-last-equip {
+  fill: rgba(96, 165, 250, 0.95);
 }
 .trend-empty {
   font-size: 10px;
@@ -1560,10 +1572,10 @@ tbody tr:hover { background: var(--bg3); }
   <span class="v" id="strategy-cpt">-</span>
   <div class="strategy-trend-wrap">
     <div class="strategy-trend-head">
-      <span class="strategy-trend-title">Run Time Series</span>
+      <span class="strategy-trend-title">Run Resources (1m)</span>
       <span class="strategy-trend-meta" id="strategy-trend-meta">-</span>
     </div>
-    <svg class="strategy-trend-svg" id="strategy-trend-svg" viewBox="0 0 320 72" preserveAspectRatio="none" aria-label="run-trend"></svg>
+    <svg class="strategy-trend-svg" id="strategy-trend-svg" viewBox="0 0 320 96" preserveAspectRatio="xMidYMid meet" aria-label="run-trend"></svg>
   </div>
 </section>
 

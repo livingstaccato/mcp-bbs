@@ -32,6 +32,9 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         haggle_accept=4,
         haggle_counter=1,
         haggle_too_low=1,
+        cargo_fuel_ore=12,
+        cargo_organics=7,
+        cargo_equipment=3,
         cargo_estimated_value=120,
         net_worth_estimate=1354,
         credits_delta=300,
@@ -55,6 +58,9 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         haggle_accept=0,
         haggle_counter=2,
         haggle_too_high=3,
+        cargo_fuel_ore=2,
+        cargo_organics=0,
+        cargo_equipment=11,
         cargo_estimated_value=40,
         net_worth_estimate=740,
         credits_delta=-50,
@@ -84,6 +90,9 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert row["llm_wakeups_total"] == 4
     assert row["autopilot_turns_total"] == 32
     assert row["goal_contract_failures_total"] == 1
+    assert row["total_cargo_fuel_ore"] == 14
+    assert row["total_cargo_organics"] == 7
+    assert row["total_cargo_equipment"] == 14
     overall = row["trade_outcomes_overall"]
     assert overall["trades_executed"] == 6
     assert overall["turns_executed"] == 182

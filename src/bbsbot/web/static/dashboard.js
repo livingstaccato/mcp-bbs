@@ -18,6 +18,9 @@
   let lastRunTotalTurns = 0;
   let lastRunTotalBots = 0;
   let runHistoryHydrated = false;
+  let runBaselineCredits = null;
+  let runBaselineTurns = null;
+  let runBaselineTrades = null;
 
   const $ = (sel) => document.querySelector(sel);
   const dot = $("#dot");
@@ -407,37 +410,52 @@
     const bots = data.bots || [];
     const includeStates = new Set(["running", "recovering", "blocked", "completed", "error", "disconnected"]);
     let turns = 0;
-    let creditsDelta = 0;
     let trades = 0;
     let runStart = Number.POSITIVE_INFINITY;
     let activeBots = 0;
     let totalNetWorth = Number(data.total_net_worth_estimate || 0);
     let totalLiquid = Number(data.total_credits || 0);
+    let totalCargoFuelOre = 0;
+    let totalCargoOrganics = 0;
+    let totalCargoEquipment = 0;
 
     for (const b of bots) {
       const state = String(b.state || "").toLowerCase();
       if (!includeStates.has(state)) continue;
       activeBots += 1;
       turns += Number(b.turns_executed || 0);
-      creditsDelta += Number(b.credits_delta || 0);
       trades += Number(b.trades_executed || 0);
+      totalCargoFuelOre += Number(b.cargo_fuel_ore || 0);
+      totalCargoOrganics += Number(b.cargo_organics || 0);
+      totalCargoEquipment += Number(b.cargo_equipment || 0);
       const started = Number(b.started_at || 0);
       if (started > 0 && started < runStart) runStart = started;
     }
 
-    const trueCpt = turns > 0 ? (creditsDelta / turns) : 0;
-    const tradesPer100 = turns > 0 ? ((trades * 100) / turns) : 0;
     return {
       runStart: isFinite(runStart) ? runStart : null,
       turns,
-      creditsDelta,
       trades,
-      trueCpt,
-      tradesPer100,
       activeBots,
       totalNetWorth,
       totalLiquid,
+      totalCargoFuelOre,
+      totalCargoOrganics,
+      totalCargoEquipment,
     };
+  }
+
+  function computeRunDeltas(run) {
+    const baseCredits = Number(runBaselineCredits != null ? runBaselineCredits : run.totalLiquid);
+    const baseTurns = Number(runBaselineTurns != null ? runBaselineTurns : run.turns);
+    const baseTrades = Number(runBaselineTrades != null ? runBaselineTrades : run.trades);
+    const deltaTurns = Math.max(0, Number(run.turns || 0) - baseTurns);
+    const deltaTrades = Math.max(0, Number(run.trades || 0) - baseTrades);
+    const deltaCredits = Number(run.totalLiquid || 0) - baseCredits;
+    const trueCpt = deltaTurns > 0 ? (deltaCredits / deltaTurns) : 0;
+    const tradesPer100 = deltaTurns > 0 ? ((deltaTrades * 100) / deltaTurns) : 0;
+    const returnPerTrade = deltaTrades > 0 ? (deltaCredits / deltaTrades) : 0;
+    return { deltaTurns, deltaTrades, deltaCredits, trueCpt, tradesPer100, returnPerTrade };
   }
 
   async function hydrateRunHistoryFromTimeseries() {
@@ -452,8 +470,6 @@
       rows.sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
       const first = rows[0];
       const baseTurns = Number(first.total_turns || 0);
-      const baseCredits = Number(first.total_credits || 0);
-      const baseNetWorth = Number((first.total_net_worth_estimate ?? first.total_credits) || 0);
       const baseTrades = Number(((first.trade_outcomes_overall || {}).trades_executed) || 0);
       let lastKeepTs = 0;
       for (let i = 0; i < rows.length; i++) {
@@ -465,18 +481,17 @@
         }
         const turns = Number(row.total_turns || 0);
         const credits = Number(row.total_credits || 0);
-        const netWorth = Number((row.total_net_worth_estimate ?? row.total_credits) || 0);
         const trades = Number(((row.trade_outcomes_overall || {}).trades_executed) || 0);
         const deltaTurns = turns >= baseTurns ? (turns - baseTurns) : turns;
-        const deltaCredits = credits >= baseCredits ? (credits - baseCredits) : credits;
         const deltaTrades = trades >= baseTrades ? (trades - baseTrades) : trades;
         runMetricHistory.push({
           ts: Number(row.ts || 0),
-          trueCpt: deltaTurns > 0 ? (deltaCredits / deltaTurns) : 0,
-          tradesPer100: deltaTurns > 0 ? ((deltaTrades * 100) / deltaTurns) : 0,
           turns: deltaTurns,
-          netWorth: netWorth >= baseNetWorth ? netWorth : baseNetWorth,
-          liquid: credits,
+          trades: deltaTrades,
+          credits,
+          fuelOre: Number(row.total_cargo_fuel_ore || 0),
+          organics: Number(row.total_cargo_organics || 0),
+          equipment: Number(row.total_cargo_equipment || 0),
         });
         lastKeepTs = rowTs;
       }
@@ -490,33 +505,32 @@
 
   function renderRunTrend(runtimeSec, metrics) {
     if (strategyTrendMetaEl) {
-      const deltaNetWorth = runMetricHistory.length
-        ? (Number(metrics.totalNetWorth || 0) - Number(runMetricHistory[0].netWorth || 0))
-        : 0;
-      const dnwText = `${deltaNetWorth >= 0 ? "+" : ""}${formatCredits(Math.round(deltaNetWorth))}`;
-      strategyTrendMetaEl.textContent = `ΔNW ${dnwText} · CPT ${metrics.trueCpt.toFixed(2)} · T/100 ${metrics.tradesPer100.toFixed(2)} · ${formatClockDuration(runtimeSec)}`;
+      strategyTrendMetaEl.textContent = (
+        `C/T ${metrics.trueCpt.toFixed(2)} · T/100 ${metrics.tradesPer100.toFixed(2)} · `
+        + `CR ${formatCredits(Math.round(metrics.totalLiquid || 0))} · `
+        + `ORE ${Math.round(metrics.totalCargoFuelOre || 0)} · `
+        + `ORG ${Math.round(metrics.totalCargoOrganics || 0)} · `
+        + `EQU ${Math.round(metrics.totalCargoEquipment || 0)} · `
+        + `${formatClockDuration(runtimeSec)}`
+      );
     }
     if (!strategyTrendSvgEl) return;
     if (runMetricHistory.length < 2) {
-      strategyTrendSvgEl.innerHTML = `<text x="8" y="22" class="trend-empty">Collecting run samples...</text>`;
+      strategyTrendSvgEl.innerHTML = `<text x="160" y="48" text-anchor="middle" class="trend-empty">Collecting run samples...</text>`;
       return;
     }
 
     const tail = runMetricHistory.slice(-180);
     const w = 320;
-    const h = 72;
-    const pad = 3;
+    const pad = 4;
     const n = tail.length;
     const xAt = (i) => pad + ((w - (pad * 2)) * (n <= 1 ? 0 : i / (n - 1)));
-    const cptVals = tail.map((x) => Number(x.trueCpt || 0));
-    const nw0 = Number(tail[0].netWorth || 0);
-    const moneyVals = tail.map((x) => Number(x.netWorth || 0) - nw0);
-
-    // Two compact lanes: CPT (top) and money delta (bottom).
-    const cTop = 6;
-    const cBottom = 31;
-    const mTop = 40;
-    const mBottom = 66;
+    const lanes = [
+      { key: "credits", label: "CR", className: "trend-line-credits", dotClass: "trend-last-credits", values: tail.map((x) => Number(x.credits || 0)) },
+      { key: "fuelOre", label: "ORE", className: "trend-line-fuel", dotClass: "trend-last-fuel", values: tail.map((x) => Number(x.fuelOre || 0)) },
+      { key: "organics", label: "ORG", className: "trend-line-org", dotClass: "trend-last-org", values: tail.map((x) => Number(x.organics || 0)) },
+      { key: "equipment", label: "EQU", className: "trend-line-equip", dotClass: "trend-last-equip", values: tail.map((x) => Number(x.equipment || 0)) },
+    ];
 
     function robustBounds(values, zeroRef, minSpan) {
       const vals = values.filter((v) => isFinite(v)).slice().sort((a, b) => a - b);
@@ -532,30 +546,31 @@
       return [lo, hi];
     }
 
-    let [cMin, cMax] = robustBounds(cptVals, 0, 0.08);
-    const cSpan = Math.max(0.0001, cMax - cMin);
-    const cY = (v) => cTop + (((cMax - v) / cSpan) * (cBottom - cTop));
-    const cZeroY = cY(0);
-    const cPts = cptVals.map((v, i) => `${xAt(i).toFixed(2)},${cY(v).toFixed(2)}`);
-
-    let [mMin, mMax] = robustBounds(moneyVals, 0, 5);
-    const mSpan = Math.max(0.0001, mMax - mMin);
-    const mY = (v) => mTop + (((mMax - v) / mSpan) * (mBottom - mTop));
-    const mZeroY = mY(0);
-    const mPts = moneyVals.map((v, i) => `${xAt(i).toFixed(2)},${mY(v).toFixed(2)}`);
-
+    const laneHeight = 17;
+    const laneGap = 5;
+    const laneTopStart = 4;
     const lastX = xAt(n - 1).toFixed(2);
-    const cLastY = cY(cptVals[n - 1]).toFixed(2);
-    const mLastY = mY(moneyVals[n - 1]).toFixed(2);
+    const parts = [];
+    for (let i = 0; i < lanes.length; i++) {
+      const lane = lanes[i];
+      const top = laneTopStart + (i * (laneHeight + laneGap));
+      const bottom = top + laneHeight;
+      const baselineRef = lane.values.length ? lane.values[0] : 0;
+      const [minV, maxV] = robustBounds(lane.values, baselineRef, lane.key === "credits" ? 20 : 2);
+      const span = Math.max(0.0001, maxV - minV);
+      const yAt = (v) => top + (((maxV - v) / span) * (bottom - top));
+      const points = lane.values.map((v, idx) => `${xAt(idx).toFixed(2)},${yAt(v).toFixed(2)}`);
+      const baselineY = yAt(baselineRef).toFixed(2);
+      const lastY = yAt(lane.values[n - 1]).toFixed(2);
+      const lastVal = Math.round(lane.values[n - 1] || 0);
+      parts.push(`<line class="trend-baseline" x1="${pad}" y1="${baselineY}" x2="${(w - pad)}" y2="${baselineY}"></line>`);
+      parts.push(`<polyline class="trend-line ${lane.className}" points="${points.join(" ")}"></polyline>`);
+      parts.push(`<circle class="trend-last ${lane.dotClass}" cx="${lastX}" cy="${lastY}" r="1.7"></circle>`);
+      parts.push(`<text class="trend-label trend-lane-label" x="${pad + 1}" y="${(top + 7).toFixed(2)}">${lane.label}</text>`);
+      parts.push(`<text class="trend-label trend-lane-value" text-anchor="end" x="${(w - pad - 1)}" y="${(top + 7).toFixed(2)}">${formatCredits(lastVal)}</text>`);
+    }
 
-    strategyTrendSvgEl.innerHTML = `
-      <line class="trend-baseline" x1="${pad}" y1="${cZeroY.toFixed(2)}" x2="${(w - pad)}" y2="${cZeroY.toFixed(2)}"></line>
-      <line class="trend-baseline-secondary" x1="${pad}" y1="${mZeroY.toFixed(2)}" x2="${(w - pad)}" y2="${mZeroY.toFixed(2)}"></line>
-      <polyline class="trend-line trend-line-cpt" points="${cPts.join(" ")}"></polyline>
-      <polyline class="trend-line trend-line-money" points="${mPts.join(" ")}"></polyline>
-      <circle class="trend-last trend-last-cpt" cx="${lastX}" cy="${cLastY}" r="1.9"></circle>
-      <circle class="trend-last trend-last-money" cx="${lastX}" cy="${mLastY}" r="1.9"></circle>
-    `;
+    strategyTrendSvgEl.innerHTML = parts.join("");
   }
 
   function shortBotId(botId) {
@@ -750,19 +765,18 @@
       const returnPerTradeEl = $("#return-per-trade");
       const tradesPer100El = $("#trades-per-100");
       const profitableRateSubEl = $("#profitable-rate-sub");
-
-      const returnPerTrade = run.trades > 0 ? (run.creditsDelta / run.trades) : 0;
+      const runDelta = computeRunDeltas(run);
       if (returnPerTurnEl) {
-        returnPerTurnEl.textContent = formatSigned(run.trueCpt, 2);
-        returnPerTurnEl.style.color = strategyCptColor(run.trueCpt) || "";
+        returnPerTurnEl.textContent = formatSigned(runDelta.trueCpt, 2);
+        returnPerTurnEl.style.color = strategyCptColor(runDelta.trueCpt) || "";
       }
       if (returnPerTradeEl) {
-        returnPerTradeEl.textContent = formatSigned(returnPerTrade, 1);
-        returnPerTradeEl.style.color = strategyCptColor(returnPerTrade / 50) || "";
+        returnPerTradeEl.textContent = formatSigned(runDelta.returnPerTrade, 1);
+        returnPerTradeEl.style.color = strategyCptColor(runDelta.returnPerTrade / 50) || "";
       }
       if (tradesPer100El) {
-        tradesPer100El.textContent = `${run.tradesPer100.toFixed(2)}`;
-        tradesPer100El.style.color = run.tradesPer100 >= 3 ? "var(--green)" : (run.tradesPer100 >= 1.5 ? "var(--yellow)" : "var(--red)");
+        tradesPer100El.textContent = `${runDelta.tradesPer100.toFixed(2)}`;
+        tradesPer100El.style.color = runDelta.tradesPer100 >= 3 ? "var(--green)" : (runDelta.tradesPer100 >= 1.5 ? "var(--yellow)" : "var(--red)");
       }
       if (profitableRateSubEl) {
         const bots = data.bots || [];
@@ -798,10 +812,23 @@
       if (resetRun) {
         runMetricHistory.length = 0;
         lastRunMetricSampleTs = 0;
+        runBaselineCredits = null;
+        runBaselineTurns = null;
+        runBaselineTrades = null;
       }
       if (run.runStart) activeRunStartTs = run.runStart;
       lastRunTotalTurns = run.turns;
       lastRunTotalBots = totalBotsNow;
+      if (run.activeBots > 0 && runBaselineCredits == null) {
+        runBaselineCredits = Number(run.totalLiquid || 0);
+        runBaselineTurns = Number(run.turns || 0);
+        runBaselineTrades = Number(run.trades || 0);
+      }
+      if (run.activeBots <= 0) {
+        runBaselineCredits = null;
+        runBaselineTurns = null;
+        runBaselineTrades = null;
+      }
 
       const runtimeSec = activeRunStartTs ? Math.max(0, nowS - activeRunStartTs) : 0;
       if (testRuntimeValueEl) testRuntimeValueEl.textContent = formatClockDuration(runtimeSec);
@@ -822,18 +849,20 @@
           || (nowS - lastRunMetricSampleTs) >= RUN_TREND_SAMPLE_INTERVAL_S
         );
       if (shouldSample) {
+        const liveDelta = computeRunDeltas(run);
         runMetricHistory.push({
           ts: nowS,
-          trueCpt: run.trueCpt,
-          tradesPer100: run.tradesPer100,
-          turns: run.turns,
-          netWorth: Number(run.totalNetWorth || 0),
-          liquid: Number(run.totalLiquid || 0),
+          turns: Number(liveDelta.deltaTurns || 0),
+          trades: Number(liveDelta.deltaTrades || 0),
+          credits: Number(run.totalLiquid || 0),
+          fuelOre: Number(run.totalCargoFuelOre || 0),
+          organics: Number(run.totalCargoOrganics || 0),
+          equipment: Number(run.totalCargoEquipment || 0),
         });
         while (runMetricHistory.length > 240) runMetricHistory.shift();
         lastRunMetricSampleTs = nowS;
       }
-      renderRunTrend(runtimeSec, run);
+      renderRunTrend(runtimeSec, { ...run, ...computeRunDeltas(run) });
 
       const metrics = computeAggregateMetrics(data);
       const acceptEl = $("#accept-rate");
