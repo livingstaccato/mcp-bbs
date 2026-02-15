@@ -2098,9 +2098,13 @@
         ).trim();
         const statusParts = [];
         const leasedState = String((leasedBotStatus && leasedBotStatus.state) || "").toLowerCase();
-        const isAi = String(
+        const strategyRaw = String(
           ((leasedBotStatus && (leasedBotStatus.strategy_id || leasedBotStatus.strategy)) || "")
-        ).toLowerCase().includes("ai");
+        )
+          .trim()
+          .toLowerCase();
+        const strategyNorm = strategyRaw.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        const isAi = strategyNorm === "ai_strategy" || strategyNorm === "ai";
         if (isAi) statusParts.push(`<span class="pool-status-pill ai">AI</span>`);
         if (isHijacked) statusParts.push(`<span class="pool-status-pill hijacked">Hijacked</span>`);
         if (leasedState === "running") statusParts.push(`<span class="pool-status-pill running">Running</span>`);
