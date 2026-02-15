@@ -199,14 +199,14 @@ class TradeQualityConfig(BaseModel):
     bootstrap_turns: int = 50
     bootstrap_min_verified_lanes: int = 8
     attempt_budget_window_turns: int = 40
-    attempt_budget_max_attempts: int = 8
-    opportunity_score_min: float = 0.62
+    attempt_budget_max_attempts: int = 6
+    opportunity_score_min: float = 0.72
     role_mode_enabled: bool = True
     role_scout_ratio: float = 0.20
     role_harvester_ratio: float = 0.75
     role_ai_ratio: float = 0.05
     reroute_wrong_side_ttl_s: int = 300
-    reroute_no_port_ttl_s: int = 900
+    reroute_no_port_ttl_s: int = 1200
     reroute_no_interaction_ttl_s: int = 180
     autotune_enabled: bool = False
     autotune_apply_on_restart: bool = True
