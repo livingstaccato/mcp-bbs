@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from bbsbot.manager import BotStatus, SwarmManager
@@ -147,6 +148,24 @@ def test_timeseries_recent_limit(tmp_path: Path) -> None:
     assert recent[1]["reason"] == "tick_4"
 
 
+def test_timeseries_recent_trims_to_latest_epoch(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    rows = [
+        {"ts": time.time() - 80, "reason": "old_a", "total_turns": 400, "total_bots": 20},
+        {"ts": time.time() - 60, "reason": "old_b", "total_turns": 420, "total_bots": 20},
+        {"ts": time.time() - 40, "reason": "reset", "total_turns": 0, "total_bots": 0},
+        {"ts": time.time() - 20, "reason": "new_a", "total_turns": 15, "total_bots": 20},
+        {"ts": time.time() - 10, "reason": "new_b", "total_turns": 28, "total_bots": 20},
+    ]
+    manager._timeseries_path.parent.mkdir(parents=True, exist_ok=True)
+    with manager._timeseries_path.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+    recent = manager.get_timeseries_recent(limit=10)
+    assert [r["reason"] for r in recent] == ["reset", "new_a", "new_b"]
+
+
 def test_timeseries_summary_window(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path)
     manager.bots["bot_000"] = BotStatus(
@@ -249,6 +268,84 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     assert summary["last"]["trade_quality_runtime_total"]["verified_lanes_count"] >= 3
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_executed"]
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_per_100_turns"]
+
+
+def test_timeseries_summary_trims_to_latest_epoch(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    now = time.time()
+    rows = [
+        {
+            "ts": now - 90,
+            "reason": "old_a",
+            "total_turns": 600,
+            "total_bots": 20,
+            "total_credits": 5000,
+            "total_net_worth_estimate": 5500,
+            "trade_attempts_total": 120,
+            "trade_successes_total": 30,
+            "trade_failures_total": 90,
+            "trade_outcomes_overall": {"trades_executed": 70},
+        },
+        {
+            "ts": now - 70,
+            "reason": "old_b",
+            "total_turns": 700,
+            "total_bots": 20,
+            "total_credits": 5200,
+            "total_net_worth_estimate": 5700,
+            "trade_attempts_total": 150,
+            "trade_successes_total": 35,
+            "trade_failures_total": 115,
+            "trade_outcomes_overall": {"trades_executed": 78},
+        },
+        {
+            "ts": now - 50,
+            "reason": "reset",
+            "total_turns": 0,
+            "total_bots": 0,
+            "total_credits": 0,
+            "total_net_worth_estimate": 0,
+            "trade_attempts_total": 0,
+            "trade_successes_total": 0,
+            "trade_failures_total": 0,
+            "trade_outcomes_overall": {"trades_executed": 0},
+        },
+        {
+            "ts": now - 30,
+            "reason": "new_a",
+            "total_turns": 25,
+            "total_bots": 20,
+            "total_credits": 3100,
+            "total_net_worth_estimate": 3300,
+            "trade_attempts_total": 4,
+            "trade_successes_total": 1,
+            "trade_failures_total": 3,
+            "trade_outcomes_overall": {"trades_executed": 1},
+        },
+        {
+            "ts": now - 10,
+            "reason": "new_b",
+            "total_turns": 55,
+            "total_bots": 20,
+            "total_credits": 3600,
+            "total_net_worth_estimate": 3900,
+            "trade_attempts_total": 9,
+            "trade_successes_total": 2,
+            "trade_failures_total": 7,
+            "trade_outcomes_overall": {"trades_executed": 2},
+        },
+    ]
+    manager._timeseries_path.parent.mkdir(parents=True, exist_ok=True)
+    with manager._timeseries_path.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+    summary = manager.get_timeseries_summary(window_minutes=120)
+    assert summary["rows"] == 3
+    assert summary["delta"]["turns"] == 55
+    assert summary["delta"]["trade_attempts"] == 9
+    assert summary["delta"]["trade_successes"] == 2
+    assert summary["delta"]["trades_executed"] == 2
 
 
 def test_timeseries_summary_treats_net_worth_as_gauge(tmp_path: Path) -> None:

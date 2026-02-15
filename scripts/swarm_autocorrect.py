@@ -200,6 +200,10 @@ def main() -> int:
     ap.add_argument("--base-url", default="http://localhost:2272")
     ap.add_argument("--interval-s", type=int, default=20)
     ap.add_argument("--profile-cooldown-s", type=int, default=480)
+    ap.add_argument("--warmup-seconds", type=int, default=900)
+    ap.add_argument("--warmup-min-turns", type=int, default=500)
+    ap.add_argument("--min-running-for-controls", type=int, default=18)
+    ap.add_argument("--min-attempts-for-controls", type=int, default=40)
     ap.add_argument("--root", default=str(Path.cwd()))
     args = ap.parse_args()
 
@@ -220,6 +224,7 @@ def main() -> int:
     stagnant = 0
     active_profile = "baseline"
     last_profile_change = 0.0
+    start_ts = time.time()
 
     print("autocorrect_started", flush=True)
     while True:
@@ -234,12 +239,26 @@ def main() -> int:
             attempts = int(delta.get("trade_attempts") or 0)
             errors = int(status.get("errors") or 0)
             turns = int(status.get("total_turns") or 0)
+            running = int(status.get("running") or 0)
+            warmup_active = (
+                (now - start_ts) < float(args.warmup_seconds)
+                or turns < int(args.warmup_min_turns)
+                or running < int(args.min_running_for_controls)
+            )
+            controls_ready = (not warmup_active) and (attempts >= int(args.min_attempts_for_controls))
 
-            bad_nwpt = bad_nwpt + 1 if nwpt <= 0.0 else 0
-            bad_t100 = bad_t100 + 1 if t100 < 0.8 else 0
-            bad_succ = bad_succ + 1 if (succ < 0.05 and attempts >= 40) else 0
-            bad_errors = bad_errors + 1 if errors > 0 else 0
-            stagnant = stagnant + 1 if turns == last_total_turns else 0
+            if controls_ready:
+                bad_nwpt = bad_nwpt + 1 if nwpt <= 0.0 else 0
+                bad_t100 = bad_t100 + 1 if t100 < 0.8 else 0
+                bad_succ = bad_succ + 1 if succ < 0.05 else 0
+                bad_errors = bad_errors + 1 if errors > 0 else 0
+                stagnant = stagnant + 1 if turns == last_total_turns else 0
+            else:
+                bad_nwpt = 0
+                bad_t100 = 0
+                bad_succ = 0
+                bad_errors = 0
+                stagnant = 0
             last_total_turns = turns
 
             # Keep dead bots cycling.
@@ -263,7 +282,7 @@ def main() -> int:
             )
             action = {
                 "ts": now,
-                "running": int(status.get("running") or 0),
+                "running": running,
                 "errors": errors,
                 "turns": turns,
                 "nwpt": nwpt,
@@ -273,6 +292,8 @@ def main() -> int:
                 "profile": active_profile,
                 "restarted": restarted,
                 "trigger": trigger,
+                "warmup_active": warmup_active,
+                "controls_ready": controls_ready,
             }
 
             if trigger:

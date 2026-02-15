@@ -509,7 +509,29 @@ class SwarmManager:
                     rows.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
-        return list(rows)
+        return self._trim_to_latest_timeseries_epoch(list(rows))
+
+    @staticmethod
+    def _trim_to_latest_timeseries_epoch(rows: list[dict]) -> list[dict]:
+        """Trim rows to the latest continuous run epoch.
+
+        A hard reset/respawn causes aggregate `total_turns` to drop sharply. If old
+        metrics remain on disk, we only want the most recent epoch for summaries/UI.
+        """
+        if len(rows) <= 1:
+            return rows
+        latest_epoch_start = 0
+        prev_turns = int(rows[0].get("total_turns") or 0)
+        prev_bots = int(rows[0].get("total_bots") or 0)
+        for idx, row in enumerate(rows[1:], start=1):
+            cur_turns = int(row.get("total_turns") or 0)
+            cur_bots = int(row.get("total_bots") or 0)
+            # Run boundary: aggregate turns reset/drop or swarm explicitly cleared.
+            if cur_turns < prev_turns or (prev_bots > 0 and cur_bots == 0):
+                latest_epoch_start = idx
+            prev_turns = cur_turns
+            prev_bots = cur_bots
+        return rows[latest_epoch_start:]
 
     def get_timeseries_summary(self, window_minutes: int = 120) -> dict:
         """Summarize built-in timeseries over a trailing time window."""
@@ -537,6 +559,8 @@ class SwarmManager:
                 ts = float(row.get("ts") or 0)
                 if ts >= cutoff:
                     window_rows.append(row)
+
+        window_rows = self._trim_to_latest_timeseries_epoch(window_rows)
 
         if not window_rows:
             return {
