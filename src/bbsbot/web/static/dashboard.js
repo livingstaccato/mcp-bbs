@@ -389,7 +389,7 @@
           <thead>
             <tr>
               <th>Strategy</th>
-              <th>CPT</th>
+              <th>Bot CPT</th>
               <th>N</th>
               <th>Turns</th>
               <th>T/100</th>
