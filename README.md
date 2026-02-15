@@ -141,6 +141,9 @@ server process you start from this repository/environment. In multi-connector
 clients, you may also have unrelated MCP connectors installed; those will not
 expose `tw2002_*` tools.
 
+For swarm runtime/ROI diagnostics and anti-collapse control references, see:
+- [`/Users/tim/code/gh/livingstaccato/bbsbot/docs/guides/SWARM_OPERATIONS_TELEMETRY.md`](/Users/tim/code/gh/livingstaccato/bbsbot/docs/guides/SWARM_OPERATIONS_TELEMETRY.md)
+
 Use an explicit local alias and tool filter for TW2002 operations:
 
 ```json

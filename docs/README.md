@@ -38,6 +38,7 @@ Topics covered:
 - **[Multi-Character Management](guides/MULTI_CHARACTER.md)** - Managing multiple bots
 - **[Intelligent Bot](guides/INTELLIGENT_BOT.md)** - Using AI strategies
 - **[TW2002 MCP Operations](TW2002_MCP_OPERATIONS.md)** - Local MCP server aliasing, hijack flow, troubleshooting
+- **[Swarm Operations + Telemetry](guides/SWARM_OPERATIONS_TELEMETRY.md)** - ROI interpretation, anti-collapse controls, degradation triage
 - **[Configuration](../README.md#configuration)** - Config + environment settings
 - **[Spying / Watch Socket](../README.md#spy--watch-socket)** - Attach to a running session output
 
