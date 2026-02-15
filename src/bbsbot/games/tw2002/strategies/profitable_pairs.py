@@ -22,6 +22,10 @@ from bbsbot.games.tw2002.strategies.base import (
     TradeOpportunity,
     TradingStrategy,
 )
+from bbsbot.games.tw2002.trade_quality import (
+    resolve_trade_quality_controls,
+    trade_quality_runtime_map,
+)
 from bbsbot.logging import get_logger
 
 if TYPE_CHECKING:
@@ -59,6 +63,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         super().__init__(config, knowledge)
         self._settings = config.trading.profitable_pairs
         self._anti_controls = resolve_anti_collapse_controls(config, self._settings.anti_collapse_override)
+        self._trade_quality_controls = resolve_trade_quality_controls(config, self._settings.trade_quality_override)
         self._pairs: list[PortPair] = []
         self._pairs_dirty = True  # Need to recalculate
         self._current_pair: PortPair | None = None
@@ -83,6 +88,18 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._anti_trigger_forced_probe_disable: int = 0
         self._anti_prev_throughput_degraded: bool = False
         self._anti_prev_structural_storm: bool = False
+        self._trade_quality_blocked_unknown_side: int = 0
+        self._trade_quality_blocked_no_port: int = 0
+        self._trade_quality_blocked_low_score: int = 0
+        self._trade_quality_blocked_budget_exhausted: int = 0
+        self._trade_quality_reroute_wrong_side: int = 0
+        self._trade_quality_reroute_no_port: int = 0
+        self._trade_quality_reroute_no_interaction: int = 0
+        self._trade_quality_score_accepted_sum: float = 0.0
+        self._trade_quality_score_accepted_n: int = 0
+        self._trade_quality_score_rejected_sum: float = 0.0
+        self._trade_quality_score_rejected_n: int = 0
+        self._trade_quality_attempt_turns: deque[int] = deque(maxlen=256)
 
     @property
     def name(self) -> str:
@@ -119,7 +136,111 @@ class ProfitablePairsStrategy(TradingStrategy):
             trigger_structural_storm=self._anti_trigger_structural_storm,
             trigger_forced_probe_disable=self._anti_trigger_forced_probe_disable,
         )
+        accepted_avg = (
+            self._trade_quality_score_accepted_sum / float(self._trade_quality_score_accepted_n)
+            if self._trade_quality_score_accepted_n > 0
+            else 0.0
+        )
+        rejected_avg = (
+            self._trade_quality_score_rejected_sum / float(self._trade_quality_score_rejected_n)
+            if self._trade_quality_score_rejected_n > 0
+            else 0.0
+        )
+        payload["trade_quality_runtime"] = trade_quality_runtime_map(
+            self._trade_quality_controls,
+            strict_eligibility_active=bool(self._trade_quality_controls.strict_eligibility_enabled),
+            bootstrap_active=self._is_bootstrap_active(),
+            attempt_budget_active=self._is_attempt_budget_exhausted(int(getattr(self, "_turns_used", 0) or 0)),
+            role_mode_active=bool(self._trade_quality_controls.role_mode_enabled),
+            blocked_unknown_side=self._trade_quality_blocked_unknown_side,
+            blocked_no_port=self._trade_quality_blocked_no_port,
+            blocked_low_score=self._trade_quality_blocked_low_score,
+            blocked_budget_exhausted=self._trade_quality_blocked_budget_exhausted,
+            reroute_wrong_side=self._trade_quality_reroute_wrong_side,
+            reroute_no_port=self._trade_quality_reroute_no_port,
+            reroute_no_interaction=self._trade_quality_reroute_no_interaction,
+            verified_lanes_count=self._verified_lane_count(),
+            attempt_budget_used=len(self._trade_quality_attempt_turns),
+            attempt_budget_window=int(self._trade_quality_controls.attempt_budget_window_turns),
+            opportunity_score_avg_accepted=accepted_avg,
+            opportunity_score_avg_rejected=rejected_avg,
+        )
         return payload
+
+    def _verified_lane_count(self) -> int:
+        count = 0
+        for pair in self._pairs:
+            if not pair:
+                continue
+            buy_info = self.knowledge.get_sector_info(int(pair.buy_sector))
+            sell_info = self.knowledge.get_sector_info(int(pair.sell_sector))
+            buy_side = self._port_side_for_sector_info(buy_info, str(pair.commodity), expected="selling")
+            sell_side = self._port_side_for_sector_info(sell_info, str(pair.commodity), expected="buying")
+            if buy_side and sell_side:
+                count += 1
+        return count
+
+    @staticmethod
+    def _port_side_for_sector_info(info: SectorInfo | None, commodity: str, expected: str | None = None) -> bool:
+        if not info:
+            return False
+        side = str((info.port_status or {}).get(commodity, "")).strip().lower()
+        if not side:
+            idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
+            if idx is None:
+                return False
+            pclass = str(info.port_class or "").upper()
+            if len(pclass) == 3:
+                side = "buying" if pclass[idx] == "B" else ("selling" if pclass[idx] == "S" else "")
+        if expected is None:
+            return side in {"buying", "selling"}
+        return side == expected
+
+    def _is_bootstrap_active(self) -> bool:
+        turns_used = int(getattr(self, "_turns_used", 0) or 0)
+        if turns_used < int(self._trade_quality_controls.bootstrap_turns):
+            return True
+        return self._verified_lane_count() < int(self._trade_quality_controls.bootstrap_min_verified_lanes)
+
+    def _prune_attempt_budget(self, turns_used: int) -> None:
+        min_turn = max(0, int(turns_used) - int(self._trade_quality_controls.attempt_budget_window_turns))
+        while self._trade_quality_attempt_turns and int(self._trade_quality_attempt_turns[0]) < min_turn:
+            self._trade_quality_attempt_turns.popleft()
+
+    def _is_attempt_budget_exhausted(self, turns_used: int) -> bool:
+        self._prune_attempt_budget(turns_used)
+        return len(self._trade_quality_attempt_turns) >= int(self._trade_quality_controls.attempt_budget_max_attempts)
+
+    def _record_attempt_budget_use(self, turns_used: int) -> None:
+        self._prune_attempt_budget(turns_used)
+        self._trade_quality_attempt_turns.append(int(max(0, turns_used)))
+
+    def _opportunity_score(
+        self,
+        *,
+        reposition_hops: int,
+        turns: int,
+        has_prices: bool,
+        price_profit: int,
+        pair: PortPair,
+        pair_sig: str,
+    ) -> float:
+        score = 1.0
+        if has_prices:
+            score += min(1.0, max(0.0, float(price_profit) / 800.0))
+        else:
+            score -= 0.25
+        score -= min(0.5, max(0.0, float(reposition_hops) / 18.0))
+        score -= min(0.35, max(0.0, float(turns) / 40.0))
+        if self._is_trade_lane_blocked(pair.buy_sector, pair.commodity, "buy"):
+            score -= 0.4
+        if self._is_trade_lane_blocked(pair.sell_sector, pair.commodity, "sell"):
+            score -= 0.4
+        if self._is_trade_sector_blocked(pair.buy_sector) or self._is_trade_sector_blocked(pair.sell_sector):
+            score -= 0.3
+        fail_streak = int(self._pair_failure_streak_by_signature.get(pair_sig, 0) or 0)
+        score -= min(0.5, fail_streak * 0.08)
+        return max(0.0, min(2.5, score))
 
     @staticmethod
     def _trade_lane_key(sector: int | None, commodity: str | None, side: str | None) -> str:
@@ -168,6 +289,15 @@ class ProfitablePairsStrategy(TradingStrategy):
                 int(self._anti_controls.lane_backoff_base_seconds) * (2**exponent),
             )
         )
+        if reason_token == "wrong_side":
+            cooldown_s = max(cooldown_s, int(self._trade_quality_controls.reroute_wrong_side_ttl_s))
+            self._trade_quality_reroute_wrong_side += 1
+        elif reason_token == "no_port":
+            cooldown_s = max(cooldown_s, int(self._trade_quality_controls.reroute_no_port_ttl_s))
+            self._trade_quality_reroute_no_port += 1
+        elif reason_token == "no_interaction":
+            cooldown_s = max(cooldown_s, int(self._trade_quality_controls.reroute_no_interaction_ttl_s))
+            self._trade_quality_reroute_no_interaction += 1
         until_ts = time() + cooldown_s
         self._trade_lane_cooldown_until_by_key[key] = until_ts
 
@@ -190,6 +320,8 @@ class ProfitablePairsStrategy(TradingStrategy):
                         int(self._anti_controls.sector_backoff_base_seconds) * (2**exponent_s),
                     )
                 )
+                if reason_token == "no_port":
+                    sector_cooldown_s = max(sector_cooldown_s, int(self._trade_quality_controls.reroute_no_port_ttl_s))
                 self._trade_sector_cooldown_until_by_sector[sector_i] = max(
                     float(self._trade_sector_cooldown_until_by_sector.get(sector_i, 0.0) or 0.0),
                     time() + sector_cooldown_s,
@@ -406,6 +538,28 @@ class ProfitablePairsStrategy(TradingStrategy):
         if code == "S":
             return "selling"
         return None
+
+    def _strict_trade_eligibility(
+        self,
+        state: GameState,
+        *,
+        commodity: str,
+        expected_side: str,
+    ) -> tuple[bool, str]:
+        if not self._trade_quality_controls.strict_eligibility_enabled:
+            return True, "ok"
+        if self._trade_quality_controls.strict_eligibility_require_port_presence and not bool(state.has_port):
+            self._trade_quality_blocked_no_port += 1
+            return False, "no_port"
+        if self._trade_quality_controls.strict_eligibility_require_known_side:
+            side = self._local_port_side_live(state, commodity)
+            if side is None:
+                self._trade_quality_blocked_unknown_side += 1
+                return False, "unknown_side"
+            if side != expected_side:
+                self._trade_quality_blocked_unknown_side += 1
+                return False, "wrong_side"
+        return True, "ok"
 
     def _choose_sell_commodity_here(
         self,
@@ -733,7 +887,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         if not self._pairs:
             self._current_pair = None
             self._pair_phase = "idle"
-            bootstrap = None if degraded else self._local_bootstrap_trade(state)
+            bootstrap = None if (degraded or self._is_bootstrap_active()) else self._local_bootstrap_trade(state)
             if bootstrap is not None:
                 return bootstrap
             logger.info("No profitable pairs found, exploring")
@@ -743,7 +897,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         if self._current_pair is None:
             self._current_pair = self._select_best_pair(state)
             if self._current_pair is None:
-                bootstrap = None if degraded else self._local_bootstrap_trade(state)
+                bootstrap = None if (degraded or self._is_bootstrap_active()) else self._local_bootstrap_trade(state)
                 if bootstrap is not None:
                     return bootstrap
                 logger.info("No reachable/viable pair selected, exploring")
@@ -759,6 +913,16 @@ class ProfitablePairsStrategy(TradingStrategy):
         # Execute pair trading phases
         if self._pair_phase == "going_to_buy":
             if current == pair.buy_sector:
+                eligible, reason = self._strict_trade_eligibility(
+                    state,
+                    commodity=pair.commodity,
+                    expected_side="selling",
+                )
+                if not eligible:
+                    self._apply_trade_lane_backoff(current, pair.commodity, "buy", reason)
+                    self._invalidate_pair(pair, f"buy_{reason}")
+                    self._pair_phase = "idle"
+                    return self._explore_for_ports(state)
                 if self._is_trade_lane_blocked(current, pair.commodity, "buy"):
                     self._invalidate_pair(pair, "buy_lane_cooldown")
                     self._pair_phase = "idle"
@@ -821,6 +985,17 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         elif self._pair_phase == "going_to_sell":
             if current == pair.sell_sector:
+                eligible, reason = self._strict_trade_eligibility(
+                    state,
+                    commodity=pair.commodity,
+                    expected_side="buying",
+                )
+                if not eligible:
+                    self._apply_trade_lane_backoff(current, pair.commodity, "sell", reason)
+                    self._invalidate_pair(pair, f"sell_{reason}")
+                    self._pair_phase = "idle"
+                    self._current_pair = None
+                    return self._explore_for_ports(state)
                 if self._is_trade_lane_blocked(current, pair.commodity, "sell"):
                     self._invalidate_pair(pair, "sell_lane_cooldown")
                     self._pair_phase = "idle"
@@ -1057,6 +1232,11 @@ class ProfitablePairsStrategy(TradingStrategy):
             max_reposition_hops = max(6, max_reposition_hops - 2)
             max_total_turns = max(10, max_total_turns - 2)
 
+        turns_used = int(getattr(self, "_turns_used", 0) or 0)
+        if self._is_attempt_budget_exhausted(turns_used):
+            self._trade_quality_blocked_budget_exhausted += 1
+            return None
+
         # Find pair with best profit/turn ratio from current position.
         # Prefer viable price-known pairs over structural unknown-price pairs.
         best_priced_pair = None
@@ -1096,6 +1276,19 @@ class ProfitablePairsStrategy(TradingStrategy):
             has_prices = bool(buy_unit and sell_unit)
 
             price_profit = self._estimate_profit_for_pair(state, pair)
+            opportunity_score = self._opportunity_score(
+                reposition_hops=reposition_hops,
+                turns=turns,
+                has_prices=has_prices,
+                price_profit=price_profit,
+                pair=pair,
+                pair_sig=pair_sig,
+            )
+            if opportunity_score < float(self._trade_quality_controls.opportunity_score_min):
+                self._trade_quality_blocked_low_score += 1
+                self._trade_quality_score_rejected_sum += opportunity_score
+                self._trade_quality_score_rejected_n += 1
+                continue
             if has_prices:
                 if price_profit <= 0:
                     # We already know this pair is non-viable at current prices/liquidity.
@@ -1108,9 +1301,11 @@ class ProfitablePairsStrategy(TradingStrategy):
                 if score > best_priced_score:
                     best_priced_score = score
                     best_priced_pair = pair
+                    self._trade_quality_score_accepted_sum += opportunity_score
+                    self._trade_quality_score_accepted_n += 1
             else:
                 # Unknown pricing: explore the closest structural pair to collect prices.
-                if self._is_trade_throughput_degraded():
+                if self._is_trade_throughput_degraded() or self._is_bootstrap_active():
                     # Under degraded throughput, unknown-price probes mostly
                     # amplify wrong-side/no-port loops; prefer known-priced routes.
                     continue
@@ -1128,9 +1323,14 @@ class ProfitablePairsStrategy(TradingStrategy):
                 if score > best_unpriced_score:
                     best_unpriced_score = score
                     best_unpriced_pair = pair
+                    self._trade_quality_score_accepted_sum += opportunity_score
+                    self._trade_quality_score_accepted_n += 1
 
         if best_priced_pair is not None:
+            self._record_attempt_budget_use(turns_used)
             return best_priced_pair
+        if best_unpriced_pair is not None:
+            self._record_attempt_budget_use(turns_used)
         return best_unpriced_pair
 
     @staticmethod

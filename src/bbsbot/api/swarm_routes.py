@@ -351,6 +351,9 @@ async def update_status(bot_id: str, update: dict):
         bot.strategy_id = update["strategy_id"]
     if "strategy_mode" in update:
         bot.strategy_mode = update["strategy_mode"]
+    if "swarm_role" in update:
+        role = str(update["swarm_role"] or "").strip().lower()
+        bot.swarm_role = role or None
     if "strategy_intent" in update:
         bot.strategy_intent = update["strategy_intent"]
     if "ship_name" in update:
@@ -571,6 +574,22 @@ async def update_status(bot_id: str, update: dict):
             with contextlib.suppress(Exception):
                 merged_anti[token] = max(int(merged_anti.get(token, 0) or 0), int(value or 0))
         bot.anti_collapse_runtime = merged_anti
+    if "trade_quality_runtime" in update:
+        merged_tq = dict(bot.trade_quality_runtime or {})
+        for key, value in dict(update.get("trade_quality_runtime") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            if isinstance(value, bool):
+                merged_tq[token] = bool(value)
+                continue
+            if isinstance(value, float):
+                with contextlib.suppress(Exception):
+                    merged_tq[token] = float(value)
+                continue
+            with contextlib.suppress(Exception):
+                merged_tq[token] = max(float(merged_tq.get(token, 0) or 0), float(value or 0))
+        bot.trade_quality_runtime = merged_tq
     if "llm_wakeups_per_100_turns" in update:
         bot.llm_wakeups_per_100_turns = float(update["llm_wakeups_per_100_turns"])
     if "hostile_fighters" in update:

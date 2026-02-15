@@ -75,6 +75,12 @@ def test_update_status_merges_diagnostics_telemetry_maps(tmp_path: Path) -> None
                     "throughput_degraded_active": True,
                     "trigger_throughput_degraded": 2,
                 },
+                "trade_quality_runtime": {
+                    "strict_eligibility_active": True,
+                    "blocked_unknown_side": 4,
+                    "opportunity_score_avg_accepted": 0.52,
+                },
+                "swarm_role": "scout",
             },
         )
         assert resp1.status_code == 200
@@ -90,6 +96,11 @@ def test_update_status_merges_diagnostics_telemetry_maps(tmp_path: Path) -> None
                     "controls_enabled": True,
                     "throughput_degraded_active": False,
                     "trigger_throughput_degraded": 5,
+                },
+                "trade_quality_runtime": {
+                    "strict_eligibility_active": False,
+                    "blocked_unknown_side": 2,
+                    "opportunity_score_avg_accepted": 0.61,
                 },
             },
         )
@@ -108,6 +119,10 @@ def test_update_status_merges_diagnostics_telemetry_maps(tmp_path: Path) -> None
     assert bot.anti_collapse_runtime["controls_enabled"] is True
     assert bot.anti_collapse_runtime["throughput_degraded_active"] is False
     assert bot.anti_collapse_runtime["trigger_throughput_degraded"] == 5
+    assert bot.trade_quality_runtime["strict_eligibility_active"] is False
+    assert bot.trade_quality_runtime["blocked_unknown_side"] == 4
+    assert float(bot.trade_quality_runtime["opportunity_score_avg_accepted"]) >= 0.61
+    assert bot.swarm_role == "scout"
 
 
 def test_update_status_ignores_out_of_order_reports(tmp_path: Path) -> None:

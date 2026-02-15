@@ -76,7 +76,11 @@ def test_profitable_pairs_selection_skips_pairs_on_cooldown() -> None:
         return None
 
     knowledge.find_path = _find_path  # type: ignore[assignment]
-    strategy = ProfitablePairsStrategy(BotConfig(), knowledge)
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_turns = 0
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_min_verified_lanes = 0
+    cfg.trading.profitable_pairs.trade_quality_override.opportunity_score_min = 0.0
+    strategy = ProfitablePairsStrategy(cfg, knowledge)
     pair = PortPair(
         buy_sector=2,
         sell_sector=3,
@@ -101,7 +105,11 @@ def test_profitable_pairs_prefers_live_port_class_over_stale_status() -> None:
     info = SectorInfo(has_port=True, port_class="SSS")
     info.port_status = {"fuel_ore": "selling", "organics": "buying", "equipment": "buying"}
     knowledge._sectors[77] = info
-    strategy = ProfitablePairsStrategy(BotConfig(), knowledge)
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_turns = 0
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_min_verified_lanes = 0
+    cfg.trading.profitable_pairs.trade_quality_override.opportunity_score_min = 0.0
+    strategy = ProfitablePairsStrategy(cfg, knowledge)
 
     state = GameState(
         context="sector_command",
@@ -134,7 +142,11 @@ def test_profitable_pairs_trade_lane_backoff_blocks_pair_selection() -> None:
         return None
 
     knowledge.find_path = _find_path  # type: ignore[assignment]
-    strategy = ProfitablePairsStrategy(BotConfig(), knowledge)
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_turns = 0
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_min_verified_lanes = 0
+    cfg.trading.profitable_pairs.trade_quality_override.opportunity_score_min = 0.0
+    strategy = ProfitablePairsStrategy(cfg, knowledge)
     pair = PortPair(
         buy_sector=2,
         sell_sector=3,
@@ -164,7 +176,11 @@ def test_profitable_pairs_sector_backoff_blocks_pair_selection() -> None:
         return None
 
     knowledge.find_path = _find_path  # type: ignore[assignment]
-    strategy = ProfitablePairsStrategy(BotConfig(), knowledge)
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_turns = 0
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_min_verified_lanes = 0
+    cfg.trading.profitable_pairs.trade_quality_override.opportunity_score_min = 0.0
+    strategy = ProfitablePairsStrategy(cfg, knowledge)
     pair = PortPair(
         buy_sector=2,
         sell_sector=3,
@@ -237,3 +253,43 @@ def test_profitable_pairs_anti_collapse_override_thresholds_apply() -> None:
     assert strategy._is_trade_throughput_degraded() is False
     strategy._record_trade_attempt_sample(False)
     assert strategy._is_trade_throughput_degraded() is True
+
+
+def test_profitable_pairs_trade_quality_attempt_budget_blocks_selection() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="test")
+    knowledge._sectors[2] = SectorInfo(has_port=True, port_class="SSS")
+    knowledge._sectors[3] = SectorInfo(has_port=True, port_class="BBB")
+    knowledge.find_path = lambda start, end, max_hops=None: [start, end] if start != end else [start]  # type: ignore[assignment]
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.attempt_budget_window_turns = 20
+    cfg.trading.profitable_pairs.trade_quality_override.attempt_budget_max_attempts = 1
+    cfg.trading.profitable_pairs.trade_quality_override.opportunity_score_min = 0.0
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_turns = 0
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_min_verified_lanes = 0
+    strategy = ProfitablePairsStrategy(cfg, knowledge)
+    strategy._pairs = [
+        PortPair(
+            buy_sector=2,
+            sell_sector=3,
+            commodity="fuel_ore",
+            distance=1,
+            path=[2, 3],
+            estimated_profit=0,
+        )
+    ]
+    state = GameState(context="sector_command", sector=1, credits=1200, holds_free=15, turns_used=30, has_port=False)
+    first = strategy._select_best_pair(state)
+    assert first is not None
+    second = strategy._select_best_pair(state)
+    assert second is None
+
+
+def test_profitable_pairs_strict_eligibility_blocks_unknown_live_side() -> None:
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.strict_eligibility_enabled = True
+    cfg.trading.profitable_pairs.trade_quality_override.strict_eligibility_require_known_side = True
+    strategy = ProfitablePairsStrategy(cfg, SectorKnowledge(knowledge_dir=None, character_name="test"))
+    state = GameState(context="sector_command", sector=7, has_port=True, port_class="")
+    ok, reason = strategy._strict_trade_eligibility(state, commodity="fuel_ore", expected_side="selling")
+    assert ok is False
+    assert reason == "unknown_side"

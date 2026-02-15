@@ -13,9 +13,10 @@ import time
 from collections import deque
 from typing import TYPE_CHECKING
 
-from bbsbot.games.tw2002.anti_collapse import controls_to_runtime_map, resolve_anti_collapse_controls
+from bbsbot.games.tw2002.anti_collapse import resolve_anti_collapse_controls
 from bbsbot.games.tw2002.orientation import OrientationError
 from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
+from bbsbot.games.tw2002.trade_quality import resolve_trade_quality_controls
 from bbsbot.games.tw2002.visualization import GoalStatusDisplay
 from bbsbot.logging import get_logger
 
@@ -1040,6 +1041,7 @@ def _should_disable_guard_forced_trade(
 def _should_force_bootstrap_trade(
     *,
     config: BotConfig,
+    controls=None,
     turns_used: int,
     trades_done: int,
     guard_min_trades: int,
@@ -1048,7 +1050,8 @@ def _should_force_bootstrap_trade(
     """Return True when we should force an early first-trade action."""
     if force_guard:
         return False
-    bootstrap_turns = max(0, int(getattr(config.trading, "bootstrap_trade_turns", 12)))
+    bootstrap_turns_cfg = max(0, int(getattr(config.trading, "bootstrap_trade_turns", 12)))
+    bootstrap_turns = max(bootstrap_turns_cfg, int(getattr(controls, "bootstrap_turns", bootstrap_turns_cfg) or 0))
     if turns_used < bootstrap_turns:
         return False
     return int(trades_done) < int(max(1, guard_min_trades))
@@ -1449,6 +1452,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             config,
             getattr(getattr(config.trading, "no_trade_guard", None), "anti_collapse_override", None),
         )
+        no_trade_quality_controls = resolve_trade_quality_controls(
+            config,
+            getattr(getattr(config.trading, "no_trade_guard", None), "trade_quality_override", None),
+        )
         disable_forced_trade_probe = _should_disable_guard_forced_trade(
             trade_attempts=trade_attempts_done,
             trade_successes=trade_successes_done,
@@ -1465,6 +1472,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             force_guard_action = False
         force_bootstrap_trade = _should_force_bootstrap_trade(
             config=config,
+            controls=no_trade_quality_controls,
             turns_used=turns_used,
             trades_done=trades_done,
             guard_min_trades=guard_min_trades,
@@ -1472,9 +1480,23 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         )
         if disable_forced_trade_probe:
             force_bootstrap_trade = False
+        if no_trade_quality_controls.bootstrap_turns <= 0:
+            force_bootstrap_trade = False
         if stale_soft_holdoff:
             with contextlib.suppress(Exception):
                 bot.strategy_intent = "RECOVERY:STALE_HOLDOFF"
+
+        with contextlib.suppress(Exception):
+            runtime_map = {
+                "strict_eligibility_active": bool(no_trade_quality_controls.strict_eligibility_enabled),
+                "bootstrap_active": bool(force_bootstrap_trade),
+                "attempt_budget_active": False,
+                "role_mode_active": bool(no_trade_quality_controls.role_mode_enabled),
+                "attempt_budget_window": int(no_trade_quality_controls.attempt_budget_window_turns),
+            }
+            prev = dict(getattr(bot, "_trade_quality_runtime", {}) or {})
+            prev.update(runtime_map)
+            bot._trade_quality_runtime = prev
 
         if force_guard:
             current_name = getattr(strategy, "name", "unknown")

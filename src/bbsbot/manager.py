@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -27,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from bbsbot.api import log_routes, swarm_routes, term_routes
 from bbsbot.defaults import MANAGER_HOST, MANAGER_PORT
+from bbsbot.games.tw2002.autotune import build_trade_quality_recommendations
 from bbsbot.log_service import LogService
 from bbsbot.logging import get_logger
 
@@ -100,6 +102,7 @@ class BotStatus(BaseModel):
     strategy: str | None = None  # Back-compat: UI display (usually "id(mode)")
     strategy_id: str | None = None
     strategy_mode: str | None = None
+    swarm_role: str | None = None
     strategy_intent: str | None = None
     ship_name: str | None = None  # Current ship name
     ship_level: str | None = None  # Ship class/level (Fighter, Trader, etc)
@@ -146,6 +149,7 @@ class BotStatus(BaseModel):
     action_latency_telemetry: dict[str, int] = Field(default_factory=dict)
     delta_attribution_telemetry: dict[str, int] = Field(default_factory=dict)
     anti_collapse_runtime: dict[str, int | bool] = Field(default_factory=dict)
+    trade_quality_runtime: dict[str, int | float | bool] = Field(default_factory=dict)
     llm_wakeups_per_100_turns: float = 0.0
     hostile_fighters: int = 0
     under_attack: bool = False
@@ -315,10 +319,15 @@ class SwarmManager:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / f"{bot_id}.log"
             with log_file.open("w") as log_handle:
+                env = os.environ.copy()
+                role_value = str((self.bots.get(bot_id).swarm_role if bot_id in self.bots else "") or "").strip().lower()
+                if role_value:
+                    env["BBSBOT_SWARM_ROLE"] = role_value
                 process = subprocess.Popen(
                     cmd,
                     stdout=log_handle,
                     stderr=subprocess.STDOUT,
+                    env=env,
                 )
 
             if bot_id in self.bots:
@@ -362,17 +371,30 @@ class SwarmManager:
         bot_ids = []
         total = len(config_paths)
 
+        def _role_for_config(config_path: str, idx: int, total_count: int) -> str:
+            low = str(config_path or "").lower()
+            if "swarm_demo_ai" in low or "ai" in Path(config_path).stem.lower():
+                return "ai"
+            if total_count <= 0:
+                return "harvester"
+            scout_target = max(0, int(round(total_count * 0.20)))
+            return "scout" if idx < scout_target else "harvester"
+
         # Pre-register all bots as queued so they appear in dashboard immediately
         base_index = len(self.bots)
         for i, config in enumerate(config_paths):
             bot_id = f"bot_{base_index + i:03d}"
+            assigned_role = _role_for_config(config, i, total)
             if bot_id not in self.bots:
                 self.bots[bot_id] = BotStatus(
                     bot_id=bot_id,
                     pid=0,
                     config=config,
                     state="queued",
+                    swarm_role=assigned_role,
                 )
+            else:
+                self.bots[bot_id].swarm_role = assigned_role
         await self._broadcast_status()
 
         for group_start in range(0, total, group_size):
@@ -655,6 +677,7 @@ class SwarmManager:
         delta_action_latency_telemetry = _rolling_map_counter_delta("action_latency_telemetry_total")
         delta_delta_attribution_telemetry = _rolling_map_counter_delta("delta_attribution_telemetry_total")
         delta_anti_collapse_runtime = _rolling_map_counter_delta("anti_collapse_runtime_total")
+        delta_trade_quality_runtime = _rolling_map_counter_delta("trade_quality_runtime_total")
 
         strategy_delta_trades = _strategy_deltas("trades_executed")
         strategy_delta_turns = _strategy_deltas("turns_executed")
@@ -709,6 +732,34 @@ class SwarmManager:
                 "action_latency_telemetry": delta_action_latency_telemetry,
                 "delta_attribution_telemetry": delta_delta_attribution_telemetry,
                 "anti_collapse_runtime": delta_anti_collapse_runtime,
+                "trade_quality_runtime": delta_trade_quality_runtime,
+                "trade_quality": {
+                    "block_rate": (
+                        float(
+                            int(delta_trade_quality_runtime.get("blocked_unknown_side", 0) or 0)
+                            + int(delta_trade_quality_runtime.get("blocked_no_port", 0) or 0)
+                            + int(delta_trade_quality_runtime.get("blocked_low_score", 0) or 0)
+                            + int(delta_trade_quality_runtime.get("blocked_budget_exhausted", 0) or 0)
+                        )
+                        / float(max(1, delta_trade_attempts))
+                    ),
+                    "accept_rate": (
+                        float(delta_trade_successes) / float(max(1, delta_trade_attempts))
+                    ),
+                    "verified_lane_growth_rate": (
+                        float(delta_trade_quality_runtime.get("verified_lanes_count", 0) or 0)
+                        / float(max(1, elapsed_s / 60.0))
+                    ),
+                    "reroute_events_per_100_turns": (
+                        float(
+                            int(delta_trade_quality_runtime.get("reroute_wrong_side", 0) or 0)
+                            + int(delta_trade_quality_runtime.get("reroute_no_port", 0) or 0)
+                            + int(delta_trade_quality_runtime.get("reroute_no_interaction", 0) or 0)
+                        )
+                        * 100.0
+                        / float(max(1, delta_turns))
+                    ),
+                },
                 "action_counts": delta_action_counts,
                 "recovery_actions": delta_recovery_actions,
                 "haggle_offers": _rolling_nested_counter_delta("trade_outcomes_overall", "haggle_offers"),
@@ -754,6 +805,7 @@ class SwarmManager:
                 "action_latency_telemetry_total": last.get("action_latency_telemetry_total") or {},
                 "delta_attribution_telemetry_total": last.get("delta_attribution_telemetry_total") or {},
                 "anti_collapse_runtime_total": last.get("anti_collapse_runtime_total") or {},
+                "trade_quality_runtime_total": last.get("trade_quality_runtime_total") or {},
                 "action_counts_total": last.get("action_counts_total") or {},
                 "recovery_actions_total": _safe_int(last, "recovery_actions_total"),
                 "zombie_traders_120_1": _safe_int(last, "zombie_traders_120_1"),
@@ -774,6 +826,18 @@ class SwarmManager:
                 "haggle_too_low": _strategy_deltas("haggle_too_low"),
                 "avg_cpt_last": _strategy_avg_cpt(),
             },
+            "trade_quality_recommendations": build_trade_quality_recommendations(
+                {
+                    "trade_attempts": delta_trade_attempts,
+                    "trade_success_rate": (
+                        float(delta_trade_successes) / float(delta_trade_attempts) if delta_trade_attempts > 0 else 0.0
+                    ),
+                    "trade_failure_reasons": delta_trade_failure_reasons,
+                },
+                {
+                    "trade_quality_runtime_total": last.get("trade_quality_runtime_total") or {},
+                },
+            ),
         }
 
     def _build_timeseries_row(self, status: SwarmStatus, reason: str) -> dict:
@@ -814,6 +878,7 @@ class SwarmManager:
         action_latency_telemetry_total: dict[str, int] = {}
         delta_attribution_telemetry_total: dict[str, int] = {}
         anti_collapse_runtime_total: dict[str, int] = {}
+        trade_quality_runtime_total: dict[str, int] = {}
         action_counts_total: dict[str, int] = {}
         recovery_actions_total = 0
         zombie_traders_120_1 = 0
@@ -1008,6 +1073,15 @@ class SwarmManager:
                     continue
                 with contextlib.suppress(Exception):
                     anti_collapse_runtime_total[key] = int(anti_collapse_runtime_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("trade_quality_runtime") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                if isinstance(val, bool):
+                    trade_quality_runtime_total[key] = int(trade_quality_runtime_total.get(key, 0) or 0) + int(val)
+                    continue
+                with contextlib.suppress(Exception):
+                    trade_quality_runtime_total[key] = int(trade_quality_runtime_total.get(key, 0) or 0) + int(float(val or 0))
 
             trade_outcomes_overall["trades_executed"] += trades
             trade_outcomes_overall["turns_executed"] = int(trade_outcomes_overall.get("turns_executed") or 0) + turns
@@ -1071,6 +1145,7 @@ class SwarmManager:
                     "credits_per_turn": cpt,
                     "strategy_id": bot.get("strategy_id"),
                     "strategy_mode": bot.get("strategy_mode"),
+                    "swarm_role": bot.get("swarm_role"),
                     "haggle_accept": accept,
                     "haggle_counter": counter,
                     "haggle_too_low": low,
@@ -1104,6 +1179,7 @@ class SwarmManager:
                     "action_latency_telemetry": bot.get("action_latency_telemetry") or {},
                     "delta_attribution_telemetry": bot.get("delta_attribution_telemetry") or {},
                     "anti_collapse_runtime": bot.get("anti_collapse_runtime") or {},
+                    "trade_quality_runtime": bot.get("trade_quality_runtime") or {},
                     "llm_wakeups_per_100_turns": float(bot.get("llm_wakeups_per_100_turns") or 0.0),
                     "turns_since_last_trade": int(bot.get("turns_since_last_trade") or 0),
                     "move_streak": int(bot.get("move_streak") or 0),
@@ -1211,6 +1287,7 @@ class SwarmManager:
             "action_latency_telemetry_total": action_latency_telemetry_total,
             "delta_attribution_telemetry_total": delta_attribution_telemetry_total,
             "anti_collapse_runtime_total": anti_collapse_runtime_total,
+            "trade_quality_runtime_total": trade_quality_runtime_total,
             "action_counts_total": action_counts_total,
             "recovery_actions_total": recovery_actions_total,
             "zombie_traders_120_1": zombie_traders_120_1,
@@ -1353,6 +1430,7 @@ class SwarmManager:
                             strategy=bot_data.get("strategy"),
                             strategy_id=bot_data.get("strategy_id"),
                             strategy_mode=bot_data.get("strategy_mode"),
+                            swarm_role=bot_data.get("swarm_role"),
                             strategy_intent=bot_data.get("strategy_intent"),
                             ship_name=bot_data.get("ship_name"),
                             ship_level=bot_data.get("ship_level"),
@@ -1397,6 +1475,8 @@ class SwarmManager:
                             goal_contract_failures=bot_data.get("goal_contract_failures", 0),
                             action_counters=bot_data.get("action_counters", {}),
                             recovery_actions=bot_data.get("recovery_actions", 0),
+                            anti_collapse_runtime=bot_data.get("anti_collapse_runtime", {}),
+                            trade_quality_runtime=bot_data.get("trade_quality_runtime", {}),
                             llm_wakeups_per_100_turns=bot_data.get("llm_wakeups_per_100_turns", 0.0),
                         )
                 logger.info(f"Loaded {len(state.get('bots', {}))} bots from {self.state_file}")

@@ -89,16 +89,15 @@ def test_dashboard_run_resource_timeseries_is_labeled() -> None:
 def test_dashboard_binds_diagnostics_telemetry_signals() -> None:
     html = _dashboard_html()
     js = _dashboard_js()
-    assert "Opp Seen" in html
-    assert "Combat Seen" in html
-    assert "Under Attack" in html
-    assert "Unknown Delta" in html
-    assert "Attrition (Cr)" in html
-    assert "Opp Exec Rate" in html
-    assert "combat_telemetry" in js
-    assert "attrition_telemetry" in js
+    assert "Blocked Unknown Side" in html
+    assert "Blocked No Port" in html
+    assert "Blocked Low Score" in html
+    assert "Budget Exhausted" in html
+    assert "Verified Lanes" in html
+    assert "Accept Rate" in html
+    assert "trade_quality_runtime" in js
     assert "opportunity_telemetry" in js
-    assert "delta_attribution_telemetry" in js
+    assert "blockedUnknownSide" in js
 
 
 def test_account_pool_renders_hijack_column_and_state() -> None:
@@ -108,3 +107,13 @@ def test_account_pool_renders_hijack_column_and_state() -> None:
     assert "lease_seconds_remaining" in js
     assert "pool-status-pill" in js
     assert "latestBotsById" in js
+
+
+def test_dashboard_bot_list_role_badges_present() -> None:
+    html = _dashboard_html()
+    js = _dashboard_js()
+    assert ".chip.role.scout" in html
+    assert ".chip.role.harvester" in html
+    assert ".chip.role.ai" in html
+    assert ".chip.role.hijacked" in html
+    assert "swarm_role" in js

@@ -459,6 +459,15 @@
     let attritionCredits = 0;
     let oppSeen = 0;
     let oppExecuted = 0;
+    let blockedUnknownSide = 0;
+    let blockedNoPort = 0;
+    let blockedLowScore = 0;
+    let blockedBudgetExhausted = 0;
+    let rerouteWrongSide = 0;
+    let rerouteNoPort = 0;
+    let rerouteNoInteraction = 0;
+    let verifiedLanes = 0;
+    let acceptRateHint = 0;
 
     for (const b of bots) {
       const state = String(b.state || "").toLowerCase();
@@ -482,6 +491,7 @@
       const combat = b.combat_telemetry || {};
       const attrition = b.attrition_telemetry || {};
       const opp = b.opportunity_telemetry || {};
+      const tq = b.trade_quality_runtime || {};
       const deltaAttr = b.delta_attribution_telemetry || {};
       combatSeen += Number(combat.combat_context_seen || 0);
       underAttackReports += Number(combat.under_attack_reports || 0);
@@ -490,6 +500,15 @@
       attritionCredits += Number(attrition.credits_loss_nontrade || 0);
       oppSeen += Number(opp.opportunities_seen || 0);
       oppExecuted += Number(opp.opportunities_executed || 0);
+      blockedUnknownSide += Number(tq.blocked_unknown_side || 0);
+      blockedNoPort += Number(tq.blocked_no_port || 0);
+      blockedLowScore += Number(tq.blocked_low_score || 0);
+      blockedBudgetExhausted += Number(tq.blocked_budget_exhausted || 0);
+      rerouteWrongSide += Number(tq.reroute_wrong_side || 0);
+      rerouteNoPort += Number(tq.reroute_no_port || 0);
+      rerouteNoInteraction += Number(tq.reroute_no_interaction || 0);
+      verifiedLanes += Number(tq.verified_lanes_count || 0);
+      acceptRateHint += Number(tq.opportunity_score_avg_accepted || 0);
       const started = Number(b.started_at || 0);
       if (started > 0 && started < runStart) runStart = started;
     }
@@ -519,6 +538,15 @@
       attritionCredits,
       oppSeen,
       oppExecuted,
+      blockedUnknownSide,
+      blockedNoPort,
+      blockedLowScore,
+      blockedBudgetExhausted,
+      rerouteWrongSide,
+      rerouteNoPort,
+      rerouteNoInteraction,
+      verifiedLanes,
+      acceptRateHint,
     };
   }
 
@@ -620,37 +648,41 @@
 
   function renderRunTrend(runtimeSec, metrics) {
     const _ = runtimeSec;
+    const blockedUnknownSide = Number(metrics.blockedUnknownSide || 0);
+    const blockedNoPort = Number(metrics.blockedNoPort || 0);
+    const blockedLowScore = Number(metrics.blockedLowScore || 0);
+    const blockedBudgetExhausted = Number(metrics.blockedBudgetExhausted || 0);
+    const rerouteWrongSide = Number(metrics.rerouteWrongSide || 0);
+    const rerouteNoPort = Number(metrics.rerouteNoPort || 0);
+    const rerouteNoInteraction = Number(metrics.rerouteNoInteraction || 0);
+    const verifiedLanes = Number(metrics.verifiedLanes || 0);
     const oppSeen = Number(metrics.oppSeen || 0);
     const oppExecuted = Number(metrics.oppExecuted || 0);
-    const oppExecRate = oppSeen > 0 ? (oppExecuted * 100.0 / oppSeen) : 0;
-    const combatSeen = Number(metrics.combatSeen || 0);
-    const underAttackReports = Number(metrics.underAttackReports || 0);
-    const unknownDelta = Number(metrics.unknownDelta || 0);
-    const attritionCredits = Number(metrics.attritionCredits || 0);
+    const acceptRate = oppSeen > 0 ? (oppExecuted * 100.0 / oppSeen) : 0;
 
     if (runTradeAttemptsEl) {
-      runTradeAttemptsEl.textContent = formatCredits(Math.round(oppSeen));
-      runTradeAttemptsEl.style.color = "var(--fg-bright)";
+      runTradeAttemptsEl.textContent = formatCredits(Math.round(blockedUnknownSide));
+      runTradeAttemptsEl.style.color = blockedUnknownSide > 0 ? "var(--yellow)" : "var(--fg-dim)";
     }
     if (runTradeFailuresEl) {
-      runTradeFailuresEl.textContent = formatCredits(Math.round(combatSeen));
-      runTradeFailuresEl.style.color = combatSeen > 0 ? "var(--yellow)" : "var(--fg-dim)";
+      runTradeFailuresEl.textContent = formatCredits(Math.round(blockedNoPort));
+      runTradeFailuresEl.style.color = blockedNoPort > 0 ? "var(--red)" : "var(--fg-dim)";
     }
     if (runFailNoPortEl) {
-      runFailNoPortEl.textContent = formatCredits(Math.round(underAttackReports));
-      runFailNoPortEl.style.color = underAttackReports > 0 ? "var(--red)" : "var(--fg-dim)";
+      runFailNoPortEl.textContent = formatCredits(Math.round(blockedLowScore));
+      runFailNoPortEl.style.color = blockedLowScore > 0 ? "var(--yellow)" : "var(--fg-dim)";
     }
     if (runFailNoInteractEl) {
-      runFailNoInteractEl.textContent = formatCredits(Math.round(unknownDelta));
-      runFailNoInteractEl.style.color = unknownDelta > 0 ? "var(--red)" : "var(--fg-dim)";
+      runFailNoInteractEl.textContent = formatCredits(Math.round(blockedBudgetExhausted));
+      runFailNoInteractEl.style.color = blockedBudgetExhausted > 0 ? "var(--yellow)" : "var(--fg-dim)";
     }
     if (runFailWrongSideEl) {
-      runFailWrongSideEl.textContent = formatCredits(Math.round(attritionCredits));
-      runFailWrongSideEl.style.color = attritionCredits > 0 ? "var(--red)" : "var(--fg-dim)";
+      runFailWrongSideEl.textContent = formatCredits(Math.round(verifiedLanes));
+      runFailWrongSideEl.style.color = verifiedLanes > 0 ? "var(--green)" : "var(--fg-dim)";
     }
     if (runLaggardsEl) {
-      runLaggardsEl.textContent = `${oppExecRate.toFixed(1)}%`;
-      runLaggardsEl.style.color = oppExecRate >= 50 ? "var(--green)" : (oppExecRate >= 20 ? "var(--yellow)" : "var(--red)");
+      runLaggardsEl.textContent = `${acceptRate.toFixed(1)}%`;
+      runLaggardsEl.style.color = acceptRate >= 50 ? "var(--green)" : (acceptRate >= 20 ? "var(--yellow)" : "var(--red)");
     }
 
     const resourceRows = [
@@ -1193,10 +1225,16 @@
         const strategyNote = getStrategyNote(b);
         const strategyLine2 = strategyNote || "—";
         const strategyTitle = strategyNote ? `${compact.full} | ${strategyNote}` : compact.full;
+        const roleToken = String(b.swarm_role || "").trim().toLowerCase();
+        const roleLabel = roleToken === "scout" ? "SCOUT" : (roleToken === "harvester" ? "HARVESTER" : (roleToken === "ai" ? "AI" : ""));
+        const roleChip = roleLabel ? `<span class="chip role ${esc(roleToken || "unknown")}">${esc(roleLabel)}</span>` : "";
+        const hijackChip = b.is_hijacked ? `<span class="chip role hijacked">HIJACKED</span>` : "";
         const strategyHtml = `<div class="strategy-cell" title="${esc(strategyTitle)}">` +
             `<span class="strategy-chip-row">` +
               `<span class="chip sid">${esc(compact.id || "-")}</span>` +
               (compact.mode ? `<span class="chip mode">${esc(compact.mode)}</span>` : "") +
+              roleChip +
+              hijackChip +
             `</span>` +
             `<div class="strategy-intent${strategyNote ? "" : " subtle-empty"}">${esc(strategyLine2)}</div>` +
           `</div>`;

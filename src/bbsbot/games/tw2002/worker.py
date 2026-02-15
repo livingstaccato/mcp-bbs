@@ -168,6 +168,7 @@ class WorkerBot(TradingBot):
         super().__init__(character_name=bot_id, config=config)
         self.bot_id = bot_id
         self.manager_url = manager_url
+        self.swarm_role = str(os.getenv("BBSBOT_SWARM_ROLE", "")).strip().lower() or None
         self._http_client = httpx.AsyncClient(timeout=10)
         # Activity tracking
         self.current_action: str | None = None
@@ -233,6 +234,7 @@ class WorkerBot(TradingBot):
         self.action_latency_telemetry: dict[str, int] = {}
         self.delta_attribution_telemetry: dict[str, int] = {}
         self.anti_collapse_runtime: dict[str, int | bool] = {}
+        self.trade_quality_runtime: dict[str, int | float | bool] = {}
         self._last_hostile_fighters_seen: int = 0
         self._metrics_initialized: bool = False
 
@@ -272,6 +274,7 @@ class WorkerBot(TradingBot):
         self.action_latency_telemetry = {}
         self.delta_attribution_telemetry = {}
         self.anti_collapse_runtime = {}
+        self.trade_quality_runtime = {}
         self._last_hostile_fighters_seen = 0
         with contextlib.suppress(Exception):
             self._last_trade_turn = 0
@@ -1117,6 +1120,7 @@ class WorkerBot(TradingBot):
                 "strategy_id": strategy_name,
                 "strategy_mode": strategy_mode,
                 "strategy_intent": strategy_intent,
+                "swarm_role": self.swarm_role,
                 "cargo_fuel_ore": cargo_fuel_ore,
                 "cargo_organics": cargo_organics,
                 "cargo_equipment": cargo_equipment,
@@ -1198,6 +1202,13 @@ class WorkerBot(TradingBot):
                 }
             self.anti_collapse_runtime = dict(anti_runtime or {})
             status_data["anti_collapse_runtime"] = dict(self.anti_collapse_runtime or {})
+            trade_quality_runtime = dict(s_stats.get("trade_quality_runtime") or {})
+            extra_trade_quality_runtime = dict(getattr(self, "_trade_quality_runtime", {}) or {})
+            if extra_trade_quality_runtime:
+                trade_quality_runtime.update(extra_trade_quality_runtime)
+            self.trade_quality_runtime = dict(trade_quality_runtime or {})
+            if self.trade_quality_runtime:
+                status_data["trade_quality_runtime"] = dict(self.trade_quality_runtime)
             status_data["llm_wakeups_per_100_turns"] = (
                 (float(status_data["llm_wakeups"]) * 100.0 / float(self.turns_used))
                 if self.turns_used > 0

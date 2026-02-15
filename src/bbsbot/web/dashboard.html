@@ -932,6 +932,10 @@ thead th, tbody td {
 }
 .chip.sid { color: var(--cyan); border-color: rgba(57,197,207,0.45); }
 .chip.mode { color: var(--yellow); border-color: rgba(210,153,34,0.45); }
+.chip.role.scout { color: var(--purple); border-color: rgba(163,113,247,0.48); }
+.chip.role.harvester { color: var(--green); border-color: rgba(63,185,80,0.48); }
+.chip.role.ai { color: var(--cyan); border-color: rgba(57,197,207,0.48); }
+.chip.role.hijacked { color: #ff8c86; border-color: rgba(248,81,73,0.7); background: rgba(248,81,73,0.12); }
 .state-dot {
   display: inline-block;
   width: 7px;
@@ -1948,12 +1952,12 @@ tbody tr:hover { background: var(--bg3); }
           <div class="run-resource-cell left">
             <span class="run-resource-title">Execution Signals</span>
             <div class="run-credit-stats">
-              <div class="run-stat"><span class="k">Opp Seen</span><span class="v" id="run-trade-attempts">-</span></div>
-              <div class="run-stat"><span class="k">Combat Seen</span><span class="v" id="run-trade-failures">-</span></div>
-              <div class="run-stat"><span class="k">Under Attack</span><span class="v" id="run-fail-no-port">-</span></div>
-              <div class="run-stat"><span class="k">Unknown Delta</span><span class="v" id="run-fail-no-interact">-</span></div>
-              <div class="run-stat"><span class="k">Attrition (Cr)</span><span class="v" id="run-fail-wrong-side">-</span></div>
-              <div class="run-stat"><span class="k">Opp Exec Rate</span><span class="v" id="run-laggards">-</span></div>
+              <div class="run-stat"><span class="k">Blocked Unknown Side</span><span class="v" id="run-trade-attempts">-</span></div>
+              <div class="run-stat"><span class="k">Blocked No Port</span><span class="v" id="run-trade-failures">-</span></div>
+              <div class="run-stat"><span class="k">Blocked Low Score</span><span class="v" id="run-fail-no-port">-</span></div>
+              <div class="run-stat"><span class="k">Budget Exhausted</span><span class="v" id="run-fail-no-interact">-</span></div>
+              <div class="run-stat"><span class="k">Verified Lanes</span><span class="v" id="run-fail-wrong-side">-</span></div>
+              <div class="run-stat"><span class="k">Accept Rate</span><span class="v" id="run-laggards">-</span></div>
             </div>
           </div>
           <div class="run-resource-cell right">

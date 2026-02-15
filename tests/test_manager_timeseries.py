@@ -50,6 +50,8 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         action_latency_telemetry={"trade_count": 3, "trade_ms_sum": 900},
         delta_attribution_telemetry={"delta_trade": 2, "delta_unknown": 1},
         anti_collapse_runtime={"controls_enabled": True, "trigger_throughput_degraded": 2},
+        trade_quality_runtime={"blocked_unknown_side": 3, "verified_lanes_count": 2},
+        swarm_role="scout",
     )
     manager.bots["bot_001"] = BotStatus(
         bot_id="bot_001",
@@ -102,6 +104,8 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert row["action_latency_telemetry_total"]["trade_count"] == 3
     assert row["delta_attribution_telemetry_total"]["delta_unknown"] == 1
     assert row["anti_collapse_runtime_total"]["trigger_throughput_degraded"] == 2
+    assert row["trade_quality_runtime_total"]["blocked_unknown_side"] == 3
+    assert row["trade_quality_runtime_total"]["verified_lanes_count"] == 2
     assert row["total_cargo_fuel_ore"] == 14
     assert row["total_cargo_organics"] == 7
     assert row["total_cargo_equipment"] == 14
@@ -180,6 +184,7 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
         action_latency_telemetry={"trade_count": 2, "trade_ms_sum": 400},
         delta_attribution_telemetry={"delta_trade": 2, "delta_unknown": 0},
         anti_collapse_runtime={"controls_enabled": True, "trigger_throughput_degraded": 1},
+        trade_quality_runtime={"blocked_unknown_side": 2, "verified_lanes_count": 1, "reroute_no_port": 1},
     )
     manager._write_timeseries_sample(reason="tick_a")
 
@@ -214,6 +219,7 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     manager.bots["bot_000"].action_latency_telemetry = {"trade_count": 5, "trade_ms_sum": 1200}
     manager.bots["bot_000"].delta_attribution_telemetry = {"delta_trade": 5, "delta_unknown": 1}
     manager.bots["bot_000"].anti_collapse_runtime = {"controls_enabled": True, "trigger_throughput_degraded": 4}
+    manager.bots["bot_000"].trade_quality_runtime = {"blocked_unknown_side": 5, "verified_lanes_count": 3, "reroute_no_port": 2}
     manager._write_timeseries_sample(reason="tick_b")
 
     summary = manager.get_timeseries_summary(window_minutes=120)
@@ -236,8 +242,11 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     assert summary["delta"]["action_latency_telemetry"]["trade_count"] >= 3
     assert summary["delta"]["delta_attribution_telemetry"]["delta_trade"] >= 3
     assert summary["delta"]["anti_collapse_runtime"]["trigger_throughput_degraded"] >= 3
+    assert summary["delta"]["trade_quality_runtime"]["blocked_unknown_side"] >= 3
+    assert summary["delta"]["trade_quality"]["block_rate"] >= 0.0
     assert summary["last"]["combat_telemetry_total"]["under_attack_reports"] >= 2
     assert summary["last"]["anti_collapse_runtime_total"]["trigger_throughput_degraded"] >= 4
+    assert summary["last"]["trade_quality_runtime_total"]["verified_lanes_count"] >= 3
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_executed"]
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_per_100_turns"]
 

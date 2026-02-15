@@ -161,7 +161,8 @@ class ProfitablePairsConfig(BaseModel):
 
     max_hop_distance: int = 3
     min_profit_per_turn: int = 100
-    anti_collapse_override: "AntiCollapseOverrideConfig" = Field(default_factory=lambda: AntiCollapseOverrideConfig())
+    anti_collapse_override: AntiCollapseOverrideConfig = Field(default_factory=lambda: AntiCollapseOverrideConfig())
+    trade_quality_override: TradeQualityOverrideConfig = Field(default_factory=lambda: TradeQualityOverrideConfig())
 
     model_config = ConfigDict(extra="ignore")
 
@@ -189,6 +190,30 @@ class AntiCollapseConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class TradeQualityConfig(BaseModel):
+    """Global trade-quality controls for structural miss reduction."""
+
+    strict_eligibility_enabled: bool = True
+    strict_eligibility_require_known_side: bool = True
+    strict_eligibility_require_port_presence: bool = True
+    bootstrap_turns: int = 50
+    bootstrap_min_verified_lanes: int = 8
+    attempt_budget_window_turns: int = 40
+    attempt_budget_max_attempts: int = 8
+    opportunity_score_min: float = 0.62
+    role_mode_enabled: bool = True
+    role_scout_ratio: float = 0.20
+    role_harvester_ratio: float = 0.75
+    role_ai_ratio: float = 0.05
+    reroute_wrong_side_ttl_s: int = 300
+    reroute_no_port_ttl_s: int = 900
+    reroute_no_interaction_ttl_s: int = 180
+    autotune_enabled: bool = False
+    autotune_apply_on_restart: bool = True
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class AntiCollapseOverrideConfig(BaseModel):
     """Strategy-specific anti-collapse override fields."""
 
@@ -212,10 +237,35 @@ class AntiCollapseOverrideConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class TradeQualityOverrideConfig(BaseModel):
+    """Strategy-specific trade-quality override fields."""
+
+    strict_eligibility_enabled: bool | None = None
+    strict_eligibility_require_known_side: bool | None = None
+    strict_eligibility_require_port_presence: bool | None = None
+    bootstrap_turns: int | None = None
+    bootstrap_min_verified_lanes: int | None = None
+    attempt_budget_window_turns: int | None = None
+    attempt_budget_max_attempts: int | None = None
+    opportunity_score_min: float | None = None
+    role_mode_enabled: bool | None = None
+    role_scout_ratio: float | None = None
+    role_harvester_ratio: float | None = None
+    role_ai_ratio: float | None = None
+    reroute_wrong_side_ttl_s: int | None = None
+    reroute_no_port_ttl_s: int | None = None
+    reroute_no_interaction_ttl_s: int | None = None
+    autotune_enabled: bool | None = None
+    autotune_apply_on_restart: bool | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class NoTradeGuardConfig(BaseModel):
     """No-trade guard extension settings."""
 
     anti_collapse_override: AntiCollapseOverrideConfig = Field(default_factory=AntiCollapseOverrideConfig)
+    trade_quality_override: TradeQualityOverrideConfig = Field(default_factory=TradeQualityOverrideConfig)
 
     model_config = ConfigDict(extra="ignore")
 
@@ -334,6 +384,7 @@ class AIStrategyConfig(BaseModel):
 
     # Intervention system
     intervention: InterventionConfig = Field(default_factory=InterventionConfig)
+    trade_quality_override: TradeQualityOverrideConfig = Field(default_factory=TradeQualityOverrideConfig)
 
     model_config = ConfigDict(extra="ignore")
 
@@ -361,6 +412,7 @@ class TradingConfig(BaseModel):
 
     dynamic_policy: DynamicPolicyConfig = Field(default_factory=DynamicPolicyConfig)
     anti_collapse: AntiCollapseConfig = Field(default_factory=AntiCollapseConfig)
+    trade_quality: TradeQualityConfig = Field(default_factory=TradeQualityConfig)
     no_trade_guard: NoTradeGuardConfig = Field(default_factory=NoTradeGuardConfig)
 
     profitable_pairs: ProfitablePairsConfig = Field(default_factory=ProfitablePairsConfig)
