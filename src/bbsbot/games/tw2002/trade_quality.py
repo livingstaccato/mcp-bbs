@@ -20,6 +20,11 @@ class EffectiveTradeQualityControls:
     attempt_budget_window_turns: int
     attempt_budget_max_attempts: int
     opportunity_score_min: float
+    non_verified_lane_score_penalty: float
+    wrong_side_storm_enabled: bool
+    wrong_side_storm_min_samples: int
+    wrong_side_storm_ratio_gte: float
+    wrong_side_storm_cooldown_turns: int
     role_mode_enabled: bool
     role_scout_ratio: float
     role_harvester_ratio: float
@@ -56,6 +61,11 @@ def resolve_trade_quality_controls(
         "attempt_budget_window_turns": int(base.attempt_budget_window_turns),
         "attempt_budget_max_attempts": int(base.attempt_budget_max_attempts),
         "opportunity_score_min": float(base.opportunity_score_min),
+        "non_verified_lane_score_penalty": float(base.non_verified_lane_score_penalty),
+        "wrong_side_storm_enabled": bool(base.wrong_side_storm_enabled),
+        "wrong_side_storm_min_samples": int(base.wrong_side_storm_min_samples),
+        "wrong_side_storm_ratio_gte": float(base.wrong_side_storm_ratio_gte),
+        "wrong_side_storm_cooldown_turns": int(base.wrong_side_storm_cooldown_turns),
         "role_mode_enabled": bool(base.role_mode_enabled),
         "role_scout_ratio": float(base.role_scout_ratio),
         "role_harvester_ratio": float(base.role_harvester_ratio),
@@ -85,6 +95,11 @@ def resolve_trade_quality_controls(
         attempt_budget_window_turns=_clamp_int(int(merged["attempt_budget_window_turns"]), 1, 2000),
         attempt_budget_max_attempts=_clamp_int(int(merged["attempt_budget_max_attempts"]), 1, 1000),
         opportunity_score_min=_clamp_ratio(float(merged["opportunity_score_min"])),
+        non_verified_lane_score_penalty=_clamp_ratio(float(merged["non_verified_lane_score_penalty"])),
+        wrong_side_storm_enabled=bool(merged["wrong_side_storm_enabled"]),
+        wrong_side_storm_min_samples=_clamp_int(int(merged["wrong_side_storm_min_samples"]), 1, 1000),
+        wrong_side_storm_ratio_gte=_clamp_ratio(float(merged["wrong_side_storm_ratio_gte"])),
+        wrong_side_storm_cooldown_turns=_clamp_int(int(merged["wrong_side_storm_cooldown_turns"]), 1, 10_000),
         role_mode_enabled=bool(merged["role_mode_enabled"]),
         role_scout_ratio=scout_ratio,
         role_harvester_ratio=harvester_ratio,
@@ -108,6 +123,7 @@ def trade_quality_runtime_map(
     blocked_no_port: int = 0,
     blocked_low_score: int = 0,
     blocked_budget_exhausted: int = 0,
+    blocked_wrong_side_storm: int = 0,
     reroute_wrong_side: int = 0,
     reroute_no_port: int = 0,
     reroute_no_interaction: int = 0,
@@ -116,6 +132,8 @@ def trade_quality_runtime_map(
     attempt_budget_window: int = 0,
     opportunity_score_avg_accepted: float = 0.0,
     opportunity_score_avg_rejected: float = 0.0,
+    wrong_side_storm_active: bool = False,
+    trigger_wrong_side_storm: int = 0,
 ) -> dict[str, int | float | bool]:
     return {
         "strict_eligibility_active": bool(strict_eligibility_active and controls.strict_eligibility_enabled),
@@ -126,6 +144,7 @@ def trade_quality_runtime_map(
         "blocked_no_port": int(max(0, blocked_no_port)),
         "blocked_low_score": int(max(0, blocked_low_score)),
         "blocked_budget_exhausted": int(max(0, blocked_budget_exhausted)),
+        "blocked_wrong_side_storm": int(max(0, blocked_wrong_side_storm)),
         "reroute_wrong_side": int(max(0, reroute_wrong_side)),
         "reroute_no_port": int(max(0, reroute_no_port)),
         "reroute_no_interaction": int(max(0, reroute_no_interaction)),
@@ -134,4 +153,6 @@ def trade_quality_runtime_map(
         "attempt_budget_window": int(max(1, attempt_budget_window)),
         "opportunity_score_avg_accepted": float(max(0.0, opportunity_score_avg_accepted)),
         "opportunity_score_avg_rejected": float(max(0.0, opportunity_score_avg_rejected)),
+        "wrong_side_storm_active": bool(wrong_side_storm_active and controls.wrong_side_storm_enabled),
+        "trigger_wrong_side_storm": int(max(0, trigger_wrong_side_storm)),
     }

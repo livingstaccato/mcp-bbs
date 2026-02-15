@@ -201,6 +201,11 @@ class TradeQualityConfig(BaseModel):
     attempt_budget_window_turns: int = 40
     attempt_budget_max_attempts: int = 6
     opportunity_score_min: float = 0.72
+    non_verified_lane_score_penalty: float = 0.12
+    wrong_side_storm_enabled: bool = True
+    wrong_side_storm_min_samples: int = 12
+    wrong_side_storm_ratio_gte: float = 0.60
+    wrong_side_storm_cooldown_turns: int = 40
     role_mode_enabled: bool = True
     role_scout_ratio: float = 0.20
     role_harvester_ratio: float = 0.75
@@ -248,6 +253,11 @@ class TradeQualityOverrideConfig(BaseModel):
     attempt_budget_window_turns: int | None = None
     attempt_budget_max_attempts: int | None = None
     opportunity_score_min: float | None = None
+    non_verified_lane_score_penalty: float | None = None
+    wrong_side_storm_enabled: bool | None = None
+    wrong_side_storm_min_samples: int | None = None
+    wrong_side_storm_ratio_gte: float | None = None
+    wrong_side_storm_cooldown_turns: int | None = None
     role_mode_enabled: bool | None = None
     role_scout_ratio: float | None = None
     role_harvester_ratio: float | None = None

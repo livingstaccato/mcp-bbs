@@ -293,3 +293,49 @@ def test_profitable_pairs_strict_eligibility_blocks_unknown_live_side() -> None:
     ok, reason = strategy._strict_trade_eligibility(state, commodity="fuel_ore", expected_side="selling")
     assert ok is False
     assert reason == "unknown_side"
+
+
+def test_profitable_pairs_unverified_lane_penalty_blocks_selection() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="test")
+    knowledge._sectors[2] = SectorInfo(has_port=True, port_class="")
+    knowledge._sectors[3] = SectorInfo(has_port=True, port_class="")
+    knowledge.find_path = lambda start, end, max_hops=None: [start, end] if start != end else [start]  # type: ignore[assignment]
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_turns = 0
+    cfg.trading.profitable_pairs.trade_quality_override.bootstrap_min_verified_lanes = 0
+    cfg.trading.profitable_pairs.trade_quality_override.opportunity_score_min = 0.55
+    cfg.trading.profitable_pairs.trade_quality_override.non_verified_lane_score_penalty = 0.10
+    strategy = ProfitablePairsStrategy(cfg, knowledge)
+    strategy._pairs = [
+        PortPair(
+            buy_sector=2,
+            sell_sector=3,
+            commodity="fuel_ore",
+            distance=1,
+            path=[2, 3],
+            estimated_profit=0,
+        )
+    ]
+    state = GameState(context="sector_command", sector=1, credits=2200, holds_free=15, turns_used=30, has_port=False)
+    choice = strategy._select_best_pair(state)
+    assert choice is None
+    assert strategy._trade_quality_blocked_low_score > 0
+
+
+def test_profitable_pairs_wrong_side_storm_brake_forces_explore() -> None:
+    cfg = BotConfig()
+    cfg.trading.profitable_pairs.trade_quality_override.wrong_side_storm_enabled = True
+    cfg.trading.profitable_pairs.trade_quality_override.wrong_side_storm_min_samples = 4
+    cfg.trading.profitable_pairs.trade_quality_override.wrong_side_storm_ratio_gte = 0.75
+    cfg.trading.profitable_pairs.trade_quality_override.wrong_side_storm_cooldown_turns = 20
+    strategy = ProfitablePairsStrategy(cfg, SectorKnowledge(knowledge_dir=None, character_name="test"))
+    strategy._turns_used = 40
+    strategy._record_trade_failure_reason("wrong_side")
+    strategy._record_trade_failure_reason("wrong_side")
+    strategy._record_trade_failure_reason("wrong_side")
+    strategy._record_trade_failure_reason("no_port")
+
+    state = GameState(context="sector_command", sector=7, credits=1800, holds_free=12, turns_used=40, warps=[8, 9])
+    action, _params = strategy.get_next_action(state)
+    assert action in {TradeAction.EXPLORE, TradeAction.MOVE}
+    assert strategy._trade_quality_blocked_wrong_side_storm >= 1

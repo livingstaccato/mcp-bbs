@@ -92,14 +92,18 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._trade_quality_blocked_no_port: int = 0
         self._trade_quality_blocked_low_score: int = 0
         self._trade_quality_blocked_budget_exhausted: int = 0
+        self._trade_quality_blocked_wrong_side_storm: int = 0
         self._trade_quality_reroute_wrong_side: int = 0
         self._trade_quality_reroute_no_port: int = 0
         self._trade_quality_reroute_no_interaction: int = 0
+        self._trade_quality_trigger_wrong_side_storm: int = 0
         self._trade_quality_score_accepted_sum: float = 0.0
         self._trade_quality_score_accepted_n: int = 0
         self._trade_quality_score_rejected_sum: float = 0.0
         self._trade_quality_score_rejected_n: int = 0
         self._trade_quality_attempt_turns: deque[int] = deque(maxlen=256)
+        self._wrong_side_failure_turns: deque[int] = deque(maxlen=256)
+        self._wrong_side_storm_until_turn: int = 0
 
     @property
     def name(self) -> str:
@@ -156,6 +160,7 @@ class ProfitablePairsStrategy(TradingStrategy):
             blocked_no_port=self._trade_quality_blocked_no_port,
             blocked_low_score=self._trade_quality_blocked_low_score,
             blocked_budget_exhausted=self._trade_quality_blocked_budget_exhausted,
+            blocked_wrong_side_storm=self._trade_quality_blocked_wrong_side_storm,
             reroute_wrong_side=self._trade_quality_reroute_wrong_side,
             reroute_no_port=self._trade_quality_reroute_no_port,
             reroute_no_interaction=self._trade_quality_reroute_no_interaction,
@@ -164,6 +169,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             attempt_budget_window=int(self._trade_quality_controls.attempt_budget_window_turns),
             opportunity_score_avg_accepted=accepted_avg,
             opportunity_score_avg_rejected=rejected_avg,
+            wrong_side_storm_active=self._is_wrong_side_storm_active(int(getattr(self, "_turns_used", 0) or 0)),
+            trigger_wrong_side_storm=self._trade_quality_trigger_wrong_side_storm,
         )
         return payload
 
@@ -343,6 +350,10 @@ class ProfitablePairsStrategy(TradingStrategy):
     def _record_trade_failure_reason(self, reason: str) -> None:
         token = str(reason or "").strip().lower() or "unknown"
         self._recent_trade_failure_reasons.append(token)
+        turns_used = int(getattr(self, "_turns_used", 0) or 0)
+        if token == "wrong_side":
+            self._record_wrong_side_failure_turn(turns_used)
+        self._maybe_activate_wrong_side_storm(turns_used)
 
     def _is_structural_failure_storm(self) -> bool:
         if not self._anti_controls.enabled:
@@ -363,6 +374,44 @@ class ProfitablePairsStrategy(TradingStrategy):
         structural_hits = sum(1 for r in reasons if r in structural)
         rate = float(structural_hits) / float(max(1, len(reasons)))
         return rate >= 0.85
+
+    def _record_wrong_side_failure_turn(self, turns_used: int) -> None:
+        self._prune_wrong_side_failure_turns(turns_used)
+        self._wrong_side_failure_turns.append(int(max(0, turns_used)))
+
+    def _maybe_activate_wrong_side_storm(self, turns_used: int) -> None:
+        if not self._trade_quality_controls.wrong_side_storm_enabled:
+            return
+        sample_min = int(self._trade_quality_controls.wrong_side_storm_min_samples)
+        reasons = list(self._recent_trade_failure_reasons)[-sample_min:]
+        if len(reasons) < sample_min:
+            return
+        wrong_side_hits = sum(1 for r in reasons if r == "wrong_side")
+        ratio = float(wrong_side_hits) / float(max(1, len(reasons)))
+        if ratio < float(self._trade_quality_controls.wrong_side_storm_ratio_gte):
+            return
+        until_turn = int(turns_used) + int(self._trade_quality_controls.wrong_side_storm_cooldown_turns)
+        if until_turn > self._wrong_side_storm_until_turn:
+            self._wrong_side_storm_until_turn = until_turn
+            self._trade_quality_trigger_wrong_side_storm += 1
+
+    def _prune_wrong_side_failure_turns(self, turns_used: int) -> None:
+        window = int(self._trade_quality_controls.attempt_budget_window_turns)
+        min_turn = max(0, int(turns_used) - max(1, window))
+        while self._wrong_side_failure_turns and int(self._wrong_side_failure_turns[0]) < min_turn:
+            self._wrong_side_failure_turns.popleft()
+
+    def _is_wrong_side_storm_active(self, turns_used: int) -> bool:
+        return bool(self._trade_quality_controls.wrong_side_storm_enabled) and int(turns_used) < int(
+            self._wrong_side_storm_until_turn
+        )
+
+    def _is_pair_verified_lane(self, pair: PortPair) -> bool:
+        buy_info = self.knowledge.get_sector_info(int(pair.buy_sector))
+        sell_info = self.knowledge.get_sector_info(int(pair.sell_sector))
+        buy_side_ok = self._port_side_for_sector_info(buy_info, str(pair.commodity), expected="selling")
+        sell_side_ok = self._port_side_for_sector_info(sell_info, str(pair.commodity), expected="buying")
+        return bool(buy_side_ok and sell_side_ok)
 
     def _effective_limits(self, state: GameState | None = None) -> tuple[int, int]:
         """Return (max_hops, min_profit_per_turn) adjusted by policy and bankroll."""
@@ -812,6 +861,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         degraded = self._is_trade_throughput_degraded()
         structural_storm = self._is_structural_failure_storm()
         catastrophic = self._is_catastrophic_collapse()
+        wrong_side_storm = self._is_wrong_side_storm_active(int(getattr(self, "_turns_used", 0) or 0))
         if degraded and not self._anti_prev_throughput_degraded:
             self._anti_trigger_throughput_degraded += 1
         if structural_storm and not self._anti_prev_structural_storm:
@@ -834,6 +884,12 @@ class ProfitablePairsStrategy(TradingStrategy):
             self._current_pair = None
             self._pair_phase = "idle"
             self._pairs_dirty = True
+        if wrong_side_storm and not any(cargo.values()):
+            self._trade_quality_blocked_wrong_side_storm += 1
+            self._current_pair = None
+            self._pair_phase = "idle"
+            self._pairs_dirty = True
+            return self._explore_for_ports(state)
 
         # If we keep exploring/moving without a profitable trade cycle, force
         # pair rediscovery and reset phase. This avoids long "explore-only" runs.
@@ -1284,7 +1340,10 @@ class ProfitablePairsStrategy(TradingStrategy):
                 pair=pair,
                 pair_sig=pair_sig,
             )
-            if opportunity_score < float(self._trade_quality_controls.opportunity_score_min):
+            score_floor = float(self._trade_quality_controls.opportunity_score_min)
+            if not self._is_pair_verified_lane(pair):
+                score_floor += float(self._trade_quality_controls.non_verified_lane_score_penalty)
+            if opportunity_score < score_floor:
                 self._trade_quality_blocked_low_score += 1
                 self._trade_quality_score_rejected_sum += opportunity_score
                 self._trade_quality_score_rejected_n += 1
