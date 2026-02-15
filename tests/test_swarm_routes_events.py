@@ -52,6 +52,64 @@ def test_update_status_accepts_llm_telemetry(tmp_path: Path) -> None:
     assert bot.llm_wakeups_per_100_turns == 13.5
 
 
+def test_update_status_merges_diagnostics_telemetry_maps(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_diag"] = BotStatus(
+        bot_id="bot_diag",
+        pid=333,
+        config="config/swarm_demo/bot_diag.yaml",
+        state="running",
+    )
+
+    with TestClient(manager.app) as client:
+        resp1 = client.post(
+            "/bot/bot_diag/status",
+            json={
+                "combat_telemetry": {"combat_context_seen": 2, "under_attack_reports": 1},
+                "attrition_telemetry": {"credits_loss_nontrade": 50},
+                "opportunity_telemetry": {"opportunities_seen": 12, "opportunities_executed": 4},
+                "action_latency_telemetry": {"trade_count": 3, "trade_ms_sum": 1100},
+                "delta_attribution_telemetry": {"delta_trade": 3, "delta_unknown": 1},
+                "anti_collapse_runtime": {
+                    "controls_enabled": True,
+                    "throughput_degraded_active": True,
+                    "trigger_throughput_degraded": 2,
+                },
+            },
+        )
+        assert resp1.status_code == 200
+        resp2 = client.post(
+            "/bot/bot_diag/status",
+            json={
+                "combat_telemetry": {"combat_context_seen": 1, "under_attack_reports": 5},
+                "attrition_telemetry": {"credits_loss_nontrade": 40},
+                "opportunity_telemetry": {"opportunities_seen": 9, "opportunities_executed": 8},
+                "action_latency_telemetry": {"trade_count": 2, "trade_ms_sum": 900},
+                "delta_attribution_telemetry": {"delta_trade": 2, "delta_unknown": 2},
+                "anti_collapse_runtime": {
+                    "controls_enabled": True,
+                    "throughput_degraded_active": False,
+                    "trigger_throughput_degraded": 5,
+                },
+            },
+        )
+        assert resp2.status_code == 200
+
+    bot = manager.bots["bot_diag"]
+    assert bot.combat_telemetry["combat_context_seen"] == 2
+    assert bot.combat_telemetry["under_attack_reports"] == 5
+    assert bot.attrition_telemetry["credits_loss_nontrade"] == 50
+    assert bot.opportunity_telemetry["opportunities_seen"] == 12
+    assert bot.opportunity_telemetry["opportunities_executed"] == 8
+    assert bot.action_latency_telemetry["trade_count"] == 3
+    assert bot.action_latency_telemetry["trade_ms_sum"] == 1100
+    assert bot.delta_attribution_telemetry["delta_trade"] == 3
+    assert bot.delta_attribution_telemetry["delta_unknown"] == 2
+    assert bot.anti_collapse_runtime["controls_enabled"] is True
+    assert bot.anti_collapse_runtime["throughput_degraded_active"] is False
+    assert bot.anti_collapse_runtime["trigger_throughput_degraded"] == 5
+
+
 def test_update_status_ignores_out_of_order_reports(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path)
     manager.bots["bot_009"] = BotStatus(
@@ -289,3 +347,59 @@ def test_account_pool_endpoint_redacts_passwords_and_summarizes_identities(tmp_p
     assert first["username"] == "pilot_pool"
     assert "character_password" not in first
     assert "game_password" not in first
+    assert "lease_seconds_remaining" in first
+    assert "is_hijacked" in first["lease"]
+    assert "hijacked_by" in first["lease"]
+    assert "hijacked_at" in first["lease"]
+
+
+def test_account_pool_endpoint_includes_hijack_state_for_active_lease(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    swarm_routes._identity_store = BotIdentityStore(data_dir=tmp_path / "sessions")
+    swarm_routes._account_pool_store = AccountPoolStore(
+        pool_file=tmp_path / "sessions" / "account_pool.json",
+        lock_file=tmp_path / "sessions" / "account_pool.lock",
+    )
+    manager.bots["bot_hijack"] = BotStatus(
+        bot_id="bot_hijack",
+        pid=444,
+        config="config/swarm_demo/bot_hijack.yaml",
+        state="running",
+        is_hijacked=True,
+        hijacked_by="codex_soak",
+        hijacked_at=1234.5,
+    )
+
+    swarm_routes._identity_store.upsert_identity(
+        bot_id="bot_hijack",
+        username="pilot_hijack",
+        character_password="secret_char",
+        game_password="secret_game",
+        host="localhost",
+        port=2002,
+        game_letter="T",
+        config_path="config/swarm_demo/bot_hijack.yaml",
+        identity_source="pool",
+    )
+    swarm_routes._account_pool_store.reserve_account(
+        bot_id="bot_hijack",
+        username="pilot_hijack",
+        character_password="secret_char",
+        game_password="secret_game",
+        host="localhost",
+        port=2002,
+        game_letter="T",
+        source="pool",
+    )
+
+    with TestClient(manager.app) as client:
+        resp = client.get("/swarm/account-pool")
+        assert resp.status_code == 200
+        data = resp.json()
+
+    first = data["pool"]["accounts"][0]
+    assert first["lease"]["is_hijacked"] is True
+    assert first["lease"]["hijacked_by"] == "codex_soak"
+    assert first["lease"]["hijacked_at"] == 1234.5
+    assert isinstance(first["lease_seconds_remaining"], int)
+    assert first["lease_seconds_remaining"] >= 0

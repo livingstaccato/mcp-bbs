@@ -161,6 +161,61 @@ class ProfitablePairsConfig(BaseModel):
 
     max_hop_distance: int = 3
     min_profit_per_turn: int = 100
+    anti_collapse_override: "AntiCollapseOverrideConfig" = Field(default_factory=lambda: AntiCollapseOverrideConfig())
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class AntiCollapseConfig(BaseModel):
+    """Global anti-collapse controls for trade throughput protection."""
+
+    enabled: bool = True
+    throughput_degraded_min_samples: int = 12
+    throughput_degraded_success_rate_lt: float = 0.20
+    structural_storm_min_samples: int = 14
+    structural_storm_structural_ratio_gte: float = 0.72
+    lane_backoff_enabled: bool = True
+    lane_backoff_base_seconds: int = 240
+    lane_backoff_max_seconds: int = 1800
+    sector_backoff_enabled: bool = True
+    sector_backoff_base_seconds: int = 240
+    sector_backoff_max_seconds: int = 1800
+    forced_probe_disable_enabled: bool = True
+    forced_probe_disable_attempts_low: int = 12
+    forced_probe_disable_success_rate_low: float = 0.08
+    forced_probe_disable_attempts_high: int = 24
+    forced_probe_disable_success_rate_high: float = 0.12
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class AntiCollapseOverrideConfig(BaseModel):
+    """Strategy-specific anti-collapse override fields."""
+
+    enabled: bool | None = None
+    throughput_degraded_min_samples: int | None = None
+    throughput_degraded_success_rate_lt: float | None = None
+    structural_storm_min_samples: int | None = None
+    structural_storm_structural_ratio_gte: float | None = None
+    lane_backoff_enabled: bool | None = None
+    lane_backoff_base_seconds: int | None = None
+    lane_backoff_max_seconds: int | None = None
+    sector_backoff_enabled: bool | None = None
+    sector_backoff_base_seconds: int | None = None
+    sector_backoff_max_seconds: int | None = None
+    forced_probe_disable_enabled: bool | None = None
+    forced_probe_disable_attempts_low: int | None = None
+    forced_probe_disable_success_rate_low: float | None = None
+    forced_probe_disable_attempts_high: int | None = None
+    forced_probe_disable_success_rate_high: float | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class NoTradeGuardConfig(BaseModel):
+    """No-trade guard extension settings."""
+
+    anti_collapse_override: AntiCollapseOverrideConfig = Field(default_factory=AntiCollapseOverrideConfig)
 
     model_config = ConfigDict(extra="ignore")
 
@@ -305,6 +360,8 @@ class TradingConfig(BaseModel):
         model_config = ConfigDict(extra="ignore")
 
     dynamic_policy: DynamicPolicyConfig = Field(default_factory=DynamicPolicyConfig)
+    anti_collapse: AntiCollapseConfig = Field(default_factory=AntiCollapseConfig)
+    no_trade_guard: NoTradeGuardConfig = Field(default_factory=NoTradeGuardConfig)
 
     profitable_pairs: ProfitablePairsConfig = Field(default_factory=ProfitablePairsConfig)
     opportunistic: OpportunisticConfig = Field(default_factory=OpportunisticConfig)

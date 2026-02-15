@@ -37,6 +37,7 @@ Topics covered:
 - **[Quick Start](guides/QUICK_START.md)** - Get started in 5 minutes
 - **[Multi-Character Management](guides/MULTI_CHARACTER.md)** - Managing multiple bots
 - **[Intelligent Bot](guides/INTELLIGENT_BOT.md)** - Using AI strategies
+- **[TW2002 MCP Operations](TW2002_MCP_OPERATIONS.md)** - Local MCP server aliasing, hijack flow, troubleshooting
 - **[Configuration](../README.md#configuration)** - Config + environment settings
 - **[Spying / Watch Socket](../README.md#spy--watch-socket)** - Attach to a running session output
 

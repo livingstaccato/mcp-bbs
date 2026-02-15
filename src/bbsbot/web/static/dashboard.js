@@ -18,9 +18,10 @@
   let lastRunTotalTurns = 0;
   let lastRunTotalBots = 0;
   let runHistoryHydrated = false;
-  let runBaselineCredits = null;
+  let runBaselineNetWorth = null;
   let runBaselineTurns = null;
   let runBaselineTrades = null;
+  const latestBotsById = new Map();
 
   const $ = (sel) => document.querySelector(sel);
   const dot = $("#dot");
@@ -37,8 +38,17 @@
   const testRuntimeValueEl = $("#test-runtime-value");
   const testRuntimeSinceEl = $("#test-runtime-since");
   const testRuntimeFillEl = $("#test-runtime-fill");
-  const strategyTrendMetricsEl = $("#strategy-trend-metrics");
-  const strategyTrendSvgEl = $("#strategy-trend-svg");
+  const runTradeAttemptsEl = $("#run-trade-attempts");
+  const runTradeFailuresEl = $("#run-trade-failures");
+  const runFailNoPortEl = $("#run-fail-no-port");
+  const runFailNoInteractEl = $("#run-fail-no-interact");
+  const runFailWrongSideEl = $("#run-fail-wrong-side");
+  const runLaggardsEl = $("#run-laggards");
+  const runOreNowEl = $("#run-ore-now");
+  const runOrgNowEl = $("#run-org-now");
+  const runEquipNowEl = $("#run-equip-now");
+  const runCreditsChartSvgEl = $("#run-credits-chart-svg");
+  const runResourcesChartSvgEl = $("#run-resources-chart-svg");
 
   function renderOrDeferTable(data) {
     if (tablePointerActive) {
@@ -198,6 +208,10 @@
     const eased = t * t * (3 - 2 * t);
     const hue = 6 + (136 * eased);
     return `hsl(${hue.toFixed(1)} 60% 62%)`;
+  }
+
+  function creditGlyph() {
+    return "¢";
   }
 
   function strategyCptColor(cpt) {
@@ -427,9 +441,24 @@
     let activeBots = 0;
     let totalNetWorth = Number(data.total_net_worth_estimate || 0);
     let totalLiquid = Number(data.total_credits || 0);
+    let totalBanked = Number(data.total_bank_credits || 0);
     let totalCargoFuelOre = 0;
     let totalCargoOrganics = 0;
     let totalCargoEquipment = 0;
+    let tradeAttempts = 0;
+    let tradeSuccesses = 0;
+    let failNoPort = 0;
+    let failNoInteraction = 0;
+    let failWrongSide = 0;
+    let failOther = 0;
+    let laggards = 0;
+    let combatSeen = 0;
+    let underAttackReports = 0;
+    let unknownDelta = 0;
+    let combatDelta = 0;
+    let attritionCredits = 0;
+    let oppSeen = 0;
+    let oppExecuted = 0;
 
     for (const b of bots) {
       const state = String(b.state || "").toLowerCase();
@@ -440,6 +469,27 @@
       totalCargoFuelOre += Number(b.cargo_fuel_ore || 0);
       totalCargoOrganics += Number(b.cargo_organics || 0);
       totalCargoEquipment += Number(b.cargo_equipment || 0);
+      tradeAttempts += Number(b.trade_attempts || 0);
+      tradeSuccesses += Number(b.trade_successes || 0);
+      const turnsExec = Number(b.turns_executed || 0);
+      const tradesExec = Number(b.trades_executed || 0);
+      if (turnsExec >= 80 && tradesExec <= 1) laggards += 1;
+      const fr = b.trade_failure_reasons || {};
+      failNoPort += Number(fr.trade_fail_no_port || 0);
+      failNoInteraction += Number(fr.trade_fail_no_interaction || 0);
+      failWrongSide += Number(fr.trade_fail_wrong_side || 0);
+      failOther += Number(fr.trade_fail_other || 0);
+      const combat = b.combat_telemetry || {};
+      const attrition = b.attrition_telemetry || {};
+      const opp = b.opportunity_telemetry || {};
+      const deltaAttr = b.delta_attribution_telemetry || {};
+      combatSeen += Number(combat.combat_context_seen || 0);
+      underAttackReports += Number(combat.under_attack_reports || 0);
+      unknownDelta += Number(deltaAttr.delta_unknown || 0);
+      combatDelta += Number(deltaAttr.delta_combat || 0);
+      attritionCredits += Number(attrition.credits_loss_nontrade || 0);
+      oppSeen += Number(opp.opportunities_seen || 0);
+      oppExecuted += Number(opp.opportunities_executed || 0);
       const started = Number(b.started_at || 0);
       if (started > 0 && started < runStart) runStart = started;
     }
@@ -451,21 +501,71 @@
       activeBots,
       totalNetWorth,
       totalLiquid,
+      totalBanked,
       totalCargoFuelOre,
       totalCargoOrganics,
       totalCargoEquipment,
+      tradeAttempts,
+      tradeSuccesses,
+      failNoPort,
+      failNoInteraction,
+      failWrongSide,
+      failOther,
+      laggards,
+      combatSeen,
+      underAttackReports,
+      unknownDelta,
+      combatDelta,
+      attritionCredits,
+      oppSeen,
+      oppExecuted,
     };
   }
 
   function computeRunDeltas(run) {
-    const baseCredits = Number(runBaselineCredits != null ? runBaselineCredits : run.totalLiquid);
+    const baseCredits = Number(runBaselineNetWorth != null ? runBaselineNetWorth : run.totalNetWorth);
     const baseTurns = Number(runBaselineTurns != null ? runBaselineTurns : run.turns);
     const baseTrades = Number(runBaselineTrades != null ? runBaselineTrades : run.trades);
     const deltaTurns = Math.max(0, Number(run.turns || 0) - baseTurns);
     const deltaTrades = Math.max(0, Number(run.trades || 0) - baseTrades);
-    const deltaCredits = Number(run.totalLiquid || 0) - baseCredits;
+    const deltaCredits = Number(run.totalNetWorth || 0) - baseCredits;
     const trueCpt = deltaTurns > 0 ? (deltaCredits / deltaTurns) : 0;
     const tradesPer100 = deltaTurns > 0 ? ((deltaTrades * 100) / deltaTurns) : 0;
+    const returnPerTrade = deltaTrades > 0 ? (deltaCredits / deltaTrades) : 0;
+    return { deltaTurns, deltaTrades, deltaCredits, trueCpt, tradesPer100, returnPerTrade };
+  }
+
+  function computeRecentRunDeltas(fallback, windowSeconds = 900) {
+    const tail = runMetricHistory.slice(-240);
+    if (!Array.isArray(tail) || tail.length < 2) return fallback;
+
+    const end = tail[tail.length - 1];
+    const endTs = Number(end.ts || 0);
+    if (!isFinite(endTs) || endTs <= 0) return fallback;
+
+    const cutoff = endTs - Math.max(60, Number(windowSeconds || 900));
+    let start = tail[0];
+    for (let i = tail.length - 2; i >= 0; i--) {
+      const ts = Number(tail[i].ts || 0);
+      if (ts <= cutoff) {
+        start = tail[i];
+        break;
+      }
+      start = tail[i];
+    }
+
+    const deltaTurns = Number(end.turns || 0) - Number(start.turns || 0);
+    if (!isFinite(deltaTurns) || deltaTurns <= 0) return fallback;
+    const deltaTrades = Math.max(0, Number(end.trades || 0) - Number(start.trades || 0));
+    const endNetWorth = Number(
+      end.netWorth != null ? end.netWorth : (Number(end.credits || 0) + Number(end.banked || 0))
+    );
+    const startNetWorth = Number(
+      start.netWorth != null ? start.netWorth : (Number(start.credits || 0) + Number(start.banked || 0))
+    );
+    const deltaCredits = endNetWorth - startNetWorth;
+    const trueCpt = deltaCredits / deltaTurns;
+    const tradesPer100 = (deltaTrades * 100) / deltaTurns;
     const returnPerTrade = deltaTrades > 0 ? (deltaCredits / deltaTrades) : 0;
     return { deltaTurns, deltaTrades, deltaCredits, trueCpt, tradesPer100, returnPerTrade };
   }
@@ -493,6 +593,7 @@
         }
         const turns = Number(row.total_turns || 0);
         const credits = Number(row.total_credits || 0);
+        const banked = Number(row.total_bank_credits || 0);
         const trades = Number(((row.trade_outcomes_overall || {}).trades_executed) || 0);
         const deltaTurns = turns >= baseTurns ? (turns - baseTurns) : turns;
         const deltaTrades = trades >= baseTrades ? (trades - baseTrades) : trades;
@@ -500,7 +601,9 @@
           ts: Number(row.ts || 0),
           turns: deltaTurns,
           trades: deltaTrades,
+          netWorth: Number(row.total_net_worth_estimate || 0),
           credits,
+          banked,
           fuelOre: Number(row.total_cargo_fuel_ore || 0),
           organics: Number(row.total_cargo_organics || 0),
           equipment: Number(row.total_cargo_equipment || 0),
@@ -516,110 +619,122 @@
   }
 
   function renderRunTrend(runtimeSec, metrics) {
-    if (strategyTrendMetricsEl) {
-      const metricCards = [
-        {
-          label: "C/T",
-          value: formatSigned(Number(metrics.trueCpt || 0), 2),
-          color: strategyCptColor(Number(metrics.trueCpt || 0)) || "",
-        },
-        {
-          label: "T/100",
-          value: Number(metrics.tradesPer100 || 0).toFixed(2),
-          color: Number(metrics.tradesPer100 || 0) >= 3 ? "var(--green)" : (Number(metrics.tradesPer100 || 0) >= 1.5 ? "var(--yellow)" : "var(--red)"),
-        },
-        {
-          label: "Turns",
-          value: formatCredits(Math.round(Number(metrics.deltaTurns || 0))),
-          color: "",
-        },
-        {
-          label: "Trades",
-          value: formatCredits(Math.round(Number(metrics.deltaTrades || 0))),
-          color: "",
-        },
-        {
-          label: "Credits",
-          value: formatCredits(Math.round(Number(metrics.totalLiquid || 0))),
-          color: creditColor(Number(metrics.totalLiquid || 0)) || "",
-        },
-        {
-          label: "Ore",
-          value: formatCredits(Math.round(Number(metrics.totalCargoFuelOre || 0))),
-          color: "var(--green)",
-        },
-        {
-          label: "Org",
-          value: formatCredits(Math.round(Number(metrics.totalCargoOrganics || 0))),
-          color: "var(--yellow)",
-        },
-        {
-          label: "Equip",
-          value: formatCredits(Math.round(Number(metrics.totalCargoEquipment || 0))),
-          color: "var(--blue)",
-        },
-      ];
-      strategyTrendMetricsEl.innerHTML = metricCards
-        .map((m) => `<div class="trend-metric"><span class="k">${esc(m.label)}</span><span class="v"${m.color ? ` style="color:${m.color}"` : ""}>${esc(m.value)}</span></div>`)
-        .join("");
+    const _ = runtimeSec;
+    const oppSeen = Number(metrics.oppSeen || 0);
+    const oppExecuted = Number(metrics.oppExecuted || 0);
+    const oppExecRate = oppSeen > 0 ? (oppExecuted * 100.0 / oppSeen) : 0;
+    const combatSeen = Number(metrics.combatSeen || 0);
+    const underAttackReports = Number(metrics.underAttackReports || 0);
+    const unknownDelta = Number(metrics.unknownDelta || 0);
+    const attritionCredits = Number(metrics.attritionCredits || 0);
+
+    if (runTradeAttemptsEl) {
+      runTradeAttemptsEl.textContent = formatCredits(Math.round(oppSeen));
+      runTradeAttemptsEl.style.color = "var(--fg-bright)";
     }
-    if (!strategyTrendSvgEl) return;
-    if (runMetricHistory.length < 2) {
-      strategyTrendSvgEl.innerHTML = `<text x="160" y="48" text-anchor="middle" class="trend-empty">Collecting run samples...</text>`;
-      return;
+    if (runTradeFailuresEl) {
+      runTradeFailuresEl.textContent = formatCredits(Math.round(combatSeen));
+      runTradeFailuresEl.style.color = combatSeen > 0 ? "var(--yellow)" : "var(--fg-dim)";
+    }
+    if (runFailNoPortEl) {
+      runFailNoPortEl.textContent = formatCredits(Math.round(underAttackReports));
+      runFailNoPortEl.style.color = underAttackReports > 0 ? "var(--red)" : "var(--fg-dim)";
+    }
+    if (runFailNoInteractEl) {
+      runFailNoInteractEl.textContent = formatCredits(Math.round(unknownDelta));
+      runFailNoInteractEl.style.color = unknownDelta > 0 ? "var(--red)" : "var(--fg-dim)";
+    }
+    if (runFailWrongSideEl) {
+      runFailWrongSideEl.textContent = formatCredits(Math.round(attritionCredits));
+      runFailWrongSideEl.style.color = attritionCredits > 0 ? "var(--red)" : "var(--fg-dim)";
+    }
+    if (runLaggardsEl) {
+      runLaggardsEl.textContent = `${oppExecRate.toFixed(1)}%`;
+      runLaggardsEl.style.color = oppExecRate >= 50 ? "var(--green)" : (oppExecRate >= 20 ? "var(--yellow)" : "var(--red)");
+    }
+
+    const resourceRows = [
+      { el: runOreNowEl, value: Number(metrics.totalCargoFuelOre || 0) },
+      { el: runOrgNowEl, value: Number(metrics.totalCargoOrganics || 0) },
+      { el: runEquipNowEl, value: Number(metrics.totalCargoEquipment || 0) },
+    ];
+    for (const row of resourceRows) {
+      if (!row.el) continue;
+      const v = Math.max(0, Math.round(Number(row.value || 0)));
+      row.el.textContent = formatCredits(v);
+      row.el.classList.remove("empty", "has");
+      row.el.classList.add(v > 0 ? "has" : "empty");
     }
 
     const tail = runMetricHistory.slice(-180);
-    const w = 320;
-    const pad = 4;
+    renderRunChart(runCreditsChartSvgEl, tail, [
+      { key: "credits", label: "Credits", lineClass: "run-chart-line-credits", dotClass: "run-chart-dot-credits", minSpan: 30 },
+      { key: "banked", label: "Banked", lineClass: "run-chart-line-banked", dotClass: "run-chart-dot-banked", minSpan: 10 },
+    ]);
+    renderRunChart(runResourcesChartSvgEl, tail, [
+      { key: "fuelOre", label: "Ore", lineClass: "run-chart-line-ore", dotClass: "run-chart-dot-ore", minSpan: 2 },
+      { key: "organics", label: "Org", lineClass: "run-chart-line-org", dotClass: "run-chart-dot-org", minSpan: 2 },
+      { key: "equipment", label: "Equip", lineClass: "run-chart-line-equip", dotClass: "run-chart-dot-equip", minSpan: 2 },
+    ]);
+  }
+
+  function robustBounds(values, zeroRef, minSpan) {
+    const vals = values.filter((v) => isFinite(v)).slice().sort((a, b) => a - b);
+    if (!vals.length) return [zeroRef - (minSpan / 2), zeroRef + (minSpan / 2)];
+    const q = (p) => vals[Math.max(0, Math.min(vals.length - 1, Math.floor((vals.length - 1) * p)))];
+    let lo = Math.min(q(0.05), zeroRef);
+    let hi = Math.max(q(0.95), zeroRef);
+    if ((hi - lo) < minSpan) {
+      const mid = (hi + lo) / 2;
+      lo = mid - (minSpan / 2);
+      hi = mid + (minSpan / 2);
+    }
+    return [lo, hi];
+  }
+
+  function renderRunChart(svgEl, tail, series) {
+    if (!svgEl) return;
+    if (!Array.isArray(tail) || tail.length < 2) {
+      const emptyW = Math.max(420, Math.round((svgEl.clientWidth || 0)));
+      const emptyH = Math.max(48, Math.round((svgEl.clientHeight || 0)));
+      svgEl.setAttribute("viewBox", `0 0 ${emptyW} ${emptyH}`);
+      svgEl.setAttribute("preserveAspectRatio", "none");
+      svgEl.innerHTML = `<text x="${(emptyW / 2).toFixed(1)}" y="${(emptyH / 2).toFixed(1)}" text-anchor="middle" class="run-chart-empty">Collecting run samples...</text>`;
+      return;
+    }
+    const w = Math.max(420, Math.round(svgEl.clientWidth || 0));
+    const h = Math.max(48, Math.round(svgEl.clientHeight || 0));
+    svgEl.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svgEl.setAttribute("preserveAspectRatio", "none");
+    const padX = Math.max(10, Math.round(w * 0.02));
+    const padY = Math.max(8, Math.round(h * 0.16));
     const n = tail.length;
-    const xAt = (i) => pad + ((w - (pad * 2)) * (n <= 1 ? 0 : i / (n - 1)));
-    const lanes = [
-      { key: "credits", label: "CR", className: "trend-line-credits", dotClass: "trend-last-credits", values: tail.map((x) => Number(x.credits || 0)) },
-      { key: "fuelOre", label: "ORE", className: "trend-line-fuel", dotClass: "trend-last-fuel", values: tail.map((x) => Number(x.fuelOre || 0)) },
-      { key: "organics", label: "ORG", className: "trend-line-org", dotClass: "trend-last-org", values: tail.map((x) => Number(x.organics || 0)) },
-      { key: "equipment", label: "EQU", className: "trend-line-equip", dotClass: "trend-last-equip", values: tail.map((x) => Number(x.equipment || 0)) },
-    ];
-
-    function robustBounds(values, zeroRef, minSpan) {
-      const vals = values.filter((v) => isFinite(v)).slice().sort((a, b) => a - b);
-      if (!vals.length) return [zeroRef - (minSpan / 2), zeroRef + (minSpan / 2)];
-      const q = (p) => vals[Math.max(0, Math.min(vals.length - 1, Math.floor((vals.length - 1) * p)))];
-      let lo = Math.min(q(0.05), zeroRef);
-      let hi = Math.max(q(0.95), zeroRef);
-      if ((hi - lo) < minSpan) {
-        const mid = (hi + lo) / 2;
-        lo = mid - (minSpan / 2);
-        hi = mid + (minSpan / 2);
-      }
-      return [lo, hi];
-    }
-
-    const laneHeight = 17;
-    const laneGap = 5;
-    const laneTopStart = 4;
-    const lastX = xAt(n - 1).toFixed(2);
+    const xAt = (i) => padX + (((w - (padX * 2)) * (n <= 1 ? 0 : i / (n - 1))));
     const parts = [];
-    for (let i = 0; i < lanes.length; i++) {
-      const lane = lanes[i];
-      const top = laneTopStart + (i * (laneHeight + laneGap));
-      const bottom = top + laneHeight;
-      const baselineRef = lane.values.length ? lane.values[0] : 0;
-      const [minV, maxV] = robustBounds(lane.values, baselineRef, lane.key === "credits" ? 20 : 2);
+    const labelStep = Math.max(12, Math.round((h - (padY * 2)) / Math.max(1, series.length)));
+
+    for (let idx = 0; idx < series.length; idx++) {
+      const lane = series[idx];
+      const values = tail.map((entry) => Number(entry[lane.key] || 0));
+      const baselineRef = values.length ? Number(values[0] || 0) : 0;
+      const [minV, maxV] = robustBounds(values, baselineRef, Number(lane.minSpan || 2));
       const span = Math.max(0.0001, maxV - minV);
-      const yAt = (v) => top + (((maxV - v) / span) * (bottom - top));
-      const points = lane.values.map((v, idx) => `${xAt(idx).toFixed(2)},${yAt(v).toFixed(2)}`);
+      const yAt = (v) => padY + (((maxV - v) / span) * (h - (padY * 2)));
+      const points = values.map((v, i) => `${xAt(i).toFixed(2)},${yAt(v).toFixed(2)}`);
       const baselineY = yAt(baselineRef).toFixed(2);
-      const lastY = yAt(lane.values[n - 1]).toFixed(2);
-      const lastVal = Math.round(lane.values[n - 1] || 0);
-      parts.push(`<line class="trend-baseline" x1="${pad}" y1="${baselineY}" x2="${(w - pad)}" y2="${baselineY}"></line>`);
-      parts.push(`<polyline class="trend-line ${lane.className}" points="${points.join(" ")}"></polyline>`);
-      parts.push(`<circle class="trend-last ${lane.dotClass}" cx="${lastX}" cy="${lastY}" r="1.7"></circle>`);
-      parts.push(`<text class="trend-label trend-lane-label" x="${pad + 1}" y="${(top + 7).toFixed(2)}">${lane.label}</text>`);
-      parts.push(`<text class="trend-label trend-lane-value" text-anchor="end" x="${(w - pad - 1)}" y="${(top + 7).toFixed(2)}">${formatCredits(lastVal)}</text>`);
+      const lastX = xAt(n - 1).toFixed(2);
+      const lastY = yAt(values[n - 1]).toFixed(2);
+      const lastVal = Math.round(values[n - 1] || 0);
+      const labelY = (padY + 2 + (idx * labelStep));
+
+      parts.push(`<line class="run-chart-baseline" x1="${padX}" y1="${baselineY}" x2="${(w - padX)}" y2="${baselineY}"></line>`);
+      parts.push(`<polyline class="run-chart-line ${lane.lineClass}" points="${points.join(" ")}"></polyline>`);
+      parts.push(`<circle class="run-chart-dot ${lane.dotClass}" cx="${lastX}" cy="${lastY}"></circle>`);
+      parts.push(`<text class="run-chart-label" x="${padX + 1}" y="${labelY.toFixed(2)}">${esc(String(lane.label))}</text>`);
+      parts.push(`<text class="run-chart-label" text-anchor="end" x="${w - padX - 1}" y="${labelY.toFixed(2)}">${esc(formatCredits(lastVal))}</text>`);
     }
 
-    strategyTrendSvgEl.innerHTML = parts.join("");
+    svgEl.innerHTML = parts.join("");
   }
 
   function shortBotId(botId) {
@@ -799,6 +914,11 @@
   // --- Bot table rendering ---
 	  function update(data) {
 	    lastData = data;
+      latestBotsById.clear();
+      for (const b of (data.bots || [])) {
+        const botId = String((b && b.bot_id) || "");
+        if (botId) latestBotsById.set(botId, b);
+      }
 	    // Update stats immediately (lightweight)
 	    $("#running").textContent = data.running;
 	    $("#total").textContent = data.total_bots;
@@ -824,20 +944,28 @@
 
       const returnPerTurnEl = $("#return-per-turn");
       const returnPerTradeEl = $("#return-per-trade");
+      const tradeSuccessSubEl = $("#trade-success-sub");
       const tradesPer100El = $("#trades-per-100");
       const profitableRateSubEl = $("#profitable-rate-sub");
       const runDelta = computeRunDeltas(run);
+      let displayDelta = computeRecentRunDeltas(runDelta);
       if (returnPerTurnEl) {
-        returnPerTurnEl.textContent = formatSigned(runDelta.trueCpt, 2);
-        returnPerTurnEl.style.color = strategyCptColor(runDelta.trueCpt) || "";
+        returnPerTurnEl.textContent = formatSigned(displayDelta.trueCpt, 2);
+        returnPerTurnEl.style.color = strategyCptColor(displayDelta.trueCpt) || "";
       }
       if (returnPerTradeEl) {
-        returnPerTradeEl.textContent = formatSigned(runDelta.returnPerTrade, 1);
-        returnPerTradeEl.style.color = strategyCptColor(runDelta.returnPerTrade / 50) || "";
+        const successRate = Number(run.tradeAttempts || 0) > 0
+          ? (Number(run.tradeSuccesses || 0) / Number(run.tradeAttempts || 1))
+          : 0;
+        returnPerTradeEl.textContent = `${(successRate * 100).toFixed(1)}%`;
+        returnPerTradeEl.style.color = successRate >= 0.4 ? "var(--green)" : (successRate >= 0.15 ? "var(--yellow)" : "var(--red)");
+        if (tradeSuccessSubEl) {
+          tradeSuccessSubEl.textContent = `successful attempts · ${displayDelta.tradesPer100.toFixed(2)}/100 turns`;
+        }
       }
       if (tradesPer100El) {
-        tradesPer100El.textContent = `${runDelta.tradesPer100.toFixed(2)}`;
-        tradesPer100El.style.color = runDelta.tradesPer100 >= 3 ? "var(--green)" : (runDelta.tradesPer100 >= 1.5 ? "var(--yellow)" : "var(--red)");
+        tradesPer100El.textContent = `${displayDelta.tradesPer100.toFixed(2)}`;
+        tradesPer100El.style.color = displayDelta.tradesPer100 >= 3 ? "var(--green)" : (displayDelta.tradesPer100 >= 1.5 ? "var(--yellow)" : "var(--red)");
       }
       if (profitableRateSubEl) {
         const bots = data.bots || [];
@@ -873,20 +1001,20 @@
       if (resetRun) {
         runMetricHistory.length = 0;
         lastRunMetricSampleTs = 0;
-        runBaselineCredits = null;
+        runBaselineNetWorth = null;
         runBaselineTurns = null;
         runBaselineTrades = null;
       }
       if (run.runStart) activeRunStartTs = run.runStart;
       lastRunTotalTurns = run.turns;
       lastRunTotalBots = totalBotsNow;
-      if (run.activeBots > 0 && runBaselineCredits == null) {
-        runBaselineCredits = Number(run.totalLiquid || 0);
+      if (run.activeBots > 0 && runBaselineNetWorth == null) {
+        runBaselineNetWorth = Number(run.totalNetWorth || 0);
         runBaselineTurns = Number(run.turns || 0);
         runBaselineTrades = Number(run.trades || 0);
       }
       if (run.activeBots <= 0) {
-        runBaselineCredits = null;
+        runBaselineNetWorth = null;
         runBaselineTurns = null;
         runBaselineTrades = null;
       }
@@ -915,7 +1043,9 @@
           ts: nowS,
           turns: Number(liveDelta.deltaTurns || 0),
           trades: Number(liveDelta.deltaTrades || 0),
+          netWorth: Number(run.totalNetWorth || 0),
           credits: Number(run.totalLiquid || 0),
+          banked: Number(run.totalBanked || 0),
           fuelOre: Number(run.totalCargoFuelOre || 0),
           organics: Number(run.totalCargoOrganics || 0),
           equipment: Number(run.totalCargoEquipment || 0),
@@ -923,7 +1053,8 @@
         while (runMetricHistory.length > 240) runMetricHistory.shift();
         lastRunMetricSampleTs = nowS;
       }
-      renderRunTrend(runtimeSec, { ...run, ...computeRunDeltas(run) });
+      displayDelta = computeRecentRunDeltas(runDelta);
+      renderRunTrend(runtimeSec, { ...run, ...displayDelta });
 
       const metrics = computeAggregateMetrics(data);
       const acceptEl = $("#accept-rate");
@@ -957,17 +1088,24 @@
     const bots = filteredBots.slice().sort((a, b) => {
       let va = a[sortKey] ?? "";
       let vb = b[sortKey] ?? "";
-      if (typeof va === "number") {
-        return sortReverse ? vb - va : va - vb;
+      if (typeof va === "number" || typeof vb === "number") {
+        const na = Number(va ?? 0);
+        const nb = Number(vb ?? 0);
+        if (isFinite(na) && isFinite(nb)) {
+          if (na !== nb) return sortReverse ? nb - na : na - nb;
+          return String(a.bot_id || "").localeCompare(String(b.bot_id || ""));
+        }
       }
       va = String(va);
       vb = String(vb);
-      return sortReverse ? vb.localeCompare(va) : va.localeCompare(vb);
+      const cmp = sortReverse ? vb.localeCompare(va) : va.localeCompare(vb);
+      if (cmp !== 0) return cmp;
+      return String(a.bot_id || "").localeCompare(String(b.bot_id || ""));
     });
 
     const tbody = $("#bot-table");
     tbody.innerHTML = bots
-      .map((b, idx) => {
+      .map((b) => {
         const isRunning = b.state === "running";
         const isQueued = b.state === "queued";
 
@@ -1006,32 +1144,7 @@
 
         // Status: phase/prompt detail (Paused, Username/Password, Port Haggle, etc.)
         // Hijack is additive; it shouldn't replace the bot's true activity.
-        const statusParts = [];
-        if (b.is_hijacked) {
-          statusParts.push("HIJACKED");
-        }
-        if (isUnderAttack) {
-          statusParts.push("UNDER_ATTACK");
-        }
-        const hostileFighters = Number(b.hostile_fighters || 0);
-        if (hostileFighters > 0) {
-          statusParts.push(`THREAT ${hostileFighters}`);
-        }
-        const lifecycleLabel = {
-          blocked: "BLOCKED",
-          recovering: "RECOVERING",
-          disconnected: "DISCONNECTED",
-          error: "ERROR",
-          stopped: "STOPPED",
-          queued: "QUEUED",
-          completed: "COMPLETED",
-        }[b.state];
-        if (lifecycleLabel) {
-          const withReason = (b.exit_reason && ["blocked", "error", "disconnected"].includes(b.state))
-            ? `${lifecycleLabel} (${b.exit_reason})`
-            : lifecycleLabel;
-          statusParts.push(withReason);
-        }
+        const detailParts = [];
         const detail = (b.status_detail || "").trim();
         const isStaleOrientFailed =
           detail === "ORIENTING:FAILED" &&
@@ -1039,7 +1152,7 @@
           !["CONNECTING", "LOGGING_IN", "INITIALIZING"].includes(String(activity || "").toUpperCase());
         if (detail) {
           if (!isStaleOrientFailed) {
-            statusParts.push(detail);
+            detailParts.push(detail);
           }
         } else if (b.prompt_id) {
           // Avoid showing "prompt.sector_command" etc. as status; Status is for meaningful blocking phases.
@@ -1052,10 +1165,10 @@
           const isInteresting = !safePrompts.has(b.prompt_id);
           const isBadState = ["error", "blocked", "recovering", "disconnected"].includes(b.state);
           if (isBadState && isInteresting) {
-            statusParts.push(b.prompt_id);
+            detailParts.push(b.prompt_id);
           }
         }
-        const statusText = statusParts.length ? statusParts.join(" | ") : "-";
+        const statusText = detailParts.length ? detailParts.join(" | ") : "-";
         const compactStatus = compactStatusText(`${statusText}${exitInfo ? " " + exitInfo : ""}`);
         const activityLine2 = compactStatus || "—";
         const activityHtml = `<div class="activity-cell" onclick="window._openInspector('${esc(b.bot_id)}','activity')" title="${esc(statusText)}"><span class="activity-primary">${activityPrimary}</span><span class="activity-secondary${compactStatus ? "" : " subtle-empty"}">${esc(activityLine2)}</span></div>`;
@@ -1066,9 +1179,15 @@
 
         // Display "-" for uninitialized numeric fields
         const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
-        const fuelDisplay = (b.cargo_fuel_ore === null || b.cargo_fuel_ore === undefined) ? "-" : formatCredits(b.cargo_fuel_ore);
-        const orgDisplay = (b.cargo_organics === null || b.cargo_organics === undefined) ? "-" : formatCredits(b.cargo_organics);
-        const equipDisplay = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? "-" : formatCredits(b.cargo_equipment);
+        const fuelValue = (b.cargo_fuel_ore === null || b.cargo_fuel_ore === undefined) ? null : Number(b.cargo_fuel_ore);
+        const orgValue = (b.cargo_organics === null || b.cargo_organics === undefined) ? null : Number(b.cargo_organics);
+        const equipValue = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? null : Number(b.cargo_equipment);
+        const fuelDisplay = fuelValue === null ? "-" : formatCredits(fuelValue);
+        const orgDisplay = orgValue === null ? "-" : formatCredits(orgValue);
+        const equipDisplay = equipValue === null ? "-" : formatCredits(equipValue);
+        const fuelStateClass = fuelValue !== null && fuelValue > 0 ? "hold-active" : "hold-empty";
+        const orgStateClass = orgValue !== null && orgValue > 0 ? "hold-active" : "hold-empty";
+        const equipStateClass = equipValue !== null && equipValue > 0 ? "hold-active" : "hold-empty";
 
         const compact = getStrategyCompact(b);
         const strategyNote = getStrategyNote(b);
@@ -1084,15 +1203,15 @@
 
         const creditsColor = b.credits >= 0 ? creditColor(b.credits) : "";
         return `<tr>
-	        <td title="${esc(b.bot_id)}">${idx + 1}</td>
+	        <td title="${esc(b.bot_id)}">${esc(String(b.bot_id || "-"))}</td>
 	        <td>${stateHtml}</td>
 	        <td>${activityHtml}</td>
 	        <td>${strategyHtml}</td>
 	        <td class="numeric">${b.sector}</td>
-	        <td class="numeric credit-cell"${creditsColor ? ` style="color:${creditsColor}"` : ""}>${creditsDisplay}</td>
-	        <td class="numeric">${fuelDisplay}</td>
-	        <td class="numeric">${orgDisplay}</td>
-	        <td class="numeric">${equipDisplay}</td>
+	        <td class="numeric credit-cell"${creditsColor ? ` style="color:${creditsColor}"` : ""}><span class="credit-glyph">${esc(creditGlyph())}</span>${creditsDisplay}</td>
+	        <td class="numeric cargo-fuel-cell ${fuelStateClass}">${fuelDisplay}</td>
+	        <td class="numeric cargo-org-cell ${orgStateClass}">${orgDisplay}</td>
+	        <td class="numeric cargo-equip-cell ${equipStateClass}">${equipDisplay}</td>
 	        <td class="numeric">${turnsDisplay}</td>
 	        <td class="numeric">${tradesDisplay}</td>
 	        <td class="timecell">${updatedDisplay}</td>
@@ -1877,7 +1996,30 @@
 
       poolTable.innerHTML = accounts.map((a) => {
         const accountId = String(a.account_id || "");
-        const leaseBot = (a.lease && a.lease.bot_id) ? a.lease.bot_id : "-";
+        const leaseBot = (a.lease && a.lease.bot_id) ? String(a.lease.bot_id) : "-";
+        const leasedBotStatus = leaseBot !== "-" ? latestBotsById.get(leaseBot) : null;
+        const leaseSecondsRemaining = Number(a.lease_seconds_remaining);
+        const ttl = Number.isFinite(leaseSecondsRemaining) ? Math.max(0, Math.round(leaseSecondsRemaining)) : null;
+        const isHijacked = !!(
+          (a.lease && a.lease.is_hijacked) ||
+          (leasedBotStatus && leasedBotStatus.is_hijacked)
+        );
+        const hijackedBy = String(
+          ((a.lease && a.lease.hijacked_by) || (leasedBotStatus && leasedBotStatus.hijacked_by) || "")
+        ).trim();
+        const statusParts = [];
+        const leasedState = String((leasedBotStatus && leasedBotStatus.state) || "").toLowerCase();
+        const isAi = String(
+          ((leasedBotStatus && (leasedBotStatus.strategy_id || leasedBotStatus.strategy)) || "")
+        ).toLowerCase().includes("ai");
+        if (isAi) statusParts.push(`<span class="pool-status-pill ai">AI</span>`);
+        if (isHijacked) statusParts.push(`<span class="pool-status-pill hijacked">Hijacked</span>`);
+        if (leasedState === "running") statusParts.push(`<span class="pool-status-pill running">Running</span>`);
+        else if (leasedState) statusParts.push(`<span class="pool-status-pill ${esc(leasedState === "error" ? "error" : "active")}">${esc(leasedState)}</span>`);
+        if (!statusParts.length) statusParts.push(`<span class="pool-status-pill">-</span>`);
+        const ownerMeta = isHijacked && hijackedBy ? `<span class="pool-status-meta">${esc(hijackedBy)}</span>` : "";
+        const ttlMeta = ttl != null ? `<span class="pool-status-meta">${esc(String(ttl))}s</span>` : "";
+        const statusCell = `<div class="pool-status-cell">${statusParts.join("")}${ownerMeta}${ttlMeta}</div>`;
         const game = formatGameName(a);
         const source = formatSourceName(a.source);
         const lastUsed = a.last_used_at ? formatAgeSeconds(a.last_used_at) : "-";
@@ -1890,6 +2032,7 @@
         return `<tr>
           <td title="${esc(a.username || "-")}">${esc(a.username || "-")}</td>
           <td title="${esc(leaseBot)}">${esc(leaseBot)}</td>
+          <td>${statusCell}</td>
           <td title="${esc(game)}">${esc(game)}</td>
           <td><span class="pool-source-chip ${esc(source.raw)}" title="${esc(source.raw)}">${esc(source.label)}</span></td>
           <td class="num">${esc(String(a.use_count || 0))}</td>
@@ -1898,7 +2041,7 @@
         </tr>`;
       }).join("");
       if (!accounts.length) {
-        poolTable.innerHTML = `<tr><td colspan="7" style="color: var(--fg2);">No pooled accounts yet</td></tr>`;
+        poolTable.innerHTML = `<tr><td colspan="8" style="color: var(--fg2);">No pooled accounts yet</td></tr>`;
       }
     } catch (_) {
       poolSummary.textContent = "unavailable";

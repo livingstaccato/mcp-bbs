@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter
@@ -135,12 +136,24 @@ async def account_pool_summary():
     """Get pooled account lease/cooldown state + identity lifecycle summary."""
     pool = _account_pool_store.summary()
     active_bot_ids: set[str] = set()
+    active_bot_statuses: dict[str, object] = {}
     if _manager is not None:
         active_states = {"running", "recovering", "blocked", "disconnected", "queued"}
-        active_bot_ids = {bid for bid, status in _manager.bots.items() if status.state in active_states}
+        for bid, status in _manager.bots.items():
+            if status.state in active_states:
+                active_bot_ids.add(bid)
+                active_bot_statuses[bid] = status
+    now_ts = time.time()
     redacted_accounts = []
     for account in pool.get("accounts", []):
         lease = account.get("lease") or None
+        lease_bot_id = str((lease or {}).get("bot_id") or "")
+        lease_status = active_bot_statuses.get(lease_bot_id)
+        lease_expires_at = float((lease or {}).get("lease_expires_at") or 0)
+        lease_seconds_remaining = None
+        if lease_expires_at > 0:
+            lease_seconds_remaining = max(0, int(round(lease_expires_at - now_ts)))
+
         redacted_accounts.append(
             {
                 "account_id": account.get("account_id"),
@@ -159,9 +172,13 @@ async def account_pool_summary():
                     "bot_id": lease.get("bot_id"),
                     "leased_at": lease.get("leased_at"),
                     "lease_expires_at": lease.get("lease_expires_at"),
+                    "is_hijacked": bool(getattr(lease_status, "is_hijacked", False)),
+                    "hijacked_by": getattr(lease_status, "hijacked_by", None),
+                    "hijacked_at": getattr(lease_status, "hijacked_at", None),
                 }
                 if lease
                 else None,
+                "lease_seconds_remaining": lease_seconds_remaining,
             }
         )
 
@@ -352,16 +369,208 @@ async def update_status(bot_id: str, update: dict):
         bot.haggle_too_low = int(update["haggle_too_low"])
     if "trades_executed" in update:
         bot.trades_executed = max(int(bot.trades_executed or 0), int(update["trades_executed"] or 0))
+    if "trade_attempts" in update:
+        bot.trade_attempts = max(int(bot.trade_attempts or 0), int(update["trade_attempts"] or 0))
+    if "trade_successes" in update:
+        bot.trade_successes = max(int(bot.trade_successes or 0), int(update["trade_successes"] or 0))
+    if "trade_failures" in update:
+        bot.trade_failures = max(int(bot.trade_failures or 0), int(update["trade_failures"] or 0))
+    if "trade_failure_reasons" in update:
+        merged = dict(bot.trade_failure_reasons or {})
+        for key, value in dict(update.get("trade_failure_reasons") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged[token] = max(int(merged.get(token, 0) or 0), int(value or 0))
+        bot.trade_failure_reasons = merged
+    if "trade_outcomes_by_port_resource" in update:
+        merged_port = dict(bot.trade_outcomes_by_port_resource or {})
+        for key, metrics in dict(update.get("trade_outcomes_by_port_resource") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            prev = dict(merged_port.get(token) or {})
+            for metric, value in dict(metrics or {}).items():
+                mkey = str(metric or "").strip().lower()
+                if not mkey:
+                    continue
+                prev[mkey] = max(int(prev.get(mkey, 0) or 0), int(value or 0))
+            merged_port[token] = prev
+        bot.trade_outcomes_by_port_resource = merged_port
+    if "trade_outcomes_by_pair" in update:
+        merged_pair = dict(bot.trade_outcomes_by_pair or {})
+        for key, metrics in dict(update.get("trade_outcomes_by_pair") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            prev = dict(merged_pair.get(token) or {})
+            for metric, value in dict(metrics or {}).items():
+                mkey = str(metric or "").strip().lower()
+                if not mkey:
+                    continue
+                prev[mkey] = max(int(prev.get(mkey, 0) or 0), int(value or 0))
+            merged_pair[token] = prev
+        bot.trade_outcomes_by_pair = merged_pair
     if "credits_delta" in update:
         bot.credits_delta = int(update["credits_delta"])
     if "credits_per_turn" in update:
         bot.credits_per_turn = float(update["credits_per_turn"])
+    if "turns_since_last_trade" in update:
+        bot.turns_since_last_trade = max(0, int(update["turns_since_last_trade"] or 0))
+    if "move_streak" in update:
+        bot.move_streak = max(0, int(update["move_streak"] or 0))
+    if "zero_delta_action_streak" in update:
+        bot.zero_delta_action_streak = max(0, int(update["zero_delta_action_streak"] or 0))
+    if "prompt_telemetry" in update:
+        merged_prompt = dict(bot.prompt_telemetry or {})
+        for key, value in dict(update.get("prompt_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_prompt[token] = max(int(merged_prompt.get(token, 0) or 0), int(value or 0))
+        bot.prompt_telemetry = merged_prompt
+    if "warp_telemetry" in update:
+        merged_warp = dict(bot.warp_telemetry or {})
+        for key, value in dict(update.get("warp_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_warp[token] = max(int(merged_warp.get(token, 0) or 0), int(value or 0))
+        bot.warp_telemetry = merged_warp
+    if "warp_failure_reasons" in update:
+        merged_warp_reasons = dict(bot.warp_failure_reasons or {})
+        for key, value in dict(update.get("warp_failure_reasons") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_warp_reasons[token] = max(int(merged_warp_reasons.get(token, 0) or 0), int(value or 0))
+        bot.warp_failure_reasons = merged_warp_reasons
+    if "decision_counts_considered" in update:
+        merged_considered = dict(bot.decision_counts_considered or {})
+        for key, value in dict(update.get("decision_counts_considered") or {}).items():
+            token = str(key or "").strip().upper()
+            if not token:
+                continue
+            merged_considered[token] = max(int(merged_considered.get(token, 0) or 0), int(value or 0))
+        bot.decision_counts_considered = merged_considered
+    if "decision_counts_executed" in update:
+        merged_executed = dict(bot.decision_counts_executed or {})
+        for key, value in dict(update.get("decision_counts_executed") or {}).items():
+            token = str(key or "").strip().upper()
+            if not token:
+                continue
+            merged_executed[token] = max(int(merged_executed.get(token, 0) or 0), int(value or 0))
+        bot.decision_counts_executed = merged_executed
+    if "decision_override_total" in update:
+        bot.decision_override_total = max(int(bot.decision_override_total or 0), int(update["decision_override_total"] or 0))
+    if "decision_override_reasons" in update:
+        merged_override_reasons = dict(bot.decision_override_reasons or {})
+        for key, value in dict(update.get("decision_override_reasons") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_override_reasons[token] = max(int(merged_override_reasons.get(token, 0) or 0), int(value or 0))
+        bot.decision_override_reasons = merged_override_reasons
+    if "valuation_source_units_total" in update:
+        merged_units_total = dict(bot.valuation_source_units_total or {})
+        for key, value in dict(update.get("valuation_source_units_total") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_units_total[token] = max(int(merged_units_total.get(token, 0) or 0), int(value or 0))
+        bot.valuation_source_units_total = merged_units_total
+    if "valuation_source_value_total" in update:
+        merged_value_total = dict(bot.valuation_source_value_total or {})
+        for key, value in dict(update.get("valuation_source_value_total") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_value_total[token] = max(int(merged_value_total.get(token, 0) or 0), int(value or 0))
+        bot.valuation_source_value_total = merged_value_total
+    if "valuation_source_units_last" in update:
+        bot.valuation_source_units_last = dict(update.get("valuation_source_units_last") or {})
+    if "valuation_source_value_last" in update:
+        bot.valuation_source_value_last = dict(update.get("valuation_source_value_last") or {})
+    if "valuation_confidence_last" in update:
+        bot.valuation_confidence_last = float(update["valuation_confidence_last"] or 0.0)
+    if "route_churn_total" in update:
+        bot.route_churn_total = max(int(bot.route_churn_total or 0), int(update["route_churn_total"] or 0))
+    if "route_churn_reasons" in update:
+        merged_churn_reasons = dict(bot.route_churn_reasons or {})
+        for key, value in dict(update.get("route_churn_reasons") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_churn_reasons[token] = max(int(merged_churn_reasons.get(token, 0) or 0), int(value or 0))
+        bot.route_churn_reasons = merged_churn_reasons
     if "llm_wakeups" in update:
         bot.llm_wakeups = int(update["llm_wakeups"])
     if "autopilot_turns" in update:
         bot.autopilot_turns = int(update["autopilot_turns"])
     if "goal_contract_failures" in update:
         bot.goal_contract_failures = int(update["goal_contract_failures"])
+    if "action_counters" in update:
+        merged_actions = dict(bot.action_counters or {})
+        for key, value in dict(update.get("action_counters") or {}).items():
+            token = str(key or "").strip().upper()
+            if not token:
+                continue
+            merged_actions[token] = max(int(merged_actions.get(token, 0) or 0), int(value or 0))
+        bot.action_counters = merged_actions
+    if "recovery_actions" in update:
+        bot.recovery_actions = max(int(bot.recovery_actions or 0), int(update["recovery_actions"] or 0))
+    if "combat_telemetry" in update:
+        merged_combat = dict(bot.combat_telemetry or {})
+        for key, value in dict(update.get("combat_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_combat[token] = max(int(merged_combat.get(token, 0) or 0), int(value or 0))
+        bot.combat_telemetry = merged_combat
+    if "attrition_telemetry" in update:
+        merged_attrition = dict(bot.attrition_telemetry or {})
+        for key, value in dict(update.get("attrition_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_attrition[token] = max(int(merged_attrition.get(token, 0) or 0), int(value or 0))
+        bot.attrition_telemetry = merged_attrition
+    if "opportunity_telemetry" in update:
+        merged_opp = dict(bot.opportunity_telemetry or {})
+        for key, value in dict(update.get("opportunity_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_opp[token] = max(int(merged_opp.get(token, 0) or 0), int(value or 0))
+        bot.opportunity_telemetry = merged_opp
+    if "action_latency_telemetry" in update:
+        merged_latency = dict(bot.action_latency_telemetry or {})
+        for key, value in dict(update.get("action_latency_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_latency[token] = max(int(merged_latency.get(token, 0) or 0), int(value or 0))
+        bot.action_latency_telemetry = merged_latency
+    if "delta_attribution_telemetry" in update:
+        merged_delta_attr = dict(bot.delta_attribution_telemetry or {})
+        for key, value in dict(update.get("delta_attribution_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_delta_attr[token] = max(int(merged_delta_attr.get(token, 0) or 0), int(value or 0))
+        bot.delta_attribution_telemetry = merged_delta_attr
+    if "anti_collapse_runtime" in update:
+        merged_anti = dict(bot.anti_collapse_runtime or {})
+        for key, value in dict(update.get("anti_collapse_runtime") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            if isinstance(value, bool):
+                merged_anti[token] = bool(value)
+                continue
+            with contextlib.suppress(Exception):
+                merged_anti[token] = max(int(merged_anti.get(token, 0) or 0), int(value or 0))
+        bot.anti_collapse_runtime = merged_anti
     if "llm_wakeups_per_100_turns" in update:
         bot.llm_wakeups_per_100_turns = float(update["llm_wakeups_per_100_turns"])
     if "hostile_fighters" in update:
@@ -479,6 +688,12 @@ async def get_bot_events(bot_id: str):
                 "llm_wakeups": bot.llm_wakeups,
                 "autopilot_turns": bot.autopilot_turns,
                 "goal_contract_failures": bot.goal_contract_failures,
+                "trade_attempts": bot.trade_attempts,
+                "trade_successes": bot.trade_successes,
+                "trade_failures": bot.trade_failures,
+                "trade_failure_reasons": bot.trade_failure_reasons,
+                "action_counters": bot.action_counters,
+                "recovery_actions": bot.recovery_actions,
                 "sector": bot.sector,
                 "credits": bot.credits,
                 "turns_executed": bot.turns_executed,
@@ -506,6 +721,12 @@ async def get_bot_events(bot_id: str):
                 "llm_wakeups": bot.llm_wakeups,
                 "autopilot_turns": bot.autopilot_turns,
                 "goal_contract_failures": bot.goal_contract_failures,
+                "trade_attempts": bot.trade_attempts,
+                "trade_successes": bot.trade_successes,
+                "trade_failures": bot.trade_failures,
+                "trade_failure_reasons": bot.trade_failure_reasons,
+                "action_counters": bot.action_counters,
+                "recovery_actions": bot.recovery_actions,
                 "llm_wakeups_per_100_turns": bot.llm_wakeups_per_100_turns,
                 "hostile_fighters": bot.hostile_fighters,
                 "under_attack": bot.under_attack,

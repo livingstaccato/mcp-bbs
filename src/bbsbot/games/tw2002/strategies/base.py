@@ -67,6 +67,12 @@ class TradeResult(BaseModel):
     turns_used: int = 0
     from_sector: int | None = None  # For tracking failed warps
     to_sector: int | None = None  # For tracking failed warps
+    trade_attempted: bool = False
+    trade_failure_reason: str = ""
+    pair_signature: str = ""
+    trade_commodity: str = ""
+    trade_side: str = ""
+    trade_sector: int | None = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -202,19 +208,22 @@ class TradingStrategy(ABC):
             return False, None
 
         # Check holds (only if we actually know current holds)
-        if self.config.upgrades.auto_buy_holds and state.holds_total is not None:
-            if state.holds_total < self.config.upgrades.max_holds:
-                return True, "holds"
+        if self.config.upgrades.auto_buy_holds and state.holds_total is not None and (
+            state.holds_total < self.config.upgrades.max_holds
+        ):
+            return True, "holds"
 
         # Check fighters (only if we actually know current fighters)
-        if self.config.upgrades.auto_buy_fighters and state.fighters is not None:
-            if state.fighters < self.config.upgrades.min_fighters:
-                return True, "fighters"
+        if self.config.upgrades.auto_buy_fighters and state.fighters is not None and (
+            state.fighters < self.config.upgrades.min_fighters
+        ):
+            return True, "fighters"
 
         # Check shields (only if we actually know current shields)
-        if self.config.upgrades.auto_buy_shields and state.shields is not None:
-            if state.shields < self.config.upgrades.min_shields:
-                return True, "shields"
+        if self.config.upgrades.auto_buy_shields and state.shields is not None and (
+            state.shields < self.config.upgrades.min_shields
+        ):
+            return True, "shields"
 
         return False, None
 

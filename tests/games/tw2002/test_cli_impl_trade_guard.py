@@ -3,6 +3,7 @@
 
 from collections import deque
 
+from bbsbot.games.tw2002.anti_collapse import resolve_anti_collapse_controls
 from bbsbot.games.tw2002.cli_impl import (
     _choose_guard_reroute_action,
     _choose_no_trade_guard_action,
@@ -11,9 +12,11 @@ from bbsbot.games.tw2002.cli_impl import (
     _get_zero_trade_streak,
     _is_effective_trade_change,
     _is_futile_sell_trade,
+    _is_move_stall_recent_actions,
     _is_sector_ping_pong,
     _resolve_no_trade_guard_thresholds,
     _should_count_trade_completion,
+    _should_disable_guard_forced_trade,
     _should_force_bootstrap_trade,
     _state_cargo_for_commodity,
 )
@@ -39,6 +42,23 @@ def test_state_cargo_for_commodity_returns_known_hold_counts() -> None:
     assert _state_cargo_for_commodity(state, "organics") == 2
     assert _state_cargo_for_commodity(state, "equipment") == 1
     assert _state_cargo_for_commodity(state, "unknown") is None
+
+
+def test_is_move_stall_recent_actions_detects_zero_delta_move_loops() -> None:
+    stalled = [
+        {"action": "MOVE", "result_delta": 0},
+        {"action": "EXPLORE", "result_delta": 0},
+        {"action": "MOVE", "result_delta": 0},
+        {"action": "MOVE", "result_delta": 0},
+        {"action": "EXPLORE", "result_delta": 0},
+        {"action": "MOVE", "result_delta": 0},
+        {"action": "MOVE", "result_delta": 0},
+        {"action": "EXPLORE", "result_delta": 0},
+    ]
+    assert _is_move_stall_recent_actions(stalled, min_streak=8)
+
+    with_trade = stalled[:-1] + [{"action": "TRADE", "result_delta": 0}]
+    assert not _is_move_stall_recent_actions(with_trade, min_streak=8)
 
 
 def test_is_futile_sell_trade_detects_zero_cargo_sell() -> None:
@@ -194,6 +214,35 @@ def test_trade_guard_bootstrap_mode_disables_forced_local_buy() -> None:
     assert params.get("action") != "buy"
 
 
+def test_should_disable_guard_forced_trade_when_success_rate_collapses() -> None:
+    controls = resolve_anti_collapse_controls(BotConfig(), None)
+    assert _should_disable_guard_forced_trade(
+        trade_attempts=80,
+        trade_successes=2,
+        turns_since_last_trade=50,
+        guard_stale_turns=60,
+        controls=controls,
+    ) is True
+    assert _should_disable_guard_forced_trade(
+        trade_attempts=80,
+        trade_successes=12,
+        turns_since_last_trade=50,
+        guard_stale_turns=60,
+        controls=controls,
+    ) is False
+
+
+def test_should_disable_guard_forced_trade_immediately_on_probe_collapse() -> None:
+    controls = resolve_anti_collapse_controls(BotConfig(), None)
+    assert _should_disable_guard_forced_trade(
+        trade_attempts=24,
+        trade_successes=1,
+        turns_since_last_trade=3,
+        guard_stale_turns=60,
+        controls=controls,
+    ) is True
+
+
 def test_trade_guard_moves_to_nearest_known_port_when_not_at_port() -> None:
     knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
     knowledge._sectors[200] = SectorInfo(has_port=True, port_class="BBS")
@@ -286,6 +335,28 @@ def test_trade_guard_explores_when_no_known_port_exists() -> None:
     action, params = _choose_no_trade_guard_action(state, knowledge, credits_now=300) or (None, {})
     assert action == TradeAction.EXPLORE
     assert params["direction"] == 10
+
+
+def test_trade_guard_explore_avoids_known_no_port_warp() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    knowledge._sectors[10] = SectorInfo(has_port=False, port_class=None)
+    state = GameState(
+        context="sector_command",
+        sector=22,
+        has_port=False,
+        port_class=None,
+        credits=300,
+        holds_free=20,
+        cargo_fuel_ore=0,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[30, 10, 25],
+    )
+
+    action, params = _choose_no_trade_guard_action(state, knowledge, credits_now=300) or (None, {})
+    assert action == TradeAction.EXPLORE
+    assert int(params["direction"]) in {25, 30}
+    assert int(params["direction"]) != 10
 
 
 def test_trade_guard_hard_probes_trade_when_no_port_intel_and_stalled() -> None:
@@ -775,6 +846,45 @@ def test_guard_reroute_prefers_explicit_market_side_over_unknown() -> None:
     knowledge._sectors[200] = SectorInfo(has_port=True, port_class=None, port_status={})
     # Explicit buyer for fuel_ore (BSS).
     knowledge._sectors[300] = SectorInfo(has_port=True, port_class="BSS")
+
+    def _find_path(start: int, end: int, max_hops: int = 100):
+        if end == 200:
+            return [100, 200]
+        if end == 300:
+            return [100, 250, 300]
+        return None
+
+    knowledge.find_path = _find_path  # type: ignore[assignment]
+
+    state = GameState(
+        context="sector_command",
+        sector=100,
+        has_port=False,
+        port_class=None,
+        credits=300,
+        holds_free=19,
+        cargo_fuel_ore=1,
+        cargo_organics=0,
+        cargo_equipment=0,
+        warps=[101, 102],
+    )
+
+    action, params = _choose_guard_reroute_action(
+        state=state,
+        knowledge=knowledge,
+        commodity="fuel_ore",
+        trade_action="sell",
+    ) or (None, {})
+    assert action == TradeAction.MOVE
+    assert params["target_sector"] == 300
+
+
+def test_guard_reroute_skips_explicit_wrong_market_side() -> None:
+    knowledge = SectorKnowledge(knowledge_dir=None, character_name="t")
+    # Explicit non-buyer for fuel_ore (SSB sells fuel_ore).
+    knowledge._sectors[200] = SectorInfo(has_port=True, port_class="SSB")
+    # Unknown side fallback target.
+    knowledge._sectors[300] = SectorInfo(has_port=True, port_class=None, port_status={})
 
     def _find_path(start: int, end: int, max_hops: int = 100):
         if end == 200:

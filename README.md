@@ -127,12 +127,35 @@ Then add to your MCP client configuration:
 ```json
 {
   "mcpServers": {
-    "bbsbot": {
+    "bbsbot_local_tw2002": {
       "command": "bbsbot"
     }
   }
 }
 ```
+
+### Local TW2002 MCP vs External MCP Connectors
+
+`bbsbot` provides TW2002 tools locally, but those tools only exist in the MCP
+server process you start from this repository/environment. In multi-connector
+clients, you may also have unrelated MCP connectors installed; those will not
+expose `tw2002_*` tools.
+
+Use an explicit local alias and tool filter for TW2002 operations:
+
+```json
+{
+  "mcpServers": {
+    "bbsbot_local_tw2002": {
+      "command": "bbsbot",
+      "args": ["serve", "--tools", "tw2002"]
+    }
+  }
+}
+```
+
+If `tw2002_*` tools are missing, first verify the configured command includes
+`serve --tools tw2002`.
 
 ### Option 2: Install with pip
 

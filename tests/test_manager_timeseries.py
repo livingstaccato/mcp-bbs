@@ -44,6 +44,12 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         llm_wakeups=3,
         autopilot_turns=12,
         goal_contract_failures=1,
+        combat_telemetry={"combat_context_seen": 1},
+        attrition_telemetry={"credits_loss_nontrade": 10},
+        opportunity_telemetry={"opportunities_seen": 5, "opportunities_executed": 2},
+        action_latency_telemetry={"trade_count": 3, "trade_ms_sum": 900},
+        delta_attribution_telemetry={"delta_trade": 2, "delta_unknown": 1},
+        anti_collapse_runtime={"controls_enabled": True, "trigger_throughput_degraded": 2},
     )
     manager.bots["bot_001"] = BotStatus(
         bot_id="bot_001",
@@ -90,6 +96,12 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert row["llm_wakeups_total"] == 4
     assert row["autopilot_turns_total"] == 32
     assert row["goal_contract_failures_total"] == 1
+    assert row["combat_telemetry_total"]["combat_context_seen"] == 1
+    assert row["attrition_telemetry_total"]["credits_loss_nontrade"] == 10
+    assert row["opportunity_telemetry_total"]["opportunities_seen"] == 5
+    assert row["action_latency_telemetry_total"]["trade_count"] == 3
+    assert row["delta_attribution_telemetry_total"]["delta_unknown"] == 1
+    assert row["anti_collapse_runtime_total"]["trigger_throughput_degraded"] == 2
     assert row["total_cargo_fuel_ore"] == 14
     assert row["total_cargo_organics"] == 7
     assert row["total_cargo_equipment"] == 14
@@ -148,8 +160,26 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
         credits_per_turn=20.0,
         haggle_accept=2,
         haggle_counter=1,
+        prompt_telemetry={"seen": 12, "accepted": 8, "misses": 1},
+        warp_telemetry={"hops_attempted": 9, "hops_succeeded": 8, "hops_failed": 1},
+        warp_failure_reasons={"target_mismatch": 1},
+        decision_counts_considered={"TRADE": 5, "MOVE": 4},
+        decision_counts_executed={"TRADE": 4, "MOVE": 5},
+        decision_override_total=2,
+        decision_override_reasons={"loop_break_force:MOVE->TRADE": 1, "trade_stall_reroute:TRADE->MOVE": 1},
+        valuation_source_units_total={"quote": 10, "hint": 3, "floor": 2},
+        valuation_source_value_total={"quote": 900, "hint": 120, "floor": 30},
+        valuation_confidence_last=0.81,
+        route_churn_total=2,
+        route_churn_reasons={"buy_path_unreachable": 2},
         llm_wakeups=2,
         autopilot_turns=8,
+        combat_telemetry={"combat_context_seen": 1, "under_attack_reports": 1},
+        attrition_telemetry={"credits_loss_nontrade": 5},
+        opportunity_telemetry={"opportunities_seen": 10, "opportunities_executed": 3},
+        action_latency_telemetry={"trade_count": 2, "trade_ms_sum": 400},
+        delta_attribution_telemetry={"delta_trade": 2, "delta_unknown": 0},
+        anti_collapse_runtime={"controls_enabled": True, "trigger_throughput_degraded": 1},
     )
     manager._write_timeseries_sample(reason="tick_a")
 
@@ -161,8 +191,29 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     manager.bots["bot_000"].credits_per_turn = 24.0
     manager.bots["bot_000"].haggle_accept = 5
     manager.bots["bot_000"].haggle_counter = 2
+    manager.bots["bot_000"].prompt_telemetry = {"seen": 20, "accepted": 15, "misses": 2}
+    manager.bots["bot_000"].warp_telemetry = {"hops_attempted": 19, "hops_succeeded": 17, "hops_failed": 2}
+    manager.bots["bot_000"].warp_failure_reasons = {"target_mismatch": 2}
+    manager.bots["bot_000"].decision_counts_considered = {"TRADE": 9, "MOVE": 8}
+    manager.bots["bot_000"].decision_counts_executed = {"TRADE": 8, "MOVE": 9}
+    manager.bots["bot_000"].decision_override_total = 3
+    manager.bots["bot_000"].decision_override_reasons = {
+        "loop_break_force:MOVE->TRADE": 1,
+        "trade_stall_reroute:TRADE->MOVE": 2,
+    }
+    manager.bots["bot_000"].valuation_source_units_total = {"quote": 22, "hint": 5, "floor": 2}
+    manager.bots["bot_000"].valuation_source_value_total = {"quote": 1800, "hint": 210, "floor": 30}
+    manager.bots["bot_000"].valuation_confidence_last = 0.88
+    manager.bots["bot_000"].route_churn_total = 4
+    manager.bots["bot_000"].route_churn_reasons = {"buy_path_unreachable": 2, "sell_side_not_buying": 2}
     manager.bots["bot_000"].llm_wakeups = 5
     manager.bots["bot_000"].autopilot_turns = 20
+    manager.bots["bot_000"].combat_telemetry = {"combat_context_seen": 3, "under_attack_reports": 2}
+    manager.bots["bot_000"].attrition_telemetry = {"credits_loss_nontrade": 12}
+    manager.bots["bot_000"].opportunity_telemetry = {"opportunities_seen": 18, "opportunities_executed": 7}
+    manager.bots["bot_000"].action_latency_telemetry = {"trade_count": 5, "trade_ms_sum": 1200}
+    manager.bots["bot_000"].delta_attribution_telemetry = {"delta_trade": 5, "delta_unknown": 1}
+    manager.bots["bot_000"].anti_collapse_runtime = {"controls_enabled": True, "trigger_throughput_degraded": 4}
     manager._write_timeseries_sample(reason="tick_b")
 
     summary = manager.get_timeseries_summary(window_minutes=120)
@@ -173,5 +224,49 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     assert summary["delta"]["trades_executed"] >= 3
     assert summary["delta"]["trades_per_100_turns"] > 0
     assert summary["delta"]["llm_wakeups"] >= 3
+    assert summary["delta"]["prompt_telemetry"]["seen"] >= 8
+    assert summary["delta"]["warp_telemetry"]["hops_attempted"] >= 10
+    assert summary["delta"]["decision_counts_considered"]["TRADE"] >= 4
+    assert summary["delta"]["decision_override_total"] >= 1
+    assert summary["delta"]["valuation_source_units"]["quote"] >= 12
+    assert summary["delta"]["route_churn_total"] >= 2
+    assert summary["delta"]["combat_telemetry"]["combat_context_seen"] >= 2
+    assert summary["delta"]["attrition_telemetry"]["credits_loss_nontrade"] >= 7
+    assert summary["delta"]["opportunity_telemetry"]["opportunities_seen"] >= 8
+    assert summary["delta"]["action_latency_telemetry"]["trade_count"] >= 3
+    assert summary["delta"]["delta_attribution_telemetry"]["delta_trade"] >= 3
+    assert summary["delta"]["anti_collapse_runtime"]["trigger_throughput_degraded"] >= 3
+    assert summary["last"]["combat_telemetry_total"]["under_attack_reports"] >= 2
+    assert summary["last"]["anti_collapse_runtime_total"]["trigger_throughput_degraded"] >= 4
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_executed"]
     assert "profitable_pairs(balanced)" in summary["strategy_delta"]["trades_per_100_turns"]
+
+
+def test_timeseries_summary_treats_net_worth_as_gauge(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_000"] = BotStatus(
+        bot_id="bot_000",
+        pid=111,
+        config="config/swarm_demo/bot_000.yaml",
+        state="running",
+        turns_executed=10,
+        credits=200,
+        net_worth_estimate=500,
+    )
+    manager._write_timeseries_sample(reason="tick_a")
+
+    manager.bots["bot_000"].turns_executed = 20
+    manager.bots["bot_000"].credits = 50
+    manager.bots["bot_000"].net_worth_estimate = 350
+    manager._write_timeseries_sample(reason="tick_b")
+
+    manager.bots["bot_000"].turns_executed = 30
+    manager.bots["bot_000"].credits = 260
+    manager.bots["bot_000"].net_worth_estimate = 540
+    manager._write_timeseries_sample(reason="tick_c")
+
+    summary = manager.get_timeseries_summary(window_minutes=120)
+    assert summary["rows"] == 3
+    # Gauge deltas use end-start, not reset-aware rolling sum of upward moves.
+    assert summary["delta"]["net_worth_estimate"] == 40
+    assert summary["delta"]["credits"] == 60

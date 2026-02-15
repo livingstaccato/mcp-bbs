@@ -68,6 +68,8 @@ class PromptWaiter:
         timeout_ms: int = 10000,
         read_interval_ms: int = 250,
         on_prompt_detected: Callable[[dict], bool] | None = None,
+        on_prompt_seen: Callable[[dict], None] | None = None,
+        on_prompt_rejected: Callable[[dict, str], None] | None = None,
         require_idle: bool = True,
         idle_grace_ratio: float = 0.8,
     ) -> dict[str, Any]:
@@ -80,6 +82,8 @@ class PromptWaiter:
             read_max_bytes: Maximum bytes to read per call
             on_prompt_detected: Optional callback called when prompt detected.
                                Should return True to accept the prompt, False to continue waiting.
+            on_prompt_seen: Optional callback fired when any prompt candidate is seen.
+            on_prompt_rejected: Optional callback fired when a candidate is rejected.
             require_idle: Whether to wait for screen to stabilize before returning
             idle_grace_ratio: Accept non-idle prompt after this ratio of timeout (0.0-1.0)
 
@@ -122,27 +126,33 @@ class PromptWaiter:
                 detected_full["screen"] = screen
                 detected_full["screen_hash"] = snapshot.get("screen_hash", "")
                 detected_full["captured_at"] = snapshot.get("captured_at")
-                prompt_id = detected.get("prompt_id")
+                prompt_id = str(detected.get("prompt_id") or "")
                 is_idle = detected.get("is_idle", False)
+                if on_prompt_seen:
+                    on_prompt_seen(detected_full)
 
                 # Wait for screen to stabilize if required
                 elapsed = time.monotonic() - start_mono
-                if require_idle and not is_idle:
-                    # Accept non-idle after grace period
-                    if elapsed < timeout_sec * idle_grace_ratio:
-                        # Wait until either: new bytes arrive (screen still changing), or idle timer elapses.
-                        remaining_idle = getattr(self.session, "seconds_until_idle", lambda _t=2.0: read_interval_sec)()
-                        wait_ms = int(max(1, min(remaining_idle, timeout_sec - elapsed) * 1000))
-                        await self.session.wait_for_update(timeout_ms=wait_ms)
-                        continue
+                if require_idle and not is_idle and elapsed < timeout_sec * idle_grace_ratio:
+                    if on_prompt_rejected:
+                        on_prompt_rejected(detected_full, "not_idle")
+                    # Wait until either: new bytes arrive (screen still changing), or idle timer elapses.
+                    remaining_idle = getattr(self.session, "seconds_until_idle", lambda _t=2.0: read_interval_sec)()
+                    wait_ms = int(max(1, min(remaining_idle, timeout_sec - elapsed) * 1000))
+                    await self.session.wait_for_update(timeout_ms=wait_ms)
+                    continue
 
                 # Check if prompt matches expected pattern
                 if expected_prompt_id and expected_prompt_id not in prompt_id:
+                    if on_prompt_rejected:
+                        on_prompt_rejected(detected_full, "expected_mismatch")
                     await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
                     continue
 
                 # Call custom filter callback if provided
                 if on_prompt_detected and not on_prompt_detected(detected_full):
+                    if on_prompt_rejected:
+                        on_prompt_rejected(detected_full, "callback_reject")
                     await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
                     continue
 

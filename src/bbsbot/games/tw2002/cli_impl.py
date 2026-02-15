@@ -9,9 +9,11 @@ import asyncio
 import contextlib
 import random
 import re
+import time
 from collections import deque
 from typing import TYPE_CHECKING
 
+from bbsbot.games.tw2002.anti_collapse import controls_to_runtime_map, resolve_anti_collapse_controls
 from bbsbot.games.tw2002.orientation import OrientationError
 from bbsbot.games.tw2002.strategies.base import TradeAction, TradeResult
 from bbsbot.games.tw2002.visualization import GoalStatusDisplay
@@ -142,6 +144,40 @@ def _record_cargo_ledger_trade(bot, commodity: str | None, is_buy: bool | None, 
             sem["cargo_fuel_ore"] = int(ledger.get("fuel_ore", 0))
             sem["cargo_organics"] = int(ledger.get("organics", 0))
             sem["cargo_equipment"] = int(ledger.get("equipment", 0))
+
+
+def _record_cargo_value_hint(bot, commodity: str | None, unit_price: int | None, *, side: str | None = None) -> None:
+    """Record a conservative per-unit liquidation hint for cargo valuation fallback.
+
+    `side` comes from the port quote text:
+    - "buy": port buys from us (realized sell price)
+    - "sell": port sells to us (our buy cost)
+    """
+    if commodity not in {"fuel_ore", "organics", "equipment"}:
+        return
+    try:
+        unit = int(unit_price or 0)
+    except Exception:
+        unit = 0
+    if unit <= 0:
+        return
+
+    side_norm = str(side or "").strip().lower()
+    # If this was a buy from port, use a haircut so fallback net-worth doesn't
+    # overstate liquidation value.
+    candidate = unit if side_norm == "buy" else max(1, int(round(unit * 0.75)))
+
+    hints = getattr(bot, "_cargo_value_hints", None)
+    if not isinstance(hints, dict):
+        hints = {}
+        bot._cargo_value_hints = hints
+
+    prev = int(hints.get(commodity, 0) or 0)
+    if prev <= 0:
+        hints[commodity] = candidate
+        return
+    # Smooth updates to reduce volatility from one noisy quote.
+    hints[commodity] = max(1, int(round((prev * 3 + candidate) / 4)))
 
 
 def _create_strategy_instance(strategy_name: str, config: BotConfig, knowledge):
@@ -507,6 +543,13 @@ def _choose_no_trade_guard_action(
                 return action, params
 
     warps = [int(w) for w in (state.warps or []) if int(w) != current_sector]
+    known_non_port = set()
+    for warp in warps:
+        with contextlib.suppress(Exception):
+            info = knowledge.get_sector_info(int(warp))
+            if info is not None and getattr(info, "has_port", None) is False:
+                known_non_port.add(int(warp))
+    preferred_warps = [w for w in warps if int(w) not in known_non_port]
     # Hard stall escape: if guard has been over threshold for a long time and we
     # still cannot resolve a trade/reroute, force a long-jump move. Non-adjacent
     # sector moves are handled by warp_to_sector() via autopilot and help break
@@ -522,6 +565,13 @@ def _choose_no_trade_guard_action(
                 "path": [int(current_sector), int(jump_target)],
                 "urgency": "no_trade_escape_jump",
             }
+    if preferred_warps:
+        target = (
+            sorted(w for w in preferred_warps if int(w) != int(previous_sector or 0))
+            or sorted(preferred_warps)
+        )
+        chosen = int(target[0])
+        return TradeAction.EXPLORE, {"direction": chosen, "urgency": "no_trade_guard"}
     if warps:
         target = sorted(w for w in warps if int(w) != int(previous_sector or 0)) or sorted(warps)
         chosen = int(target[0])
@@ -558,6 +608,7 @@ def _choose_guard_reroute_action(
 
     best_pref: tuple[tuple[int, int, int, int, int], list[int]] | None = None
     best_any: tuple[tuple[int, int, int, int], list[int]] | None = None
+    best_conflict: tuple[tuple[int, int, int, int], list[int]] | None = None
     for sector, info in (getattr(knowledge, "_sectors", {}) or {}).items():
         try:
             target_sector = int(sector)
@@ -569,6 +620,8 @@ def _choose_guard_reroute_action(
             continue
         if not getattr(info, "has_port", False):
             continue
+        statuses = _derive_port_statuses(getattr(info, "port_class", None), info)
+        side = statuses.get(target_commodity) if target_commodity else None
         path = knowledge.find_path(current_sector, target_sector, max_hops=20)
         # Guard mode can safely use non-adjacent direct jump requests; the game
         # autopilot resolves full routes server-side even when local map knowledge
@@ -586,12 +639,16 @@ def _choose_guard_reroute_action(
             quality += 1 if getattr(info, "port_prices", None) else 0
 
         any_key = (recent_penalty, hops, -quality, target_sector)
+        if desired_side and side and side != desired_side:
+            # Keep an explicit-side-conflict candidate only as a last-ditch
+            # fallback when no side-matching or unknown-side routes exist.
+            if best_conflict is None or any_key < best_conflict[0]:
+                best_conflict = (any_key, path)
+            continue
         if best_any is None or any_key < best_any[0]:
             best_any = (any_key, path)
 
         if desired_side:
-            statuses = _derive_port_statuses(getattr(info, "port_class", None), info)
-            side = statuses.get(target_commodity)
             comm_penalty = 0 if side == desired_side else 3
             pref_key = (comm_penalty, recent_penalty, hops, -quality, target_sector)
             # Prefer explicit market-side matches only; unknown side can trap
@@ -601,7 +658,7 @@ def _choose_guard_reroute_action(
 
     # Prefer side-matched targets when possible; otherwise fall back to any known
     # port so stale/partial market intel doesn't trap guard mode in pure explores.
-    best = best_pref if best_pref is not None else best_any
+    best = best_pref if best_pref is not None else (best_any if best_any is not None else best_conflict)
     if best is not None:
         path = best[1]
         return TradeAction.MOVE, {
@@ -611,6 +668,19 @@ def _choose_guard_reroute_action(
         }
 
     warps = [int(w) for w in (getattr(state, "warps", []) or []) if int(w) != current_sector]
+    known_non_port = set()
+    for warp in warps:
+        with contextlib.suppress(Exception):
+            info = knowledge.get_sector_info(int(warp))
+            if info is not None and getattr(info, "has_port", None) is False:
+                known_non_port.add(int(warp))
+    preferred_warps = [w for w in warps if int(w) not in known_non_port]
+    if preferred_warps:
+        target = (
+            sorted(w for w in preferred_warps if int(w) != int(previous_sector or 0))
+            or sorted(preferred_warps)
+        )
+        return TradeAction.EXPLORE, {"direction": int(target[0]), "urgency": "no_trade_reroute"}
     if warps:
         target = sorted(w for w in warps if int(w) != int(previous_sector or 0)) or sorted(warps)
         return TradeAction.EXPLORE, {"direction": int(target[0]), "urgency": "no_trade_reroute"}
@@ -793,6 +863,33 @@ def _choose_ping_pong_break_action(
     return TradeAction.EXPLORE, {"direction": target, "urgency": "loop_break"}
 
 
+def _is_move_stall_recent_actions(
+    recent_actions: list[dict] | None,
+    *,
+    min_streak: int = 8,
+) -> bool:
+    """True when recent actions are a non-productive MOVE/EXPLORE streak."""
+    actions = list(recent_actions or [])
+    if len(actions) < int(min_streak):
+        return False
+    tail = actions[-max(int(min_streak), 12) :]
+    if len(tail) < int(min_streak):
+        return False
+
+    move_like = {"MOVE", "EXPLORE"}
+    for entry in tail:
+        action = str(entry.get("action") or "").strip().upper()
+        if action not in move_like:
+            return False
+        try:
+            delta = int(entry.get("result_delta") or 0)
+        except Exception:
+            delta = 0
+        if delta != 0:
+            return False
+    return True
+
+
 def _resolve_no_trade_guard_thresholds(
     *,
     config: BotConfig,
@@ -909,6 +1006,35 @@ def _compute_no_trade_guard_flags(
         if (int(turns_used) - int(last_stale_force_turn or -10_000)) < stale_force_interval:
             force_guard_action = False
     return force_guard, force_guard_action, stale_soft_holdoff
+
+
+def _should_disable_guard_forced_trade(
+    *,
+    trade_attempts: int,
+    trade_successes: int,
+    turns_since_last_trade: int,
+    guard_stale_turns: int,
+    controls,
+) -> bool:
+    """Return True when forced no-trade probes should be suspended."""
+    if not bool(getattr(controls, "forced_probe_disable_enabled", True)):
+        return int(turns_since_last_trade) >= max(12, int(guard_stale_turns // 3))
+    attempts = max(0, int(trade_attempts))
+    successes = max(0, int(trade_successes))
+    low_attempts = max(1, int(getattr(controls, "forced_probe_disable_attempts_low", 12)))
+    high_attempts = max(low_attempts, int(getattr(controls, "forced_probe_disable_attempts_high", 24)))
+    low_rate = max(0.0, min(1.0, float(getattr(controls, "forced_probe_disable_success_rate_low", 0.08))))
+    high_rate = max(0.0, min(1.0, float(getattr(controls, "forced_probe_disable_success_rate_high", 0.12))))
+    if attempts < min(10, low_attempts):
+        return False
+    success_rate = float(successes) / float(max(1, attempts))
+    if attempts >= high_attempts and success_rate < high_rate:
+        return True
+    if attempts >= low_attempts and success_rate < low_rate:
+        return True
+    if success_rate >= 0.15:
+        return False
+    return int(turns_since_last_trade) >= max(12, int(guard_stale_turns // 3))
 
 
 def _should_force_bootstrap_trade(
@@ -1279,6 +1405,8 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         guard_strategy = str(getattr(config.trading, "no_trade_guard_strategy", "profitable_pairs"))
         guard_mode = str(getattr(config.trading, "no_trade_guard_mode", "balanced"))
         trades_done = int(getattr(bot, "trades_executed", 0) or 0)
+        trade_attempts_done = int(getattr(bot, "trade_attempts", 0) or 0)
+        trade_successes_done = int(getattr(bot, "trade_successes", 0) or 0)
         turns_since_last_trade = turns_used if last_trade_turn <= 0 else max(0, turns_used - last_trade_turn)
         session_start_credits = getattr(bot, "_session_start_credits", None)
         credits_now = int(getattr(state, "credits", 0) or 0)
@@ -1317,6 +1445,24 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             trades_per_100_turns=trades_per_100_turns,
             last_stale_force_turn=int(getattr(bot, "_last_no_trade_stale_force_turn", -10_000) or -10_000),
         )
+        no_trade_controls = resolve_anti_collapse_controls(
+            config,
+            getattr(getattr(config.trading, "no_trade_guard", None), "anti_collapse_override", None),
+        )
+        disable_forced_trade_probe = _should_disable_guard_forced_trade(
+            trade_attempts=trade_attempts_done,
+            trade_successes=trade_successes_done,
+            turns_since_last_trade=turns_since_last_trade,
+            guard_stale_turns=guard_stale_turns,
+            controls=no_trade_controls,
+        )
+        prev_disable = bool(getattr(bot, "_anti_prev_forced_probe_disable", False))
+        if disable_forced_trade_probe and not prev_disable:
+            bot._anti_trigger_forced_probe_disable = int(getattr(bot, "_anti_trigger_forced_probe_disable", 0) or 0) + 1
+        bot._anti_prev_forced_probe_disable = disable_forced_trade_probe
+        bot._anti_forced_probe_disable_active = disable_forced_trade_probe
+        if disable_forced_trade_probe and force_guard_action:
+            force_guard_action = False
         force_bootstrap_trade = _should_force_bootstrap_trade(
             config=config,
             turns_used=turns_used,
@@ -1324,6 +1470,8 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             guard_min_trades=guard_min_trades,
             force_guard=force_guard,
         )
+        if disable_forced_trade_probe:
+            force_bootstrap_trade = False
         if stale_soft_holdoff:
             with contextlib.suppress(Exception):
                 bot.strategy_intent = "RECOVERY:STALE_HOLDOFF"
@@ -1398,12 +1546,33 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         else:
             # Synchronous strategy
             action, params = strategy.get_next_action(state)
+        strategy_action_name = action.name
+        with contextlib.suppress(Exception):
+            note_considered = getattr(bot, "note_decision_considered", None)
+            if callable(note_considered):
+                note_considered(strategy_action_name, 1)
+
+        def _set_action(new_action: TradeAction, new_params: dict, reason: str) -> None:
+            nonlocal action, params
+            prev_action_name = getattr(action, "name", str(action))
+            action = new_action
+            params = new_params
+            with contextlib.suppress(Exception):
+                note_override = getattr(bot, "note_decision_override", None)
+                if callable(note_override):
+                    note_override(
+                        from_action=prev_action_name,
+                        to_action=getattr(action, "name", str(action)),
+                        reason=reason,
+                    )
 
         if force_guard_action:
             allow_guard_buy = bool(
                 turns_since_last_trade >= max(20, int(guard_stale_turns // 2))
                 or trades_done <= 1
             )
+            if disable_forced_trade_probe:
+                allow_guard_buy = False
             guard_overage = max(0, int(turns_since_last_trade - guard_stale_turns))
             if hard_no_trade_guard and trades_done <= 0:
                 # Fresh bots can hit hard guard before stale thresholds.
@@ -1420,70 +1589,78 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 recent_sectors=list(recent_sectors),
             )
             if forced is not None:
-                action, params = forced
-                if not hard_no_trade_guard:
-                    with contextlib.suppress(Exception):
-                        bot._last_no_trade_stale_force_turn = int(turns_used)
-                probe_urgency = str((params or {}).get("urgency") or "")
-                if action == TradeAction.TRADE and probe_urgency == "no_trade_probe":
-                    probe_cooldown_turns = max(1, int(getattr(config.trading, "no_trade_probe_cooldown_turns", 5) or 5))
-                    last_probe_turn = int(getattr(bot, "_last_no_trade_probe_turn", -10_000) or -10_000)
-                    if (int(turns_used) - last_probe_turn) < probe_cooldown_turns:
-                        reroute = _choose_guard_reroute_action(
-                            state=state,
-                            knowledge=bot.sector_knowledge,
-                            previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
-                            recent_sectors=list(recent_sectors),
-                        )
-                        if reroute is not None:
-                            action, params = reroute
-                            with contextlib.suppress(Exception):
-                                bot.strategy_intent = "RECOVERY:PROBE_COOLDOWN_REROUTE"
-                    else:
+                if disable_forced_trade_probe and forced[0] == TradeAction.TRADE:
+                    forced = _choose_guard_reroute_action(
+                        state=state,
+                        knowledge=bot.sector_knowledge,
+                        previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                        recent_sectors=list(recent_sectors),
+                    )
+                if forced is not None:
+                    _set_action(forced[0], forced[1], "no_trade_guard_force")
+                    if not hard_no_trade_guard:
                         with contextlib.suppress(Exception):
-                            bot._last_no_trade_probe_turn = int(turns_used)
-                logger.warning(
-                    "no_trade_guard_force_action: turns=%s trades=%s action=%s params=%s",
-                    turns_used,
-                    trades_done,
-                    action.name,
-                    params,
-                )
-                with contextlib.suppress(Exception):
-                    bot.strategy_intent = f"RECOVERY:TRADE_URGENCY {action.name}"
-                # If the exact local forced trade has produced zero-change outcomes repeatedly,
-                # reroute away from this sector instead of hammering the same prompt.
-                if action == TradeAction.TRADE:
-                    try:
-                        comm = str(params.get("commodity") or "")
-                        act = str(params.get("action") or "")
-                        sig = (int(getattr(state, "sector", 0) or 0), comm, act)
-                        zero_map = getattr(bot, "_zero_trade_streak", {}) or {}
-                        zero_streak = int(zero_map.get(sig, 0) or 0)
-                    except Exception:
-                        zero_streak = 0
-                    if zero_streak >= 2:
-                        reroute = _choose_guard_reroute_action(
-                            state=state,
-                            knowledge=bot.sector_knowledge,
-                            previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
-                            recent_sectors=list(recent_sectors),
-                            commodity=(comm or None),
-                            trade_action=(act or None),
-                        )
-                        if reroute is not None:
-                            action, params = reroute
-                            logger.warning(
-                                "no_trade_guard_reroute: sector=%s commodity=%s action=%s zero_streak=%s -> %s %s",
-                                int(getattr(state, "sector", 0) or 0),
-                                comm,
-                                act,
-                                zero_streak,
-                                action.name,
-                                params,
+                            bot._last_no_trade_stale_force_turn = int(turns_used)
+                    probe_urgency = str((params or {}).get("urgency") or "")
+                    if action == TradeAction.TRADE and probe_urgency == "no_trade_probe":
+                        probe_cooldown_turns = max(1, int(getattr(config.trading, "no_trade_probe_cooldown_turns", 5) or 5))
+                        last_probe_turn = int(getattr(bot, "_last_no_trade_probe_turn", -10_000) or -10_000)
+                        if (int(turns_used) - last_probe_turn) < probe_cooldown_turns:
+                            reroute = _choose_guard_reroute_action(
+                                state=state,
+                                knowledge=bot.sector_knowledge,
+                                previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                                recent_sectors=list(recent_sectors),
                             )
+                            if reroute is not None:
+                                _set_action(reroute[0], reroute[1], "probe_cooldown_reroute")
+                                with contextlib.suppress(Exception):
+                                    bot.strategy_intent = "RECOVERY:PROBE_COOLDOWN_REROUTE"
+                        else:
                             with contextlib.suppress(Exception):
-                                bot.strategy_intent = "RECOVERY:REROUTE_STALE_PORT"
+                                bot._last_no_trade_probe_turn = int(turns_used)
+                    logger.warning(
+                        "no_trade_guard_force_action: turns=%s trades=%s action=%s params=%s",
+                        turns_used,
+                        trades_done,
+                        action.name,
+                        params,
+                    )
+                    with contextlib.suppress(Exception):
+                        bot.strategy_intent = f"RECOVERY:TRADE_URGENCY {action.name}"
+                    # If the exact local forced trade has produced zero-change outcomes repeatedly,
+                    # reroute away from this sector instead of hammering the same prompt.
+                    if action == TradeAction.TRADE:
+                        try:
+                            comm = str(params.get("commodity") or "")
+                            act = str(params.get("action") or "")
+                            sig = (int(getattr(state, "sector", 0) or 0), comm, act)
+                            zero_map = getattr(bot, "_zero_trade_streak", {}) or {}
+                            zero_streak = int(zero_map.get(sig, 0) or 0)
+                        except Exception:
+                            zero_streak = 0
+                        if zero_streak >= 2:
+                            reroute = _choose_guard_reroute_action(
+                                state=state,
+                                knowledge=bot.sector_knowledge,
+                                previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                                recent_sectors=list(recent_sectors),
+                                commodity=(comm or None),
+                                trade_action=(act or None),
+                            )
+                            if reroute is not None:
+                                _set_action(reroute[0], reroute[1], "no_trade_guard_reroute")
+                                logger.warning(
+                                    "no_trade_guard_reroute: sector=%s commodity=%s action=%s zero_streak=%s -> %s %s",
+                                    int(getattr(state, "sector", 0) or 0),
+                                    comm,
+                                    act,
+                                    zero_streak,
+                                    action.name,
+                                    params,
+                                )
+                                with contextlib.suppress(Exception):
+                                    bot.strategy_intent = "RECOVERY:REROUTE_STALE_PORT"
         elif force_bootstrap_trade:
             bootstrap_turns_cfg = max(0, int(getattr(config.trading, "bootstrap_trade_turns", 12)))
             bootstrap_overage = max(0, int(turns_used - bootstrap_turns_cfg))
@@ -1500,7 +1677,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 recent_sectors=list(recent_sectors),
             )
             if forced is not None:
-                action, params = forced
+                _set_action(forced[0], forced[1], "bootstrap_trade_force")
                 logger.info(
                     "bootstrap_trade_force_action: turns=%s trades=%s action=%s params=%s",
                     turns_used,
@@ -1537,7 +1714,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     trade_action=(act or None),
                 )
                 if reroute is not None:
-                    action, params = reroute
+                    _set_action(reroute[0], reroute[1], "trade_stall_reroute")
                     logger.warning(
                         "trade_stall_reroute: sector=%s zero_streak=%s -> %s %s",
                         int(getattr(state, "sector", 0) or 0),
@@ -1559,7 +1736,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 trade_action="sell",
             )
             if reroute is not None:
-                action, params = reroute
+                _set_action(reroute[0], reroute[1], "empty_sell_reroute")
                 logger.warning(
                     "skip_futile_sell_trade: sector=%s commodity=%s cargo=0 -> %s %s",
                     int(getattr(state, "sector", 0) or 0),
@@ -1574,8 +1751,11 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 if fallback_warps:
                     previous = int(recent_sectors[-2]) if len(recent_sectors) >= 2 else 0
                     choices = [w for w in sorted(fallback_warps) if w != previous] or sorted(fallback_warps)
-                    action = TradeAction.EXPLORE
-                    params = {"direction": int(choices[0]), "urgency": "empty_sell_escape"}
+                    _set_action(
+                        TradeAction.EXPLORE,
+                        {"direction": int(choices[0]), "urgency": "empty_sell_escape"},
+                        "empty_sell_escape",
+                    )
                     logger.warning(
                         "skip_futile_sell_trade: sector=%s commodity=%s cargo=0 -> EXPLORE %s",
                         int(getattr(state, "sector", 0) or 0),
@@ -1593,7 +1773,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 turns_since_last_trade=turns_since_last_trade,
             )
             if forced_loop_break is not None:
-                action, params = forced_loop_break
+                _set_action(forced_loop_break[0], forced_loop_break[1], "loop_break_force")
                 logger.warning(
                     "loop_break_force_action: turns=%s turns_since_last_trade=%s recent=%s action=%s params=%s",
                     turns_used,
@@ -1604,6 +1784,32 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 )
                 with contextlib.suppress(Exception):
                     bot.strategy_intent = "RECOVERY:LOOP_BREAK"
+            elif action in (TradeAction.MOVE, TradeAction.EXPLORE):
+                if (
+                    turns_since_last_trade >= max(28, int(guard_stale_turns))
+                    and _is_move_stall_recent_actions(getattr(bot, "recent_actions", None), min_streak=8)
+                    and not disable_forced_trade_probe
+                ):
+                    forced = _choose_no_trade_guard_action(
+                        state=state,
+                        knowledge=bot.sector_knowledge,
+                        credits_now=credits_now,
+                        allow_buy=True,
+                        guard_overage=max(12, int(turns_since_last_trade - guard_stale_turns)),
+                        previous_sector=(int(recent_sectors[-2]) if len(recent_sectors) >= 2 else None),
+                        recent_sectors=list(recent_sectors),
+                    )
+                    if forced is not None and forced[0] == TradeAction.TRADE:
+                        _set_action(forced[0], forced[1], "move_stall_force_trade")
+                        logger.warning(
+                            "move_stall_force_trade: turns=%s turns_since_last_trade=%s action=%s params=%s",
+                            turns_used,
+                            turns_since_last_trade,
+                            action.name,
+                            params,
+                        )
+                        with contextlib.suppress(Exception):
+                            bot.strategy_intent = "RECOVERY:MOVE_STALL_FORCE_TRADE"
 
         print(f"  Strategy: {action.name}")
 
@@ -1687,6 +1893,19 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         credits_before = int(getattr(state, "credits", 0) or 0)
         turns_before = int(turns_used)
         result_delta = 0
+        bank_before = 0
+        cargo_before = {
+            "fuel_ore": int(getattr(state, "cargo_fuel_ore", 0) or 0),
+            "organics": int(getattr(state, "cargo_organics", 0) or 0),
+            "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
+        }
+        with contextlib.suppress(Exception):
+            bank_before = max(0, int(getattr(getattr(bot, "_banking", None), "bank_balance", 0) or 0))
+        with contextlib.suppress(Exception):
+            if hasattr(bot, "note_opportunity"):
+                bot.note_opportunity("opportunities_seen", 1)
+                if action != TradeAction.WAIT:
+                    bot.note_opportunity("opportunities_executable", 1)
 
         # Log action to bot's action feed (if worker bot)
         import time
@@ -1716,6 +1935,11 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         # Execute action with error recovery
         trades_before_action = int(getattr(bot, "trades_executed", 0) or 0)
+        action_started_at = time.monotonic()
+        with contextlib.suppress(Exception):
+            note_executed = getattr(bot, "note_decision_executed", None)
+            if callable(note_executed):
+                note_executed(action.name, 1)
         try:
             # Pause again right before acting (lets hijack take effect between planning and acting).
             await_if_hijacked2 = getattr(bot, "await_if_hijacked", None)
@@ -1723,9 +1947,20 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 await await_if_hijacked2()
 
             if action == TradeAction.TRADE:
+                with contextlib.suppress(Exception):
+                    if hasattr(bot, "note_opportunity"):
+                        bot.note_opportunity("opportunities_attempted", 1)
                 opportunity = params.get("opportunity")
                 trade_action = params.get("action")  # "buy" or "sell" for pair trading
                 commodity = opportunity.commodity if opportunity else params.get("commodity")
+                pair_signature = None
+                if opportunity is not None:
+                    with contextlib.suppress(Exception):
+                        pair_signature = (
+                            f"{int(getattr(opportunity, 'buy_sector', 0) or 0)}"
+                            f"->{int(getattr(opportunity, 'sell_sector', 0) or 0)}"
+                            f":{str(getattr(opportunity, 'commodity', '') or '').strip().lower() or 'unknown'}"
+                        )
 
                 if commodity:
                     print(f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})")
@@ -1739,6 +1974,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                         commodity=commodity,
                         trade_action=trade_action,
                         max_quantity=max_qty,
+                        pair_signature=pair_signature,
                     )
                     if profit != 0:
                         char_state.record_trade(profit)
@@ -1749,7 +1985,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                         success = False
                 else:
                     print(f"  Trading all commodities at sector {state.sector} (credits: {bot.current_credits or 0:,})")
-                    profit = await execute_port_trade(bot, commodity=None)
+                    profit = await execute_port_trade(bot, commodity=None, pair_signature=pair_signature)
                     if profit != 0:
                         char_state.record_trade(profit)
                         print(f"  Result: {profit:+,} credits")
@@ -1793,6 +2029,12 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     await warp_to_sector(bot, safe_sector)
 
             elif action == TradeAction.WAIT:
+                with contextlib.suppress(Exception):
+                    if hasattr(bot, "note_opportunity"):
+                        if int(getattr(state, "turns_left", 0) or 0) <= 0:
+                            bot.note_opportunity("skipped_no_turns", 1)
+                        if int(getattr(state, "holds_free", 0) or 0) <= 0:
+                            bot.note_opportunity("skipped_no_holds", 1)
                 print("  No action available, exploring randomly")
                 warps = list(state.warps or [])
                 if not warps and state.sector is not None:
@@ -1829,6 +2071,16 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         except Exception as e:
             print(f"  ⚠️  Action failed: {type(e).__name__}: {e}")
             success = False
+        finally:
+            elapsed_ms = int(max(0.0, (time.monotonic() - action_started_at) * 1000.0))
+            latency_bucket = "recovery" if str(intent or "").upper().startswith(("RECOVERY:", "BOOTSTRAP:")) else "move"
+            if action == TradeAction.TRADE:
+                latency_bucket = "trade"
+            elif action == TradeAction.RETREAT:
+                latency_bucket = "recovery"
+            with contextlib.suppress(Exception):
+                if hasattr(bot, "note_action_latency"):
+                    bot.note_action_latency(latency_bucket, elapsed_ms)
 
         # Log action to bot's action feed (if worker bot)
         if hasattr(bot, "log_action"):
@@ -1876,12 +2128,67 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             last_trade_turn = int(turns_used)
             bot._last_trade_turn = last_trade_turn
 
+        trade_meta = {}
+        if action == TradeAction.TRADE:
+            raw_meta = getattr(bot, "_last_trade_meta", None)
+            if isinstance(raw_meta, dict):
+                trade_meta = raw_meta
+            with contextlib.suppress(Exception):
+                if hasattr(bot, "note_opportunity") and bool(trade_meta.get("trade_success")):
+                    bot.note_opportunity("opportunities_executed", 1)
+                if hasattr(bot, "note_opportunity") and str(trade_meta.get("trade_failure_reason") or "") == "no_port":
+                    bot.note_opportunity("skipped_no_port", 1)
+        elif action == TradeAction.RETREAT:
+            with contextlib.suppress(Exception):
+                if hasattr(bot, "note_opportunity"):
+                    bot.note_opportunity("skipped_risk", 1)
+
+        credits_after_obs = int(getattr(bot, "current_credits", credits_before) or credits_before)
+        bank_after = 0
+        with contextlib.suppress(Exception):
+            bank_after = max(0, int(getattr(getattr(bot, "_banking", None), "bank_balance", 0) or 0))
+        post_state = getattr(bot, "game_state", None)
+        cargo_after = {
+            "fuel_ore": int(getattr(post_state, "cargo_fuel_ore", 0) or 0),
+            "organics": int(getattr(post_state, "cargo_organics", 0) or 0),
+            "equipment": int(getattr(post_state, "cargo_equipment", 0) or 0),
+        }
+        combat_evidence = bool(
+            str(getattr(state, "context", "") or "").strip().lower() == "combat"
+            or int(getattr(state, "hostile_fighters", 0) or 0) > 0
+            or str(getattr(post_state, "context", "") or "").strip().lower() == "combat"
+            or int(getattr(post_state, "hostile_fighters", 0) or 0) > 0
+        )
+        with contextlib.suppress(Exception):
+            if hasattr(bot, "note_action_completion"):
+                bot.note_action_completion(
+                    action=action.name,
+                    credits_before=int(credits_before),
+                    credits_after=int(credits_after_obs),
+                    bank_before=int(bank_before),
+                    bank_after=int(bank_after),
+                    cargo_before=dict(cargo_before),
+                    cargo_after=dict(cargo_after),
+                    trade_attempted=bool(trade_meta.get("trade_attempted", action == TradeAction.TRADE)),
+                    trade_success=bool(trade_meta.get("trade_success", success)),
+                    combat_evidence=bool(combat_evidence),
+                )
         result = TradeResult(
             success=success,
             action=action,
             profit=profit,
             new_sector=bot.current_sector,
             turns_used=turns_counted,
+            trade_attempted=bool(trade_meta.get("trade_attempted", action == TradeAction.TRADE)),
+            trade_failure_reason=str(trade_meta.get("trade_failure_reason") or ""),
+            pair_signature=str(trade_meta.get("pair_signature") or ""),
+            trade_commodity=str(trade_meta.get("trade_commodity") or ""),
+            trade_side=str(trade_meta.get("trade_side") or ""),
+            trade_sector=(
+                int(trade_meta.get("trade_sector") or 0)
+                if trade_meta.get("trade_sector") is not None
+                else None
+            ),
         )
 
         # Add from/to sector for failed warp tracking
@@ -1910,6 +2217,7 @@ async def execute_port_trade(
     commodity: str | None = None,
     max_quantity: int = 0,
     trade_action: str | None = None,  # "buy" | "sell" (best-effort)
+    pair_signature: str | None = None,
 ) -> int:
     """Execute a trade at the current port.
 
@@ -1935,6 +2243,12 @@ async def execute_port_trade(
         return _is_port_qty_prompt(last_line)
 
     initial_credits = bot.current_credits or 0
+    start_sector = 0
+    with contextlib.suppress(Exception):
+        start_sector = int(getattr(bot, "current_sector", 0) or 0)
+    if start_sector <= 0:
+        with contextlib.suppress(Exception):
+            start_sector = int(getattr(getattr(bot, "game_state", None), "sector", 0) or 0)
     pending_trade = False
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
     credits_available: int | None = None
@@ -1958,6 +2272,43 @@ async def execute_port_trade(
     attempted_trade: bool = False
     target_action_mismatch_count: int = 0
     target_action_mismatch_limit: int = 2
+    non_target_prompt_count: int = 0
+    non_target_prompt_limit: int = 3
+    trade_failure_reason: str | None = None
+
+    def _set_trade_failure_reason(reason: str | None) -> None:
+        nonlocal trade_failure_reason
+        token = str(reason or "").strip().lower()
+        if token and not trade_failure_reason:
+            trade_failure_reason = token
+
+    def _publish_trade_meta(
+        *,
+        success: bool,
+        attempted: bool,
+        credit_change: int,
+        sector: int,
+        resolved_commodity: str | None,
+        resolved_is_buy: bool | None,
+    ) -> None:
+        side = "unknown"
+        if resolved_is_buy is True:
+            side = "buy"
+        elif resolved_is_buy is False:
+            side = "sell"
+        elif trade_action in ("buy", "sell"):
+            side = str(trade_action)
+        with contextlib.suppress(Exception):
+            bot._last_trade_meta = {
+                "trade_attempted": bool(attempted),
+                "trade_success": bool(success),
+                "trade_failure_reason": str(trade_failure_reason or ""),
+                "pair_signature": str(pair_signature or ""),
+                "trade_commodity": str(resolved_commodity or commodity or "all").strip().lower() or "all",
+                "trade_side": side,
+                "trade_sector": int(sector or 0),
+                "trade_credit_change": int(credit_change),
+            }
 
     def _safe_buy_qty(
         *,
@@ -1994,6 +2345,83 @@ async def execute_port_trade(
             return min(qty, 3)
         return qty
 
+    def _infer_qty_from_credit_change(
+        *,
+        commodity_name: str | None,
+        is_buy_side: bool | None,
+        credit_delta: int,
+        sector_hint: int,
+    ) -> int:
+        """Infer quantity when port prompt parsing misses an explicit unit count."""
+        if not commodity_name or is_buy_side is None:
+            return 0
+        if commodity_name not in {"fuel_ore", "organics", "equipment"}:
+            return 0
+        if credit_delta == 0:
+            return 0
+        if is_buy_side and credit_delta >= 0:
+            return 0
+        if (not is_buy_side) and credit_delta <= 0:
+            return 0
+
+        unit_candidates: list[int] = []
+        with contextlib.suppress(Exception):
+            info = None
+            if getattr(bot, "sector_knowledge", None) is not None and int(sector_hint or 0) > 0:
+                info = bot.sector_knowledge.get_sector_info(int(sector_hint))
+            if info:
+                price_row = (info.port_prices or {}).get(commodity_name) or {}
+                unit = int(price_row.get("sell") or 0) if is_buy_side else int(price_row.get("buy") or 0)
+                if unit > 0:
+                    unit_candidates.append(unit)
+        with contextlib.suppress(Exception):
+            hints = getattr(bot, "_cargo_value_hints", None)
+            hint_unit = int((hints or {}).get(commodity_name) or 0)
+            if hint_unit > 0:
+                unit_candidates.append(hint_unit)
+
+        abs_delta = abs(int(credit_delta))
+        for unit in unit_candidates:
+            if unit <= 0:
+                continue
+            qty = max(1, abs_delta // unit)
+            if qty > 0:
+                return int(min(200, qty))
+        return 1 if abs_delta > 0 else 0
+
+    with contextlib.suppress(Exception):
+        bot._last_trade_meta = {}
+
+    # Trade preflight: don't dock/trade from transition/menu prompts.
+    # Acting from yes/no/navpoint/stop prompts can cause false no-port updates.
+    with contextlib.suppress(Exception):
+        from bbsbot.games.tw2002 import orientation
+
+        quick = await orientation.where_am_i(bot, timeout_ms=100)
+        if quick.context not in ("sector_command", "citadel_command"):
+            logger.warning(
+                "trade_preflight_recover: context=%s prompt_id=%s sector=%s",
+                quick.context,
+                quick.prompt_id,
+                quick.sector,
+            )
+            await bot.recover()
+            quick = await orientation.where_am_i(bot, timeout_ms=150)
+        if quick.context not in ("sector_command", "citadel_command"):
+            _set_trade_failure_reason("no_interaction")
+            if hasattr(bot, "note_trade_telemetry"):
+                bot.note_trade_telemetry("trade_attempts", 1)
+                bot.note_trade_telemetry("trade_fail_no_interaction", 1)
+            _publish_trade_meta(
+                success=False,
+                attempted=True,
+                credit_change=0,
+                sector=int(getattr(quick, "sector", 0) or start_sector or 0),
+                resolved_commodity=commodity,
+                resolved_is_buy=(trade_action == "buy") if trade_action in ("buy", "sell") else None,
+            )
+            return 0
+
     # Dock at port
     await bot.session.send("P")
     await asyncio.sleep(1.0)
@@ -2002,6 +2430,7 @@ async def execute_port_trade(
     screen = bot.session.snapshot().get("screen", "").lower()
 
     if "no port" in screen:
+        _set_trade_failure_reason("no_port")
         # Universe/server resets can invalidate cached port data.
         # Mark this sector as non-port to avoid repeated forced-trade loops here.
         with contextlib.suppress(Exception):
@@ -2024,6 +2453,9 @@ async def execute_port_trade(
                     },
                 )
                 logger.info("Marked sector as no-port after dock failure: sector=%s", sector_now)
+                with contextlib.suppress(Exception):
+                    if hasattr(getattr(bot, "_strategy", None), "invalidate_pairs"):
+                        bot._strategy.invalidate_pairs()
                 if was_known_port:
                     mismatch_count = int(getattr(bot, "_port_mismatch_count", 0) or 0) + 1
                     mismatch_sectors = set(getattr(bot, "_port_mismatch_sectors", set()) or set())
@@ -2035,8 +2467,8 @@ async def execute_port_trade(
                     # (common after server reset). Reset cached port intel once per session.
                     if (
                         not bool(getattr(bot, "_market_intel_reset_done", False))
-                        and mismatch_count >= 6
-                        and len(mismatch_sectors) >= 4
+                        and mismatch_count >= 3
+                        and len(mismatch_sectors) >= 2
                     ):
                         changed = int(bot.sector_knowledge.clear_port_intel(clear_has_port=True) or 0)
                         bot._market_intel_reset_done = True
@@ -2050,6 +2482,17 @@ async def execute_port_trade(
                             changed,
                         )
         await bot.recover()
+        if hasattr(bot, "note_trade_telemetry"):
+            bot.note_trade_telemetry("trade_attempts", 1)
+            bot.note_trade_telemetry("trade_fail_no_port", 1)
+        _publish_trade_meta(
+            success=False,
+            attempted=True,
+            credit_change=0,
+            sector=int(start_sector or 0),
+            resolved_commodity=commodity,
+            resolved_is_buy=(trade_action == "buy") if trade_action in ("buy", "sell") else None,
+        )
         return 0
 
     # Start trading (T for transaction)
@@ -2122,8 +2565,10 @@ async def execute_port_trade(
                 # Targeted trading: only trade the target commodity
                 is_target = bool(target_re.search(prompt_line))
                 if is_target:
+                    non_target_prompt_count = 0
                     # If the caller specified buy/sell, enforce it.
                     if trade_action == "buy" and not is_buy:
+                        _set_trade_failure_reason("wrong_side")
                         await bot.session.send("0\r")
                         pending_trade = False
                         target_action_mismatch_count += 1
@@ -2134,12 +2579,14 @@ async def execute_port_trade(
                                 commodity,
                                 trade_action,
                             )
+                            _set_trade_failure_reason("action_mismatch")
                             await bot.session.send("Q\r")
                             await asyncio.sleep(0.5)
                             break
                         await asyncio.sleep(0.3)
                         continue
                     if trade_action == "sell" and not is_sell:
+                        _set_trade_failure_reason("wrong_side")
                         await bot.session.send("0\r")
                         pending_trade = False
                         target_action_mismatch_count += 1
@@ -2150,6 +2597,7 @@ async def execute_port_trade(
                                 commodity,
                                 trade_action,
                             )
+                            _set_trade_failure_reason("action_mismatch")
                             await bot.session.send("Q\r")
                             await asyncio.sleep(0.5)
                             break
@@ -2158,6 +2606,7 @@ async def execute_port_trade(
 
                     # If we're trying to sell but the port reports we have none, skip.
                     if trade_action == "sell" and "you have 0 in your holds" in screen_lower:
+                        _set_trade_failure_reason("no_cargo")
                         await bot.session.send("0\r")
                         pending_trade = False
                         logger.debug("Skipping sell: no cargo in holds")
@@ -2195,12 +2644,32 @@ async def execute_port_trade(
                         if qty_str.strip():
                             last_requested_qty = max(0, int(qty_str.strip()))
                             trade_interaction_seen = last_requested_qty > 0
+                        elif prompt_qty_cap is not None:
+                            # Empty submit accepts bracket default; keep this as
+                            # quantity hint so quote parsing can still derive unit price.
+                            last_requested_qty = max(0, int(prompt_qty_cap))
+                            trade_interaction_seen = last_requested_qty > 0
                     await bot.session.send(f"{qty_str}\r")
                     pending_trade = True
                     logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
                 else:
                     # Strict targeted trade: skip anything that's not the target to avoid
                     # buying/selling unintended commodities (and getting stuck haggling).
+                    # Non-target prompts are normal; they should not be counted as wrong-side
+                    # failures for the selected commodity pair.
+                    trade_interaction_seen = True
+                    non_target_prompt_count += 1
+                    if non_target_prompt_count >= non_target_prompt_limit:
+                        logger.warning(
+                            "Aborting targeted trade after repeated non-target prompts: target=%s action=%s count=%s",
+                            commodity,
+                            trade_action,
+                            non_target_prompt_count,
+                        )
+                        _set_trade_failure_reason("no_target_commodity")
+                        await bot.session.send("Q\r")
+                        await asyncio.sleep(0.5)
+                        break
                     await bot.session.send("0\r")
                     pending_trade = False
                     logger.debug("Skipping non-target commodity (target=%s)", commodity)
@@ -2240,6 +2709,11 @@ async def execute_port_trade(
                     with contextlib.suppress(Exception):
                         if qty_str.strip():
                             last_requested_qty = max(0, int(qty_str.strip()))
+                            trade_interaction_seen = last_requested_qty > 0
+                        elif prompt_qty_cap is not None:
+                            # Empty submit accepts bracket default; keep this as
+                            # quantity hint so quote parsing can still derive unit price.
+                            last_requested_qty = max(0, int(prompt_qty_cap))
                             trade_interaction_seen = last_requested_qty > 0
                     await bot.session.send(f"{qty_str}\r")
                 pending_trade = True
@@ -2290,6 +2764,7 @@ async def execute_port_trade(
 
                 # If offering all credits didn't resolve it quickly, bail out of port trading.
                 if insufficient_haggle_loops >= 2:
+                    _set_trade_failure_reason("insufficient_credits")
                     logger.warning(
                         "Haggle stuck (insufficient credits). Aborting port trade. default=%s credits=%s",
                         default_offer,
@@ -2486,9 +2961,10 @@ async def execute_port_trade(
                 except Exception:
                     total = 0
 
-                qty = last_trade_qty or 0
+                qty = last_trade_qty or last_requested_qty or 0
                 if qty > 0 and total > 0 and last_trade_commodity:
                     unit = max(1, int(round(total / qty)))
+                    _record_cargo_value_hint(bot, last_trade_commodity, unit, side=side)
                     # "sell" here means port sells to us -> we bought -> store as port_sells_price.
                     try:
                         if hasattr(bot, "sector_knowledge") and bot.sector_knowledge and bot.current_sector:
@@ -2568,21 +3044,70 @@ async def execute_port_trade(
     resolved_is_buy = last_trade_is_buy
     if resolved_is_buy is None and trade_action in ("buy", "sell"):
         resolved_is_buy = trade_action == "buy"
-    resolved_commodity = last_trade_commodity or commodity
+    resolved_commodity = commodity or last_trade_commodity
     effective_trade = _is_effective_trade_change(
         credit_change=int(credit_change),
         trade_action=trade_action,
         is_buy=resolved_is_buy,
     )
-    if _should_count_trade_completion(
+    trade_success = _should_count_trade_completion(
         trade_interaction_seen=bool(trade_interaction_seen),
         credit_change=int(credit_change),
         trade_action=trade_action,
         is_buy=resolved_is_buy,
-    ) and hasattr(bot, "note_trade_telemetry"):
+    )
+    if trade_success:
+        trade_failure_reason = None
+    if resolved_qty <= 0 and effective_trade:
+        resolved_qty = _infer_qty_from_credit_change(
+            commodity_name=resolved_commodity,
+            is_buy_side=resolved_is_buy,
+            credit_delta=int(credit_change),
+            sector_hint=(int(getattr(new_state, "sector", 0) or 0) or int(start_sector or 0)),
+        )
+    if trade_success and hasattr(bot, "note_trade_telemetry"):
         bot.note_trade_telemetry("trades_executed", 1)
+        bot.note_trade_telemetry("trade_successes", 1)
     if trade_interaction_seen and resolved_qty > 0 and effective_trade:
         _record_cargo_ledger_trade(bot, resolved_commodity, resolved_is_buy, resolved_qty)
+    if hasattr(bot, "note_trade_telemetry") and attempted_trade:
+        bot.note_trade_telemetry("trade_attempts", 1)
+    if attempted_trade and not trade_success:
+        if not trade_failure_reason:
+            if not trade_interaction_seen:
+                _set_trade_failure_reason("no_interaction")
+            elif int(credit_change) == 0:
+                _set_trade_failure_reason("wrong_side")
+            else:
+                _set_trade_failure_reason("other")
+        if hasattr(bot, "note_trade_telemetry"):
+            bot.note_trade_telemetry(f"trade_fail_{trade_failure_reason or 'other'}", 1)
+    if hasattr(bot, "note_trade_outcome"):
+        with contextlib.suppress(Exception):
+            side = "unknown"
+            if resolved_is_buy is True:
+                side = "buy"
+            elif resolved_is_buy is False:
+                side = "sell"
+            elif trade_action in ("buy", "sell"):
+                side = str(trade_action)
+            bot.note_trade_outcome(
+                sector=(int(getattr(new_state, "sector", 0) or 0) or int(start_sector or 0)),
+                commodity=str(resolved_commodity or commodity or "all").strip().lower() or "all",
+                side=side,
+                success=bool(trade_success),
+                credit_change=int(credit_change),
+                failure_reason=str(trade_failure_reason or ""),
+                pair_signature=pair_signature,
+            )
+    _publish_trade_meta(
+        success=bool(trade_success),
+        attempted=bool(attempted_trade),
+        credit_change=int(credit_change),
+        sector=(int(getattr(new_state, "sector", 0) or 0) or int(start_sector or 0)),
+        resolved_commodity=resolved_commodity,
+        resolved_is_buy=resolved_is_buy,
+    )
 
     # Track local zero-change trade loops so guard mode can reroute away from bad ports.
     with contextlib.suppress(Exception):
@@ -2632,69 +3157,103 @@ async def warp_to_sector(bot, target: int) -> bool:
     Returns:
         True if successfully reached target sector
     """
-    bot.loop_detection.reset()
+    hop_start = time.monotonic()
 
-    await bot.session.send(f"{target}\r")
-    await asyncio.sleep(1.5)
+    def _note_hop(success: bool, reason: str | None = None) -> None:
+        hook = getattr(bot, "note_warp_hop", None)
+        if callable(hook):
+            with contextlib.suppress(Exception):
+                hook(
+                    success=success,
+                    latency_ms=int(max(0.0, (time.monotonic() - hop_start) * 1000.0)),
+                    reason=reason,
+                )
 
-    # Handle intermediate screens (autopilot, pause, etc.)
-    for _ in range(5):
-        await bot.session.wait_for_update(timeout_ms=1000)
-        screen = bot.session.snapshot().get("screen", "").lower()
+    try:
+        bot.loop_detection.reset()
+        from bbsbot.games.tw2002 import orientation
 
-        # Already at command prompt with target sector
-        if f"[{target}]" in screen and "command" in screen:
-            break
+        # Preflight: only issue warp keys from a stable command prompt.
+        quick_state = await orientation.where_am_i(bot, timeout_ms=100)
+        if quick_state.context not in ("sector_command", "citadel_command"):
+            logger.warning(
+                "warp_preflight_recover: context=%s prompt_id=%s target=%s",
+                quick_state.context,
+                quick_state.prompt_id,
+                target,
+            )
+            await bot.recover()
+            quick_state = await orientation.where_am_i(bot, timeout_ms=120)
+            if quick_state.context not in ("sector_command", "citadel_command"):
+                _note_hop(False, "preflight_not_safe")
+                return False
 
-        # Autopilot confirmation
-        if ("autopilot" in screen or "engage" in screen) and ("(y/n" in screen or "[y]" in screen):
-            # Prefer express mode to avoid repeated "Stop in this sector" prompts.
-            await bot.session.send("E")
-            await asyncio.sleep(1.0)
-            continue
+        await bot.session.send(f"{target}\r")
+        await asyncio.sleep(1.5)
 
-        # Autopilot route checkpoint prompt.
-        if "stop in this sector" in screen and "(y,n" in screen:
-            await bot.session.send("N")
+        # Handle intermediate screens (autopilot, pause, etc.)
+        for _ in range(5):
+            await bot.session.wait_for_update(timeout_ms=1000)
+            screen = bot.session.snapshot().get("screen", "").lower()
+
+            # Already at command prompt with target sector
+            if f"[{target}]" in screen and "command" in screen:
+                break
+
+            # Autopilot confirmation
+            if ("autopilot" in screen or "engage" in screen) and ("(y/n" in screen or "[y]" in screen):
+                # Prefer express mode to avoid repeated "Stop in this sector" prompts.
+                await bot.session.send("E")
+                await asyncio.sleep(1.0)
+                continue
+
+            # Autopilot route checkpoint prompt.
+            if "stop in this sector" in screen and "(y,n" in screen:
+                # Prefer express mode to avoid per-hop stop prompts and navpoint/menu drift.
+                await bot.session.send("E" if "(y,n,e" in screen else "N")
+                await asyncio.sleep(0.6)
+                continue
+
+            # During non-adjacent routing the game may print progress screens.
+            if "computing shortest path" in screen or "auto warping to sector" in screen:
+                await asyncio.sleep(0.3)
+                continue
+
+            # If an accidental quit confirmation appears, reject it and continue navigation.
+            if "confirmed? (y/n)" in screen and "<quit>" in screen:
+                await bot.session.send("N")
+                await asyncio.sleep(0.3)
+                continue
+
+            # Pause/press key
+            if "[pause]" in screen or "press" in screen:
+                await bot.session.send(" ")
+                await asyncio.sleep(0.3)
+                continue
+
             await asyncio.sleep(0.3)
-            continue
 
-        # During non-adjacent routing the game may print progress screens.
-        if "computing shortest path" in screen or "auto warping to sector" in screen:
-            await asyncio.sleep(0.3)
-            continue
-
-        # If an accidental quit confirmation appears, reject it and continue navigation.
-        if "confirmed? (y/n)" in screen and "<quit>" in screen:
-            await bot.session.send("N")
-            await asyncio.sleep(0.3)
-            continue
-
-        # Pause/press key
-        if "[pause]" in screen or "press" in screen:
-            await bot.session.send(" ")
-            await asyncio.sleep(0.3)
-            continue
-
-        await asyncio.sleep(0.3)
-
-    state = await bot.orient()
-    if state.sector == target:
-        return True
-
-    # Orientation can occasionally read a stale sector immediately after warp.
-    # Re-check using quick prompt detection before declaring failure.
-    from bbsbot.games.tw2002 import orientation
-
-    for _ in range(2):
-        await asyncio.sleep(0.35)
-        quick = await orientation.where_am_i(bot)
-        if quick.context == "sector_command" and quick.sector == target:
-            logger.debug("Warp settled after delayed recheck: target=%d", target)
+        state = await bot.orient()
+        if state.sector == target:
+            _note_hop(True, "ok")
             return True
 
-    logger.warning("Warp failed: wanted %d, at %s", target, state.sector)
-    return False
+        # Orientation can occasionally read a stale sector immediately after warp.
+        # Re-check using quick prompt detection before declaring failure.
+        for _ in range(2):
+            await asyncio.sleep(0.35)
+            quick = await orientation.where_am_i(bot)
+            if quick.context == "sector_command" and quick.sector == target:
+                logger.debug("Warp settled after delayed recheck: target=%d", target)
+                _note_hop(True, "settled_recheck")
+                return True
+
+        logger.warning("Warp failed: wanted %d, at %s", target, state.sector)
+        _note_hop(False, "target_mismatch")
+        return False
+    except Exception as exc:
+        _note_hop(False, f"exception_{type(exc).__name__.lower()}")
+        raise
 
 
 async def warp_along_path(bot, path: list[int]) -> bool:

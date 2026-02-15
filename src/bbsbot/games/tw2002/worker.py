@@ -201,6 +201,39 @@ class WorkerBot(TradingBot):
         self.haggle_too_high: int = 0
         self.haggle_too_low: int = 0
         self.trades_executed: int = 0
+        self.trade_attempts: int = 0
+        self.trade_successes: int = 0
+        self.trade_failures: int = 0
+        self.trade_failure_reasons: dict[str, int] = {}
+        # Rich trade telemetry for per-port/per-resource diagnostics.
+        self.trade_outcomes_by_port_resource: dict[str, dict[str, int]] = {}
+        self.trade_outcomes_by_pair: dict[str, dict[str, int]] = {}
+        # Prompt detection telemetry.
+        self.prompt_telemetry: dict[str, int] = {}
+        # Navigation/warp telemetry.
+        self.warp_telemetry: dict[str, int] = {}
+        self.warp_failure_reasons: dict[str, int] = {}
+        # Decision pipeline telemetry.
+        self.decisions_considered: dict[str, int] = {}
+        self.decisions_executed: dict[str, int] = {}
+        self.decision_override_reasons: dict[str, int] = {}
+        self.decision_override_total: int = 0
+        # Cargo valuation source/confidence telemetry.
+        self.valuation_source_units_total: dict[str, int] = {}
+        self.valuation_source_value_total: dict[str, int] = {}
+        self.valuation_source_units_last: dict[str, int] = {}
+        self.valuation_source_value_last: dict[str, int] = {}
+        self.valuation_confidence_last: float = 0.0
+        self._last_cargo_valuation_signature: tuple[tuple[str, int, str, int], ...] = ()
+        self.action_counters: dict[str, int] = {}
+        self.recovery_actions: int = 0
+        self.combat_telemetry: dict[str, int] = {}
+        self.attrition_telemetry: dict[str, int] = {}
+        self.opportunity_telemetry: dict[str, int] = {}
+        self.action_latency_telemetry: dict[str, int] = {}
+        self.delta_attribution_telemetry: dict[str, int] = {}
+        self.anti_collapse_runtime: dict[str, int | bool] = {}
+        self._last_hostile_fighters_seen: int = 0
         self._metrics_initialized: bool = False
 
     def reset_runtime_session_metrics(self) -> None:
@@ -212,6 +245,34 @@ class WorkerBot(TradingBot):
         self.haggle_too_high = 0
         self.haggle_too_low = 0
         self.trades_executed = 0
+        self.trade_attempts = 0
+        self.trade_successes = 0
+        self.trade_failures = 0
+        self.trade_failure_reasons = {}
+        self.trade_outcomes_by_port_resource = {}
+        self.trade_outcomes_by_pair = {}
+        self.prompt_telemetry = {}
+        self.warp_telemetry = {}
+        self.warp_failure_reasons = {}
+        self.decisions_considered = {}
+        self.decisions_executed = {}
+        self.decision_override_reasons = {}
+        self.decision_override_total = 0
+        self.valuation_source_units_total = {}
+        self.valuation_source_value_total = {}
+        self.valuation_source_units_last = {}
+        self.valuation_source_value_last = {}
+        self.valuation_confidence_last = 0.0
+        self._last_cargo_valuation_signature = ()
+        self.action_counters = {}
+        self.recovery_actions = 0
+        self.combat_telemetry = {}
+        self.attrition_telemetry = {}
+        self.opportunity_telemetry = {}
+        self.action_latency_telemetry = {}
+        self.delta_attribution_telemetry = {}
+        self.anti_collapse_runtime = {}
+        self._last_hostile_fighters_seen = 0
         with contextlib.suppress(Exception):
             self._last_trade_turn = 0
 
@@ -230,21 +291,272 @@ class WorkerBot(TradingBot):
                 self.haggle_too_low = max(0, int(self.haggle_too_low) + int(amount))
             elif metric == "trades_executed":
                 self.trades_executed = max(0, int(self.trades_executed) + int(amount))
+            elif metric == "trade_attempts":
+                self.trade_attempts = max(0, int(self.trade_attempts) + int(amount))
+            elif metric == "trade_successes":
+                self.trade_successes = max(0, int(self.trade_successes) + int(amount))
+            elif metric == "trade_failures":
+                self.trade_failures = max(0, int(self.trade_failures) + int(amount))
+            elif metric.startswith("trade_fail_"):
+                self.trade_failures = max(0, int(self.trade_failures) + int(amount))
+                bucket = str(metric).strip().lower()
+                if bucket:
+                    prev = int(self.trade_failure_reasons.get(bucket, 0) or 0)
+                    self.trade_failure_reasons[bucket] = max(0, prev + int(amount))
         except Exception:
             pass
+
+    def note_trade_outcome(
+        self,
+        *,
+        sector: int,
+        commodity: str,
+        side: str,
+        success: bool,
+        credit_change: int,
+        failure_reason: str = "",
+        pair_signature: str | None = None,
+    ) -> None:
+        """Record per-port/resource and per-pair trade outcomes."""
+        try:
+            sec = int(sector or 0)
+            comm = str(commodity or "").strip().lower() or "unknown"
+            if comm not in {"fuel_ore", "organics", "equipment", "all", "unknown"}:
+                comm = "unknown"
+            trade_side = str(side or "").strip().lower() or "unknown"
+            if trade_side not in {"buy", "sell", "unknown"}:
+                trade_side = "unknown"
+            key = f"{sec}:{comm}:{trade_side}"
+            bucket = self.trade_outcomes_by_port_resource.setdefault(
+                key,
+                {
+                    "attempts": 0,
+                    "successes": 0,
+                    "failures": 0,
+                    "credit_gain": 0,
+                    "credit_loss": 0,
+                    "zero_delta": 0,
+                },
+            )
+            bucket["attempts"] = int(bucket.get("attempts", 0) or 0) + 1
+            if success:
+                bucket["successes"] = int(bucket.get("successes", 0) or 0) + 1
+            else:
+                bucket["failures"] = int(bucket.get("failures", 0) or 0) + 1
+            delta = int(credit_change or 0)
+            if delta > 0:
+                bucket["credit_gain"] = int(bucket.get("credit_gain", 0) or 0) + delta
+            elif delta < 0:
+                bucket["credit_loss"] = int(bucket.get("credit_loss", 0) or 0) + abs(delta)
+            else:
+                bucket["zero_delta"] = int(bucket.get("zero_delta", 0) or 0) + 1
+            if failure_reason:
+                reason_key = f"fail_{str(failure_reason).strip().lower()}"
+                bucket[reason_key] = int(bucket.get(reason_key, 0) or 0) + 1
+
+            pair_key = str(pair_signature or "").strip().lower()
+            if pair_key:
+                pair_bucket = self.trade_outcomes_by_pair.setdefault(
+                    pair_key,
+                    {
+                        "attempts": 0,
+                        "successes": 0,
+                        "failures": 0,
+                        "credit_gain": 0,
+                        "credit_loss": 0,
+                        "zero_delta": 0,
+                    },
+                )
+                pair_bucket["attempts"] = int(pair_bucket.get("attempts", 0) or 0) + 1
+                if success:
+                    pair_bucket["successes"] = int(pair_bucket.get("successes", 0) or 0) + 1
+                else:
+                    pair_bucket["failures"] = int(pair_bucket.get("failures", 0) or 0) + 1
+                if delta > 0:
+                    pair_bucket["credit_gain"] = int(pair_bucket.get("credit_gain", 0) or 0) + delta
+                elif delta < 0:
+                    pair_bucket["credit_loss"] = int(pair_bucket.get("credit_loss", 0) or 0) + abs(delta)
+                else:
+                    pair_bucket["zero_delta"] = int(pair_bucket.get("zero_delta", 0) or 0) + 1
+        except Exception:
+            return
+
+    @staticmethod
+    def _normalize_metric_key(metric: str, *, upper: bool = False) -> str:
+        key = str(metric or "").strip()
+        if not key:
+            return ""
+        return key.upper() if upper else key.lower()
+
+    def _increment_map_counter(
+        self,
+        bucket: dict[str, int],
+        key: str,
+        amount: int = 1,
+        *,
+        upper: bool = False,
+    ) -> None:
+        token = self._normalize_metric_key(key, upper=upper)
+        if not token:
+            return
+        prev = int(bucket.get(token, 0) or 0)
+        bucket[token] = max(0, prev + int(amount))
+
+    def note_prompt_telemetry(self, metric: str, amount: int = 1) -> None:
+        try:
+            self._increment_map_counter(self.prompt_telemetry, metric, amount)
+        except Exception:
+            return
+
+    def note_warp_hop(self, *, success: bool, latency_ms: int, reason: str | None = None) -> None:
+        try:
+            self._increment_map_counter(self.warp_telemetry, "hops_attempted", 1)
+            if success:
+                self._increment_map_counter(self.warp_telemetry, "hops_succeeded", 1)
+            else:
+                self._increment_map_counter(self.warp_telemetry, "hops_failed", 1)
+                if reason:
+                    self._increment_map_counter(self.warp_failure_reasons, reason, 1)
+            latency = max(0, int(latency_ms))
+            self._increment_map_counter(self.warp_telemetry, "hop_latency_ms_sum", latency)
+            prev_max = int(self.warp_telemetry.get("hop_latency_ms_max", 0) or 0)
+            if latency > prev_max:
+                self.warp_telemetry["hop_latency_ms_max"] = latency
+        except Exception:
+            return
+
+    def note_decision_considered(self, action_name: str, amount: int = 1) -> None:
+        try:
+            self._increment_map_counter(
+                self.decisions_considered,
+                action_name,
+                amount,
+                upper=True,
+            )
+        except Exception:
+            return
+
+    def note_decision_executed(self, action_name: str, amount: int = 1) -> None:
+        try:
+            self._increment_map_counter(
+                self.decisions_executed,
+                action_name,
+                amount,
+                upper=True,
+            )
+        except Exception:
+            return
+
+    def note_decision_override(self, *, from_action: str, to_action: str, reason: str) -> None:
+        try:
+            from_key = self._normalize_metric_key(from_action, upper=True) or "UNKNOWN"
+            to_key = self._normalize_metric_key(to_action, upper=True) or "UNKNOWN"
+            reason_key = self._normalize_metric_key(reason) or "unknown"
+            self.decision_override_total = max(0, int(self.decision_override_total) + 1)
+            self._increment_map_counter(
+                self.decision_override_reasons,
+                f"{reason_key}:{from_key}->{to_key}",
+                1,
+            )
+        except Exception:
+            return
+
+    def note_opportunity(self, metric: str, amount: int = 1) -> None:
+        try:
+            self._increment_map_counter(self.opportunity_telemetry, metric, amount)
+        except Exception:
+            return
+
+    def note_action_latency(self, action_bucket: str, elapsed_ms: int) -> None:
+        try:
+            token = self._normalize_metric_key(action_bucket) or "unknown"
+            self._increment_map_counter(self.action_latency_telemetry, f"{token}_count", 1)
+            self._increment_map_counter(self.action_latency_telemetry, f"{token}_ms_sum", max(0, int(elapsed_ms)))
+        except Exception:
+            return
+
+    def note_action_completion(
+        self,
+        *,
+        action: str,
+        credits_before: int,
+        credits_after: int,
+        bank_before: int,
+        bank_after: int,
+        cargo_before: dict[str, int],
+        cargo_after: dict[str, int],
+        trade_attempted: bool,
+        trade_success: bool,
+        combat_evidence: bool,
+    ) -> None:
+        """Attribution and combat/attrition telemetry from one completed action."""
+        try:
+            action_token = self._normalize_metric_key(action, upper=True) or "UNKNOWN"
+            cred_delta = int(credits_after) - int(credits_before)
+            bank_delta = int(bank_after) - int(bank_before)
+            cargo_keys = ("fuel_ore", "organics", "equipment")
+            cargo_net_delta = 0
+            for key in cargo_keys:
+                cargo_net_delta += int(cargo_after.get(key, 0) or 0) - int(cargo_before.get(key, 0) or 0)
+
+            attribution: str | None = None
+            if trade_attempted or action_token == "TRADE":
+                attribution = "delta_trade"
+            elif bank_delta != 0 or action_token == "BANK":
+                attribution = "delta_bank"
+            elif combat_evidence:
+                attribution = "delta_combat"
+            elif cred_delta != 0 or bank_delta != 0 or cargo_net_delta != 0:
+                attribution = "delta_unknown"
+            if attribution:
+                self._increment_map_counter(self.delta_attribution_telemetry, attribution, 1)
+
+            hostile_now = 0
+            with contextlib.suppress(Exception):
+                hostile_now = max(0, int(getattr(getattr(self, "game_state", None), "hostile_fighters", 0) or 0))
+            if combat_evidence:
+                self._increment_map_counter(self.combat_telemetry, "combat_context_seen", 1)
+                self._increment_map_counter(self.combat_telemetry, "under_attack_reports", 1)
+                if hostile_now > int(self._last_hostile_fighters_seen or 0):
+                    self._increment_map_counter(self.combat_telemetry, "hostile_fighters_spike", 1)
+            self._last_hostile_fighters_seen = max(0, int(hostile_now))
+
+            screen_lower = ""
+            with contextlib.suppress(Exception):
+                if getattr(self, "session", None):
+                    screen_lower = str(self.session.get_screen() or "").lower()
+            if "escape pod" in screen_lower:
+                self._increment_map_counter(self.combat_telemetry, "combat_prompt_escape_pod", 1)
+            if "ferrengi" in screen_lower or "ferrengi fighter" in screen_lower:
+                self._increment_map_counter(self.combat_telemetry, "combat_prompt_ferrengi", 1)
+            if any(t in screen_lower for t in ("you have been destroyed", "you are dead", "killed by", "your ship was destroyed")):
+                self._increment_map_counter(self.combat_telemetry, "death_prompt_detected", 1)
+                self._increment_map_counter(self.combat_telemetry, "combat_destroyed", 1)
+            if action_token == "RETREAT":
+                self._increment_map_counter(self.combat_telemetry, "combat_retreats", 1)
+
+            for key in cargo_keys:
+                before = int(cargo_before.get(key, 0) or 0)
+                after = int(cargo_after.get(key, 0) or 0)
+                drop = max(0, before - after)
+                if drop > 0 and (not trade_attempted):
+                    self._increment_map_counter(self.attrition_telemetry, f"{key}_loss_nontrade", drop)
+            if cred_delta < 0 and (not trade_success):
+                self._increment_map_counter(self.attrition_telemetry, "credits_loss_nontrade", abs(int(cred_delta)))
+        except Exception:
+            return
 
     def _estimate_cargo_market_value(self, cargo: dict[str, int]) -> int:
         """Estimate liquidation value from observed market data (best-effort)."""
         knowledge = getattr(self, "sector_knowledge", None)
-        if not knowledge:
-            return 0
-
-        sectors = getattr(knowledge, "_sectors", {}) or {}
-        if not sectors:
-            return 0
+        sectors = (getattr(knowledge, "_sectors", {}) or {}) if knowledge else {}
+        value_hints = getattr(self, "_cargo_value_hints", None)
+        if not isinstance(value_hints, dict):
+            value_hints = {}
 
         best_buy: dict[str, int] = {"fuel_ore": 0, "organics": 0, "equipment": 0}
         best_sell: dict[str, int] = {"fuel_ore": 0, "organics": 0, "equipment": 0}
+        conservative_floor: dict[str, int] = {"fuel_ore": 15, "organics": 15, "equipment": 15}
 
         for info in sectors.values():
             prices = getattr(info, "port_prices", {}) or {}
@@ -260,15 +572,55 @@ class WorkerBot(TradingBot):
                         best_sell[commodity] = sell_unit
 
         total = 0
+        source_units: dict[str, int] = {"quote": 0, "hint": 0, "sell_fallback": 0, "floor": 0}
+        source_values: dict[str, int] = {"quote": 0, "hint": 0, "sell_fallback": 0, "floor": 0}
+        confidence_for_source = {"quote": 1.0, "hint": 0.72, "sell_fallback": 0.45, "floor": 0.25}
+        confidence_weighted = 0.0
+        confidence_units = 0
+        valuation_signature_parts: list[tuple[str, int, str, int]] = []
         for commodity, qty in cargo.items():
             if qty <= 0:
                 continue
             unit = int(best_buy.get(commodity) or 0)
+            source = "quote"
+            if unit <= 0:
+                with contextlib.suppress(Exception):
+                    unit = max(unit, int(value_hints.get(commodity) or 0))
+                if unit > 0:
+                    source = "hint"
             # If we only know sell-side quotes, estimate a conservative liquidation value.
             if unit <= 0:
                 fallback_sell = int(best_sell.get(commodity) or 0)
                 unit = int(fallback_sell * 0.7) if fallback_sell > 0 else 0
-            total += max(0, int(qty)) * max(0, unit)
+                if unit > 0:
+                    source = "sell_fallback"
+            if unit <= 0:
+                unit = int(conservative_floor.get(commodity, 0) or 0)
+                source = "floor"
+            qty_int = max(0, int(qty))
+            unit_int = max(0, int(unit))
+            line_value = qty_int * unit_int
+            total += line_value
+            source_units[source] = int(source_units.get(source, 0) or 0) + qty_int
+            source_values[source] = int(source_values.get(source, 0) or 0) + line_value
+            confidence_weighted += float(confidence_for_source.get(source, 0.0)) * float(qty_int)
+            confidence_units += qty_int
+            valuation_signature_parts.append((str(commodity), qty_int, source, unit_int))
+        self.valuation_source_units_last = dict(source_units)
+        self.valuation_source_value_last = dict(source_values)
+        self.valuation_confidence_last = (
+            float(confidence_weighted) / float(confidence_units)
+            if confidence_units > 0
+            else 0.0
+        )
+
+        signature = tuple(sorted(valuation_signature_parts))
+        if signature != self._last_cargo_valuation_signature:
+            self._last_cargo_valuation_signature = signature
+            for key, value in source_units.items():
+                self._increment_map_counter(self.valuation_source_units_total, key, int(value))
+            for key, value in source_values.items():
+                self._increment_map_counter(self.valuation_source_value_total, key, int(value))
         return int(total)
 
     def _note_progress(self) -> None:
@@ -727,6 +1079,28 @@ class WorkerBot(TradingBot):
             if credits_out >= 0 and self._session_start_credits is not None:
                 credits_delta = int(credits_out - self._session_start_credits)
             credits_per_turn = float(credits_delta) / float(self.turns_used) if self.turns_used > 0 else 0.0
+            last_trade_turn = int(getattr(self, "_last_trade_turn", 0) or 0)
+            turns_since_last_trade = int(self.turns_used) if last_trade_turn <= 0 else max(
+                0,
+                int(self.turns_used) - last_trade_turn,
+            )
+            move_streak = 0
+            zero_delta_action_streak = 0
+            for entry in reversed(list(self.recent_actions or [])):
+                action_name = str(entry.get("action") or "").strip().upper()
+                if action_name in {"MOVE", "EXPLORE"}:
+                    move_streak += 1
+                else:
+                    break
+            for entry in reversed(list(self.recent_actions or [])):
+                try:
+                    delta = int(entry.get("result_delta") or 0)
+                except Exception:
+                    delta = 0
+                if delta == 0:
+                    zero_delta_action_streak += 1
+                else:
+                    break
 
             status_data = {
                 "reported_at": time.time(),
@@ -755,10 +1129,38 @@ class WorkerBot(TradingBot):
                 "haggle_too_high": int(self.haggle_too_high),
                 "haggle_too_low": int(self.haggle_too_low),
                 "trades_executed": int(self.trades_executed),
+                "trade_attempts": int(self.trade_attempts),
+                "trade_successes": int(self.trade_successes),
+                "trade_failures": int(self.trade_failures),
+                "trade_failure_reasons": dict(self.trade_failure_reasons or {}),
+                "trade_outcomes_by_port_resource": dict(self.trade_outcomes_by_port_resource or {}),
+                "trade_outcomes_by_pair": dict(self.trade_outcomes_by_pair or {}),
                 "credits_delta": int(credits_delta),
                 "credits_per_turn": float(credits_per_turn),
+                "turns_since_last_trade": int(turns_since_last_trade),
+                "move_streak": int(move_streak),
+                "zero_delta_action_streak": int(zero_delta_action_streak),
                 "hostile_fighters": int(hostile_fighters),
                 "under_attack": bool(under_attack),
+                "action_counters": dict(self.action_counters or {}),
+                "recovery_actions": int(self.recovery_actions),
+                "combat_telemetry": dict(self.combat_telemetry or {}),
+                "attrition_telemetry": dict(self.attrition_telemetry or {}),
+                "opportunity_telemetry": dict(self.opportunity_telemetry or {}),
+                "action_latency_telemetry": dict(self.action_latency_telemetry or {}),
+                "delta_attribution_telemetry": dict(self.delta_attribution_telemetry or {}),
+                "prompt_telemetry": dict(self.prompt_telemetry or {}),
+                "warp_telemetry": dict(self.warp_telemetry or {}),
+                "warp_failure_reasons": dict(self.warp_failure_reasons or {}),
+                "decision_counts_considered": dict(self.decisions_considered or {}),
+                "decision_counts_executed": dict(self.decisions_executed or {}),
+                "decision_override_total": int(self.decision_override_total),
+                "decision_override_reasons": dict(self.decision_override_reasons or {}),
+                "valuation_source_units_total": dict(self.valuation_source_units_total or {}),
+                "valuation_source_value_total": dict(self.valuation_source_value_total or {}),
+                "valuation_source_units_last": dict(self.valuation_source_units_last or {}),
+                "valuation_source_value_last": dict(self.valuation_source_value_last or {}),
+                "valuation_confidence_last": float(self.valuation_confidence_last or 0.0),
             }
             if actual_state == "running":
                 # Clear stale error banners once the bot has recovered and resumed.
@@ -772,6 +1174,30 @@ class WorkerBot(TradingBot):
             status_data["llm_wakeups"] = int(s_stats.get("llm_wakeups", 0) or 0)
             status_data["autopilot_turns"] = int(s_stats.get("autopilot_turns", 0) or 0)
             status_data["goal_contract_failures"] = int(s_stats.get("goal_contract_failures", 0) or 0)
+            status_data["route_churn_total"] = int(s_stats.get("pair_invalidations_total", 0) or 0)
+            status_data["route_churn_reasons"] = dict(s_stats.get("pair_invalidations_by_reason", {}) or {})
+            anti_runtime = dict(s_stats.get("anti_collapse_runtime") or {})
+            if anti_runtime:
+                anti_runtime["forced_probe_disable_active"] = bool(
+                    getattr(self, "_anti_forced_probe_disable_active", anti_runtime.get("forced_probe_disable_active", False))
+                )
+                anti_runtime["trigger_forced_probe_disable"] = int(
+                    getattr(self, "_anti_trigger_forced_probe_disable", anti_runtime.get("trigger_forced_probe_disable", 0)) or 0
+                )
+            elif hasattr(self, "_anti_forced_probe_disable_active") or hasattr(self, "_anti_trigger_forced_probe_disable"):
+                anti_runtime = {
+                    "controls_enabled": True,
+                    "throughput_degraded_active": False,
+                    "structural_storm_active": False,
+                    "forced_probe_disable_active": bool(getattr(self, "_anti_forced_probe_disable_active", False)),
+                    "lane_cooldowns_active": 0,
+                    "sector_cooldowns_active": 0,
+                    "trigger_throughput_degraded": 0,
+                    "trigger_structural_storm": 0,
+                    "trigger_forced_probe_disable": int(getattr(self, "_anti_trigger_forced_probe_disable", 0) or 0),
+                }
+            self.anti_collapse_runtime = dict(anti_runtime or {})
+            status_data["anti_collapse_runtime"] = dict(self.anti_collapse_runtime or {})
             status_data["llm_wakeups_per_100_turns"] = (
                 (float(status_data["llm_wakeups"]) * 100.0 / float(self.turns_used))
                 if self.turns_used > 0
@@ -947,6 +1373,11 @@ class WorkerBot(TradingBot):
             "result_delta": result_delta,
         }
         self.recent_actions.append(action_entry)
+        action_key = str(action or "UNKNOWN").strip().upper() or "UNKNOWN"
+        self.action_counters[action_key] = int(self.action_counters.get(action_key, 0) or 0) + 1
+        intent_key = str(strategy_intent or "").strip().upper()
+        if intent_key.startswith("RECOVERY:") or intent_key.startswith("BOOTSTRAP:"):
+            self.recovery_actions = max(0, int(self.recovery_actions) + 1)
         # Keep only last 10 actions
         if len(self.recent_actions) > 10:
             self.recent_actions = self.recent_actions[-10:]

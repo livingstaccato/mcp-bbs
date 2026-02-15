@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from bbsbot.games.tw2002.anti_collapse import controls_to_runtime_map, resolve_anti_collapse_controls
 from bbsbot.games.tw2002.strategies.base import (
     TradeAction,
     TradeOpportunity,
@@ -57,6 +58,7 @@ class ProfitablePairsStrategy(TradingStrategy):
     def __init__(self, config: BotConfig, knowledge: SectorKnowledge):
         super().__init__(config, knowledge)
         self._settings = config.trading.profitable_pairs
+        self._anti_controls = resolve_anti_collapse_controls(config, self._settings.anti_collapse_override)
         self._pairs: list[PortPair] = []
         self._pairs_dirty = True  # Need to recalculate
         self._current_pair: PortPair | None = None
@@ -67,10 +69,168 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._explore_since_profit: int = 0
         self._replan_explore_threshold: int = 10
         self._recent_sectors: deque[int] = deque(maxlen=8)
+        self._pair_invalidations_total: int = 0
+        self._pair_invalidations_by_reason: dict[str, int] = {}
+        self._pair_failure_streak_by_signature: dict[str, int] = {}
+        self._pair_cooldown_until_by_signature: dict[str, float] = {}
+        self._trade_lane_failure_streak_by_key: dict[str, int] = {}
+        self._trade_lane_cooldown_until_by_key: dict[str, float] = {}
+        self._trade_sector_cooldown_until_by_sector: dict[int, float] = {}
+        self._recent_trade_attempt_successes: deque[bool] = deque(maxlen=120)
+        self._recent_trade_failure_reasons: deque[str] = deque(maxlen=80)
+        self._anti_trigger_throughput_degraded: int = 0
+        self._anti_trigger_structural_storm: int = 0
+        self._anti_trigger_forced_probe_disable: int = 0
+        self._anti_prev_throughput_degraded: bool = False
+        self._anti_prev_structural_storm: bool = False
 
     @property
     def name(self) -> str:
         return "profitable_pairs"
+
+    @property
+    def stats(self) -> dict:
+        payload = dict(super().stats)
+        now_ts = time()
+        payload["pair_invalidations_total"] = int(self._pair_invalidations_total)
+        payload["pair_invalidations_by_reason"] = dict(self._pair_invalidations_by_reason)
+        payload["pair_cooldowns_active"] = sum(
+            1 for until in self._pair_cooldown_until_by_signature.values() if float(until or 0.0) > now_ts
+        )
+        payload["pair_failure_streaks"] = dict(self._pair_failure_streak_by_signature)
+        payload["trade_lane_cooldowns_active"] = sum(
+            1 for until in self._trade_lane_cooldown_until_by_key.values() if float(until or 0.0) > now_ts
+        )
+        payload["trade_sector_cooldowns_active"] = sum(
+            1 for until in self._trade_sector_cooldown_until_by_sector.values() if float(until or 0.0) > now_ts
+        )
+        throughput_degraded = bool(self._is_trade_throughput_degraded())
+        structural_storm = bool(self._is_structural_failure_storm())
+        payload["trade_throughput_degraded"] = throughput_degraded
+        payload["trade_structural_failure_storm"] = structural_storm
+        payload["anti_collapse_runtime"] = controls_to_runtime_map(
+            self._anti_controls,
+            throughput_degraded_active=throughput_degraded,
+            structural_storm_active=structural_storm,
+            forced_probe_disable_active=False,
+            lane_cooldowns_active=payload["trade_lane_cooldowns_active"],
+            sector_cooldowns_active=payload["trade_sector_cooldowns_active"],
+            trigger_throughput_degraded=self._anti_trigger_throughput_degraded,
+            trigger_structural_storm=self._anti_trigger_structural_storm,
+            trigger_forced_probe_disable=self._anti_trigger_forced_probe_disable,
+        )
+        return payload
+
+    @staticmethod
+    def _trade_lane_key(sector: int | None, commodity: str | None, side: str | None) -> str:
+        sector_i = int(sector or 0)
+        comm = str(commodity or "").strip().lower() or "unknown"
+        lane = str(side or "").strip().lower() or "unknown"
+        return f"{sector_i}:{comm}:{lane}"
+
+    def _is_trade_lane_blocked(self, sector: int | None, commodity: str | None, side: str | None) -> bool:
+        key = self._trade_lane_key(sector, commodity, side)
+        if not key:
+            return False
+        until = float(self._trade_lane_cooldown_until_by_key.get(key, 0.0) or 0.0)
+        return until > time()
+
+    def _is_trade_sector_blocked(self, sector: int | None) -> bool:
+        sector_i = int(sector or 0)
+        if sector_i <= 0:
+            return False
+        until = float(self._trade_sector_cooldown_until_by_sector.get(sector_i, 0.0) or 0.0)
+        return until > time()
+
+    def _apply_trade_lane_backoff(
+        self,
+        sector: int | None,
+        commodity: str | None,
+        side: str | None,
+        reason: str,
+    ) -> None:
+        if not self._anti_controls.enabled:
+            return
+        reason_token = str(reason or "").strip().lower()
+        if reason_token not in {"wrong_side", "no_port", "no_interaction"}:
+            return
+        key = self._trade_lane_key(sector, commodity, side)
+        if key.endswith(":unknown:unknown") or key.startswith("0:"):
+            return
+        streak = int(self._trade_lane_failure_streak_by_key.get(key, 0) or 0) + 1
+        self._trade_lane_failure_streak_by_key[key] = streak
+        if not self._anti_controls.lane_backoff_enabled:
+            return
+        exponent = max(0, min(streak - 1, 4))
+        cooldown_s = int(
+            min(
+                int(self._anti_controls.lane_backoff_max_seconds),
+                int(self._anti_controls.lane_backoff_base_seconds) * (2**exponent),
+            )
+        )
+        until_ts = time() + cooldown_s
+        self._trade_lane_cooldown_until_by_key[key] = until_ts
+
+        # Structural mismatches at a sector/commodity (wrong side/no port) are
+        # usually stale knowledge or map drift, so quarantine both sides.
+        if reason_token in {"wrong_side", "no_port"}:
+            opposite = "sell" if str(side or "").strip().lower() == "buy" else "buy"
+            opposite_key = self._trade_lane_key(sector, commodity, opposite)
+            if not opposite_key.endswith(":unknown:unknown") and not opposite_key.startswith("0:"):
+                self._trade_lane_cooldown_until_by_key[opposite_key] = max(
+                    float(self._trade_lane_cooldown_until_by_key.get(opposite_key, 0.0) or 0.0),
+                    until_ts,
+                )
+            sector_i = int(sector or 0)
+            if sector_i > 0 and self._anti_controls.sector_backoff_enabled:
+                exponent_s = max(0, min(streak - 1, 4))
+                sector_cooldown_s = int(
+                    min(
+                        int(self._anti_controls.sector_backoff_max_seconds),
+                        int(self._anti_controls.sector_backoff_base_seconds) * (2**exponent_s),
+                    )
+                )
+                self._trade_sector_cooldown_until_by_sector[sector_i] = max(
+                    float(self._trade_sector_cooldown_until_by_sector.get(sector_i, 0.0) or 0.0),
+                    time() + sector_cooldown_s,
+                )
+
+    def _record_trade_attempt_sample(self, success: bool) -> None:
+        self._recent_trade_attempt_successes.append(bool(success))
+
+    def _is_trade_throughput_degraded(self) -> bool:
+        if not self._anti_controls.enabled:
+            return False
+        samples = list(self._recent_trade_attempt_successes)
+        if len(samples) < int(self._anti_controls.throughput_degraded_min_samples):
+            return False
+        successes = sum(1 for ok in samples if ok)
+        rate = float(successes) / float(max(1, len(samples)))
+        return rate < float(self._anti_controls.throughput_degraded_success_rate_lt)
+
+    def _record_trade_failure_reason(self, reason: str) -> None:
+        token = str(reason or "").strip().lower() or "unknown"
+        self._recent_trade_failure_reasons.append(token)
+
+    def _is_structural_failure_storm(self) -> bool:
+        if not self._anti_controls.enabled:
+            return False
+        reasons = list(self._recent_trade_failure_reasons)
+        if len(reasons) < int(self._anti_controls.structural_storm_min_samples):
+            return False
+        structural = {"wrong_side", "no_port", "no_interaction", "action_mismatch"}
+        structural_hits = sum(1 for r in reasons if r in structural)
+        rate = float(structural_hits) / float(max(1, len(reasons)))
+        return rate >= float(self._anti_controls.structural_storm_structural_ratio_gte)
+
+    def _is_catastrophic_collapse(self) -> bool:
+        reasons = list(self._recent_trade_failure_reasons)
+        if len(reasons) < 24:
+            return False
+        structural = {"wrong_side", "no_port", "no_interaction", "action_mismatch"}
+        structural_hits = sum(1 for r in reasons if r in structural)
+        rate = float(structural_hits) / float(max(1, len(reasons)))
+        return rate >= 0.85
 
     def _effective_limits(self, state: GameState | None = None) -> tuple[int, int]:
         """Return (max_hops, min_profit_per_turn) adjusted by policy and bankroll."""
@@ -202,6 +362,19 @@ class ProfitablePairsStrategy(TradingStrategy):
 
     def _local_port_side(self, state: GameState, commodity: str) -> str | None:
         """Best-effort local port side for one commodity: buying/selling/None."""
+        idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
+        if idx is None:
+            return None
+
+        # Prefer live port class from current screen over cached status tables.
+        live_port_class = str(state.port_class or "").upper()
+        if len(live_port_class) == 3:
+            code = live_port_class[idx]
+            if code == "B":
+                return "buying"
+            if code == "S":
+                return "selling"
+
         current_sector = int(state.sector or 0)
         info = self.knowledge.get_sector_info(current_sector) if current_sector > 0 else None
         statuses = dict((info.port_status or {}) if info else {})
@@ -209,13 +382,25 @@ class ProfitablePairsStrategy(TradingStrategy):
         if side in {"buying", "selling"}:
             return side
 
-        port_class = str(state.port_class or (info.port_class if info else "") or "").upper()
+        port_class = str((info.port_class if info else "") or "").upper()
         if len(port_class) != 3:
             return None
+        code = port_class[idx]
+        if code == "B":
+            return "buying"
+        if code == "S":
+            return "selling"
+        return None
+
+    def _local_port_side_live(self, state: GameState, commodity: str) -> str | None:
+        """Strict local side from live prompt only; no cached fallbacks."""
         idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
         if idx is None:
             return None
-        code = port_class[idx]
+        live_port_class = str(state.port_class or "").upper()
+        if len(live_port_class) != 3:
+            return None
+        code = live_port_class[idx]
         if code == "B":
             return "buying"
         if code == "S":
@@ -226,17 +411,9 @@ class ProfitablePairsStrategy(TradingStrategy):
         self,
         state: GameState,
         cargo: dict[str, int],
-        statuses: dict[str, str] | None,
     ) -> str | None:
-        if statuses:
-            for commodity in ("fuel_ore", "organics", "equipment"):
-                if cargo.get(commodity, 0) > 0 and str(statuses.get(commodity, "")).lower() == "buying":
-                    return commodity
-        if not state.port_class or len(state.port_class) != 3:
-            return None
-        mapping = [("fuel_ore", 0), ("organics", 1), ("equipment", 2)]
-        for commodity, idx in mapping:
-            if cargo.get(commodity, 0) > 0 and state.port_class[idx] == "B":
+        for commodity in ("fuel_ore", "organics", "equipment"):
+            if cargo.get(commodity, 0) > 0 and self._local_port_side(state, commodity) == "buying":
                 return commodity
         return None
 
@@ -325,11 +502,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             return None
 
         current_sector = int(state.sector or 0)
-        info = self.knowledge.get_sector_info(current_sector) if current_sector > 0 else None
-        statuses = dict((info.port_status or {}) if info else {})
-
         if state.has_port:
-            sell_here = self._choose_sell_commodity_here(state, cargo, statuses)
+            sell_here = self._choose_sell_commodity_here(state, cargo)
             if sell_here:
                 qty = int(cargo.get(sell_here, 0) or 0)
                 opp = TradeOpportunity(
@@ -384,11 +558,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             return None
 
         current_sector = int(state.sector or 0)
-        info = self.knowledge.get_sector_info(current_sector) if current_sector > 0 else None
-        statuses = dict((info.port_status or {}) if info else {})
-
         if has_cargo and bool(state.has_port):
-            sell_here = self._choose_sell_commodity_here(state, cargo, statuses)
+            sell_here = self._choose_sell_commodity_here(state, cargo)
             if sell_here:
                 opp = TradeOpportunity(
                     buy_sector=current_sector,
@@ -484,6 +655,32 @@ class ProfitablePairsStrategy(TradingStrategy):
         if forced_break is not None:
             return forced_break
 
+        degraded = self._is_trade_throughput_degraded()
+        structural_storm = self._is_structural_failure_storm()
+        catastrophic = self._is_catastrophic_collapse()
+        if degraded and not self._anti_prev_throughput_degraded:
+            self._anti_trigger_throughput_degraded += 1
+        if structural_storm and not self._anti_prev_structural_storm:
+            self._anti_trigger_structural_storm += 1
+        self._anti_prev_throughput_degraded = degraded
+        self._anti_prev_structural_storm = structural_storm
+
+        if catastrophic and not any(cargo.values()):
+            self._current_pair = None
+            self._pair_phase = "idle"
+            self._pairs_dirty = True
+            return self._explore_for_ports(state)
+        if structural_storm and not any(cargo.values()):
+            self._current_pair = None
+            self._pair_phase = "idle"
+            self._pairs_dirty = True
+            return self._explore_for_ports(state)
+        if degraded and not any(cargo.values()):
+            # Throughput collapse guard: pause speculative buy legs and remap ports.
+            self._current_pair = None
+            self._pair_phase = "idle"
+            self._pairs_dirty = True
+
         # If we keep exploring/moving without a profitable trade cycle, force
         # pair rediscovery and reset phase. This avoids long "explore-only" runs.
         if self._explore_since_profit >= self._replan_explore_threshold:
@@ -536,7 +733,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         if not self._pairs:
             self._current_pair = None
             self._pair_phase = "idle"
-            bootstrap = self._local_bootstrap_trade(state)
+            bootstrap = None if degraded else self._local_bootstrap_trade(state)
             if bootstrap is not None:
                 return bootstrap
             logger.info("No profitable pairs found, exploring")
@@ -546,7 +743,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         if self._current_pair is None:
             self._current_pair = self._select_best_pair(state)
             if self._current_pair is None:
-                bootstrap = self._local_bootstrap_trade(state)
+                bootstrap = None if degraded else self._local_bootstrap_trade(state)
                 if bootstrap is not None:
                     return bootstrap
                 logger.info("No reachable/viable pair selected, exploring")
@@ -562,6 +759,16 @@ class ProfitablePairsStrategy(TradingStrategy):
         # Execute pair trading phases
         if self._pair_phase == "going_to_buy":
             if current == pair.buy_sector:
+                if self._is_trade_lane_blocked(current, pair.commodity, "buy"):
+                    self._invalidate_pair(pair, "buy_lane_cooldown")
+                    self._pair_phase = "idle"
+                    return self._explore_for_ports(state)
+                live_side = self._local_port_side_live(state, pair.commodity)
+                if live_side is None:
+                    self._invalidate_pair(pair, "buy_live_side_unknown")
+                    self._pair_phase = "idle"
+                    self._pairs_dirty = True
+                    return self._explore_for_ports(state)
                 # Validate local side before committing to buy leg.
                 side = self._local_port_side(state, pair.commodity)
                 if side != "selling":
@@ -571,7 +778,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                         pair.commodity,
                         side,
                     )
-                    self._invalidate_pair(pair)
+                    self._invalidate_pair(pair, "buy_side_not_selling")
                     self._pair_phase = "idle"
                     self._pairs_dirty = True
                     return self._explore_for_ports(state)
@@ -594,7 +801,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                         pair.sell_sector,
                         pair.commodity,
                     )
-                    self._invalidate_pair(pair)
+                    self._invalidate_pair(pair, "buy_qty_non_viable")
                     self._pair_phase = "idle"
                     return self._explore_for_ports(state)
                 return TradeAction.TRADE, {"opportunity": opp, "action": "buy", "max_quantity": buy_qty}
@@ -608,12 +815,24 @@ class ProfitablePairsStrategy(TradingStrategy):
                     }
                 else:
                     # Can't reach buy port, try another pair
-                    self._invalidate_pair(pair)
+                    self._invalidate_pair(pair, "buy_path_unreachable")
                     self._pair_phase = "idle"
                     return self._explore_for_ports(state)
 
         elif self._pair_phase == "going_to_sell":
             if current == pair.sell_sector:
+                if self._is_trade_lane_blocked(current, pair.commodity, "sell"):
+                    self._invalidate_pair(pair, "sell_lane_cooldown")
+                    self._pair_phase = "idle"
+                    self._current_pair = None
+                    return self._explore_for_ports(state)
+                live_side = self._local_port_side_live(state, pair.commodity)
+                if live_side is None:
+                    self._invalidate_pair(pair, "sell_live_side_unknown")
+                    self._pair_phase = "idle"
+                    self._current_pair = None
+                    self._pairs_dirty = True
+                    return self._explore_for_ports(state)
                 # Validate local side before committing to sell leg.
                 side = self._local_port_side(state, pair.commodity)
                 if side != "buying":
@@ -623,7 +842,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                         pair.commodity,
                         side,
                     )
-                    self._invalidate_pair(pair)
+                    self._invalidate_pair(pair, "sell_side_not_buying")
                     self._pair_phase = "idle"
                     self._current_pair = None
                     self._pairs_dirty = True
@@ -654,7 +873,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                     }
                 else:
                     # Can't reach sell port
-                    self._invalidate_pair(pair)
+                    self._invalidate_pair(pair, "sell_path_unreachable")
                     self._pair_phase = "idle"
                     self._current_pair = None
                     return self._explore_for_ports(state)
@@ -815,6 +1034,11 @@ class ProfitablePairsStrategy(TradingStrategy):
         if current is None:
             return self._pairs[0] if self._pairs else None
 
+        now_ts = time()
+        for key, until in list(self._pair_cooldown_until_by_signature.items()):
+            if float(until or 0.0) <= now_ts:
+                self._pair_cooldown_until_by_signature.pop(key, None)
+
         credits_now = int(state.credits or 0)
         # Keep early-game bots from burning turns on distant repositioning.
         if credits_now < 1_000:
@@ -842,6 +1066,19 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         _, min_ppt = self._effective_limits(state)
         for pair in self._pairs:
+            if int(pair.buy_sector) == int(pair.sell_sector):
+                continue
+            pair_sig = self._pair_signature(pair)
+            cooldown_until = float(self._pair_cooldown_until_by_signature.get(pair_sig, 0.0) or 0.0)
+            if cooldown_until > now_ts:
+                continue
+            if self._is_trade_sector_blocked(pair.buy_sector) or self._is_trade_sector_blocked(pair.sell_sector):
+                continue
+            if self._is_trade_lane_blocked(pair.buy_sector, pair.commodity, "buy"):
+                continue
+            if self._is_trade_lane_blocked(pair.sell_sector, pair.commodity, "sell"):
+                continue
+
             path = self.knowledge.find_path(current, pair.buy_sector)
             if not path:
                 continue
@@ -873,6 +1110,10 @@ class ProfitablePairsStrategy(TradingStrategy):
                     best_priced_pair = pair
             else:
                 # Unknown pricing: explore the closest structural pair to collect prices.
+                if self._is_trade_throughput_degraded():
+                    # Under degraded throughput, unknown-price probes mostly
+                    # amplify wrong-side/no-port loops; prefer known-priced routes.
+                    continue
                 if credits_now < 1_500 and reposition_hops > 2:
                     continue
                 if credits_now < 5_000 and reposition_hops > 4:
@@ -892,11 +1133,42 @@ class ProfitablePairsStrategy(TradingStrategy):
             return best_priced_pair
         return best_unpriced_pair
 
-    def _invalidate_pair(self, pair: PortPair) -> None:
+    @staticmethod
+    def _pair_signature(pair: PortPair) -> str:
+        return (
+            f"{int(getattr(pair, 'buy_sector', 0) or 0)}"
+            f"->{int(getattr(pair, 'sell_sector', 0) or 0)}"
+            f":{str(getattr(pair, 'commodity', '') or '').strip().lower() or 'unknown'}"
+        )
+
+    def _invalidate_pair_signature(self, signature: str, reason: str = "unknown") -> None:
+        token = str(signature or "").strip().lower()
+        if not token:
+            return
+        for pair in list(self._pairs):
+            if self._pair_signature(pair) == token:
+                self._invalidate_pair(pair, reason)
+
+    def _apply_pair_failure_backoff(self, signature: str, reason: str) -> None:
+        token = str(signature or "").strip().lower()
+        if not token:
+            return
+        streak = int(self._pair_failure_streak_by_signature.get(token, 0) or 0) + 1
+        self._pair_failure_streak_by_signature[token] = streak
+        reason_token = str(reason or "").strip().lower()
+        if reason_token in {"no_port", "no_interaction", "wrong_side", "action_mismatch"}:
+            exponent = max(0, min(streak - 1, 3))
+            cooldown_s = int(min(1800, 180 * (2**exponent)))
+            self._pair_cooldown_until_by_signature[token] = time() + cooldown_s
+
+    def _invalidate_pair(self, pair: PortPair, reason: str = "unknown") -> None:
         """Remove a pair that's no longer valid."""
         if pair in self._pairs:
             self._pairs.remove(pair)
         self._current_pair = None
+        key = str(reason or "").strip().lower() or "unknown"
+        self._pair_invalidations_total = max(0, int(self._pair_invalidations_total) + 1)
+        self._pair_invalidations_by_reason[key] = int(self._pair_invalidations_by_reason.get(key, 0) or 0) + 1
 
     def _explore_for_ports(self, state: GameState) -> tuple[TradeAction, dict]:
         """Explore to find more ports when no pairs available."""
@@ -1069,6 +1341,24 @@ class ProfitablePairsStrategy(TradingStrategy):
         """Record result and potentially invalidate pairs."""
         super().record_result(result)
 
+        if result.action == TradeAction.TRADE and not result.success:
+            reason = str(getattr(result, "trade_failure_reason", "") or "").strip().lower()
+            pair_signature = str(getattr(result, "pair_signature", "") or "").strip().lower()
+            trade_sector = getattr(result, "trade_sector", None)
+            trade_commodity = str(getattr(result, "trade_commodity", "") or "").strip().lower()
+            trade_side = str(getattr(result, "trade_side", "") or "").strip().lower()
+            self._record_trade_attempt_sample(False)
+            self._record_trade_failure_reason(reason)
+            self._pairs_dirty = True
+            self._current_pair = None
+            self._pair_phase = "idle"
+            self._explore_since_profit += 1
+            self._apply_trade_lane_backoff(trade_sector, trade_commodity, trade_side, reason)
+            if pair_signature:
+                self._apply_pair_failure_backoff(pair_signature, reason)
+                self._invalidate_pair_signature(pair_signature, f"trade_fail_{reason or 'other'}")
+            return
+
         # Track failed warps (EXPLORE/MOVE that didn't change sector)
         if result.action in (TradeAction.EXPLORE, TradeAction.MOVE) and not result.success:
             # result should have from_sector and to_sector for tracking
@@ -1084,6 +1374,17 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         # Successful trade - update pair timestamp
         if result.action == TradeAction.TRADE and result.success:
+            self._record_trade_attempt_sample(True)
+            pair_signature = str(getattr(result, "pair_signature", "") or "").strip().lower()
+            trade_sector = getattr(result, "trade_sector", None)
+            trade_commodity = str(getattr(result, "trade_commodity", "") or "").strip().lower()
+            trade_side = str(getattr(result, "trade_side", "") or "").strip().lower()
+            if pair_signature:
+                self._pair_failure_streak_by_signature[pair_signature] = 0
+                self._pair_cooldown_until_by_signature.pop(pair_signature, None)
+            lane_key = self._trade_lane_key(trade_sector, trade_commodity, trade_side)
+            self._trade_lane_failure_streak_by_key[lane_key] = 0
+            self._trade_lane_cooldown_until_by_key.pop(lane_key, None)
             if int(getattr(result, "profit", 0) or 0) > 0:
                 self._explore_since_profit = 0
             else:

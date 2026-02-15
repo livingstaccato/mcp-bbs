@@ -76,7 +76,7 @@ def detect_context(screen: str) -> str:
         death           - Ship destroyed
         unknown         - Can't determine
     """
-    lines = [l.strip() for l in screen.split("\n") if l.strip()]
+    lines = [line_text.strip() for line_text in screen.split("\n") if line_text.strip()]
     if not lines:
         return "unknown"
 
@@ -137,9 +137,10 @@ def detect_context(screen: str) -> str:
     # Haggle prompt: "Your offer [471] ?"
     if "your offer" in last_line or "counter" in last_line or "final price" in last_line:
         return "port_trading"
-    if "fuel ore" in last_lines or "organics" in last_lines or "equipment" in last_lines:
-        if "buy" in last_lines or "sell" in last_lines:
-            return "port_trading"
+    if ("fuel ore" in last_lines or "organics" in last_lines or "equipment" in last_lines) and (
+        "buy" in last_lines or "sell" in last_lines
+    ):
+        return "port_trading"
 
     # === FINANCIAL STATES ===
     # Bank
@@ -201,7 +202,7 @@ def detect_context(screen: str) -> str:
     # CRITICAL: Must come BEFORE menu detection to avoid misidentifying pauses as menus
     # Real pause prompts have [Pause] near bottom with minimal other text
     # Game menus have [Pause] at top with lots of menu text below
-    lines_lower = [l.lower() for l in lines if l.strip()]
+    lines_lower = [line_text.lower() for line_text in lines if line_text.strip()]
     if len(lines_lower) > 0:
         # Check last 3 lines for pause prompt (not in first 5 lines which could be banners)
         last_3_lines = "\n".join(lines_lower[-3:])
@@ -250,6 +251,45 @@ def detect_context(screen: str) -> str:
     return "unknown"
 
 
+def _override_context_from_prompt(context: str, prompt_id: str | None) -> str:
+    """Refine heuristic context using prompt detector IDs.
+
+    Prompt IDs are usually more precise than raw screen heuristics during
+    transition states (yes/no, autopilot, navpoint menus).
+    """
+    pid = str(prompt_id or "").strip().lower()
+    if not pid:
+        return context
+
+    # Stable command prompts.
+    if pid in ("prompt.sector_command", "prompt.command_generic"):
+        return "sector_command"
+    if pid == "prompt.planet_command":
+        return "planet_command"
+    if pid == "prompt.citadel_command":
+        return "citadel_command"
+
+    # Transition / confirmation prompts.
+    if pid in ("prompt.yes_no", "prompt.confirm_yes_no"):
+        return "confirm"
+    if pid in ("prompt.stop_in_sector", "prompt.warp_sector", "prompt.autopilot"):
+        return "autopilot"
+
+    # Known in-game menus that should be exited with Q, not game re-entry.
+    if pid in ("prompt.navpoint_menu", "prompt.corporate_listings"):
+        return "corporate_listings"
+    if pid in ("prompt.port_menu", "prompt.class0_port"):
+        return "port_menu"
+
+    # Port flows.
+    if pid == "prompt.port_haggle":
+        return "port_trading"
+    if pid.startswith("prompt.port_") or pid.startswith("prompt.hardware_"):
+        return "port_trading"
+
+    return context
+
+
 async def where_am_i(bot: TradingBot, timeout_ms: int = 50) -> QuickState:
     """Fast state check - quickly determine where we are.
 
@@ -283,24 +323,8 @@ async def where_am_i(bot: TradingBot, timeout_ms: int = 50) -> QuickState:
     context = detect_context(screen)
 
     # If prompt detection has high-confidence IDs, prefer them over heuristics.
-    # This avoids "unknown" loops where recovery spams Enter/Space on an input prompt.
-    if prompt_id:
-        if prompt_id == "prompt.port_haggle":
-            context = "port_trading"
-        elif prompt_id.startswith("prompt.port_") or prompt_id.startswith("prompt.hardware_"):
-            # Port buy/sell flows can look like generic menus to the heuristic detector.
-            # Treat as port_trading so recovery exits with Q if needed.
-            context = "port_trading"
-        elif prompt_id in ("prompt.port_menu",):
-            context = "port_menu"
-        elif prompt_id in (
-            "prompt.sector_command",
-            "prompt.command_generic",
-            "prompt.planet_command",
-            "prompt.citadel_command",
-        ):
-            # Keep these stable prompts authoritative.
-            context = "sector_command" if "sector" in prompt_id or "command_generic" in prompt_id else context
+    # This avoids false-safe states (e.g. yes/no overlays on command screens).
+    context = _override_context_from_prompt(context, prompt_id)
 
     # Capture diagnostic data for stuck bot analysis
     if hasattr(bot, "diagnostic_buffer"):
@@ -400,11 +424,14 @@ async def recover_to_safe_state(
 
     last_state = None
     attempt = 0
+    confirm_streak = 0
 
     while attempt < max_attempts:
         # Check current state
         state = await where_am_i(bot)
         last_state = state
+        if state.context != "confirm":
+            confirm_streak = 0
 
         print(f"  [{attempt}] {state.context} (sector: {state.sector})")
 
@@ -467,10 +494,19 @@ async def recover_to_safe_state(
             continue
 
         if state.context == "confirm":
-            # Y/N prompt - usually N is safer
-            print("  [Recovery] Confirm prompt - sending N...")
-            await bot.session.send("N")
-            await asyncio.sleep(0.3)
+            # Y/N overlays can be sticky/misdetected; escalate escape keys.
+            confirm_streak += 1
+            if confirm_streak <= 3:
+                key = "N"
+            elif confirm_streak <= 6:
+                key = "Q"
+            elif confirm_streak <= 8:
+                key = " "
+            else:
+                key = "\x1b"
+            print(f"  [Recovery] Confirm prompt (streak={confirm_streak}) - sending {repr(key)}...")
+            await bot.session.send(key)
+            await asyncio.sleep(0.35)
             attempt += 1
             continue
 
@@ -505,7 +541,7 @@ async def recover_to_safe_state(
         if state.context == "menu":
             # Check if this is ACTUALLY the game selection menu by looking for game titles
             # Don't just rely on sector=None, as in-game menus can also have unparseable sectors
-            screen_lower = screen.lower() if screen else ""
+            screen_lower = (state.screen or "").lower()
             is_game_selection = (
                 state.sector is None
                 and hasattr(bot, "last_game_letter")

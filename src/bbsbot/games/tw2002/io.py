@@ -93,6 +93,12 @@ async def wait_and_respond(
     start_time = time.time()
     last_screen_seen: str | None = None
 
+    def _note_prompt_metric(metric: str, amount: int = 1) -> None:
+        hook = getattr(bot, "note_prompt_telemetry", None)
+        if callable(hook):
+            with contextlib.suppress(Exception):
+                hook(metric, amount)
+
     # TW2002-specific: Callback for semantic extraction on each screen update
     def on_screen_update(screen: str) -> None:
         nonlocal last_screen_seen
@@ -118,6 +124,9 @@ async def wait_and_respond(
     def on_prompt_detected(detected: dict) -> bool:
         prompt_id = detected.get("prompt_id")
         screen = detected.get("screen", "")
+        _note_prompt_metric("accepted", 1)
+        if not prompt_id or str(prompt_id).strip().lower() in {"prompt.unknown", "unknown"}:
+            _note_prompt_metric("misclassified", 1)
 
         # Check for errors ONLY if we're at a password/login prompt
         if prompt_id and any(
@@ -161,6 +170,27 @@ async def wait_and_respond(
         # Accept this prompt
         return True
 
+    def on_prompt_seen(detected: dict) -> None:
+        _note_prompt_metric("seen", 1)
+        prompt_id = str(detected.get("prompt_id") or "").strip().lower()
+        if not prompt_id or prompt_id in {"prompt.unknown", "unknown"}:
+            _note_prompt_metric("misclassified", 1)
+
+    def on_prompt_rejected(detected: dict, reason: str) -> None:
+        reason_key = str(reason or "").strip().lower() or "other"
+        if reason_key == "not_idle":
+            _note_prompt_metric("not_idle_deferrals", 1)
+            return
+        if reason_key == "expected_mismatch":
+            _note_prompt_metric("expected_mismatch", 1)
+            _note_prompt_metric("misses", 1)
+            return
+        if reason_key == "callback_reject":
+            _note_prompt_metric("callback_reject", 1)
+            _note_prompt_metric("misclassified", 1)
+            return
+        _note_prompt_metric(f"reject_{reason_key}", 1)
+
     # Use framework PromptWaiter with TW2002-specific callbacks
     waiter = PromptWaiter(bot.session, on_screen_update=on_screen_update)
 
@@ -169,6 +199,8 @@ async def wait_and_respond(
             expected_prompt_id=prompt_id_pattern,
             timeout_ms=timeout_ms,
             on_prompt_detected=on_prompt_detected,
+            on_prompt_seen=on_prompt_seen,
+            on_prompt_rejected=on_prompt_rejected,
             require_idle=True,
             idle_grace_ratio=0.8,
         )
@@ -190,6 +222,8 @@ async def wait_and_respond(
             result["kv_data"],
         )
     except TimeoutError as err:
+        _note_prompt_metric("timeouts", 1)
+        _note_prompt_metric("misses", 1)
         raise TimeoutError(f"No prompt detected within {timeout_ms}ms") from err
 
 

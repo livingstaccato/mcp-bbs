@@ -10,6 +10,7 @@ multiple trading bots through a REST API and WebSocket interface.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import subprocess
 import sys
@@ -109,11 +110,42 @@ class BotStatus(BaseModel):
     haggle_too_high: int = 0
     haggle_too_low: int = 0
     trades_executed: int = 0
+    trade_attempts: int = 0
+    trade_successes: int = 0
+    trade_failures: int = 0
+    trade_failure_reasons: dict[str, int] = Field(default_factory=dict)
+    trade_outcomes_by_port_resource: dict[str, dict[str, int]] = Field(default_factory=dict)
+    trade_outcomes_by_pair: dict[str, dict[str, int]] = Field(default_factory=dict)
     credits_delta: int = 0
     credits_per_turn: float = 0.0
+    turns_since_last_trade: int = 0
+    move_streak: int = 0
+    zero_delta_action_streak: int = 0
+    prompt_telemetry: dict[str, int] = Field(default_factory=dict)
+    warp_telemetry: dict[str, int] = Field(default_factory=dict)
+    warp_failure_reasons: dict[str, int] = Field(default_factory=dict)
+    decision_counts_considered: dict[str, int] = Field(default_factory=dict)
+    decision_counts_executed: dict[str, int] = Field(default_factory=dict)
+    decision_override_total: int = 0
+    decision_override_reasons: dict[str, int] = Field(default_factory=dict)
+    valuation_source_units_total: dict[str, int] = Field(default_factory=dict)
+    valuation_source_value_total: dict[str, int] = Field(default_factory=dict)
+    valuation_source_units_last: dict[str, int] = Field(default_factory=dict)
+    valuation_source_value_last: dict[str, int] = Field(default_factory=dict)
+    valuation_confidence_last: float = 0.0
+    route_churn_total: int = 0
+    route_churn_reasons: dict[str, int] = Field(default_factory=dict)
     llm_wakeups: int = 0
     autopilot_turns: int = 0
     goal_contract_failures: int = 0
+    action_counters: dict[str, int] = Field(default_factory=dict)
+    recovery_actions: int = 0
+    combat_telemetry: dict[str, int] = Field(default_factory=dict)
+    attrition_telemetry: dict[str, int] = Field(default_factory=dict)
+    opportunity_telemetry: dict[str, int] = Field(default_factory=dict)
+    action_latency_telemetry: dict[str, int] = Field(default_factory=dict)
+    delta_attribution_telemetry: dict[str, int] = Field(default_factory=dict)
+    anti_collapse_runtime: dict[str, int | bool] = Field(default_factory=dict)
     llm_wakeups_per_100_turns: float = 0.0
     hostile_fighters: int = 0
     under_attack: bool = False
@@ -520,6 +552,45 @@ class SwarmManager:
                 prev = cur
             return total
 
+        def _rolling_map_counter_delta(field: str) -> dict[str, int]:
+            out: dict[str, int] = {}
+            prev_map = dict(window_rows[0].get(field) or {})
+            for row in window_rows[1:]:
+                cur_map = dict(row.get(field) or {})
+                keys = set(prev_map.keys()) | set(cur_map.keys())
+                for key in keys:
+                    try:
+                        prev = int(prev_map.get(key, 0) or 0)
+                        cur = int(cur_map.get(key, 0) or 0)
+                    except Exception:
+                        continue
+                    out[key] = int(out.get(key, 0) or 0) + ((cur - prev) if cur >= prev else cur)
+                prev_map = cur_map
+            return out
+
+        def _rolling_map_of_map_counter_delta(field: str) -> dict[str, dict[str, int]]:
+            out: dict[str, dict[str, int]] = {}
+            prev_map = dict(window_rows[0].get(field) or {})
+            for row in window_rows[1:]:
+                cur_map = dict(row.get(field) or {})
+                keys = set(prev_map.keys()) | set(cur_map.keys())
+                for key in keys:
+                    prev_inner = dict(prev_map.get(key) or {})
+                    cur_inner = dict(cur_map.get(key) or {})
+                    inner_keys = set(prev_inner.keys()) | set(cur_inner.keys())
+                    for inner_key in inner_keys:
+                        try:
+                            prev = int(prev_inner.get(inner_key, 0) or 0)
+                            cur = int(cur_inner.get(inner_key, 0) or 0)
+                        except Exception:
+                            continue
+                        bucket = out.setdefault(str(key), {})
+                        bucket[str(inner_key)] = int(bucket.get(str(inner_key), 0) or 0) + (
+                            (cur - prev) if cur >= prev else cur
+                        )
+                prev_map = cur_map
+            return out
+
         def _strategy_deltas(field: str) -> dict[str, int]:
             out: dict[str, int] = {}
             prev_map: dict[str, int] = {}
@@ -554,11 +625,36 @@ class SwarmManager:
 
         elapsed_s = float(last.get("ts") or now) - float(first.get("ts") or now)
         delta_turns = _rolling_counter_delta("total_turns")
-        delta_credits = _rolling_counter_delta("total_credits")
+        delta_credits = _safe_int(last, "total_credits") - _safe_int(first, "total_credits")
         delta_bank_credits = _rolling_counter_delta("total_bank_credits")
-        delta_net_worth = _rolling_counter_delta("total_net_worth_estimate")
+        delta_net_worth = _safe_int(last, "total_net_worth_estimate") - _safe_int(first, "total_net_worth_estimate")
         delta_llm_wakeups = _rolling_counter_delta("llm_wakeups_total")
         delta_trades = _rolling_nested_counter_delta("trade_outcomes_overall", "trades_executed")
+        delta_trade_attempts = _rolling_counter_delta("trade_attempts_total")
+        delta_trade_successes = _rolling_counter_delta("trade_successes_total")
+        delta_trade_failures = _rolling_counter_delta("trade_failures_total")
+        delta_recovery_actions = _rolling_counter_delta("recovery_actions_total")
+        delta_action_counts = _rolling_map_counter_delta("action_counts_total")
+        delta_trade_failure_reasons = _rolling_map_counter_delta("trade_failure_reasons_total")
+        delta_trade_outcomes_by_port_resource = _rolling_map_of_map_counter_delta("trade_outcomes_by_port_resource_total")
+        delta_trade_outcomes_by_pair = _rolling_map_of_map_counter_delta("trade_outcomes_by_pair_total")
+        delta_prompt_telemetry = _rolling_map_counter_delta("prompt_telemetry_total")
+        delta_warp_telemetry = _rolling_map_counter_delta("warp_telemetry_total")
+        delta_warp_failure_reasons = _rolling_map_counter_delta("warp_failure_reasons_total")
+        delta_decision_counts_considered = _rolling_map_counter_delta("decision_counts_considered_total")
+        delta_decision_counts_executed = _rolling_map_counter_delta("decision_counts_executed_total")
+        delta_decision_override_total = _rolling_counter_delta("decision_override_total")
+        delta_decision_override_reasons = _rolling_map_counter_delta("decision_override_reasons_total")
+        delta_valuation_source_units = _rolling_map_counter_delta("valuation_source_units_total")
+        delta_valuation_source_value = _rolling_map_counter_delta("valuation_source_value_total")
+        delta_route_churn_total = _rolling_counter_delta("route_churn_total")
+        delta_route_churn_reasons = _rolling_map_counter_delta("route_churn_reasons_total")
+        delta_combat_telemetry = _rolling_map_counter_delta("combat_telemetry_total")
+        delta_attrition_telemetry = _rolling_map_counter_delta("attrition_telemetry_total")
+        delta_opportunity_telemetry = _rolling_map_counter_delta("opportunity_telemetry_total")
+        delta_action_latency_telemetry = _rolling_map_counter_delta("action_latency_telemetry_total")
+        delta_delta_attribution_telemetry = _rolling_map_counter_delta("delta_attribution_telemetry_total")
+        delta_anti_collapse_runtime = _rolling_map_counter_delta("anti_collapse_runtime_total")
 
         strategy_delta_trades = _strategy_deltas("trades_executed")
         strategy_delta_turns = _strategy_deltas("turns_executed")
@@ -584,6 +680,37 @@ class SwarmManager:
                 "net_worth_per_turn": (float(delta_net_worth) / float(delta_turns)) if delta_turns > 0 else 0.0,
                 "trades_executed": delta_trades,
                 "trades_per_100_turns": (float(delta_trades) * 100.0 / float(delta_turns)) if delta_turns > 0 else 0.0,
+                "trade_attempts": delta_trade_attempts,
+                "trade_successes": delta_trade_successes,
+                "trade_failures": delta_trade_failures,
+                "trade_success_rate": (
+                    float(delta_trade_successes) / float(delta_trade_attempts) if delta_trade_attempts > 0 else 0.0
+                ),
+                "trade_failure_rate": (
+                    float(delta_trade_failures) / float(delta_trade_attempts) if delta_trade_attempts > 0 else 0.0
+                ),
+                "trade_failure_reasons": delta_trade_failure_reasons,
+                "trade_outcomes_by_port_resource": delta_trade_outcomes_by_port_resource,
+                "trade_outcomes_by_pair": delta_trade_outcomes_by_pair,
+                "prompt_telemetry": delta_prompt_telemetry,
+                "warp_telemetry": delta_warp_telemetry,
+                "warp_failure_reasons": delta_warp_failure_reasons,
+                "decision_counts_considered": delta_decision_counts_considered,
+                "decision_counts_executed": delta_decision_counts_executed,
+                "decision_override_total": delta_decision_override_total,
+                "decision_override_reasons": delta_decision_override_reasons,
+                "valuation_source_units": delta_valuation_source_units,
+                "valuation_source_value": delta_valuation_source_value,
+                "route_churn_total": delta_route_churn_total,
+                "route_churn_reasons": delta_route_churn_reasons,
+                "combat_telemetry": delta_combat_telemetry,
+                "attrition_telemetry": delta_attrition_telemetry,
+                "opportunity_telemetry": delta_opportunity_telemetry,
+                "action_latency_telemetry": delta_action_latency_telemetry,
+                "delta_attribution_telemetry": delta_delta_attribution_telemetry,
+                "anti_collapse_runtime": delta_anti_collapse_runtime,
+                "action_counts": delta_action_counts,
+                "recovery_actions": delta_recovery_actions,
                 "haggle_offers": _rolling_nested_counter_delta("trade_outcomes_overall", "haggle_offers"),
                 "llm_wakeups": delta_llm_wakeups,
                 "llm_wakeups_per_100_turns": (
@@ -603,11 +730,42 @@ class SwarmManager:
                 "llm_wakeups_total": _safe_int(last, "llm_wakeups_total"),
                 "autopilot_turns_total": _safe_int(last, "autopilot_turns_total"),
                 "goal_contract_failures_total": _safe_int(last, "goal_contract_failures_total"),
+                "trade_attempts_total": _safe_int(last, "trade_attempts_total"),
+                "trade_successes_total": _safe_int(last, "trade_successes_total"),
+                "trade_failures_total": _safe_int(last, "trade_failures_total"),
+                "trade_failure_reasons_total": last.get("trade_failure_reasons_total") or {},
+                "trade_outcomes_by_port_resource_total": last.get("trade_outcomes_by_port_resource_total") or {},
+                "trade_outcomes_by_pair_total": last.get("trade_outcomes_by_pair_total") or {},
+                "prompt_telemetry_total": last.get("prompt_telemetry_total") or {},
+                "warp_telemetry_total": last.get("warp_telemetry_total") or {},
+                "warp_failure_reasons_total": last.get("warp_failure_reasons_total") or {},
+                "decision_counts_considered_total": last.get("decision_counts_considered_total") or {},
+                "decision_counts_executed_total": last.get("decision_counts_executed_total") or {},
+                "decision_override_total": _safe_int(last, "decision_override_total"),
+                "decision_override_reasons_total": last.get("decision_override_reasons_total") or {},
+                "valuation_source_units_total": last.get("valuation_source_units_total") or {},
+                "valuation_source_value_total": last.get("valuation_source_value_total") or {},
+                "valuation_confidence_avg": float(last.get("valuation_confidence_avg") or 0.0),
+                "route_churn_total": _safe_int(last, "route_churn_total"),
+                "route_churn_reasons_total": last.get("route_churn_reasons_total") or {},
+                "combat_telemetry_total": last.get("combat_telemetry_total") or {},
+                "attrition_telemetry_total": last.get("attrition_telemetry_total") or {},
+                "opportunity_telemetry_total": last.get("opportunity_telemetry_total") or {},
+                "action_latency_telemetry_total": last.get("action_latency_telemetry_total") or {},
+                "delta_attribution_telemetry_total": last.get("delta_attribution_telemetry_total") or {},
+                "anti_collapse_runtime_total": last.get("anti_collapse_runtime_total") or {},
+                "action_counts_total": last.get("action_counts_total") or {},
+                "recovery_actions_total": _safe_int(last, "recovery_actions_total"),
+                "zombie_traders_120_1": _safe_int(last, "zombie_traders_120_1"),
+                "zombie_traders_200_2": _safe_int(last, "zombie_traders_200_2"),
                 "llm_wakeups_per_100_turns": float(last.get("llm_wakeups_per_100_turns") or 0.0),
                 "trade_outcomes_overall": last.get("trade_outcomes_overall") or {},
             },
             "strategy_delta": {
                 "trades_executed": strategy_delta_trades,
+                "trade_attempts": _strategy_deltas("trade_attempts"),
+                "trade_successes": _strategy_deltas("trade_successes"),
+                "trade_failures": _strategy_deltas("trade_failures"),
                 "turns_executed": strategy_delta_turns,
                 "trades_per_100_turns": strategy_trades_per_100_turns,
                 "haggle_accept": _strategy_deltas("haggle_accept"),
@@ -631,6 +789,35 @@ class SwarmManager:
         llm_wakeups_total = 0
         autopilot_turns_total = 0
         goal_contract_failures_total = 0
+        trade_attempts_total = 0
+        trade_successes_total = 0
+        trade_failures_total = 0
+        trade_failure_reasons_total: dict[str, int] = {}
+        trade_outcomes_by_port_resource_total: dict[str, dict[str, int]] = {}
+        trade_outcomes_by_pair_total: dict[str, dict[str, int]] = {}
+        prompt_telemetry_total: dict[str, int] = {}
+        warp_telemetry_total: dict[str, int] = {}
+        warp_failure_reasons_total: dict[str, int] = {}
+        decision_counts_considered_total: dict[str, int] = {}
+        decision_counts_executed_total: dict[str, int] = {}
+        decision_override_reasons_total: dict[str, int] = {}
+        decision_override_total = 0
+        valuation_source_units_total: dict[str, int] = {}
+        valuation_source_value_total: dict[str, int] = {}
+        valuation_confidence_sum = 0.0
+        valuation_confidence_bots = 0
+        route_churn_total = 0
+        route_churn_reasons_total: dict[str, int] = {}
+        combat_telemetry_total: dict[str, int] = {}
+        attrition_telemetry_total: dict[str, int] = {}
+        opportunity_telemetry_total: dict[str, int] = {}
+        action_latency_telemetry_total: dict[str, int] = {}
+        delta_attribution_telemetry_total: dict[str, int] = {}
+        anti_collapse_runtime_total: dict[str, int] = {}
+        action_counts_total: dict[str, int] = {}
+        recovery_actions_total = 0
+        zombie_traders_120_1 = 0
+        zombie_traders_200_2 = 0
         total_cargo_fuel_ore = 0
         total_cargo_organics = 0
         total_cargo_equipment = 0
@@ -672,6 +859,12 @@ class SwarmManager:
             llm_wakeups = int(bot.get("llm_wakeups") or 0)
             autopilot_turns = int(bot.get("autopilot_turns") or 0)
             goal_contract_failures = int(bot.get("goal_contract_failures") or 0)
+            trade_attempts = int(bot.get("trade_attempts") or 0)
+            trade_successes = int(bot.get("trade_successes") or 0)
+            trade_failures = int(bot.get("trade_failures") or 0)
+            recovery_actions = int(bot.get("recovery_actions") or 0)
+            decision_override_count = int(bot.get("decision_override_total") or 0)
+            route_churn_count = int(bot.get("route_churn_total") or 0)
             cargo_fuel_ore = int(bot.get("cargo_fuel_ore") or 0)
             cargo_organics = int(bot.get("cargo_organics") or 0)
             cargo_equipment = int(bot.get("cargo_equipment") or 0)
@@ -680,9 +873,141 @@ class SwarmManager:
             llm_wakeups_total += llm_wakeups
             autopilot_turns_total += autopilot_turns
             goal_contract_failures_total += goal_contract_failures
+            trade_attempts_total += trade_attempts
+            trade_successes_total += trade_successes
+            trade_failures_total += trade_failures
+            recovery_actions_total += recovery_actions
+            decision_override_total += decision_override_count
+            route_churn_total += route_churn_count
             total_cargo_fuel_ore += max(0, cargo_fuel_ore)
             total_cargo_organics += max(0, cargo_organics)
             total_cargo_equipment += max(0, cargo_equipment)
+            confidence = float(bot.get("valuation_confidence_last") or 0.0)
+            if confidence > 0.0:
+                valuation_confidence_sum += confidence
+                valuation_confidence_bots += 1
+            if turns >= 120 and trades <= 1:
+                zombie_traders_120_1 += 1
+            if turns >= 200 and trades <= 2:
+                zombie_traders_200_2 += 1
+
+            for reason, val in (bot.get("trade_failure_reasons") or {}).items():
+                key = str(reason or "").strip().lower()
+                if not key:
+                    continue
+                trade_failure_reasons_total[key] = int(trade_failure_reasons_total.get(key, 0) or 0) + int(val or 0)
+            for key, metrics in (bot.get("trade_outcomes_by_port_resource") or {}).items():
+                outer = str(key or "").strip().lower()
+                if not outer:
+                    continue
+                dst = trade_outcomes_by_port_resource_total.setdefault(outer, {})
+                for metric, val in dict(metrics or {}).items():
+                    inner = str(metric or "").strip().lower()
+                    if not inner:
+                        continue
+                    dst[inner] = int(dst.get(inner, 0) or 0) + int(val or 0)
+            for key, metrics in (bot.get("trade_outcomes_by_pair") or {}).items():
+                outer = str(key or "").strip().lower()
+                if not outer:
+                    continue
+                dst = trade_outcomes_by_pair_total.setdefault(outer, {})
+                for metric, val in dict(metrics or {}).items():
+                    inner = str(metric or "").strip().lower()
+                    if not inner:
+                        continue
+                    dst[inner] = int(dst.get(inner, 0) or 0) + int(val or 0)
+            for action, val in (bot.get("action_counters") or {}).items():
+                key = str(action or "").strip().upper()
+                if not key:
+                    continue
+                action_counts_total[key] = int(action_counts_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("prompt_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                prompt_telemetry_total[key] = int(prompt_telemetry_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("warp_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                warp_telemetry_total[key] = int(warp_telemetry_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("warp_failure_reasons") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                warp_failure_reasons_total[key] = int(warp_failure_reasons_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("decision_counts_considered") or {}).items():
+                key = str(metric or "").strip().upper()
+                if not key:
+                    continue
+                decision_counts_considered_total[key] = int(decision_counts_considered_total.get(key, 0) or 0) + int(
+                    val or 0
+                )
+            for metric, val in (bot.get("decision_counts_executed") or {}).items():
+                key = str(metric or "").strip().upper()
+                if not key:
+                    continue
+                decision_counts_executed_total[key] = int(decision_counts_executed_total.get(key, 0) or 0) + int(
+                    val or 0
+                )
+            for metric, val in (bot.get("decision_override_reasons") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                decision_override_reasons_total[key] = int(decision_override_reasons_total.get(key, 0) or 0) + int(
+                    val or 0
+                )
+            for metric, val in (bot.get("valuation_source_units_total") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                valuation_source_units_total[key] = int(valuation_source_units_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("valuation_source_value_total") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                valuation_source_value_total[key] = int(valuation_source_value_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("route_churn_reasons") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                route_churn_reasons_total[key] = int(route_churn_reasons_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("combat_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                combat_telemetry_total[key] = int(combat_telemetry_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("attrition_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                attrition_telemetry_total[key] = int(attrition_telemetry_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("opportunity_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                opportunity_telemetry_total[key] = int(opportunity_telemetry_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("action_latency_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                action_latency_telemetry_total[key] = int(action_latency_telemetry_total.get(key, 0) or 0) + int(val or 0)
+            for metric, val in (bot.get("delta_attribution_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                delta_attribution_telemetry_total[key] = int(
+                    delta_attribution_telemetry_total.get(key, 0) or 0
+                ) + int(val or 0)
+            for metric, val in (bot.get("anti_collapse_runtime") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                if isinstance(val, bool):
+                    anti_collapse_runtime_total[key] = int(anti_collapse_runtime_total.get(key, 0) or 0) + int(val)
+                    continue
+                with contextlib.suppress(Exception):
+                    anti_collapse_runtime_total[key] = int(anti_collapse_runtime_total.get(key, 0) or 0) + int(val or 0)
 
             trade_outcomes_overall["trades_executed"] += trades
             trade_outcomes_overall["turns_executed"] = int(trade_outcomes_overall.get("turns_executed") or 0) + turns
@@ -690,6 +1015,13 @@ class SwarmManager:
             trade_outcomes_overall["haggle_counter"] += counter
             trade_outcomes_overall["haggle_too_high"] += high
             trade_outcomes_overall["haggle_too_low"] += low
+            trade_outcomes_overall["trade_attempts"] = int(trade_outcomes_overall.get("trade_attempts") or 0) + trade_attempts
+            trade_outcomes_overall["trade_successes"] = int(
+                trade_outcomes_overall.get("trade_successes") or 0
+            ) + trade_successes
+            trade_outcomes_overall["trade_failures"] = int(
+                trade_outcomes_overall.get("trade_failures") or 0
+            ) + trade_failures
 
             strategy_id = str(bot.get("strategy_id") or bot.get("strategy") or "unknown")
             strategy_mode = str(bot.get("strategy_mode") or "unknown")
@@ -705,6 +1037,9 @@ class SwarmManager:
                     "haggle_counter": 0,
                     "haggle_too_high": 0,
                     "haggle_too_low": 0,
+                    "trade_attempts": 0,
+                    "trade_successes": 0,
+                    "trade_failures": 0,
                 }
             strat = trade_outcomes_by_strategy_mode[strategy_key]
             strat["bots"] += 1
@@ -714,6 +1049,9 @@ class SwarmManager:
             strat["haggle_counter"] += counter
             strat["haggle_too_high"] += high
             strat["haggle_too_low"] += low
+            strat["trade_attempts"] += trade_attempts
+            strat["trade_successes"] += trade_successes
+            strat["trade_failures"] += trade_failures
 
             bot_rows.append(
                 {
@@ -740,7 +1078,36 @@ class SwarmManager:
                     "llm_wakeups": llm_wakeups,
                     "autopilot_turns": autopilot_turns,
                     "goal_contract_failures": goal_contract_failures,
+                    "trade_attempts": trade_attempts,
+                    "trade_successes": trade_successes,
+                    "trade_failures": trade_failures,
+                    "trade_failure_reasons": bot.get("trade_failure_reasons") or {},
+                    "trade_outcomes_by_port_resource": bot.get("trade_outcomes_by_port_resource") or {},
+                    "trade_outcomes_by_pair": bot.get("trade_outcomes_by_pair") or {},
+                    "action_counters": bot.get("action_counters") or {},
+                    "recovery_actions": recovery_actions,
+                    "prompt_telemetry": bot.get("prompt_telemetry") or {},
+                    "warp_telemetry": bot.get("warp_telemetry") or {},
+                    "warp_failure_reasons": bot.get("warp_failure_reasons") or {},
+                    "decision_counts_considered": bot.get("decision_counts_considered") or {},
+                    "decision_counts_executed": bot.get("decision_counts_executed") or {},
+                    "decision_override_total": decision_override_count,
+                    "decision_override_reasons": bot.get("decision_override_reasons") or {},
+                    "valuation_source_units_total": bot.get("valuation_source_units_total") or {},
+                    "valuation_source_value_total": bot.get("valuation_source_value_total") or {},
+                    "valuation_confidence_last": float(bot.get("valuation_confidence_last") or 0.0),
+                    "route_churn_total": route_churn_count,
+                    "route_churn_reasons": bot.get("route_churn_reasons") or {},
+                    "combat_telemetry": bot.get("combat_telemetry") or {},
+                    "attrition_telemetry": bot.get("attrition_telemetry") or {},
+                    "opportunity_telemetry": bot.get("opportunity_telemetry") or {},
+                    "action_latency_telemetry": bot.get("action_latency_telemetry") or {},
+                    "delta_attribution_telemetry": bot.get("delta_attribution_telemetry") or {},
+                    "anti_collapse_runtime": bot.get("anti_collapse_runtime") or {},
                     "llm_wakeups_per_100_turns": float(bot.get("llm_wakeups_per_100_turns") or 0.0),
+                    "turns_since_last_trade": int(bot.get("turns_since_last_trade") or 0),
+                    "move_streak": int(bot.get("move_streak") or 0),
+                    "zero_delta_action_streak": int(bot.get("zero_delta_action_streak") or 0),
                 }
             )
 
@@ -764,6 +1131,17 @@ class SwarmManager:
         trade_outcomes_overall["trades_per_100_turns"] = (
             (float(trade_outcomes_overall["trades_executed"]) * 100.0 / float(overall_turns)) if overall_turns > 0 else 0.0
         )
+        trade_outcomes_overall["trade_success_rate"] = (
+            float(trade_outcomes_overall["trade_successes"]) / float(trade_outcomes_overall["trade_attempts"])
+            if int(trade_outcomes_overall.get("trade_attempts") or 0) > 0
+            else 0.0
+        )
+        trade_outcomes_overall["trade_failure_rate"] = (
+            float(trade_outcomes_overall["trade_failures"]) / float(trade_outcomes_overall["trade_attempts"])
+            if int(trade_outcomes_overall.get("trade_attempts") or 0) > 0
+            else 0.0
+        )
+        trade_outcomes_overall["trade_failure_reasons"] = trade_failure_reasons_total
 
         for strat in trade_outcomes_by_strategy_mode.values():
             offers = strat["haggle_accept"] + strat["haggle_counter"] + strat["haggle_too_high"] + strat["haggle_too_low"]
@@ -774,6 +1152,9 @@ class SwarmManager:
             strat_turns = int(strat.get("turns_executed") or 0)
             strat["trades_per_100_turns"] = (
                 (float(strat["trades_executed"]) * 100.0 / float(strat_turns)) if strat_turns > 0 else 0.0
+            )
+            strat["trade_success_rate"] = (
+                float(strat["trade_successes"]) / float(strat["trade_attempts"]) if int(strat["trade_attempts"]) > 0 else 0.0
             )
 
         return {
@@ -802,6 +1183,38 @@ class SwarmManager:
             "llm_wakeups_total": llm_wakeups_total,
             "autopilot_turns_total": autopilot_turns_total,
             "goal_contract_failures_total": goal_contract_failures_total,
+            "trade_attempts_total": trade_attempts_total,
+            "trade_successes_total": trade_successes_total,
+            "trade_failures_total": trade_failures_total,
+            "trade_failure_reasons_total": trade_failure_reasons_total,
+            "trade_outcomes_by_port_resource_total": trade_outcomes_by_port_resource_total,
+            "trade_outcomes_by_pair_total": trade_outcomes_by_pair_total,
+            "prompt_telemetry_total": prompt_telemetry_total,
+            "warp_telemetry_total": warp_telemetry_total,
+            "warp_failure_reasons_total": warp_failure_reasons_total,
+            "decision_counts_considered_total": decision_counts_considered_total,
+            "decision_counts_executed_total": decision_counts_executed_total,
+            "decision_override_total": decision_override_total,
+            "decision_override_reasons_total": decision_override_reasons_total,
+            "valuation_source_units_total": valuation_source_units_total,
+            "valuation_source_value_total": valuation_source_value_total,
+            "valuation_confidence_avg": (
+                float(valuation_confidence_sum) / float(valuation_confidence_bots)
+                if valuation_confidence_bots > 0
+                else 0.0
+            ),
+            "route_churn_total": route_churn_total,
+            "route_churn_reasons_total": route_churn_reasons_total,
+            "combat_telemetry_total": combat_telemetry_total,
+            "attrition_telemetry_total": attrition_telemetry_total,
+            "opportunity_telemetry_total": opportunity_telemetry_total,
+            "action_latency_telemetry_total": action_latency_telemetry_total,
+            "delta_attribution_telemetry_total": delta_attribution_telemetry_total,
+            "anti_collapse_runtime_total": anti_collapse_runtime_total,
+            "action_counts_total": action_counts_total,
+            "recovery_actions_total": recovery_actions_total,
+            "zombie_traders_120_1": zombie_traders_120_1,
+            "zombie_traders_200_2": zombie_traders_200_2,
             "llm_wakeups_per_100_turns": (
                 (float(llm_wakeups_total) * 100.0 / float(status.total_turns)) if status.total_turns > 0 else 0.0
             ),
@@ -954,11 +1367,36 @@ class SwarmManager:
                             haggle_too_high=bot_data.get("haggle_too_high", 0),
                             haggle_too_low=bot_data.get("haggle_too_low", 0),
                             trades_executed=bot_data.get("trades_executed", 0),
+                            trade_attempts=bot_data.get("trade_attempts", 0),
+                            trade_successes=bot_data.get("trade_successes", 0),
+                            trade_failures=bot_data.get("trade_failures", 0),
+                            trade_failure_reasons=bot_data.get("trade_failure_reasons", {}),
+                            trade_outcomes_by_port_resource=bot_data.get("trade_outcomes_by_port_resource", {}),
+                            trade_outcomes_by_pair=bot_data.get("trade_outcomes_by_pair", {}),
                             credits_delta=bot_data.get("credits_delta", 0),
                             credits_per_turn=bot_data.get("credits_per_turn", 0.0),
+                            turns_since_last_trade=bot_data.get("turns_since_last_trade", 0),
+                            move_streak=bot_data.get("move_streak", 0),
+                            zero_delta_action_streak=bot_data.get("zero_delta_action_streak", 0),
+                            prompt_telemetry=bot_data.get("prompt_telemetry", {}),
+                            warp_telemetry=bot_data.get("warp_telemetry", {}),
+                            warp_failure_reasons=bot_data.get("warp_failure_reasons", {}),
+                            decision_counts_considered=bot_data.get("decision_counts_considered", {}),
+                            decision_counts_executed=bot_data.get("decision_counts_executed", {}),
+                            decision_override_total=bot_data.get("decision_override_total", 0),
+                            decision_override_reasons=bot_data.get("decision_override_reasons", {}),
+                            valuation_source_units_total=bot_data.get("valuation_source_units_total", {}),
+                            valuation_source_value_total=bot_data.get("valuation_source_value_total", {}),
+                            valuation_source_units_last=bot_data.get("valuation_source_units_last", {}),
+                            valuation_source_value_last=bot_data.get("valuation_source_value_last", {}),
+                            valuation_confidence_last=bot_data.get("valuation_confidence_last", 0.0),
+                            route_churn_total=bot_data.get("route_churn_total", 0),
+                            route_churn_reasons=bot_data.get("route_churn_reasons", {}),
                             llm_wakeups=bot_data.get("llm_wakeups", 0),
                             autopilot_turns=bot_data.get("autopilot_turns", 0),
                             goal_contract_failures=bot_data.get("goal_contract_failures", 0),
+                            action_counters=bot_data.get("action_counters", {}),
+                            recovery_actions=bot_data.get("recovery_actions", 0),
                             llm_wakeups_per_100_turns=bot_data.get("llm_wakeups_per_100_turns", 0.0),
                         )
                 logger.info(f"Loaded {len(state.get('bots', {}))} bots from {self.state_file}")

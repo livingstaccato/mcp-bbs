@@ -17,6 +17,7 @@
   --red: #f85149;
   --yellow: #d29922;
   --blue: #58a6ff;
+  --purple: #a371f7;
   --cyan: #39c5cf;
   --border: #30363d;
   --page-max-width: 1480px;
@@ -223,14 +224,23 @@ body {
   border-radius: 6px;
   padding: 8px 10px;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.8fr);
   gap: 10px;
   align-items: stretch;
   width: calc(100% - 40px);
   max-width: var(--page-max-width);
+  height: 248px;
+  min-height: 248px;
+  max-height: 248px;
+  overflow: hidden;
 }
 .strategy-panel {
   min-width: 0;
+  min-height: 0;
+}
+.strategy-panel.strategy-panel-cpt {
+  display: flex;
+  flex-direction: column;
 }
 .strategy-panel + .strategy-panel {
   border-left: 1px solid rgba(48, 54, 61, 0.7);
@@ -254,13 +264,17 @@ body {
   margin-top: 0;
   border-top: none;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 .strategy-trend-head {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .strategy-trend-title {
   font-size: 9px;
@@ -323,10 +337,10 @@ body {
   fill: rgba(57, 197, 207, 0.86);
 }
 .trend-line-credits {
-  stroke: rgba(57, 197, 207, 0.92);
+  stroke: rgba(63, 185, 80, 0.92);
 }
 .trend-line-fuel {
-  stroke: rgba(63, 185, 80, 0.92);
+  stroke: rgba(163, 113, 247, 0.92);
 }
 .trend-line-org {
   stroke: rgba(245, 158, 11, 0.92);
@@ -335,10 +349,10 @@ body {
   stroke: rgba(96, 165, 250, 0.92);
 }
 .trend-last-credits {
-  fill: rgba(57, 197, 207, 0.95);
+  fill: rgba(63, 185, 80, 0.95);
 }
 .trend-last-fuel {
-  fill: rgba(63, 185, 80, 0.95);
+  fill: rgba(163, 113, 247, 0.95);
 }
 .trend-last-org {
   fill: rgba(245, 158, 11, 0.95);
@@ -355,12 +369,172 @@ body {
   fill: var(--fg2);
   letter-spacing: 0.2px;
 }
-.strategy-cpt-table-wrap {
+.run-resources-board {
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  width: 100%;
+  max-width: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+.run-resource-row {
+  border: 1px solid rgba(48, 54, 61, 0.72);
+  border-radius: 4px;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 2.4fr);
+  min-height: 0;
   overflow: hidden;
+}
+.run-resource-cell {
+  padding: 3px 6px;
+  min-width: 0;
+}
+.run-resource-cell.right {
+  border-left: 1px solid rgba(48, 54, 61, 0.7);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 0;
+}
+.run-resource-title {
+  display: block;
+  font-size: 8px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 1px;
+  white-space: nowrap;
+}
+.run-credit-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px 8px;
+}
+.run-stat {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+.run-stat .k {
+  display: block;
+  font-size: 6px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+  white-space: nowrap;
+}
+.run-stat .v {
+  display: block;
+  margin-top: 0;
+  font-size: 9px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.run-stat .v.credits {
+  color: var(--green);
+}
+.run-stat .v.banked {
+  color: var(--fg2);
+}
+.run-stat .v.net {
+  color: var(--cyan);
+}
+.run-resource-now {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1px;
+}
+.resource-now-item {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+.resource-now-label {
+  display: block;
+  font-size: 6px;
+  color: var(--fg2);
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+  white-space: nowrap;
+}
+.resource-now-value {
+  display: block;
+  margin-top: 0;
+  font-size: 9px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.resource-now-value.empty {
+  color: #646d7a;
+}
+.resource-now-value.has {
+  color: #d8dfe8;
+}
+.run-chart-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin-top: 1px;
+}
+@media (min-width: 941px) {
+  .strategy-panel.strategy-panel-trend {
+    display: flex;
+    align-items: stretch;
+    min-height: 0;
+  }
+}
+.run-chart-baseline {
+  stroke: rgba(139, 148, 158, 0.18);
+  stroke-width: 1;
+}
+.run-chart-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.run-chart-dot {
+  r: 2.7;
+}
+.run-chart-label {
+  font-size: 9px;
+  fill: var(--fg2);
+  letter-spacing: 0.2px;
+}
+.run-chart-line-credits { stroke: rgba(63, 185, 80, 0.95); }
+.run-chart-dot-credits { fill: rgba(63, 185, 80, 0.95); }
+.run-chart-line-banked { stroke: rgba(139, 148, 158, 0.95); }
+.run-chart-dot-banked { fill: rgba(139, 148, 158, 0.95); }
+.run-chart-line-ore { stroke: rgba(163, 113, 247, 0.95); }
+.run-chart-dot-ore { fill: rgba(163, 113, 247, 0.95); }
+.run-chart-line-org { stroke: rgba(245, 158, 11, 0.95); }
+.run-chart-dot-org { fill: rgba(245, 158, 11, 0.95); }
+.run-chart-line-equip { stroke: rgba(96, 165, 250, 0.95); }
+.run-chart-dot-equip { fill: rgba(96, 165, 250, 0.95); }
+.run-chart-empty {
+  font-size: 10px;
+  fill: var(--fg2);
+}
+.strategy-cpt-table-wrap {
+  overflow: auto;
   border-top: 1px solid rgba(48, 54, 61, 0.65);
   border-radius: 0;
   background: transparent;
   margin-top: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .strategy-cpt-table {
   width: 100%;
@@ -508,12 +682,12 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .pool-table-wrap {
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 .pool-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
 }
 .pool-table th,
 .pool-table td {
@@ -531,16 +705,44 @@ body {
   font-size: 10px;
   letter-spacing: 0.4px;
 }
-.pool-table th:nth-child(1), .pool-table td:nth-child(1) { width: 20%; }
-.pool-table th:nth-child(2), .pool-table td:nth-child(2) { width: 16%; }
-.pool-table th:nth-child(3), .pool-table td:nth-child(3) { width: 10%; }
-.pool-table th:nth-child(4), .pool-table td:nth-child(4) { width: 10%; }
-.pool-table th:nth-child(5), .pool-table td:nth-child(5) { width: 8%; text-align: center; font-variant-numeric: tabular-nums; }
-.pool-table th:nth-child(6), .pool-table td:nth-child(6) { width: 22%; }
-.pool-table th:nth-child(7), .pool-table td:nth-child(7) { width: 14%; text-align: right; font-variant-numeric: tabular-nums; }
+.pool-table th:nth-child(1), .pool-table td:nth-child(1) { width: 18%; }
+.pool-table th:nth-child(2), .pool-table td:nth-child(2) { width: 20%; }
+.pool-table th:nth-child(3), .pool-table td:nth-child(3) { width: 24%; }
+.pool-table th:nth-child(4), .pool-table td:nth-child(4) { width: 8%; }
+.pool-table th:nth-child(5), .pool-table td:nth-child(5) { width: 8%; }
+.pool-table th:nth-child(6), .pool-table td:nth-child(6) { width: 7%; text-align: center; font-variant-numeric: tabular-nums; }
+.pool-table th:nth-child(7), .pool-table td:nth-child(7) { width: 10%; }
+.pool-table th:nth-child(8), .pool-table td:nth-child(8) { width: 5%; text-align: right; font-variant-numeric: tabular-nums; }
 .pool-table td.num {
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+.pool-status-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pool-status-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 148, 158, 0.38);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fg2);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
+}
+.pool-status-pill.ai { color: var(--cyan); border-color: rgba(57, 197, 207, 0.5); }
+.pool-status-pill.hijacked { color: #ff8c86; border-color: rgba(248, 81, 73, 0.7); background: rgba(248, 81, 73, 0.16); }
+.pool-status-pill.running { color: var(--green); border-color: rgba(63, 185, 80, 0.55); }
+.pool-status-pill.active { color: var(--yellow); border-color: rgba(210,153,34,0.55); }
+.pool-status-pill.error { color: var(--red); border-color: rgba(248,81,73,0.55); }
+.pool-status-meta {
+  color: var(--fg2);
+  font-size: 10px;
 }
 .card {
   background: var(--bg2);
@@ -900,6 +1102,30 @@ tbody tr:hover { background: var(--bg3); }
 .state.warning { color: #f0883e; }
 .numeric { text-align: center; font-variant-numeric: tabular-nums; }
 .credit-cell { transition: color 220ms ease; }
+.credit-glyph {
+  opacity: 0.72;
+  font-size: 11px;
+  margin-right: 4px;
+}
+.cargo-fuel-cell,
+.cargo-org-cell,
+.cargo-equip-cell {
+  transition: color 160ms ease, opacity 160ms ease;
+}
+.cargo-fuel-cell { color: var(--purple); }
+.cargo-org-cell { color: var(--yellow); }
+.cargo-equip-cell { color: var(--blue); }
+.cargo-fuel-cell.hold-empty,
+.cargo-org-cell.hold-empty,
+.cargo-equip-cell.hold-empty {
+  opacity: 0.42;
+}
+.cargo-fuel-cell.hold-active,
+.cargo-org-cell.hold-active,
+.cargo-equip-cell.hold-active {
+  opacity: 0.95;
+  font-weight: 600;
+}
 .timecell { text-align: center; font-variant-numeric: tabular-nums; color: var(--fg2); }
 
 /* Hijack indicator */
@@ -1482,6 +1708,28 @@ tbody tr:hover { background: var(--bg3); }
     grid-template-columns: 1fr;
     gap: 8px;
     width: calc(100% - 32px);
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .run-resources-board {
+    margin: 0;
+    width: 100%;
+    grid-template-rows: repeat(2, minmax(0, auto));
+    gap: 8px;
+  }
+  .run-resource-row {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+  .run-resource-cell.right {
+    border-left: none;
+    border-top: 1px solid rgba(48, 54, 61, 0.7);
+    padding-top: 5px;
+  }
+  .run-chart-svg {
+    height: 92px;
+    min-height: 92px;
   }
   .strategy-panel + .strategy-panel {
     border-left: none;
@@ -1576,6 +1824,12 @@ tbody tr:hover { background: var(--bg3); }
   .strategy-trend-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .run-credit-stats {
+    grid-template-columns: 1fr;
+  }
+  .run-resource-now {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 620px) {
   .bot-table col.col-state { display: none; }
@@ -1661,9 +1915,9 @@ tbody tr:hover { background: var(--bg3); }
     <span class="sub">credits per turn</span>
   </div>
   <div class="top-stat">
-    <span class="k">Return / Trade</span>
+    <span class="k">Trade Success</span>
     <span class="v gauge" id="return-per-trade">-</span>
-    <span class="sub">credits per trade</span>
+    <span class="sub" id="trade-success-sub">successful attempts · -/100 turns</span>
   </div>
   <div class="top-stat">
     <span class="k">Trade Velocity</span>
@@ -1689,8 +1943,48 @@ tbody tr:hover { background: var(--bg3); }
       <div class="strategy-trend-head">
         <span class="strategy-trend-title">Run Resources (1m)</span>
       </div>
-      <div class="strategy-trend-metrics" id="strategy-trend-metrics"></div>
-      <svg class="strategy-trend-svg" id="strategy-trend-svg" viewBox="0 0 320 96" preserveAspectRatio="xMidYMid meet" aria-label="run-trend"></svg>
+      <section class="run-resources-board" aria-label="run-resources">
+        <div class="run-resource-row run-resource-row-top">
+          <div class="run-resource-cell left">
+            <span class="run-resource-title">Execution Signals</span>
+            <div class="run-credit-stats">
+              <div class="run-stat"><span class="k">Opp Seen</span><span class="v" id="run-trade-attempts">-</span></div>
+              <div class="run-stat"><span class="k">Combat Seen</span><span class="v" id="run-trade-failures">-</span></div>
+              <div class="run-stat"><span class="k">Under Attack</span><span class="v" id="run-fail-no-port">-</span></div>
+              <div class="run-stat"><span class="k">Unknown Delta</span><span class="v" id="run-fail-no-interact">-</span></div>
+              <div class="run-stat"><span class="k">Attrition (Cr)</span><span class="v" id="run-fail-wrong-side">-</span></div>
+              <div class="run-stat"><span class="k">Opp Exec Rate</span><span class="v" id="run-laggards">-</span></div>
+            </div>
+          </div>
+          <div class="run-resource-cell right">
+            <span class="run-resource-title">Credits + Banked (1m)</span>
+            <svg class="run-chart-svg" id="run-credits-chart-svg" viewBox="0 0 420 112" preserveAspectRatio="none" aria-label="credits-banked-trend"></svg>
+          </div>
+        </div>
+        <div class="run-resource-row run-resource-row-bottom">
+          <div class="run-resource-cell left">
+            <span class="run-resource-title">Resources Now</span>
+            <div class="run-resource-now">
+              <div class="resource-now-item">
+                <span class="resource-now-label">Ore</span>
+                <span class="resource-now-value empty" id="run-ore-now">-</span>
+              </div>
+              <div class="resource-now-item">
+                <span class="resource-now-label">Organics</span>
+                <span class="resource-now-value empty" id="run-org-now">-</span>
+              </div>
+              <div class="resource-now-item">
+                <span class="resource-now-label">Equipment</span>
+                <span class="resource-now-value empty" id="run-equip-now">-</span>
+              </div>
+            </div>
+          </div>
+          <div class="run-resource-cell right">
+            <span class="run-resource-title">Resources (1m)</span>
+            <svg class="run-chart-svg" id="run-resources-chart-svg" viewBox="0 0 420 112" preserveAspectRatio="none" aria-label="resources-trend"></svg>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </section>
@@ -1789,7 +2083,8 @@ tbody tr:hover { background: var(--bg3); }
               <thead>
                 <tr>
                   <th>User</th>
-                  <th>Lease</th>
+                  <th>Lease Bot</th>
+                  <th>Status</th>
                   <th>Game</th>
                   <th>Source</th>
                   <th>Uses</th>

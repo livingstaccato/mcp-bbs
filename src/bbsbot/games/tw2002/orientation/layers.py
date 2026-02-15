@@ -9,7 +9,7 @@ import asyncio
 from time import time
 from typing import TYPE_CHECKING
 
-from .detection import detect_context
+from .detection import _override_context_from_prompt, detect_context
 from .models import GameState, OrientationError
 from .parsing import parse_sector_display
 
@@ -85,6 +85,7 @@ async def _reach_safe_state(
 
     last_screen = ""
     consecutive_blank = 0
+    confirm_streak = 0
 
     for attempt in range(max_attempts):
         _set_orient_progress(bot, attempt + 1, max_attempts, "safe_state")
@@ -125,18 +126,49 @@ async def _reach_safe_state(
         else:
             consecutive_blank = 0
 
-        # Check if we're in a safe state using our context detection
-        context = detect_context(screen)
+        snap = bot.session.snapshot()
+        prompt_id = str((snap.get("prompt_detected") or {}).get("prompt_id") or "")
+
+        # Check if we're in a safe state using context detection, then refine
+        # with prompt IDs to avoid false-safe states on confirmation overlays.
+        context = _override_context_from_prompt(detect_context(screen), prompt_id)
+        if context != "confirm":
+            confirm_streak = 0
 
         if context in ("sector_command", "citadel_command"):
             _set_orient_progress(bot, 0, 0, "")
             print(f"  [Orient] Safe state reached: {context}")
-            return context, "", screen
+            return context, prompt_id, screen
 
         if context == "planet_command":
             print("  [Orient] On planet citadel, pressing Q to return to space...")
             await bot.session.send("Q")
             await asyncio.sleep(0.2)
+            continue
+
+        if context == "confirm":
+            confirm_streak += 1
+            if confirm_streak <= 3:
+                key = "N"
+            elif confirm_streak <= 6:
+                key = "Q"
+            elif confirm_streak <= 8:
+                key = " "
+            else:
+                key = "\x1b"
+            print(f"  [Orient] Confirmation prompt (streak={confirm_streak}), sending {repr(key)}...")
+            await bot.session.send(key)
+            await asyncio.sleep(0.35)
+            continue
+
+        if context == "autopilot":
+            if prompt_id == "prompt.stop_in_sector":
+                print("  [Orient] Autopilot stop prompt, sending E for express...")
+                await bot.session.send("E")
+            else:
+                print("  [Orient] Autopilot prompt, sending N...")
+                await bot.session.send("N")
+            await asyncio.sleep(0.35)
             continue
 
         if context == "pause":
