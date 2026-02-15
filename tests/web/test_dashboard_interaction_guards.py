@@ -117,3 +117,12 @@ def test_dashboard_bot_list_role_badges_present() -> None:
     assert ".chip.role.ai" in html
     assert ".chip.role.hijacked" in html
     assert "swarm_role" in js
+
+
+def test_dashboard_uses_cached_credits_with_unverified_style() -> None:
+    html = _dashboard_html()
+    js = _dashboard_js()
+    assert "lastKnownCreditsByBotId" in js
+    assert "credit-cell-unverified" in js
+    assert "Last known credits shown while reconnecting" in js
+    assert ".credit-cell.credit-cell-unverified" in html

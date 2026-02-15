@@ -943,7 +943,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         if not self._pairs:
             self._current_pair = None
             self._pair_phase = "idle"
-            bootstrap = None if (degraded or self._is_bootstrap_active()) else self._local_bootstrap_trade(state)
+            bootstrap = None if degraded else self._local_bootstrap_trade(state)
             if bootstrap is not None:
                 return bootstrap
             logger.info("No profitable pairs found, exploring")
@@ -953,7 +953,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         if self._current_pair is None:
             self._current_pair = self._select_best_pair(state)
             if self._current_pair is None:
-                bootstrap = None if (degraded or self._is_bootstrap_active()) else self._local_bootstrap_trade(state)
+                bootstrap = None if degraded else self._local_bootstrap_trade(state)
                 if bootstrap is not None:
                     return bootstrap
                 logger.info("No reachable/viable pair selected, exploring")
@@ -1289,6 +1289,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             max_total_turns = max(10, max_total_turns - 2)
 
         turns_used = int(getattr(self, "_turns_used", 0) or 0)
+        bootstrap_active = self._is_bootstrap_active()
+        throughput_degraded = self._is_trade_throughput_degraded()
         if self._is_attempt_budget_exhausted(turns_used):
             self._trade_quality_blocked_budget_exhausted += 1
             return None
@@ -1343,6 +1345,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             score_floor = float(self._trade_quality_controls.opportunity_score_min)
             if not self._is_pair_verified_lane(pair):
                 score_floor += float(self._trade_quality_controls.non_verified_lane_score_penalty)
+            if (not has_prices) and (bootstrap_active or credits_now < 1_500):
+                score_floor = min(score_floor, 0.35)
             if opportunity_score < score_floor:
                 self._trade_quality_blocked_low_score += 1
                 self._trade_quality_score_rejected_sum += opportunity_score
@@ -1364,7 +1368,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                     self._trade_quality_score_accepted_n += 1
             else:
                 # Unknown pricing: explore the closest structural pair to collect prices.
-                if self._is_trade_throughput_degraded() or self._is_bootstrap_active():
+                if throughput_degraded:
                     # Under degraded throughput, unknown-price probes mostly
                     # amplify wrong-side/no-port loops; prefer known-priced routes.
                     continue

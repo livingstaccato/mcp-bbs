@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.games.tw2002.worker import WorkerBot
 
@@ -13,6 +15,21 @@ class _ScreenStub:
 
     def get_screen(self) -> str:
         return self._text
+
+    def snapshot(self) -> dict:
+        return {"prompt_detected": {"prompt_id": "prompt.command_generic"}}
+
+    def is_connected(self) -> bool:
+        return True
+
+
+class _HttpStub:
+    def __init__(self) -> None:
+        self.last_json: dict | None = None
+
+    async def post(self, _url: str, json: dict):
+        self.last_json = json
+        return None
 
 
 def test_note_action_completion_attribution_precedence_and_attrition() -> None:
@@ -89,3 +106,23 @@ def test_note_action_completion_attribution_precedence_and_attrition() -> None:
         combat_evidence=False,
     )
     assert bot.delta_attribution_telemetry["delta_unknown"] == 1
+
+
+def test_report_status_captures_screen_action_tags_and_normalizes_ansi() -> None:
+    bot = WorkerBot(bot_id="bot_tags", config=BotConfig(), manager_url="http://localhost:9999")
+    bot.session = _ScreenStub(
+        "41m\x1b[1;31mThere is no port in this sector!\x1b[0m\n"
+        "<Move>\n"
+        "Command [TL=00:00:00]:[638] (?=Help)? :"
+    )
+    http = _HttpStub()
+    bot._http_client = http
+
+    asyncio.run(bot.report_status())
+
+    payload = http.last_json or {}
+    assert payload.get("screen_primary_action_tag") == "Move"
+    assert payload.get("screen_action_tags") == ["Move"]
+    assert payload.get("screen_action_tag_telemetry", {}).get("move", 0) >= 1
+    # A bare `41m`/ANSI-prefixed line should not derail command detection.
+    assert payload.get("activity_context") == "EXPLORING"

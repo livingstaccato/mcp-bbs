@@ -3195,20 +3195,22 @@ async def warp_to_sector(bot, target: int) -> bool:
         bot.loop_detection.reset()
         from bbsbot.games.tw2002 import orientation
 
-        # Preflight: only issue warp keys from a stable command prompt.
-        quick_state = await orientation.where_am_i(bot, timeout_ms=100)
-        if quick_state.context not in ("sector_command", "citadel_command"):
-            logger.warning(
-                "warp_preflight_recover: context=%s prompt_id=%s target=%s",
-                quick_state.context,
-                quick_state.prompt_id,
-                target,
-            )
-            await bot.recover()
-            quick_state = await orientation.where_am_i(bot, timeout_ms=120)
+        recover = getattr(bot, "recover", None)
+        if callable(recover):
+            # Preflight: only issue warp keys from a stable command prompt.
+            quick_state = await orientation.where_am_i(bot, timeout_ms=100)
             if quick_state.context not in ("sector_command", "citadel_command"):
-                _note_hop(False, "preflight_not_safe")
-                return False
+                logger.warning(
+                    "warp_preflight_recover: context=%s prompt_id=%s target=%s",
+                    quick_state.context,
+                    quick_state.prompt_id,
+                    target,
+                )
+                await recover()
+                quick_state = await orientation.where_am_i(bot, timeout_ms=120)
+                if quick_state.context not in ("sector_command", "citadel_command"):
+                    _note_hop(False, "preflight_not_safe")
+                    return False
 
         await bot.session.send(f"{target}\r")
         await asyncio.sleep(1.5)
@@ -3231,8 +3233,7 @@ async def warp_to_sector(bot, target: int) -> bool:
 
             # Autopilot route checkpoint prompt.
             if "stop in this sector" in screen and "(y,n" in screen:
-                # Prefer express mode to avoid per-hop stop prompts and navpoint/menu drift.
-                await bot.session.send("E" if "(y,n,e" in screen else "N")
+                await bot.session.send("N")
                 await asyncio.sleep(0.6)
                 continue
 

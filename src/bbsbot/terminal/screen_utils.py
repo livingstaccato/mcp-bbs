@@ -9,6 +9,49 @@ across different games and BBS systems.
 
 import re
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-_])")
+# Some TWGS/telnet bursts occasionally leak bare SGR fragments like `1;31m` at line
+# starts without the ESC prefix. Strip only when they look isolated.
+_BARE_SGR_RE = re.compile(r"(?:(?<=^)|(?<=\n)|(?<=\r)|(?<=\s))(?:\d{1,3}(?:;\d{1,3})*)m(?=\x1b|\s|$)")
+_BARE_SGR_LINE_PREFIX_RE = re.compile(r"(?m)^(?:\d{1,3}(?:;\d{1,3})*)m(?=[A-Z<])")
+_ACTION_TAG_RE = re.compile(r"<([^<>\r\n]{1,80})>")
+
+
+def normalize_terminal_text(text: str) -> str:
+    """Normalize terminal text for robust prompt/context parsing.
+
+    - Removes ANSI escape/control sequences.
+    - Removes isolated bare SGR fragments (e.g. ``1;31m``) seen in some TWGS output.
+    - Normalizes line endings.
+    """
+    if not text:
+        return ""
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = _ANSI_ESCAPE_RE.sub("", cleaned)
+    cleaned = _BARE_SGR_LINE_PREFIX_RE.sub("", cleaned)
+    cleaned = _BARE_SGR_RE.sub("", cleaned)
+    return cleaned
+
+
+def extract_action_tags(text: str, *, max_tags: int = 8) -> list[str]:
+    """Extract angle-bracket action tags like ``<Move>`` from a screen snapshot."""
+    if not text:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in _ACTION_TAG_RE.findall(text):
+        tag = str(raw or "").strip()
+        if not tag:
+            continue
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(tag)
+        if len(out) >= max(1, int(max_tags)):
+            break
+    return out
+
 
 def clean_screen_for_display(screen: str, max_lines: int = 30) -> list[str]:
     """Clean screen for display by removing padding lines.
@@ -129,6 +172,5 @@ def strip_ansi_codes(text: str) -> str:
     Returns:
         Text with ANSI codes removed
     """
-    # Pattern matches ANSI escape sequences
-    ansi_pattern = r"\x1b\[[0-9;]*[a-zA-Z]"
-    return re.sub(ansi_pattern, "", text)
+    # Keep backward-compatible function name, but route through the improved normalizer.
+    return normalize_terminal_text(text)

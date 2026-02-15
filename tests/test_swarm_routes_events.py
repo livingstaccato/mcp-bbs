@@ -80,6 +80,9 @@ def test_update_status_merges_diagnostics_telemetry_maps(tmp_path: Path) -> None
                     "blocked_unknown_side": 4,
                     "opportunity_score_avg_accepted": 0.52,
                 },
+                "screen_action_tags": ["Move", "Tow Control"],
+                "screen_primary_action_tag": "Move",
+                "screen_action_tag_telemetry": {"move": 3, "tow_control": 1},
                 "swarm_role": "scout",
             },
         )
@@ -102,6 +105,9 @@ def test_update_status_merges_diagnostics_telemetry_maps(tmp_path: Path) -> None
                     "blocked_unknown_side": 2,
                     "opportunity_score_avg_accepted": 0.61,
                 },
+                "screen_action_tags": ["Tow Control"],
+                "screen_primary_action_tag": "Tow Control",
+                "screen_action_tag_telemetry": {"move": 2, "tow_control": 4},
             },
         )
         assert resp2.status_code == 200
@@ -122,6 +128,10 @@ def test_update_status_merges_diagnostics_telemetry_maps(tmp_path: Path) -> None
     assert bot.trade_quality_runtime["strict_eligibility_active"] is False
     assert bot.trade_quality_runtime["blocked_unknown_side"] == 4
     assert float(bot.trade_quality_runtime["opportunity_score_avg_accepted"]) >= 0.61
+    assert bot.screen_action_tags == ["Tow Control"]
+    assert bot.screen_primary_action_tag == "Tow Control"
+    assert bot.screen_action_tag_telemetry["move"] == 3
+    assert bot.screen_action_tag_telemetry["tow_control"] == 4
     assert bot.swarm_role == "scout"
 
 
@@ -185,6 +195,33 @@ def test_update_status_normalizes_detail_values(tmp_path: Path) -> None:
     bot = manager.bots["bot_010"]
     assert bot.activity_context == "EXPLORING"
     assert bot.status_detail == "PORT HAGGLE"
+
+
+def test_update_status_ignores_unverified_zero_credit_regression(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_credit_guard"] = BotStatus(
+        bot_id="bot_credit_guard",
+        pid=912,
+        config="config/swarm_demo/bot_credit_guard.yaml",
+        state="running",
+        credits=950,
+        credits_verified=True,
+    )
+
+    with TestClient(manager.app) as client:
+        resp = client.post(
+            "/bot/bot_credit_guard/status",
+            json={
+                "reported_at": 60.0,
+                "credits": 0,
+                "credits_verified": False,
+            },
+        )
+        assert resp.status_code == 200
+
+    bot = manager.bots["bot_credit_guard"]
+    assert bot.credits == 950
+    assert bot.credits_verified is False
 
 
 def test_update_status_keeps_turn_and_trade_counters_monotonic(tmp_path: Path) -> None:

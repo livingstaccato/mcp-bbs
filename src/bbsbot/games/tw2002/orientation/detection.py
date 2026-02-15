@@ -6,8 +6,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import re
 from typing import TYPE_CHECKING
+
+from bbsbot.terminal import normalize_terminal_text
 
 from .models import OrientationError, QuickState
 
@@ -76,6 +79,7 @@ def detect_context(screen: str) -> str:
         death           - Ship destroyed
         unknown         - Can't determine
     """
+    screen = normalize_terminal_text(screen or "")
     lines = [line_text.strip() for line_text in screen.split("\n") if line_text.strip()]
     if not lines:
         return "unknown"
@@ -305,8 +309,19 @@ async def where_am_i(bot: TradingBot, timeout_ms: int = 50) -> QuickState:
     Returns:
         QuickState with context and basic info
     """
-    if not getattr(bot, "session", None) or not bot.session.is_connected():
+    session = getattr(bot, "session", None)
+    if not session:
         return QuickState(context="unknown", suggested_action="reconnect")
+    is_connected = getattr(session, "is_connected", None)
+    if callable(is_connected):
+        try:
+            connected = is_connected()
+            if inspect.isawaitable(connected):
+                connected = await connected
+            if not bool(connected):
+                return QuickState(context="unknown", suggested_action="reconnect")
+        except Exception:
+            return QuickState(context="unknown", suggested_action="reconnect")
 
     snap = bot.session.snapshot()
     screen = snap.get("screen", "")

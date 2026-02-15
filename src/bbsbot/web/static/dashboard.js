@@ -25,6 +25,7 @@
   let summary15CacheTs = 0;
   let summary15Inflight = null;
   const latestBotsById = new Map();
+  const lastKnownCreditsByBotId = new Map();
 
   const $ = (sel) => document.querySelector(sel);
   const dot = $("#dot");
@@ -638,6 +639,9 @@
       trueCpt: nwpt,
       tradesPer100: t100,
       returnPerTrade: rpt,
+      roiConfidence: Number(delta.roi_confidence || 0),
+      roiLowConfidence: !!delta.roi_low_confidence,
+      roiConfidenceReasons: Array.isArray(delta.roi_confidence_reasons) ? delta.roi_confidence_reasons : [],
     };
   }
 
@@ -994,6 +998,10 @@
       for (const b of (data.bots || [])) {
         const botId = String((b && b.bot_id) || "");
         if (botId) latestBotsById.set(botId, b);
+        const credits = Number((b && b.credits) ?? -1);
+        if (botId && isFinite(credits) && credits >= 0) {
+          lastKnownCreditsByBotId.set(botId, credits);
+        }
       }
 	    // Update stats immediately (lightweight)
 	    $("#running").textContent = data.running;
@@ -1027,8 +1035,15 @@
       let displayDelta = computeRecentRunDeltas(runDelta);
       displayDelta = canonicalDisplayDelta(displayDelta);
       if (returnPerTurnEl) {
-        returnPerTurnEl.textContent = formatSigned(displayDelta.trueCpt, 2);
+        const cptText = formatSigned(displayDelta.trueCpt, 2);
+        returnPerTurnEl.textContent = displayDelta.roiLowConfidence ? `~${cptText}` : cptText;
         returnPerTurnEl.style.color = strategyCptColor(displayDelta.trueCpt) || "";
+        if (displayDelta.roiLowConfidence) {
+          const reasons = (displayDelta.roiConfidenceReasons || []).join(", ") || "insufficient data quality";
+          returnPerTurnEl.title = `Low confidence ROI (${Number(displayDelta.roiConfidence || 0).toFixed(2)}): ${reasons}`;
+        } else {
+          returnPerTurnEl.title = "";
+        }
       }
       if (returnPerTradeEl) {
         const summaryDelta = (summary15Cache && summary15Cache.delta) ? summary15Cache.delta : null;
@@ -1261,7 +1276,14 @@
         const updatedDisplay = b.last_action_time ? formatRelativeTime(b.last_action_time) : "-";
 
         // Display "-" for uninitialized numeric fields
-        const creditsDisplay = b.credits >= 0 ? formatCredits(b.credits) : "-";
+        const botId = String(b.bot_id || "");
+        const liveCredits = Number(b.credits);
+        const hasLiveCredits = isFinite(liveCredits) && liveCredits >= 0;
+        const cachedCredits = botId ? lastKnownCreditsByBotId.get(botId) : undefined;
+        const hasCachedCredits = isFinite(Number(cachedCredits)) && Number(cachedCredits) >= 0;
+        const useRecoveredCredits = !hasLiveCredits && hasCachedCredits;
+        const creditsValue = hasLiveCredits ? liveCredits : (useRecoveredCredits ? Number(cachedCredits) : null);
+        const creditsDisplay = creditsValue != null ? formatCredits(creditsValue) : "-";
         const fuelValue = (b.cargo_fuel_ore === null || b.cargo_fuel_ore === undefined) ? null : Number(b.cargo_fuel_ore);
         const orgValue = (b.cargo_organics === null || b.cargo_organics === undefined) ? null : Number(b.cargo_organics);
         const equipValue = (b.cargo_equipment === null || b.cargo_equipment === undefined) ? null : Number(b.cargo_equipment);
@@ -1290,14 +1312,18 @@
             `<div class="strategy-intent${strategyNote ? "" : " subtle-empty"}">${esc(strategyLine2)}</div>` +
           `</div>`;
 
-        const creditsColor = b.credits >= 0 ? creditColor(b.credits) : "";
+        const creditsColor = hasLiveCredits ? creditColor(liveCredits) : "";
+        const creditCellClass = useRecoveredCredits ? "credit-cell credit-cell-unverified" : "credit-cell";
+        const creditCellTitle = useRecoveredCredits
+          ? "Last known credits shown while reconnecting; waiting for fresh verification."
+          : "";
         return `<tr>
 	        <td title="${esc(b.bot_id)}">${esc(String(b.bot_id || "-"))}</td>
 	        <td>${stateHtml}</td>
 	        <td>${activityHtml}</td>
 	        <td>${strategyHtml}</td>
 	        <td class="numeric">${b.sector}</td>
-	        <td class="numeric credit-cell"${creditsColor ? ` style="color:${creditsColor}"` : ""}><span class="credit-glyph">${esc(creditGlyph())}</span>${creditsDisplay}</td>
+	        <td class="numeric ${creditCellClass}"${creditsColor ? ` style="color:${creditsColor}"` : ""}${creditCellTitle ? ` title="${esc(creditCellTitle)}"` : ""}><span class="credit-glyph">${esc(creditGlyph())}</span>${creditsDisplay}</td>
 	        <td class="numeric cargo-fuel-cell ${fuelStateClass}">${fuelDisplay}</td>
 	        <td class="numeric cargo-org-cell ${orgStateClass}">${orgDisplay}</td>
 	        <td class="numeric cargo-equip-cell ${equipStateClass}">${equipDisplay}</td>

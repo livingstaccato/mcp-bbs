@@ -14,5 +14,17 @@ trading:
     think_interval_turns: 8
     post_change_review_turns: 4
     show_goal_visualization: false
+  trade_quality:
+    strict_eligibility_enabled: true
+    strict_eligibility_require_known_side: true
+    strict_eligibility_require_port_presence: true
+    bootstrap_turns: 60
+    bootstrap_min_verified_lanes: 10
+    attempt_budget_window_turns: 45
+    attempt_budget_max_attempts: 5
+    opportunity_score_min: 0.8
+    reroute_wrong_side_ttl_s: 600
+    reroute_no_port_ttl_s: 1500
+    reroute_no_interaction_ttl_s: 240
 session:
   max_turns_per_session: 0

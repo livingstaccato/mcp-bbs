@@ -284,10 +284,22 @@ async def update_status(bot_id: str, update: dict):
         bot.status_reported_at = incoming_reported_at
     if "sector" in update:
         bot.sector = update["sector"]
-    # Accept any non-negative value (including 0).
-    # Only -1 means uninitialized, which we skip.
-    if "credits" in update and update["credits"] >= 0:
-        bot.credits = update["credits"]
+    if "credits" in update:
+        raw_credits = update.get("credits")
+        incoming_credits = int(raw_credits) if raw_credits is not None else -1
+        incoming_verified = bool(update.get("credits_verified", False))
+        if incoming_credits >= 0:
+            # Protect aggregate ROI from reconnect churn where unknown snapshots can
+            # transiently report 0 before a verified in-game prompt arrives.
+            if not (incoming_credits == 0 and not incoming_verified and int(bot.credits or -1) > 0):
+                bot.credits = incoming_credits
+            bot.credits_verified = incoming_verified
+            if incoming_verified:
+                bot.credits_last_verified_at = time.time()
+    if "credits_verified" in update and "credits" not in update:
+        bot.credits_verified = bool(update.get("credits_verified"))
+        if bot.credits_verified:
+            bot.credits_last_verified_at = time.time()
     if "turns_executed" in update:
         # Keep counters monotonic within a bot process lifetime.
         # Reconnect churn can emit stale/lower snapshots and should not drag totals backward.
@@ -321,6 +333,27 @@ async def update_status(bot_id: str, update: dict):
         bot.status_detail = detail or None
     if "prompt_id" in update:
         bot.prompt_id = update["prompt_id"]
+    if "screen_action_tags" in update:
+        tags = []
+        for item in list(update.get("screen_action_tags") or []):
+            tag = str(item or "").strip()
+            if not tag:
+                continue
+            tags.append(tag)
+            if len(tags) >= 8:
+                break
+        bot.screen_action_tags = tags
+    if "screen_primary_action_tag" in update:
+        tag = str(update.get("screen_primary_action_tag") or "").strip()
+        bot.screen_primary_action_tag = tag or None
+    if "screen_action_tag_telemetry" in update:
+        merged_tags = dict(bot.screen_action_tag_telemetry or {})
+        for key, value in dict(update.get("screen_action_tag_telemetry") or {}).items():
+            token = str(key or "").strip().lower()
+            if not token:
+                continue
+            merged_tags[token] = max(int(merged_tags.get(token, 0) or 0), int(value or 0))
+        bot.screen_action_tag_telemetry = merged_tags
     if "cargo_fuel_ore" in update:
         bot.cargo_fuel_ore = update["cargo_fuel_ore"]
     if "cargo_organics" in update:
@@ -596,8 +629,6 @@ async def update_status(bot_id: str, update: dict):
         bot.hostile_fighters = int(update["hostile_fighters"])
     if "under_attack" in update:
         bot.under_attack = bool(update["under_attack"])
-    import time
-
     bot.last_update_time = time.time()
     await _manager._broadcast_status()
     return {"ok": True}
@@ -712,6 +743,7 @@ async def get_bot_events(bot_id: str):
                 "trade_failures": bot.trade_failures,
                 "trade_failure_reasons": bot.trade_failure_reasons,
                 "action_counters": bot.action_counters,
+                "screen_action_tag_telemetry": bot.screen_action_tag_telemetry,
                 "recovery_actions": bot.recovery_actions,
                 "sector": bot.sector,
                 "credits": bot.credits,
@@ -730,6 +762,8 @@ async def get_bot_events(bot_id: str):
                 "state": bot.state,
                 "activity": bot.activity_context,
                 "status_detail": bot.status_detail,
+                "screen_action_tags": bot.screen_action_tags,
+                "screen_primary_action_tag": bot.screen_primary_action_tag,
                 "sector": bot.sector,
                 "credits": bot.credits,
                 "turns_executed": bot.turns_executed,

@@ -26,6 +26,7 @@ from bbsbot.games.tw2002.bot import TradingBot
 from bbsbot.games.tw2002.bot_identity_store import BotIdentityStore
 from bbsbot.games.tw2002.config import BotConfig
 from bbsbot.logging import get_logger
+from bbsbot.terminal import extract_action_tags, normalize_terminal_text
 
 logger = get_logger(__name__)
 
@@ -235,6 +236,7 @@ class WorkerBot(TradingBot):
         self.delta_attribution_telemetry: dict[str, int] = {}
         self.anti_collapse_runtime: dict[str, int | bool] = {}
         self.trade_quality_runtime: dict[str, int | float | bool] = {}
+        self.screen_action_tag_telemetry: dict[str, int] = {}
         self._last_hostile_fighters_seen: int = 0
         self._metrics_initialized: bool = False
 
@@ -275,6 +277,7 @@ class WorkerBot(TradingBot):
         self.delta_attribution_telemetry = {}
         self.anti_collapse_runtime = {}
         self.trade_quality_runtime = {}
+        self.screen_action_tag_telemetry = {}
         self._last_hostile_fighters_seen = 0
         with contextlib.suppress(Exception):
             self._last_trade_turn = 0
@@ -775,9 +778,11 @@ class WorkerBot(TradingBot):
             # This ensures activity always matches what's actually on screen
             activity = "INITIALIZING"
             current_screen = ""
+            normalized_screen = ""
             current_context = "unknown"
             prompt_id: str | None = None
             screen_lower = ""
+            action_tags: list[str] = []
             is_command_prompt = False
             screen_phase: str | None = None
             in_game_now = False
@@ -797,7 +802,13 @@ class WorkerBot(TradingBot):
                 except Exception:
                     prompt_id = None
 
-            screen_lower = (current_screen or "").lower()
+            normalized_screen = normalize_terminal_text(current_screen or "")
+            screen_lower = normalized_screen.lower()
+            action_tags = extract_action_tags(normalized_screen)
+            if action_tags:
+                for tag in action_tags:
+                    token = self._normalize_metric_key(tag) or "unknown"
+                    self._increment_map_counter(self.screen_action_tag_telemetry, token, 1)
             # This is the only reliable "in game" indicator on this server.
             is_command_prompt = "command [tl=" in screen_lower
             in_game_now = bool(
@@ -841,10 +852,10 @@ class WorkerBot(TradingBot):
             screen_phase = _screen_phase(screen_lower)
 
             # Detect REAL-TIME context from current screen
-            if current_screen.strip():
+            if normalized_screen.strip():
                 from bbsbot.games.tw2002.orientation.detection import detect_context
 
-                current_context = detect_context(current_screen)
+                current_context = detect_context(normalized_screen)
 
                 # Map detected context to human-readable activity
                 if current_context == "sector_command":
@@ -960,6 +971,8 @@ class WorkerBot(TradingBot):
             # Pause screens should show as Status, not Activity.
             if current_context == "pause":
                 status_detail = "PAUSED"
+            if action_tags and not status_detail:
+                status_detail = f"ACTION:{str(action_tags[0]).upper()}"
 
             # Final safety: if we already know we're in-game, don't present LOGGING_IN.
             if in_game_now and activity in ("LOGGING_IN", "CONNECTING"):
@@ -1082,6 +1095,21 @@ class WorkerBot(TradingBot):
             if credits_out >= 0 and self._session_start_credits is not None:
                 credits_delta = int(credits_out - self._session_start_credits)
             credits_per_turn = float(credits_delta) / float(self.turns_used) if self.turns_used > 0 else 0.0
+            login_like_statuses = {
+                "USERNAME",
+                "GAME_PASSWORD",
+                "GAME_SELECTION",
+                "MENU_SELECTION",
+                "CREATING_CHARACTER",
+                "CHOOSING_PASSWORD",
+                "DISCONNECTED",
+            }
+            credits_verified = bool(
+                credits_out >= 0
+                and in_game_now
+                and activity not in {"LOGGING_IN", "GAME_SELECTION_MENU", "CONNECTING", "INITIALIZING"}
+                and (status_detail not in login_like_statuses)
+            )
             last_trade_turn = int(getattr(self, "_last_trade_turn", 0) or 0)
             turns_since_last_trade = int(self.turns_used) if last_trade_turn <= 0 else max(
                 0,
@@ -1116,6 +1144,8 @@ class WorkerBot(TradingBot):
                 "activity_context": activity,
                 "status_detail": status_detail,
                 "prompt_id": prompt_id,
+                "screen_action_tags": list(action_tags),
+                "screen_primary_action_tag": (action_tags[0] if action_tags else None),
                 "strategy": strategy_display,
                 "strategy_id": strategy_name,
                 "strategy_mode": strategy_mode,
@@ -1127,6 +1157,7 @@ class WorkerBot(TradingBot):
                 "bank_balance": int(bank_balance),
                 "cargo_estimated_value": int(cargo_estimated_value),
                 "net_worth_estimate": int(net_worth_estimate),
+                "credits_verified": bool(credits_verified),
                 "recent_actions": self.recent_actions[-10:],  # Last 10 actions
                 "haggle_accept": int(self.haggle_accept),
                 "haggle_counter": int(self.haggle_counter),
@@ -1214,6 +1245,8 @@ class WorkerBot(TradingBot):
                 if self.turns_used > 0
                 else 0.0
             )
+            if self.screen_action_tag_telemetry:
+                status_data["screen_action_tag_telemetry"] = dict(self.screen_action_tag_telemetry)
 
             # Update "last activity" memory after we've computed the final Activity value.
             # Do not record pause screens, since they are transient overlays.

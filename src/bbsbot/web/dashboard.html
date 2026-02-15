@@ -21,6 +21,7 @@
   --cyan: #39c5cf;
   --border: #30363d;
   --page-max-width: 1480px;
+  --header-controls-bg: #101722;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -37,9 +38,7 @@ body {
   padding: 10px 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "brand status"
-    "controls controls";
+  grid-template-areas: "brand status";
   align-items: center;
   position: relative;
   z-index: 1;
@@ -65,15 +64,19 @@ body {
 .dot.connected { background: var(--green); }
 .dot.disconnected { background: var(--red); }
 .header-controls {
-  grid-area: controls;
   display: flex;
   justify-content: flex-start;
   align-items: flex-end;
   gap: 10px;
   min-width: 0;
-  width: 100%;
+  width: calc(100% - 40px);
+  max-width: var(--page-max-width);
+  margin: 8px auto 0;
   flex-wrap: wrap;
-  padding-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(48, 54, 61, 0.9);
+  border-radius: 6px;
+  background: var(--header-controls-bg);
 }
 .spawn-field {
   display: flex;
@@ -1106,6 +1109,10 @@ tbody tr:hover { background: var(--bg3); }
 .state.warning { color: #f0883e; }
 .numeric { text-align: center; font-variant-numeric: tabular-nums; }
 .credit-cell { transition: color 220ms ease; }
+.credit-cell.credit-cell-unverified {
+  color: #4da8ff !important;
+  text-shadow: 0 0 6px rgba(77, 168, 255, 0.28);
+}
 .credit-glyph {
   opacity: 0.72;
   font-size: 11px;
@@ -1748,13 +1755,11 @@ tbody tr:hover { background: var(--bg3); }
   .header {
     padding: 10px 16px;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "brand status"
-      "controls controls";
+    grid-template-areas: "brand status";
     gap: 6px 12px;
   }
   .header-controls {
-    width: 100%;
+    width: calc(100% - 32px);
     justify-content: flex-start;
     align-items: end;
     gap: 10px;
@@ -1815,8 +1820,7 @@ tbody tr:hover { background: var(--bg3); }
     grid-template-columns: 1fr;
     grid-template-areas:
       "brand"
-      "status"
-      "controls";
+      "status";
     gap: 8px;
   }
   .header .status {
@@ -1863,34 +1867,34 @@ tbody tr:hover { background: var(--bg3); }
   <div class="header-brand">
     <h1>BBSBOT SWARM DASHBOARD</h1>
   </div>
-  <div class="header-controls">
-    <div class="spawn-field mix-field" title="Named bot mix templates">
-      <label for="spawn-preset">Mix</label>
-      <select id="spawn-preset">
-      <option value="custom">custom</option>
-      <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
-      <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
-      </select>
-    </div>
-    <div class="spawn-field config-field" title="Config profile used for custom mix">
-      <label for="spawn-config">Config</label>
-      <select id="spawn-config">
-        <option value="swarm_demo">tw2002_dynamic</option>
-        <option value="swarm_demo_ai">tw2002_ai</option>
-      </select>
-    </div>
-    <div class="spawn-field count-field" title="Used only when Mix is custom">
-      <label for="spawn-count">Count</label>
-      <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
-    </div>
-    <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
-    <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
-    <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
-  </div>
   <div class="status">
     <span class="dot disconnected" id="dot"></span>
     <span id="conn-status">Connecting...</span>
   </div>
+</div>
+<div class="header-controls">
+  <div class="spawn-field mix-field" title="Named bot mix templates">
+    <label for="spawn-preset">Mix</label>
+    <select id="spawn-preset">
+    <option value="custom">custom</option>
+    <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
+    <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
+    </select>
+  </div>
+  <div class="spawn-field config-field" title="Config profile used for custom mix">
+    <label for="spawn-config">Config</label>
+    <select id="spawn-config">
+      <option value="swarm_demo">tw2002_dynamic</option>
+      <option value="swarm_demo_ai">tw2002_ai</option>
+    </select>
+  </div>
+  <div class="spawn-field count-field" title="Used only when Mix is custom">
+    <label for="spawn-count">Count</label>
+    <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
+  </div>
+  <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
+  <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
+  <button class="btn" id="btn-clear" title="Clear all bot entries" style="border-color:var(--yellow);color:var(--yellow);">Clear</button>
 </div>
 
 <section class="top-stats">

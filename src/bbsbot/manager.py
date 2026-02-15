@@ -65,6 +65,8 @@ class BotStatus(BaseModel):
     state: str  # queued, running, completed, error, stopped
     sector: int = 0
     credits: int = -1  # -1 = uninitialized, 0+ = valid
+    credits_verified: bool = False
+    credits_last_verified_at: float | None = None
     turns_executed: int = 0
     turns_max: int = 500  # Max turns for this session
     uptime_seconds: float = 0
@@ -80,6 +82,9 @@ class BotStatus(BaseModel):
     activity_context: str | None = None  # current game context
     status_detail: str | None = None  # phase/prompt detail (e.g., USERNAME, PAUSED, PORT_HAGGLE)
     prompt_id: str | None = None  # last detected prompt id (debugging/diagnostics)
+    screen_action_tags: list[str] = Field(default_factory=list)
+    screen_primary_action_tag: str | None = None
+    screen_action_tag_telemetry: dict[str, int] = Field(default_factory=dict)
     # Cargo tracking (best-effort from semantic extraction)
     cargo_fuel_ore: int | None = None
     cargo_organics: int | None = None
@@ -526,8 +531,13 @@ class SwarmManager:
         for idx, row in enumerate(rows[1:], start=1):
             cur_turns = int(row.get("total_turns") or 0)
             cur_bots = int(row.get("total_bots") or 0)
-            # Run boundary: aggregate turns reset/drop or swarm explicitly cleared.
-            if cur_turns < prev_turns or (prev_bots > 0 and cur_bots == 0):
+            # Run boundary: explicit clear (bots -> 0) or a *large* turn reset.
+            # Minor regressions can occur during reconnect churn and should not
+            # split the epoch.
+            turn_drop = prev_turns - cur_turns
+            drop_threshold = max(50, int(prev_turns * 0.20))
+            hard_turn_reset = turn_drop > drop_threshold
+            if hard_turn_reset or (prev_bots > 0 and cur_bots == 0):
                 latest_epoch_start = idx
             prev_turns = cur_turns
             prev_bots = cur_bots
@@ -702,6 +712,7 @@ class SwarmManager:
         delta_delta_attribution_telemetry = _rolling_map_counter_delta("delta_attribution_telemetry_total")
         delta_anti_collapse_runtime = _rolling_map_counter_delta("anti_collapse_runtime_total")
         delta_trade_quality_runtime = _rolling_map_counter_delta("trade_quality_runtime_total")
+        delta_screen_action_tag_telemetry = _rolling_map_counter_delta("screen_action_tag_telemetry_total")
 
         strategy_delta_trades = _strategy_deltas("trades_executed")
         strategy_delta_turns = _strategy_deltas("turns_executed")
@@ -710,6 +721,33 @@ class SwarmManager:
             t = int(strategy_delta_trades.get(key, 0))
             u = int(strategy_delta_turns.get(key, 0))
             strategy_trades_per_100_turns[key] = (float(t) * 100.0 / float(u)) if u > 0 else 0.0
+
+        turn_regressions = 0
+        for i in range(1, len(window_rows)):
+            prev_turns = _safe_int(window_rows[i - 1], "total_turns")
+            cur_turns = _safe_int(window_rows[i], "total_turns")
+            if cur_turns < prev_turns:
+                turn_regressions += 1
+
+        roi_confidence = 1.0
+        roi_confidence_reasons: list[str] = []
+        if len(window_rows) < 8:
+            roi_confidence -= 0.35
+            roi_confidence_reasons.append("low_sample_count")
+        if delta_turns < 200:
+            roi_confidence -= 0.25
+            roi_confidence_reasons.append("low_turn_coverage")
+        success_rate = (float(delta_trade_successes) / float(delta_trade_attempts)) if delta_trade_attempts > 0 else 0.0
+        if delta_trade_attempts >= 20 and delta_trade_successes == 0:
+            roi_confidence -= 0.30
+            roi_confidence_reasons.append("zero_trade_success")
+        elif delta_trade_attempts >= 20 and success_rate < 0.03:
+            roi_confidence -= 0.20
+            roi_confidence_reasons.append("very_low_trade_success_rate")
+        if turn_regressions > 0:
+            roi_confidence -= 0.15
+            roi_confidence_reasons.append("turn_regressions_detected")
+        roi_confidence = max(0.0, min(1.0, roi_confidence))
 
         return {
             "window_minutes": minutes,
@@ -757,6 +795,7 @@ class SwarmManager:
                 "delta_attribution_telemetry": delta_delta_attribution_telemetry,
                 "anti_collapse_runtime": delta_anti_collapse_runtime,
                 "trade_quality_runtime": delta_trade_quality_runtime,
+                "screen_action_tag_telemetry": delta_screen_action_tag_telemetry,
                 "trade_quality": {
                     "block_rate": (
                         float(
@@ -791,6 +830,10 @@ class SwarmManager:
                 "llm_wakeups_per_100_turns": (
                     (float(delta_llm_wakeups) * 100.0 / float(delta_turns)) if delta_turns > 0 else 0.0
                 ),
+                "roi_confidence": roi_confidence,
+                "roi_low_confidence": bool(roi_confidence < 0.55),
+                "roi_confidence_reasons": roi_confidence_reasons,
+                "turn_regressions_detected": turn_regressions,
             },
             "last": {
                 "running": _safe_int(last, "running"),
@@ -802,6 +845,7 @@ class SwarmManager:
                 "total_credits": _safe_int(last, "total_credits"),
                 "total_bank_credits": _safe_int(last, "total_bank_credits"),
                 "total_net_worth_estimate": _safe_int(last, "total_net_worth_estimate"),
+                "credits_unverified_bots": _safe_int(last, "credits_unverified_bots"),
                 "llm_wakeups_total": _safe_int(last, "llm_wakeups_total"),
                 "autopilot_turns_total": _safe_int(last, "autopilot_turns_total"),
                 "goal_contract_failures_total": _safe_int(last, "goal_contract_failures_total"),
@@ -830,6 +874,7 @@ class SwarmManager:
                 "delta_attribution_telemetry_total": last.get("delta_attribution_telemetry_total") or {},
                 "anti_collapse_runtime_total": last.get("anti_collapse_runtime_total") or {},
                 "trade_quality_runtime_total": last.get("trade_quality_runtime_total") or {},
+                "screen_action_tag_telemetry_total": last.get("screen_action_tag_telemetry_total") or {},
                 "action_counts_total": last.get("action_counts_total") or {},
                 "recovery_actions_total": _safe_int(last, "recovery_actions_total"),
                 "zombie_traders_120_1": _safe_int(last, "zombie_traders_120_1"),
@@ -903,10 +948,12 @@ class SwarmManager:
         delta_attribution_telemetry_total: dict[str, int] = {}
         anti_collapse_runtime_total: dict[str, int] = {}
         trade_quality_runtime_total: dict[str, int] = {}
+        screen_action_tag_telemetry_total: dict[str, int] = {}
         action_counts_total: dict[str, int] = {}
         recovery_actions_total = 0
         zombie_traders_120_1 = 0
         zombie_traders_200_2 = 0
+        credits_unverified_bots = 0
         total_cargo_fuel_ore = 0
         total_cargo_organics = 0
         total_cargo_equipment = 0
@@ -929,6 +976,8 @@ class SwarmManager:
                 trading_bots += 1
 
             credits_delta = int(bot.get("credits_delta") or 0)
+            if not bool(bot.get("credits_verified", False)):
+                credits_unverified_bots += 1
             if credits_delta > 0:
                 profitable_bots += 1
 
@@ -1106,6 +1155,14 @@ class SwarmManager:
                     continue
                 with contextlib.suppress(Exception):
                     trade_quality_runtime_total[key] = int(trade_quality_runtime_total.get(key, 0) or 0) + int(float(val or 0))
+            for metric, val in (bot.get("screen_action_tag_telemetry") or {}).items():
+                key = str(metric or "").strip().lower()
+                if not key:
+                    continue
+                with contextlib.suppress(Exception):
+                    screen_action_tag_telemetry_total[key] = int(
+                        screen_action_tag_telemetry_total.get(key, 0) or 0
+                    ) + int(val or 0)
 
             trade_outcomes_overall["trades_executed"] += trades
             trade_outcomes_overall["turns_executed"] = int(trade_outcomes_overall.get("turns_executed") or 0) + turns
@@ -1157,8 +1214,11 @@ class SwarmManager:
                     "state": state,
                     "activity": bot.get("activity_context"),
                     "status": bot.get("status_detail"),
+                    "screen_action_tags": bot.get("screen_action_tags") or [],
+                    "screen_primary_action_tag": bot.get("screen_primary_action_tag"),
                     "sector": int(bot.get("sector") or 0),
                     "credits": int(bot.get("credits") or 0),
+                    "credits_verified": bool(bot.get("credits_verified", False)),
                     "bank_balance": int(bot.get("bank_balance") or 0),
                     "cargo_estimated_value": int(bot.get("cargo_estimated_value") or 0),
                     "net_worth_estimate": int(bot.get("net_worth_estimate") or 0),
@@ -1312,10 +1372,12 @@ class SwarmManager:
             "delta_attribution_telemetry_total": delta_attribution_telemetry_total,
             "anti_collapse_runtime_total": anti_collapse_runtime_total,
             "trade_quality_runtime_total": trade_quality_runtime_total,
+            "screen_action_tag_telemetry_total": screen_action_tag_telemetry_total,
             "action_counts_total": action_counts_total,
             "recovery_actions_total": recovery_actions_total,
             "zombie_traders_120_1": zombie_traders_120_1,
             "zombie_traders_200_2": zombie_traders_200_2,
+            "credits_unverified_bots": credits_unverified_bots,
             "llm_wakeups_per_100_turns": (
                 (float(llm_wakeups_total) * 100.0 / float(status.total_turns)) if status.total_turns > 0 else 0.0
             ),
@@ -1435,6 +1497,8 @@ class SwarmManager:
                             state=saved_state,
                             sector=bot_data.get("sector", 0),
                             credits=bot_data.get("credits", 0),
+                            credits_verified=bot_data.get("credits_verified", False),
+                            credits_last_verified_at=bot_data.get("credits_last_verified_at"),
                             turns_executed=bot_data.get("turns_executed", 0),
                             turns_max=bot_data.get("turns_max", 500),
                             uptime_seconds=bot_data.get("uptime_seconds", 0),
@@ -1446,6 +1510,11 @@ class SwarmManager:
                             last_action=bot_data.get("last_action"),
                             last_action_time=bot_data.get("last_action_time", 0),
                             activity_context=bot_data.get("activity_context"),
+                            status_detail=bot_data.get("status_detail"),
+                            prompt_id=bot_data.get("prompt_id"),
+                            screen_action_tags=bot_data.get("screen_action_tags", []),
+                            screen_primary_action_tag=bot_data.get("screen_primary_action_tag"),
+                            screen_action_tag_telemetry=bot_data.get("screen_action_tag_telemetry", {}),
                             error_type=bot_data.get("error_type"),
                             error_timestamp=bot_data.get("error_timestamp"),
                             exit_reason=bot_data.get("exit_reason"),

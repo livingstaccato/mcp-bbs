@@ -52,6 +52,7 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
         delta_attribution_telemetry={"delta_trade": 2, "delta_unknown": 1},
         anti_collapse_runtime={"controls_enabled": True, "trigger_throughput_degraded": 2},
         trade_quality_runtime={"blocked_unknown_side": 3, "verified_lanes_count": 2},
+        screen_action_tag_telemetry={"move": 4, "tow_control": 1},
         swarm_role="scout",
     )
     manager.bots["bot_001"] = BotStatus(
@@ -107,6 +108,7 @@ def test_timeseries_sample_written_with_per_bot_rows(tmp_path: Path) -> None:
     assert row["anti_collapse_runtime_total"]["trigger_throughput_degraded"] == 2
     assert row["trade_quality_runtime_total"]["blocked_unknown_side"] == 3
     assert row["trade_quality_runtime_total"]["verified_lanes_count"] == 2
+    assert row["screen_action_tag_telemetry_total"]["move"] == 4
     assert row["total_cargo_fuel_ore"] == 14
     assert row["total_cargo_organics"] == 7
     assert row["total_cargo_equipment"] == 14
@@ -164,6 +166,22 @@ def test_timeseries_recent_trims_to_latest_epoch(tmp_path: Path) -> None:
 
     recent = manager.get_timeseries_recent(limit=10)
     assert [r["reason"] for r in recent] == ["reset", "new_a", "new_b"]
+
+
+def test_timeseries_recent_does_not_trim_on_small_turn_regressions(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    rows = [
+        {"ts": time.time() - 60, "reason": "a", "total_turns": 1000, "total_bots": 20},
+        {"ts": time.time() - 40, "reason": "b", "total_turns": 980, "total_bots": 20},
+        {"ts": time.time() - 20, "reason": "c", "total_turns": 1030, "total_bots": 20},
+    ]
+    manager._timeseries_path.parent.mkdir(parents=True, exist_ok=True)
+    with manager._timeseries_path.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+    recent = manager.get_timeseries_recent(limit=10)
+    assert [r["reason"] for r in recent] == ["a", "b", "c"]
 
 
 def test_timeseries_summary_window(tmp_path: Path) -> None:
@@ -262,6 +280,9 @@ def test_timeseries_summary_window(tmp_path: Path) -> None:
     assert summary["delta"]["delta_attribution_telemetry"]["delta_trade"] >= 3
     assert summary["delta"]["anti_collapse_runtime"]["trigger_throughput_degraded"] >= 3
     assert summary["delta"]["trade_quality_runtime"]["blocked_unknown_side"] >= 3
+    assert "roi_confidence" in summary["delta"]
+    assert "roi_low_confidence" in summary["delta"]
+    assert "roi_confidence_reasons" in summary["delta"]
     assert summary["delta"]["trade_quality"]["block_rate"] >= 0.0
     assert summary["last"]["combat_telemetry_total"]["under_attack_reports"] >= 2
     assert summary["last"]["anti_collapse_runtime_total"]["trigger_throughput_degraded"] >= 4

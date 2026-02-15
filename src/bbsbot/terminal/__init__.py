@@ -9,9 +9,11 @@ from bbsbot.terminal.emulator import TerminalEmulator
 from bbsbot.terminal.screen import parse_screen_text
 from bbsbot.terminal.screen_utils import (
     clean_screen_for_display,
+    extract_action_tags,
     extract_key_value_pairs,
     extract_menu_options,
     extract_numbered_list,
+    normalize_terminal_text,
     strip_ansi_codes,
 )
 
@@ -19,6 +21,8 @@ __all__ = [
     "TerminalEmulator",
     "parse_screen_text",
     "clean_screen_for_display",
+    "normalize_terminal_text",
+    "extract_action_tags",
     "extract_key_value_pairs",
     "extract_menu_options",
     "extract_numbered_list",

@@ -12,6 +12,7 @@ from pathlib import Path
 from bbsbot.core.generic_io import InputSender, PromptWaiter, session_is_connected
 from bbsbot.games.tw2002.errors import _check_for_loop, _detect_error_in_screen
 from bbsbot.games.tw2002.parsing import extract_semantic_kv
+from bbsbot.terminal import normalize_terminal_text
 
 
 def _write_semantic_log(bot, data: dict) -> None:
@@ -102,6 +103,7 @@ async def wait_and_respond(
     # TW2002-specific: Callback for semantic extraction on each screen update
     def on_screen_update(screen: str) -> None:
         nonlocal last_screen_seen
+        screen = normalize_terminal_text(screen or "")
         if screen == last_screen_seen:
             return
         last_screen_seen = screen
