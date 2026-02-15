@@ -21,6 +21,9 @@
   let runBaselineNetWorth = null;
   let runBaselineTurns = null;
   let runBaselineTrades = null;
+  let summary15Cache = null;
+  let summary15CacheTs = 0;
+  let summary15Inflight = null;
   const latestBotsById = new Map();
 
   const $ = (sel) => document.querySelector(sel);
@@ -598,6 +601,46 @@
     return { deltaTurns, deltaTrades, deltaCredits, trueCpt, tradesPer100, returnPerTrade };
   }
 
+  async function refreshSummary15(force = false) {
+    const nowMs = Date.now();
+    if (!force && summary15Cache && (nowMs - summary15CacheTs) < 15000) {
+      return summary15Cache;
+    }
+    if (summary15Inflight) return summary15Inflight;
+    summary15Inflight = fetch("/swarm/timeseries/summary?window_minutes=15")
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data) => {
+        summary15Cache = data;
+        summary15CacheTs = Date.now();
+        return data;
+      })
+      .catch(() => summary15Cache)
+      .finally(() => {
+        summary15Inflight = null;
+      });
+    return summary15Inflight;
+  }
+
+  function canonicalDisplayDelta(localDelta) {
+    const delta = (summary15Cache && summary15Cache.delta) ? summary15Cache.delta : null;
+    if (!delta) return localDelta;
+    const turns = Number(delta.turns || 0);
+    if (!isFinite(turns) || turns <= 0) return localDelta;
+    const nwpt = Number(delta.net_worth_per_turn || 0);
+    const t100 = Number(delta.trades_per_100_turns || 0);
+    const trades = Number(delta.trades_executed || 0);
+    const netWorthDelta = Number(delta.net_worth_estimate || 0);
+    const rpt = trades > 0 ? (netWorthDelta / trades) : 0;
+    return {
+      deltaTurns: turns,
+      deltaTrades: trades,
+      deltaCredits: netWorthDelta,
+      trueCpt: nwpt,
+      tradesPer100: t100,
+      returnPerTrade: rpt,
+    };
+  }
+
   async function hydrateRunHistoryFromTimeseries() {
     if (runHistoryHydrated || runMetricHistory.length > 1) return;
     runHistoryHydrated = true;
@@ -945,6 +988,7 @@
 
   // --- Bot table rendering ---
 	  function update(data) {
+      refreshSummary15();
 	    lastData = data;
       latestBotsById.clear();
       for (const b of (data.bots || [])) {
@@ -981,18 +1025,25 @@
       const profitableRateSubEl = $("#profitable-rate-sub");
       const runDelta = computeRunDeltas(run);
       let displayDelta = computeRecentRunDeltas(runDelta);
+      displayDelta = canonicalDisplayDelta(displayDelta);
       if (returnPerTurnEl) {
         returnPerTurnEl.textContent = formatSigned(displayDelta.trueCpt, 2);
         returnPerTurnEl.style.color = strategyCptColor(displayDelta.trueCpt) || "";
       }
       if (returnPerTradeEl) {
-        const successRate = Number(run.tradeAttempts || 0) > 0
-          ? (Number(run.tradeSuccesses || 0) / Number(run.tradeAttempts || 1))
-          : 0;
+        const summaryDelta = (summary15Cache && summary15Cache.delta) ? summary15Cache.delta : null;
+        const summarySuccessRate = summaryDelta ? Number(summaryDelta.trade_success_rate || 0) : NaN;
+        const successRate = isFinite(summarySuccessRate)
+          ? summarySuccessRate
+          : (Number(run.tradeAttempts || 0) > 0
+            ? (Number(run.tradeSuccesses || 0) / Number(run.tradeAttempts || 1))
+            : 0);
         returnPerTradeEl.textContent = `${(successRate * 100).toFixed(1)}%`;
         returnPerTradeEl.style.color = successRate >= 0.4 ? "var(--green)" : (successRate >= 0.15 ? "var(--yellow)" : "var(--red)");
         if (tradeSuccessSubEl) {
-          tradeSuccessSubEl.textContent = `successful attempts · ${displayDelta.tradesPer100.toFixed(2)}/100 turns`;
+          const attempts = summaryDelta ? Number(summaryDelta.trade_attempts || 0) : Number(run.tradeAttempts || 0);
+          const successes = summaryDelta ? Number(summaryDelta.trade_successes || 0) : Number(run.tradeSuccesses || 0);
+          tradeSuccessSubEl.textContent = `successful attempts · ${formatCredits(Math.round(successes))}/${formatCredits(Math.round(attempts))} · ${displayDelta.tradesPer100.toFixed(2)}/100 turns`;
         }
       }
       if (tradesPer100El) {
@@ -1085,7 +1136,7 @@
         while (runMetricHistory.length > 240) runMetricHistory.shift();
         lastRunMetricSampleTs = nowS;
       }
-      displayDelta = computeRecentRunDeltas(runDelta);
+      displayDelta = canonicalDisplayDelta(computeRecentRunDeltas(runDelta));
       renderRunTrend(runtimeSec, { ...run, ...displayDelta });
 
       const metrics = computeAggregateMetrics(data);
