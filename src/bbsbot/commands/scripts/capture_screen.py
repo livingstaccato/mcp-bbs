@@ -5,6 +5,7 @@
 """Capture and save the actual screen the bot is seeing."""
 
 import asyncio
+from pathlib import Path
 
 from bbsbot.core.session_manager import SessionManager
 from bbsbot.paths import default_knowledge_root
@@ -40,9 +41,11 @@ async def main():
     print(f"Screen hash: {snapshot.get('screen_hash', 'N/A')[:16]}...")
 
     # Save to file
-    with open(".provide/bot-screen-capture.txt", "w") as f:
+    out_file = Path("logs/reports") / "bot-screen-capture.txt"
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    with out_file.open("w") as f:
         f.write(snapshot.get("screen", ""))
-    print("\n✓ Screen saved to .provide/bot-screen-capture.txt")
+    print(f"\n✓ Screen saved to {out_file}")
 
     await manager.close_all_sessions()
 

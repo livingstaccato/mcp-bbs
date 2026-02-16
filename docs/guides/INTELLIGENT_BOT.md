@@ -1,4 +1,4 @@
-# Intelligent TW2002 Bot - Implementation Guide
+# Intelligent TW2002 Bot Guide
 
 ## Overview
 
@@ -27,7 +27,7 @@ This implementation creates an intelligent automated player for Trade Wars 2002 
 
 ### Key Components
 
-#### IntelligentBot Class (`play_tw2002_intelligent.py`)
+#### IntelligentBot Class (`src/bbsbot/commands/scripts/play_tw2002_intelligent.py`)
 
 Core methods:
 - `wait_for_prompt(expected_prompt_id)` - Wait until prompt detected
@@ -43,21 +43,21 @@ Benefits:
 
 ## Files
 
-### New Scripts
+### Active Modules
 
-1. **`play_tw2002_intelligent.py`** - Main intelligent bot
+1. **`src/bbsbot/commands/scripts/play_tw2002_intelligent.py`** - Main intelligent bot runner
    - Implements hybrid reactive approach
    - Tests all patterns through gameplay
    - Tracks pattern matches and sequences
    - Generates comprehensive reports
 
-2. **`test_all_patterns.py`** - Systematic pattern validator
+2. **`src/bbsbot/commands/scripts/test_all_patterns.py`** - Systematic pattern validator
    - Tests each of 13 patterns individually
    - Uses specific trigger sequences
    - Validates pattern accuracy
    - Generates coverage report
 
-3. **`.provide/INTELLIGENT-BOT-README.md`** - This file
+3. **`docs/guides/INTELLIGENT_BOT.md`** - This file
    - Architecture documentation
    - Usage instructions
    - Pattern testing guide
@@ -88,11 +88,31 @@ Benefits:
 
 ## Usage
 
+### Current Command Surface (Recommended)
+
+Use play mode for the intelligent runner:
+
+```bash
+bbsbot tw2002 play --mode intelligent
+```
+
+Use direct bot mode with an AI strategy config:
+
+```bash
+bbsbot tw2002 bot -c examples/configs/ai_strategy_ollama.yml
+```
+
+Legacy compatibility command (still available, but not preferred):
+
+```bash
+bbsbot script play_tw2002_intelligent
+```
+
 ### Running the Intelligent Bot
 
 ```bash
 # Full playthrough with pattern testing
-python play_tw2002_intelligent.py
+bbsbot tw2002 play --mode intelligent
 ```
 
 This will:
@@ -102,13 +122,13 @@ This will:
 4. Test navigation (moving sectors)
 5. Test quit sequence
 6. Generate comprehensive report
-7. Save results to `.provide/intelligent-bot-{timestamp}.json`
+7. Save results to `logs/reports/intelligent-bot-{timestamp}.json`
 
 ### Running Pattern Validator
 
 ```bash
 # Systematic validation of all 13 patterns
-python test_all_patterns.py
+bbsbot script test_all_patterns
 ```
 
 This will:
@@ -116,7 +136,7 @@ This will:
 2. Validate detection accuracy
 3. Track pattern coverage
 4. Generate validation report
-5. Save to `.provide/pattern-validation-results.json`
+5. Save to `logs/reports/pattern-validation-results.json`
 
 ## Expected Output
 
@@ -169,7 +189,7 @@ INTELLIGENT TW2002 BOT - PROMPT DETECTION TESTING
 
 ### Generated Reports
 
-**JSON Report** (`.provide/intelligent-bot-{timestamp}.json`):
+**JSON Report** (`logs/reports/intelligent-bot-{timestamp}.json`):
 ```json
 {
   "timestamp": 1770159828,
@@ -200,7 +220,7 @@ INTELLIGENT TW2002 BOT - PROMPT DETECTION TESTING
 }
 ```
 
-**Markdown Report** (`.provide/intelligent-bot-{timestamp}.md`):
+**Markdown Report** (`logs/reports/intelligent-bot-{timestamp}.md`):
 - Summary statistics
 - Pattern matches
 - Unmatched patterns
@@ -329,7 +349,7 @@ For each pattern:
 ## Next Steps
 
 ### Phase 1: Run Tests ✓
-1. Run `play_tw2002_intelligent.py`
+1. Run `bbsbot tw2002 play --mode intelligent`
 2. Review pattern matches
 3. Check for false positives/negatives
 
@@ -420,7 +440,7 @@ class PredictiveBot(IntelligentBot):
 
 - Pattern definitions: `.bbs-knowledge/games/tw2002/prompts.json`
 - Saved screens: `.bbs-knowledge/games/tw2002/screens/`
-- Test results: `.provide/intelligent-bot-*.json`
+- Test results: `logs/reports/intelligent-bot-*.json`
 - Detector code: `src/bbsbot/learning/detector.py`
 
 ## Contributing
@@ -430,5 +450,5 @@ When adding new patterns:
 2. Identify the prompt text
 3. Write regex that matches uniquely
 4. Set correct `input_type`
-5. Test with `test_all_patterns.py`
+5. Test with `bbsbot script test_all_patterns`
 6. Validate no false positives

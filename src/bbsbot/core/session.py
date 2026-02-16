@@ -204,6 +204,32 @@ class Session(BaseModel):
             snap["prompt_detected"]["is_idle"] = self.is_idle()
         return snap
 
+    async def rescan_prompt(self) -> None:
+        """Re-run prompt detection on the current screen.
+
+        Useful after enabling learning on a session that already has data,
+        since the reader loop only runs detection when new data arrives.
+        """
+        if not self.learning:
+            logger.debug("rescan_prompt: no learning engine, skipping")
+            return
+        snapshot = self.emulator.get_snapshot()
+        try:
+            prompt_detection = await self.learning.process_screen(snapshot)
+        except Exception:
+            logger.exception("rescan_prompt: detection failed")
+            prompt_detection = None
+        if prompt_detection:
+            logger.debug("rescan_prompt: detected %s", prompt_detection.prompt_id)
+            self._latest_prompt_detected = {
+                "prompt_id": prompt_detection.prompt_id,
+                "input_type": prompt_detection.input_type,
+                "is_idle": prompt_detection.is_idle,
+                "kv_data": prompt_detection.kv_data,
+            }
+            async with self._update_cond:
+                self._update_cond.notify_all()
+
     def is_idle(self, threshold_s: float = 2.0) -> bool:
         if not self._last_screen_change_mono:
             return False

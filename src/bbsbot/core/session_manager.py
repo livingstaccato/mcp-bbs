@@ -315,6 +315,13 @@ class SessionManager:
         if namespace == "tedit":
             session.addons = AddonManager(addons=[TeditAddon()])
 
+        # Re-scan the current screen for prompts.  The reader loop only runs
+        # detection when new data arrives, so if the welcome screen was already
+        # fully received before learning was enabled, the prompt would be missed.
+        # Wait briefly for any in-flight data to be processed by the reader loop.
+        await asyncio.sleep(3.0)
+        await session.rescan_prompt()
+
         log.info(
             "learning_enabled",
             session_id=session_id,

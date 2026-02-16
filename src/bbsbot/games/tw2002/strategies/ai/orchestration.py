@@ -26,6 +26,9 @@ def _with_meta(
     wake_reason: str,
     review_after_turns: int | None = None,
     forced_contract: bool = False,
+    provider_disabled: bool | None = None,
+    provider_status: str | None = None,
+    provider_retry_turn: int | None = None,
 ) -> dict:
     """Attach orchestration metadata for downstream telemetry/logging."""
     out = dict(params or {})
@@ -39,6 +42,12 @@ def _with_meta(
             "forced_contract": bool(forced_contract),
         }
     )
+    if provider_disabled is not None:
+        meta["provider_disabled"] = bool(provider_disabled)
+    if provider_status is not None:
+        meta["provider_status"] = str(provider_status)
+    if provider_retry_turn is not None:
+        meta["provider_retry_turn"] = int(provider_retry_turn)
     out["__meta"] = meta
     return out
 
@@ -58,16 +67,42 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
     """
     strategy._current_turn += 1
 
-    # Verify Ollama is available on first call (warm up model)
+    # Verify Ollama is available before taking AI-directed actions.
+    # When unavailable, keep running managed fallback and retry verification on a turn cadence.
     if not strategy._ollama_verified:
-        try:
-            model = strategy.config.llm.get_model()
-            info = await strategy.llm_manager.verify_model(model)
-            strategy._ollama_verified = True
-            print(f"  [AI] Connected to Ollama, model: {info.get('name', model)}")
-        except Exception as e:
-            logger.error(f"ollama_not_available: {e}")
-            print(f"  [AI] Ollama not available: {e}, using fallback strategy")
+        retry_interval = max(1, int(getattr(strategy, "_ollama_retry_interval_turns", 12) or 12))
+        should_verify_now = strategy._current_turn >= int(getattr(strategy, "_ollama_next_retry_turn", 1) or 1)
+        if should_verify_now:
+            try:
+                model = strategy.config.llm.get_model()
+                info = await strategy.llm_manager.verify_model(model)
+                strategy._ollama_verified = True
+                strategy._ollama_disabled = False
+                strategy._ollama_disabled_reason = ""
+                print(f"  [AI] Connected to Ollama, model: {info.get('name', model)}")
+            except Exception as e:
+                reason = str(e).strip() or type(e).__name__
+                strategy._ollama_disabled = True
+                strategy._ollama_disabled_reason = reason
+                strategy._ollama_next_retry_turn = strategy._current_turn + retry_interval
+                logger.error(
+                    "ollama_not_available",
+                    error=reason,
+                    retry_turn=strategy._ollama_next_retry_turn,
+                )
+                print(
+                    f"  [AI] Ollama unavailable ({reason}); AI disabled, "
+                    f"retrying at turn {strategy._ollama_next_retry_turn}"
+                )
+
+        if not strategy._ollama_verified:
+            provider_status = "AI_DISABLED: OLLAMA_UNAVAILABLE"
+            if strategy._ollama_disabled_reason:
+                provider_status = f"{provider_status} ({strategy._ollama_disabled_reason})"
+            strategy._last_reasoning = (
+                f"{provider_status}; using opportunistic fallback until turn "
+                f"{int(getattr(strategy, '_ollama_next_retry_turn', 1) or 1)}"
+            )
             action, params = strategy.run_fallback_action(state, reason="ollama_not_available")
             return action, _with_meta(
                 params,
@@ -75,6 +110,9 @@ async def orchestrate_decision(strategy: AIStrategy, state: GameState) -> tuple[
                 selected_strategy="opportunistic",
                 wake_reason="ollama_not_available",
                 review_after_turns=getattr(strategy, "_last_review_after_turns", None),
+                provider_disabled=True,
+                provider_status=provider_status,
+                provider_retry_turn=int(getattr(strategy, "_ollama_next_retry_turn", 1) or 1),
             )
 
     # Re-evaluate goal if needed

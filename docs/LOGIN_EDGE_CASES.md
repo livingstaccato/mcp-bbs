@@ -90,7 +90,7 @@ This document records edge cases discovered during testing of the twbot login an
 
 Run orientation recovery tests:
 ```bash
-python test_orientation_recovery.py
+bbsbot script test_orientation_recovery
 ```
 
 Run hypothesis property tests:

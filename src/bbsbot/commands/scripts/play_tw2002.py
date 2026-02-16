@@ -245,8 +245,8 @@ class TW2002Player:
 
     async def save_documentation(self):
         """Save game documentation to file."""
-        doc_file = Path(".provide") / f"tw2002-playthrough-{int(time.time())}.json"
-        doc_file.parent.mkdir(exist_ok=True)
+        doc_file = Path("logs/reports") / f"tw2002-playthrough-{int(time.time())}.json"
+        doc_file.parent.mkdir(parents=True, exist_ok=True)
 
         with open(doc_file, "w") as f:
             json.dump(

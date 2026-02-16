@@ -430,6 +430,6 @@ Collision Avoidance:
 ---
 
 **Navigation**:
-- [Complete System Architecture](.provide/SYSTEM_ARCHITECTURE.md)
-- [Themed Names Implementation](.provide/HANDOFF_themed_names.md)
+- [Complete System Architecture](SYSTEM_ARCHITECTURE.md)
+- [Release Handoff (Archived)](archive/HANDOFF_2026-02-15.md)
 - [Main README](../README.md)

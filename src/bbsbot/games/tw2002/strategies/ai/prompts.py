@@ -130,7 +130,7 @@ CURRENT GOAL: {goal_description}
         sections = []
 
         # Current situation
-        sections.append(self._format_current_situation(state))
+        sections.append(self._format_current_situation(state, stats))
 
         # Ship status
         sections.append(self._format_ship_status(state))
@@ -148,12 +148,36 @@ CURRENT GOAL: {goal_description}
 
         return "\n\n".join(sections) + "\n\nWhat action should you take?"
 
-    def _format_current_situation(self, state: GameState) -> str:
+    def _format_current_situation(self, state: GameState, stats: dict | None = None) -> str:
         """Format current situation section."""
+        credit_index = 1.0
+        try:
+            credit_index = float((stats or {}).get("session_credit_index", 1.0) or 1.0)
+        except Exception:
+            credit_index = 1.0
+        if credit_index <= 0:
+            credit_index = 1.0
+
+        liquidity = "Unknown"
+        try:
+            if state.credits is not None:
+                credits = int(state.credits)
+                if credits < 300:
+                    liquidity = "Critical"
+                elif credits < 1_500:
+                    liquidity = "Low"
+                elif credits < 5_000:
+                    liquidity = "Medium"
+                else:
+                    liquidity = "High"
+        except Exception:
+            liquidity = "Unknown"
+
         return f"""CURRENT SITUATION:
 Location: Sector {state.sector if state.sector else "Unknown"}
 Context: {state.context}
-Credits: {state.credits if state.credits is not None else "Unknown"}
+Session CPT Index (start=1.00): {credit_index:.2f}
+Liquidity: {liquidity}
 Turns Left: {state.turns_left if state.turns_left is not None else "Unknown"}"""
 
     def _format_ship_status(self, state: GameState) -> str:

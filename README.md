@@ -142,7 +142,7 @@ clients, you may also have unrelated MCP connectors installed; those will not
 expose `tw2002_*` tools.
 
 For swarm runtime/ROI diagnostics and anti-collapse control references, see:
-- [`/Users/tim/code/gh/livingstaccato/bbsbot/docs/guides/SWARM_OPERATIONS_TELEMETRY.md`](/Users/tim/code/gh/livingstaccato/bbsbot/docs/guides/SWARM_OPERATIONS_TELEMETRY.md)
+- [`docs/guides/SWARM_OPERATIONS_TELEMETRY.md`](docs/guides/SWARM_OPERATIONS_TELEMETRY.md)
 
 Use an explicit local alias and tool filter for TW2002 operations:
 
@@ -765,10 +765,10 @@ If you’re running the bot inside the MCP server process, you can query goal pr
 
 ```bash
 # Run intelligent bot with pattern testing
-python play_tw2002_intelligent.py
+bbsbot script play_tw2002_intelligent
 
 # Run systematic pattern validation
-python test_all_patterns.py
+bbsbot script test_all_patterns
 ```
 
 ### Features
@@ -787,12 +787,12 @@ The intelligent bot uses a **hybrid reactive approach**:
 2. **Phase 2**: Track prompt sequences and flows
 3. **Phase 3**: Add prediction for common patterns (future)
 
-See [.provide/INTELLIGENT-BOT-README.md](.provide/INTELLIGENT-BOT-README.md) for complete documentation.
+See [docs/guides/INTELLIGENT_BOT.md](docs/guides/INTELLIGENT_BOT.md) for complete documentation.
 
 ### Example Bot Usage
 
 ```python
-from play_tw2002_intelligent import IntelligentTW2002Bot
+from bbsbot.commands.scripts.play_tw2002_intelligent import IntelligentTW2002Bot
 
 bot = IntelligentTW2002Bot()
 await bot.connect()
@@ -824,7 +824,7 @@ await bot.generate_report()
 - `yes_no_prompt`, `quit_confirm`
 - `enter_number`
 
-Results saved to `.provide/intelligent-bot-{timestamp}.json`
+Results saved to `logs/reports/intelligent-bot-{timestamp}.json`
 
 ## Known Warnings
 

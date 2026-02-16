@@ -333,11 +333,11 @@ class CompleteTW2002Player:
     async def save_documentation(self):
         """Save documentation."""
         timestamp = int(time.time())
-        json_file = Path(".provide") / f"tw2002-complete-{timestamp}.json"
-        md_file = Path(".provide") / f"tw2002-complete-{timestamp}.md"
+        json_file = Path("logs/reports") / f"tw2002-complete-{timestamp}.json"
+        md_file = Path("logs/reports") / f"tw2002-complete-{timestamp}.md"
 
         # Save JSON
-        json_file.parent.mkdir(exist_ok=True)
+        json_file.parent.mkdir(parents=True, exist_ok=True)
         with open(json_file, "w") as f:
             json.dump(
                 {

@@ -1,253 +1,94 @@
-# Intelligent Bot Quick Reference
+# Quick Start
 
-## Running the Bots
+This guide gets you from zero to a running TW2002 bot quickly.
 
-### Full Intelligent Bot
+## 1. Prerequisites
+
+- Python and `uv` are installed.
+- A TW2002 server is reachable (default `localhost:2002`).
+- You are in the repo root.
+
+## 2. Verify Setup
+
 ```bash
-python play_tw2002_intelligent.py
+uv run bbsbot --help
+uv run bbsbot tw2002 check --host localhost --port 2002
 ```
-- Navigates TWGS → Game
-- Tests commands
-- Tests navigation
-- Tests quit sequence
-- Generates comprehensive report
 
-### Pattern Validator
+If the check fails, fix server connectivity before continuing.
+
+## 3. Run a First Bot
+
+Recommended first run:
+
 ```bash
-python test_all_patterns.py
-```
-- Tests each of 13 patterns individually
-- Validates accuracy
-- Generates coverage report
-
-## Key Methods
-
-### IntelligentBot Core Methods
-
-```python
-# Wait for any prompt to appear
-snapshot = await bot.wait_for_prompt()
-
-# Wait for specific prompt
-snapshot = await bot.wait_for_prompt(expected_prompt_id="main_menu")
-
-# Send keys and wait for response
-snapshot = await bot.send_and_wait("D\r", "Display computer")
-
-# Handle pagination automatically
-snapshot = await bot.handle_pagination(snapshot)
-
-# Test a command with validation
-await bot.test_command("?\r", "Help menu", expected_pattern="command_prompt_generic")
+uv run bbsbot tw2002 bot -c examples/configs/test_opportunistic_stuck.yaml
 ```
 
-## Detection Response
+Run with explicit host/port overrides if needed:
 
-### Based on input_type
-
-```python
-if 'prompt_detected' in snapshot:
-    detected = snapshot['prompt_detected']
-    input_type = detected['input_type']
-
-    if input_type == 'single_key':
-        # Send single character, no Enter
-        await session.send("D")
-
-    elif input_type == 'multi_key':
-        # Send string + Enter
-        await session.send("PlayerName\r")
-
-    elif input_type == 'any_key':
-        # Send space to continue
-        await session.send(" ")
+```bash
+uv run bbsbot tw2002 bot \
+  -c examples/configs/test_opportunistic_stuck.yaml \
+  --host localhost \
+  --port 2002
 ```
 
-## Common Patterns
+## 4. Run an AI Bot
 
-### Navigate Menus
-```python
-# Wait for menu
-snapshot = await bot.wait_for_prompt()
+Use the Ollama example config:
 
-# Send selection
-snapshot = await bot.send_and_wait("A\r", "Select option A")
-
-# Handle any pagination
-snapshot = await bot.handle_pagination(snapshot)
+```bash
+uv run bbsbot tw2002 bot -c examples/configs/ai_strategy_ollama.yml
 ```
 
-### Execute Command Sequence
-```python
-commands = [
-    ("D\r", "Display computer"),
-    ("I\r", "Show inventory"),
-    ("P\r", "Port report"),
-]
+If you want the bundled play-mode runner:
 
-for cmd, desc in commands:
-    snapshot = await bot.send_and_wait(cmd, desc)
-    snapshot = await bot.handle_pagination(snapshot)
+```bash
+uv run bbsbot tw2002 play --mode intelligent
 ```
 
-### Handle Unknown Screens
-```python
-# If no prompt detected, screen is stable
-snapshot = await bot.wait_for_prompt(max_wait=5.0)
+Available play modes:
 
-if 'prompt_detected' not in snapshot:
-    # Screen stable but no pattern matched
-    # This is an unknown prompt - save for analysis
-    print("Unknown prompt - check saved screen")
+```bash
+uv run bbsbot tw2002 play --mode full
+uv run bbsbot tw2002 play --mode trading
+uv run bbsbot tw2002 play --mode 1000turns
 ```
 
-## Output Files
+## 5. Live Screen Visibility
 
-### Generated Reports
+Print live screen output during bot execution:
 
-**Intelligent Bot**:
-- `.provide/intelligent-bot-{timestamp}.json` - Full test results
-- `.provide/intelligent-bot-{timestamp}.md` - Human-readable report
-
-**Pattern Validator**:
-- `.provide/pattern-validation-results.json` - Validation data
-- `.provide/pattern-validation-results.md` - Coverage report
-
-### Saved Screens
-`.bbs-knowledge/games/tw2002/screens/{hash}.txt` - Unique screens
-
-## Snapshot Structure
-
-```python
-snapshot = {
-    'screen': str,              # Formatted screen text (80x25)
-    'screen_hash': str,         # SHA256 of screen
-    'cursor': {'x': int, 'y': int},
-    'prompt_detected': {        # If prompt found
-        'prompt_id': str,       # e.g., "main_menu"
-        'input_type': str,      # "single_key", "multi_key", "any_key"
-        'matched_text': str,    # Text that matched regex
-    }
-}
+```bash
+uv run bbsbot tw2002 bot -c examples/configs/test_opportunistic_stuck.yaml --watch
 ```
 
-## Tracking & Metrics
+Or expose watch socket output:
 
-### Pattern Matches
-```python
-bot.pattern_matches = {
-    'main_menu': 8,
-    'command_prompt_generic': 3,
-    'press_any_key': 2,
-    # ...
-}
+```bash
+uv run bbsbot tw2002 bot -c examples/configs/test_opportunistic_stuck.yaml \
+  --watch-socket --watch-socket-protocol json
 ```
 
-### Prompt Sequences
-```python
-bot.prompt_sequences = [
-    ("Select 'A' - My Game", "twgs_main_menu"),
-    ("Enter player name", "twgs_select_game"),
-    ("Show help", "main_menu"),
-    # ...
-]
+## 6. Swarm Manager (Optional)
+
+Start manager API/dashboard:
+
+```bash
+uv run python -m bbsbot.manager
 ```
 
-### Test Results
-```python
-bot.pattern_test_results = [
-    {
-        'command': '?\r',
-        'description': 'Show help menu',
-        'expected_pattern': 'command_prompt_generic',
-        'detected_pattern': 'command_prompt_generic',
-        'success': True,
-        'notes': ['✓ Matched expected pattern']
-    },
-    # ...
-]
+Common manager endpoints:
+
+```bash
+curl -sS http://localhost:2272/health
+curl -sS http://localhost:2272/swarm/status
+curl -sS -X POST http://localhost:2272/swarm/clear
 ```
 
-## Pattern Coverage
+## 7. Next Steps
 
-### All 13 Patterns
-
-| Pattern ID | Input Type | Tested By |
-|------------|------------|-----------|
-| login_username | multi_key | Initial connect |
-| login_password | multi_key | After username |
-| twgs_main_menu | single_key | After login |
-| twgs_select_game | single_key | Select game |
-| main_menu | single_key | In-game prompt |
-| command_prompt_generic | single_key | Help menu |
-| press_any_key | any_key | Display screens |
-| more_prompt | any_key | Long reports |
-| sector_command | single_key | At sector |
-| planet_command | single_key | On planet |
-| enter_number | multi_key | Move command |
-| quit_confirm | single_key | Quit game |
-| yes_no_prompt | single_key | Confirmations |
-
-## Debugging
-
-### Check Detection
-```python
-snapshot = await bot.read_screen()
-
-if 'prompt_detected' in snapshot:
-    print(f"Detected: {snapshot['prompt_detected']}")
-else:
-    print("No detection")
-    print(f"Screen:\n{snapshot['screen']}")
-    # Save this screen for pattern creation
-```
-
-### Show Screen
-```python
-await bot.show_screen(snapshot, max_lines=25, title="Debug")
-```
-
-### Track Steps
-```python
-print(f"Step {bot.step_counter}: {action}")
-print(f"Last prompt: {bot.last_prompt_id}")
-print(f"Location: {bot.game_location}")
-```
-
-## Troubleshooting
-
-### Pattern Not Detected
-
-1. Check saved screen: `.bbs-knowledge/games/tw2002/screens/`
-2. Look at pattern regex in `prompts.json`
-3. Test regex against screen text
-4. Adjust pattern or add new one
-
-### False Positive
-
-1. Make pattern more specific
-2. Add context to regex (before/after text)
-3. Check pattern priority order
-
-### Screen Stuck
-
-1. Check if screen is stable: `bot.wait_for_prompt()` returns after timeout
-2. Look for unknown prompt on screen
-3. Add pattern for this prompt
-4. Or manually send expected input
-
-## Success Metrics
-
-- **Coverage**: >90% patterns matched (11-12 of 13)
-- **False Positives**: <5% wrong detections
-- **Automation**: Complete session without manual intervention
-- **Documentation**: All unique screens saved
-
-## Next Steps
-
-1. Run `play_tw2002_intelligent.py`
-2. Review pattern match results
-3. Check for unmatched prompts
-4. Refine patterns in `prompts.json`
-5. Re-test with `test_all_patterns.py`
-6. Iterate until >90% coverage
+- For AI strategy details: `docs/guides/INTELLIGENT_BOT.md`
+- For swarm telemetry and triage: `docs/guides/SWARM_OPERATIONS_TELEMETRY.md`
+- For config examples: `examples/configs/README.md`

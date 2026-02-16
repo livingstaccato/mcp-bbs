@@ -180,9 +180,9 @@ class SectorKnowledge:
 ```
 
 **Files**:
-- `src/bbsbot/games/tw2002/orientation.py`
-- `src/bbsbot/games/tw2002/navigation.py`
-- `src/bbsbot/games/tw2002/trading.py`
+- `src/bbsbot/games/tw2002/orientation/`
+- `src/bbsbot/games/tw2002/bot_navigation.py`
+- `src/bbsbot/games/tw2002/trading/`
 - `src/bbsbot/games/tw2002/combat.py`
 
 ---
@@ -244,10 +244,12 @@ action = parse_llm_response(response)
 ```
 
 **Files**:
-- `src/bbsbot/llm/provider.py`
-- `src/bbsbot/llm/ollama.py`
-- `src/bbsbot/llm/prompt.py`
-- `src/bbsbot/games/tw2002/ai_strategy.py`
+- `src/bbsbot/llm/manager.py`
+- `src/bbsbot/llm/providers/ollama.py`
+- `src/bbsbot/llm/providers/openai.py`
+- `src/bbsbot/games/tw2002/strategies/ai/prompts.py`
+- `src/bbsbot/games/tw2002/strategies/ai/parser.py`
+- `src/bbsbot/games/tw2002/strategies/ai_strategy.py`
 
 ---
 
@@ -295,9 +297,10 @@ trading:
 ```
 
 **Files**:
-- `src/bbsbot/games/tw2002/trading.py`
-- `src/bbsbot/games/tw2002/ai_strategy.py`
-- `src/bbsbot/games/tw2002/twerk.py`
+- `src/bbsbot/games/tw2002/strategies/profitable_pairs.py`
+- `src/bbsbot/games/tw2002/strategies/opportunistic.py`
+- `src/bbsbot/games/tw2002/strategies/twerk_optimized.py`
+- `src/bbsbot/games/tw2002/strategies/ai_strategy.py`
 
 ---
 
@@ -733,5 +736,5 @@ The system is designed for both fully autonomous operation and human-in-the-loop
 
 ---
 
-**Last Updated**: 2026-02-06
-**Version**: 0.3.0 (with themed name generator)
+**Last Updated**: 2026-02-16
+**Version**: 0.2.1 (pre-release)

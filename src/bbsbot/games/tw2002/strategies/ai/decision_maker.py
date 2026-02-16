@@ -191,8 +191,14 @@ async def make_llm_decision(
     strategy._last_reasoning = extract_reasoning(response.message.content)
 
     # Append this exchange to conversation history (compact summary + response)
+    try:
+        credit_index = float((strategy.stats or {}).get("session_credit_index", 1.0) or 1.0)
+    except Exception:
+        credit_index = 1.0
+    if credit_index <= 0:
+        credit_index = 1.0
     compact_state = (
-        f"Turn {strategy._current_turn}: Sector {state.sector}, Credits {state.credits}, Turns left {state.turns_left}"
+        f"Turn {strategy._current_turn}: Sector {state.sector}, CreditIndex {credit_index:.2f}, Turns left {state.turns_left}"
     )
     if state.has_port:
         compact_state += f", Port {state.port_class}"

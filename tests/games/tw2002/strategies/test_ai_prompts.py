@@ -69,7 +69,7 @@ def test_prompt_builder_builds_messages(prompt_builder, game_state, sector_knowl
 
     # User prompt should contain game state
     assert "Sector 1" in messages[1].content
-    assert "10000" in messages[1].content  # credits
+    assert "Session CPT Index" in messages[1].content
     assert "100" in messages[1].content  # turns
 
 
@@ -83,13 +83,14 @@ def test_prompt_builder_includes_adjacent_sectors(prompt_builder, game_state, se
     assert "Port SSB" in user_prompt or "SSB" in user_prompt
 
 
-def test_prompt_builder_formats_current_situation(prompt_builder, game_state):
+def test_prompt_builder_formats_current_situation(prompt_builder, game_state, stats):
     """Test formatting current situation."""
-    text = prompt_builder._format_current_situation(game_state)
+    text = prompt_builder._format_current_situation(game_state, stats)
 
     assert "Sector 1" in text
     assert "sector_command" in text
-    assert "10000" in text
+    assert "Session CPT Index" in text
+    assert "Liquidity" in text
     assert "100" in text
 
 

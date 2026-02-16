@@ -39,6 +39,7 @@ Topics covered:
 - **[Intelligent Bot](guides/INTELLIGENT_BOT.md)** - Using AI strategies
 - **[TW2002 MCP Operations](TW2002_MCP_OPERATIONS.md)** - Local MCP server aliasing, hijack flow, troubleshooting
 - **[Swarm Operations + Telemetry](guides/SWARM_OPERATIONS_TELEMETRY.md)** - ROI interpretation, anti-collapse controls, degradation triage
+- **[Release Checklist](RELEASE_CHECKLIST.md)** - Pre-release validation checklist
 - **[Configuration](../README.md#configuration)** - Config + environment settings
 - **[Spying / Watch Socket](../README.md#spy--watch-socket)** - Attach to a running session output
 
@@ -68,20 +69,21 @@ Topics covered:
 - I/O: `src/bbsbot/games/tw2002/io.py`
 
 ### Layer 3: Game Mechanics
-- Game state: `src/bbsbot/games/tw2002/orientation.py`
-- Navigation: `src/bbsbot/games/tw2002/navigation.py`
-- Trading: `src/bbsbot/games/tw2002/trading.py`
+- Game state/orientation: `src/bbsbot/games/tw2002/orientation/`
+- Navigation: `src/bbsbot/games/tw2002/bot_navigation.py`
+- Trading execution/parsing: `src/bbsbot/games/tw2002/trading/`
 - Combat: `src/bbsbot/games/tw2002/combat.py`
 
 ### Layer 4: LLM Integration
-- Providers: `src/bbsbot/llm/provider.py`, `ollama.py`
-- AI strategy: `src/bbsbot/games/tw2002/ai_strategy.py`
-- Prompt generation: `src/bbsbot/llm/prompt.py`
+- LLM manager: `src/bbsbot/llm/manager.py`
+- Providers: `src/bbsbot/llm/providers/`
+- AI strategy: `src/bbsbot/games/tw2002/strategies/ai_strategy.py`
+- Prompt generation: `src/bbsbot/games/tw2002/strategies/ai/prompts.py`
 
 ### Layer 5: Trading Strategies
-- All strategies: `src/bbsbot/games/tw2002/trading.py`
-- AI strategy: `src/bbsbot/games/tw2002/ai_strategy.py`
-- Twerk analysis: `src/bbsbot/games/tw2002/twerk.py`
+- All strategies: `src/bbsbot/games/tw2002/strategies/`
+- AI strategy: `src/bbsbot/games/tw2002/strategies/ai_strategy.py`
+- Twerk optimized: `src/bbsbot/games/tw2002/strategies/twerk_optimized.py`
 
 ### Layer 6: Game Loop
 - Main bot: `src/bbsbot/games/tw2002/bot.py`
@@ -116,16 +118,21 @@ session:
 EOF
 
 # 2. Run bot
-python scripts/play_tw2002_trading.py --config config.yml
+bbsbot script play_tw2002_trading --config config.yml
 ```
 
 ### Use AI strategy
 ```bash
 # Use example config
-python scripts/play_tw2002_trading.py --config examples/configs/ai_strategy_ollama.yml
+bbsbot script play_tw2002_trading --config examples/configs/ai_strategy_ollama.yml
 ```
 
 See [examples/configs/](../examples/configs/) for more configurations.
+
+Legacy one-off scripts were moved to archive folders during cleanup:
+- `scripts/archive/`
+- `src/bbsbot/commands/scripts/archive/`
+- details: [archive notes](archive/SCRIPTS_ARCHIVE_2026-02-16.md)
 
 ---
 
@@ -151,28 +158,28 @@ print(f"{char.name} - Ship: {char.ship_name}")
 
 ## Development
 
-- **[Contributing](../CONTRIBUTING.md)** - How to contribute
+- **[Development](../README.md#development)** - Project workflow and local setup
 - **[Testing](../README.md#testing)** - Running tests
 - **[Known warnings](../README.md#known-warnings)** - Non-fatal warnings you may see at startup
+- **[Release Checklist](RELEASE_CHECKLIST.md)** - Pre-release gate and sign-off
 
 ---
 
-## Version History
+## Release Metadata
 
-- **0.3.0** (2026-02-06): Themed name generator, comprehensive architecture docs
-- **0.2.0** (2026-02-05): Multi-character management, knowledge sharing
-- **0.1.0** (2026-02-04): Initial release with core MCP server and trading bot
+- Project package version: `0.2.1` (from `pyproject.toml`)
+- Documentation state reflects pre-release work through 2026-02-16
 
 ---
 
 ## License
 
-MIT License - Copyright (c) 2026 Tim Perkins
+GNU Affero General Public License v3 or later (AGPL-3.0-or-later)
 
 See [LICENSE](../LICENSE) for details.
 
 ---
 
-**Last Updated**: 2026-02-06
-**Documentation Version**: 1.0.0
-**System Version**: 0.3.0
+**Last Updated**: 2026-02-16
+**Documentation Version**: pre-release
+**System Version**: 0.2.1

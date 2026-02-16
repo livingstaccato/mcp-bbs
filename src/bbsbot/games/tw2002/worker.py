@@ -29,6 +29,7 @@ from bbsbot.logging import get_logger
 from bbsbot.terminal import extract_action_tags, normalize_terminal_text
 
 logger = get_logger(__name__)
+RECENT_ACTIONS_LIMIT = 30
 
 
 def _auto_username_from_bot_id(bot_id: str) -> str:
@@ -238,6 +239,8 @@ class WorkerBot(TradingBot):
         self.trade_quality_runtime: dict[str, int | float | bool] = {}
         self.screen_action_tag_telemetry: dict[str, int] = {}
         self._last_hostile_fighters_seen: int = 0
+        self._last_prompt_id_combat_telemetry: str | None = None
+        self._last_combat_screen_signature: str = ""
         self._metrics_initialized: bool = False
 
     def reset_runtime_session_metrics(self) -> None:
@@ -279,6 +282,8 @@ class WorkerBot(TradingBot):
         self.trade_quality_runtime = {}
         self.screen_action_tag_telemetry = {}
         self._last_hostile_fighters_seen = 0
+        self._last_prompt_id_combat_telemetry = None
+        self._last_combat_screen_signature = ""
         with contextlib.suppress(Exception):
             self._last_trade_turn = 0
 
@@ -414,6 +419,66 @@ class WorkerBot(TradingBot):
         except Exception:
             return
 
+    def _note_prompt_id_combat_telemetry(self, prompt_id: str | None) -> None:
+        token = self._normalize_metric_key(prompt_id)
+        if not token:
+            self._last_prompt_id_combat_telemetry = None
+            return
+        if token == self._last_prompt_id_combat_telemetry:
+            return
+        self._last_prompt_id_combat_telemetry = token
+
+        mapping: dict[str, tuple[str, ...]] = {
+            "prompt.combat_loss": ("combat_prompt_loss", "death_prompt_detected", "combat_destroyed"),
+            "prompt.ship_destroyed": ("combat_prompt_ship_destroyed", "death_prompt_detected", "combat_destroyed"),
+            "prompt.mine_hit": ("combat_prompt_mine_hit",),
+            "prompt.combat_escape_pod": ("combat_prompt_escape_pod",),
+            "prompt.ferrengi_encounter": ("combat_prompt_ferrengi",),
+            "prompt.ferrengi_attack": ("combat_prompt_ferrengi",),
+            "prompt.combat_retreat": ("combat_prompt_retreat",),
+            "prompt.combat_surrender": ("combat_prompt_surrender",),
+            "prompt.combat_captured": ("combat_prompt_captured",),
+            "prompt.combat_tow_offer": ("combat_prompt_tow_offer",),
+            "prompt.combat_victory": ("combat_prompt_victory",),
+        }
+        for metric in mapping.get(token, ()):
+            self._increment_map_counter(self.combat_telemetry, metric, 1)
+
+    def _note_screen_combat_telemetry(self, screen_lower: str) -> None:
+        text = str(screen_lower or "").strip().lower()
+        if not text:
+            self._last_combat_screen_signature = ""
+            return
+        signature = " ".join(text.split())
+        if not signature:
+            self._last_combat_screen_signature = ""
+            return
+        # Deduplicate repeated identical screens to avoid inflating prompt counters.
+        signature = signature[:512]
+        if signature == self._last_combat_screen_signature:
+            return
+        self._last_combat_screen_signature = signature
+
+        death_detected = any(
+            token in text for token in ("you have been destroyed", "you are dead", "killed by", "your ship was destroyed")
+        )
+        if death_detected:
+            self._increment_map_counter(self.combat_telemetry, "death_prompt_detected", 1)
+            self._increment_map_counter(self.combat_telemetry, "combat_destroyed", 1)
+
+        mine_hit_detected = any(
+            token in text for token in ("hit a mine", "hit by a mine", "mine hit", "minefield", "mine field")
+        )
+        if mine_hit_detected:
+            self._increment_map_counter(self.combat_telemetry, "combat_prompt_mine_hit", 1)
+
+        mine_destroyed_detected = any(
+            token in text
+            for token in ("destroyed by mines", "destroyed by a mine", "killed by mines", "killed by a mine")
+        ) or (("mine" in text) and death_detected)
+        if mine_destroyed_detected:
+            self._increment_map_counter(self.combat_telemetry, "combat_destroyed_by_mines", 1)
+
     def note_warp_hop(self, *, success: bool, latency_ms: int, reason: str | None = None) -> None:
         try:
             self._increment_map_counter(self.warp_telemetry, "hops_attempted", 1)
@@ -531,13 +596,7 @@ class WorkerBot(TradingBot):
             with contextlib.suppress(Exception):
                 if getattr(self, "session", None):
                     screen_lower = str(self.session.get_screen() or "").lower()
-            if "escape pod" in screen_lower:
-                self._increment_map_counter(self.combat_telemetry, "combat_prompt_escape_pod", 1)
-            if "ferrengi" in screen_lower or "ferrengi fighter" in screen_lower:
-                self._increment_map_counter(self.combat_telemetry, "combat_prompt_ferrengi", 1)
-            if any(t in screen_lower for t in ("you have been destroyed", "you are dead", "killed by", "your ship was destroyed")):
-                self._increment_map_counter(self.combat_telemetry, "death_prompt_detected", 1)
-                self._increment_map_counter(self.combat_telemetry, "combat_destroyed", 1)
+            self._note_screen_combat_telemetry(screen_lower)
             if action_token == "RETREAT":
                 self._increment_map_counter(self.combat_telemetry, "combat_retreats", 1)
 
@@ -801,6 +860,7 @@ class WorkerBot(TradingBot):
                         prompt_id = pd.get("prompt_id")
                 except Exception:
                     prompt_id = None
+            self._note_prompt_id_combat_telemetry(prompt_id)
 
             normalized_screen = normalize_terminal_text(current_screen or "")
             screen_lower = normalized_screen.lower()
@@ -1089,12 +1149,6 @@ class WorkerBot(TradingBot):
                 sector_out = 0
 
             # Build status update dict
-            if credits_out >= 0 and self._session_start_credits is None:
-                self._session_start_credits = credits_out
-            credits_delta = 0
-            if credits_out >= 0 and self._session_start_credits is not None:
-                credits_delta = int(credits_out - self._session_start_credits)
-            credits_per_turn = float(credits_delta) / float(self.turns_used) if self.turns_used > 0 else 0.0
             login_like_statuses = {
                 "USERNAME",
                 "GAME_PASSWORD",
@@ -1110,6 +1164,20 @@ class WorkerBot(TradingBot):
                 and activity not in {"LOGGING_IN", "GAME_SELECTION_MENU", "CONNECTING", "INITIALIZING"}
                 and (status_detail not in login_like_statuses)
             )
+            # Lock CPT baselines only after the first verified in-game credit snapshot.
+            # This avoids treating placeholder/login values as a real starting point.
+            if credits_out >= 0 and self._session_start_credits is None and credits_verified:
+                self._session_start_credits = credits_out
+            cpt_baseline_locked = self._session_start_credits is not None
+            credits_delta = 0
+            if credits_out >= 0 and cpt_baseline_locked:
+                credits_delta = int(credits_out - int(self._session_start_credits or 0))
+            run_cpt_ready = bool(cpt_baseline_locked and credits_out >= 0 and self.turns_used > 0)
+            adjusted_cpt_ready = bool(cpt_baseline_locked and credits_out >= 0)
+            credits_per_turn = float(credits_delta) / float(self.turns_used) if run_cpt_ready else 0.0
+            cpt_index = 1.0
+            if adjusted_cpt_ready and int(self._session_start_credits or 0) > 0:
+                cpt_index = float(credits_out) / float(int(self._session_start_credits or 1))
             last_trade_turn = int(getattr(self, "_last_trade_turn", 0) or 0)
             turns_since_last_trade = int(self.turns_used) if last_trade_turn <= 0 else max(
                 0,
@@ -1158,7 +1226,7 @@ class WorkerBot(TradingBot):
                 "cargo_estimated_value": int(cargo_estimated_value),
                 "net_worth_estimate": int(net_worth_estimate),
                 "credits_verified": bool(credits_verified),
-                "recent_actions": self.recent_actions[-10:],  # Last 10 actions
+                "recent_actions": self.recent_actions[-RECENT_ACTIONS_LIMIT:],  # Last N actions
                 "haggle_accept": int(self.haggle_accept),
                 "haggle_counter": int(self.haggle_counter),
                 "haggle_too_high": int(self.haggle_too_high),
@@ -1172,6 +1240,11 @@ class WorkerBot(TradingBot):
                 "trade_outcomes_by_pair": dict(self.trade_outcomes_by_pair or {}),
                 "credits_delta": int(credits_delta),
                 "credits_per_turn": float(credits_per_turn),
+                "cpt_index": float(cpt_index),
+                "cpt_baseline_locked": bool(cpt_baseline_locked),
+                "cpt_baseline_credits": (int(self._session_start_credits) if cpt_baseline_locked else None),
+                "run_cpt_ready": bool(run_cpt_ready),
+                "adjusted_cpt_ready": bool(adjusted_cpt_ready),
                 "turns_since_last_trade": int(turns_since_last_trade),
                 "move_streak": int(move_streak),
                 "zero_delta_action_streak": int(zero_delta_action_streak),
@@ -1422,9 +1495,9 @@ class WorkerBot(TradingBot):
         intent_key = str(strategy_intent or "").strip().upper()
         if intent_key.startswith("RECOVERY:") or intent_key.startswith("BOOTSTRAP:"):
             self.recovery_actions = max(0, int(self.recovery_actions) + 1)
-        # Keep only last 10 actions
-        if len(self.recent_actions) > 10:
-            self.recent_actions = self.recent_actions[-10:]
+        # Keep only last N actions
+        if len(self.recent_actions) > RECENT_ACTIONS_LIMIT:
+            self.recent_actions = self.recent_actions[-RECENT_ACTIONS_LIMIT:]
 
     async def report_error(
         self,
@@ -1456,7 +1529,7 @@ class WorkerBot(TradingBot):
                     "error_timestamp": time.time(),
                     "exit_reason": exit_reason,
                     "last_action": self.current_action,
-                    "recent_actions": self.recent_actions[-10:],
+                    "recent_actions": self.recent_actions[-RECENT_ACTIONS_LIMIT:],
                 },
             )
         except Exception as e:

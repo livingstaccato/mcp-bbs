@@ -114,6 +114,20 @@ body {
 .spawn-field input {
   width: 100%;
 }
+.spawn-field.is-disabled label {
+  color: var(--fg2);
+  opacity: 0.55;
+}
+.spawn-field select:disabled,
+.spawn-field input:disabled,
+.spawn-field.is-disabled select,
+.spawn-field.is-disabled input {
+  color: #7f8793;
+  background: rgba(22, 27, 34, 0.78);
+  border-color: rgba(48, 54, 61, 0.78);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
 .header-controls .btn {
   margin-right: 0;
   height: 26px;
@@ -219,6 +233,32 @@ body {
 .top-stat.wide { grid-column: span 2; }
 .top-stat-no-trade .k {
   letter-spacing: 0.2px;
+}
+.top-stat-no-trade .v {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.15;
+  font-weight: 500;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px 6px;
+}
+.no-trade-bucket {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.no-trade-bucket .bucket-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.15px;
+}
+.no-trade-bucket .bucket-value {
+  font-size: 11px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
 }
 .strategy-strip {
   margin: 8px auto 0;
@@ -878,6 +918,58 @@ thead th, tbody td {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.strategy-ai-meta {
+  display: block;
+  margin-top: 1px;
+  font-size: 9px;
+  line-height: 1.05;
+  color: #7aa7b6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cpt-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 1px;
+  min-height: 28px;
+  line-height: 1.05;
+}
+.cpt-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--fg2);
+}
+.cpt-label {
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+}
+.cpt-primary strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.cpt-secondary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 10px;
+  line-height: 1.1;
+  color: var(--fg2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cpt-secondary strong {
+  font-size: 10px;
+  font-weight: 600;
+}
+.cpt-base {
+  opacity: 0.82;
+}
 .activity-cell {
   display: flex;
   flex-direction: column;
@@ -935,6 +1027,7 @@ thead th, tbody td {
 }
 .chip.sid { color: var(--cyan); border-color: rgba(57,197,207,0.45); }
 .chip.mode { color: var(--yellow); border-color: rgba(210,153,34,0.45); }
+.chip.aictrl { color: #67d8e6; border-color: rgba(57,197,207,0.6); background: rgba(57,197,207,0.1); }
 .chip.role.scout { color: var(--purple); border-color: rgba(163,113,247,0.48); }
 .chip.role.harvester { color: var(--green); border-color: rgba(63,185,80,0.48); }
 .chip.role.ai { color: var(--cyan); border-color: rgba(57,197,207,0.48); }
@@ -959,17 +1052,18 @@ thead th, tbody td {
 /* Bot table column sizing: fixed tiny ID/S columns + proportional data columns */
 .bot-table col.col-id { width: 3.5%; }
 .bot-table col.col-state { width: 2.5%; }
-.bot-table col.col-activity { width: 15%; }
-.bot-table col.col-strategy { width: 17%; }
+.bot-table col.col-activity { width: 14%; }
+.bot-table col.col-strategy { width: 15%; }
 .bot-table col.col-sector { width: 6%; }
-.bot-table col.col-credits { width: 10%; }
+.bot-table col.col-credits { width: 9%; }
+.bot-table col.col-cpt { width: 10%; }
 .bot-table col.col-fuel { width: 5%; }
 .bot-table col.col-org { width: 5%; }
 .bot-table col.col-equip { width: 5%; }
 .bot-table col.col-turns { width: 6%; }
 .bot-table col.col-trades { width: 6%; }
-.bot-table col.col-updated { width: 9%; }
-.bot-table col.col-actions { width: 4.5%; }
+.bot-table col.col-updated { width: 7%; }
+.bot-table col.col-actions { width: 4%; }
 .bot-table tbody td.actions {
   overflow: visible;
   text-overflow: clip;
@@ -1001,16 +1095,16 @@ body[data-table-view="compact"] .bot-table col.col-trades { display: none; }
 body[data-table-view="compact"] .bot-table col.col-updated { display: none; }
 body[data-table-view="compact"] .bot-table thead th:nth-child(5),
 body[data-table-view="compact"] .bot-table tbody td:nth-child(5),
-body[data-table-view="compact"] .bot-table thead th:nth-child(7),
-body[data-table-view="compact"] .bot-table tbody td:nth-child(7),
 body[data-table-view="compact"] .bot-table thead th:nth-child(8),
 body[data-table-view="compact"] .bot-table tbody td:nth-child(8),
 body[data-table-view="compact"] .bot-table thead th:nth-child(9),
 body[data-table-view="compact"] .bot-table tbody td:nth-child(9),
-body[data-table-view="compact"] .bot-table thead th:nth-child(11),
-body[data-table-view="compact"] .bot-table tbody td:nth-child(11),
+body[data-table-view="compact"] .bot-table thead th:nth-child(10),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(10),
 body[data-table-view="compact"] .bot-table thead th:nth-child(12),
-body[data-table-view="compact"] .bot-table tbody td:nth-child(12) { display: none; }
+body[data-table-view="compact"] .bot-table tbody td:nth-child(12),
+body[data-table-view="compact"] .bot-table thead th:nth-child(13),
+body[data-table-view="compact"] .bot-table tbody td:nth-child(13) { display: none; }
 
 body[data-table-view="trader"] .bot-table col.col-fuel { display: none; }
 body[data-table-view="trader"] .bot-table col.col-org { display: none; }
@@ -1020,14 +1114,14 @@ body[data-table-view="trader"] .bot-table col.col-activity { width: 16%; }
 body[data-table-view="trader"] .bot-table col.col-strategy { width: 18%; }
 body[data-table-view="trader"] .bot-table col.col-turns { width: 7%; }
 body[data-table-view="trader"] .bot-table col.col-trades { width: 7%; }
-body[data-table-view="trader"] .bot-table thead th:nth-child(7),
-body[data-table-view="trader"] .bot-table tbody td:nth-child(7),
 body[data-table-view="trader"] .bot-table thead th:nth-child(8),
 body[data-table-view="trader"] .bot-table tbody td:nth-child(8),
 body[data-table-view="trader"] .bot-table thead th:nth-child(9),
 body[data-table-view="trader"] .bot-table tbody td:nth-child(9),
-body[data-table-view="trader"] .bot-table thead th:nth-child(12),
-body[data-table-view="trader"] .bot-table tbody td:nth-child(12) { display: none; }
+body[data-table-view="trader"] .bot-table thead th:nth-child(10),
+body[data-table-view="trader"] .bot-table tbody td:nth-child(10),
+body[data-table-view="trader"] .bot-table thead th:nth-child(13),
+body[data-table-view="trader"] .bot-table tbody td:nth-child(13) { display: none; }
 
 body[data-table-view="ops"] .bot-table col.col-fuel { display: none; }
 body[data-table-view="ops"] .bot-table col.col-org { display: none; }
@@ -1036,14 +1130,14 @@ body[data-table-view="ops"] .bot-table col.col-trades { display: none; }
 body[data-table-view="ops"] .bot-table col.col-activity { width: 20%; }
 body[data-table-view="ops"] .bot-table col.col-strategy { width: 14%; }
 body[data-table-view="ops"] .bot-table col.col-updated { width: 11%; }
-body[data-table-view="ops"] .bot-table thead th:nth-child(7),
-body[data-table-view="ops"] .bot-table tbody td:nth-child(7),
 body[data-table-view="ops"] .bot-table thead th:nth-child(8),
 body[data-table-view="ops"] .bot-table tbody td:nth-child(8),
 body[data-table-view="ops"] .bot-table thead th:nth-child(9),
 body[data-table-view="ops"] .bot-table tbody td:nth-child(9),
-body[data-table-view="ops"] .bot-table thead th:nth-child(11),
-body[data-table-view="ops"] .bot-table tbody td:nth-child(11) { display: none; }
+body[data-table-view="ops"] .bot-table thead th:nth-child(10),
+body[data-table-view="ops"] .bot-table tbody td:nth-child(10),
+body[data-table-view="ops"] .bot-table thead th:nth-child(12),
+body[data-table-view="ops"] .bot-table tbody td:nth-child(12) { display: none; }
 
 body[data-table-view="full"] .bot-table col.col-sector,
 body[data-table-view="full"] .bot-table col.col-fuel,
@@ -1051,7 +1145,8 @@ body[data-table-view="full"] .bot-table col.col-org,
 body[data-table-view="full"] .bot-table col.col-equip,
 body[data-table-view="full"] .bot-table col.col-turns,
 body[data-table-view="full"] .bot-table col.col-trades,
-body[data-table-view="full"] .bot-table col.col-updated { display: table-column !important; }
+body[data-table-view="full"] .bot-table col.col-updated,
+body[data-table-view="full"] .bot-table col.col-cpt { display: table-column !important; }
 body[data-table-view="full"] .bot-table thead th:nth-child(5),
 body[data-table-view="full"] .bot-table tbody td:nth-child(5),
 body[data-table-view="full"] .bot-table thead th:nth-child(7),
@@ -1065,7 +1160,9 @@ body[data-table-view="full"] .bot-table tbody td:nth-child(10),
 body[data-table-view="full"] .bot-table thead th:nth-child(11),
 body[data-table-view="full"] .bot-table tbody td:nth-child(11),
 body[data-table-view="full"] .bot-table thead th:nth-child(12),
-body[data-table-view="full"] .bot-table tbody td:nth-child(12) { display: table-cell !important; }
+body[data-table-view="full"] .bot-table tbody td:nth-child(12),
+body[data-table-view="full"] .bot-table thead th:nth-child(13),
+body[data-table-view="full"] .bot-table tbody td:nth-child(13) { display: table-cell !important; }
 thead th {
   text-align: left;
   padding: 7px 8px;
@@ -1085,6 +1182,7 @@ thead th {
 .bot-table thead th:nth-child(10),
 .bot-table thead th:nth-child(11),
 .bot-table thead th:nth-child(12),
+.bot-table thead th:nth-child(13),
 .bot-table thead th:nth-child(5) {
   text-align: center;
 }
@@ -1393,7 +1491,7 @@ tbody tr:hover { background: var(--bg3); }
 .activity-ledger-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   font-size: 12px;
 }
 .activity-ledger-table thead th {
@@ -1420,15 +1518,23 @@ tbody tr:hover { background: var(--bg3); }
 }
 .activity-col-time { width: 100px; color: var(--fg2); }
 .activity-col-type { width: 90px; color: var(--cyan); font-weight: 600; }
-.activity-col-what { width: 210px; }
-.activity-col-why { width: auto; color: var(--fg2); }
+.activity-col-what { width: 220px; }
+.activity-col-why { width: 360px; color: var(--fg2); }
 .activity-col-strategy { width: 190px; color: var(--yellow); }
 .activity-col-sector { width: 70px; text-align: center; }
-.activity-col-credits { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
-.activity-col-turns { width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+.activity-col-credits { width: 140px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.activity-col-turns { width: 95px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .activity-col-start { width: 100px; text-align: center; color: var(--fg2); }
 .activity-col-stop { width: 100px; text-align: center; color: var(--fg2); }
-.activity-col-result { width: 90px; text-transform: uppercase; font-size: 11px; }
+.activity-col-result { width: 110px; text-transform: uppercase; font-size: 11px; }
+.activity-col-what,
+.activity-col-why,
+.activity-col-strategy {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
 .activity-result-success { color: var(--green); }
 .activity-result-failure { color: var(--red); }
 .activity-result-pending { color: var(--yellow); }
@@ -1777,27 +1883,27 @@ tbody tr:hover { background: var(--bg3); }
 }
 @media (max-width: 1320px) {
   .bot-table col.col-updated { display: none; }
-  .bot-table thead th:nth-child(12), .bot-table tbody td:nth-child(12) { display: none; } /* updated */
+  .bot-table thead th:nth-child(13), .bot-table tbody td:nth-child(13) { display: none; } /* updated */
 }
 @media (max-width: 1240px) {
   .bot-table col.col-fuel { display: none; }
-  .bot-table thead th:nth-child(7), .bot-table tbody td:nth-child(7) { display: none; } /* fuel */
+  .bot-table thead th:nth-child(8), .bot-table tbody td:nth-child(8) { display: none; } /* fuel */
 }
 @media (max-width: 1160px) {
   .bot-table col.col-org { display: none; }
-  .bot-table thead th:nth-child(8), .bot-table tbody td:nth-child(8) { display: none; } /* org */
+  .bot-table thead th:nth-child(9), .bot-table tbody td:nth-child(9) { display: none; } /* org */
 }
 @media (max-width: 1080px) {
   .bot-table col.col-equip { display: none; }
-  .bot-table thead th:nth-child(9), .bot-table tbody td:nth-child(9) { display: none; } /* equip */
+  .bot-table thead th:nth-child(10), .bot-table tbody td:nth-child(10) { display: none; } /* equip */
 }
 @media (max-width: 1000px) {
   .bot-table col.col-trades { display: none; }
-  .bot-table thead th:nth-child(11), .bot-table tbody td:nth-child(11) { display: none; } /* trades */
+  .bot-table thead th:nth-child(12), .bot-table tbody td:nth-child(12) { display: none; } /* trades */
 }
 @media (max-width: 920px) {
   .bot-table col.col-turns { display: none; }
-  .bot-table thead th:nth-child(10), .bot-table tbody td:nth-child(10) { display: none; } /* turns */
+  .bot-table thead th:nth-child(11), .bot-table tbody td:nth-child(11) { display: none; } /* turns */
 }
 @media (max-width: 820px) {
   .bot-table col.col-sector { display: none; }
@@ -1873,24 +1979,25 @@ tbody tr:hover { background: var(--bg3); }
   </div>
 </div>
 <div class="header-controls">
-  <div class="spawn-field mix-field" title="Named bot mix templates">
-    <label for="spawn-preset">Mix</label>
+  <div class="spawn-field mix-field" title="Spawn presets">
+    <label for="spawn-preset">Preset</label>
     <select id="spawn-preset">
-    <option value="custom">custom</option>
-    <option value="mix_5_ai_35_dynamic">tw2002_mix_5_ai_35_dynamic</option>
-    <option value="mix_20_ai_20_dynamic">tw2002_mix_20_ai_20_dynamic</option>
+    <option value="preset_20_mixed" selected>20 mixed (5 AI + 15 dynamic)</option>
+    <option value="preset_20_dynamic">20 dynamic</option>
+    <option value="preset_5_dynamic">5 dynamic (smoke)</option>
+    <option value="custom">manual</option>
     </select>
   </div>
-  <div class="spawn-field config-field" title="Config profile used for custom mix">
+  <div class="spawn-field config-field" title="Profile used for manual preset">
     <label for="spawn-config">Config</label>
     <select id="spawn-config">
       <option value="swarm_demo">tw2002_dynamic</option>
       <option value="swarm_demo_ai">tw2002_ai</option>
     </select>
   </div>
-  <div class="spawn-field count-field" title="Used only when Mix is custom">
+  <div class="spawn-field count-field" title="Used only with manual preset">
     <label for="spawn-count">Count</label>
-    <input type="number" id="spawn-count" min="1" max="100" value="5" placeholder="5">
+    <input type="number" id="spawn-count" min="1" max="100" value="20" placeholder="20">
   </div>
   <button class="btn" id="btn-spawn" style="border-color:var(--green);color:var(--green);" title="Spawn bots">Spawn</button>
   <button class="btn kill" id="btn-kill-all" title="Kill all running bots">Kill All</button>
@@ -1937,13 +2044,18 @@ tbody tr:hover { background: var(--bg3); }
     <span class="v"><span class="green" id="accept-rate">-</span> / <span class="yellow" id="too-high-rate">-</span> / <span class="blue" id="too-low-rate">-</span></span>
   </div>
   <div class="top-stat top-stat-no-trade">
-    <span class="k" title="Bots with 120+ turns and zero completed trades">No Trade 120+</span>
-    <span class="v"><span class="red" id="no-trade-120">-</span></span>
+    <span class="k" title="Running bots with zero completed trades at each turn threshold">No Trade Buckets</span>
+    <span class="v">
+      <span class="no-trade-bucket"><span class="red bucket-label">t30</span><span class="bucket-value" id="no-trade-30">-</span></span>
+      <span class="no-trade-bucket"><span class="red bucket-label">t60</span><span class="bucket-value" id="no-trade-60">-</span></span>
+      <span class="no-trade-bucket"><span class="red bucket-label">t90</span><span class="bucket-value" id="no-trade-90">-</span></span>
+      <span class="no-trade-bucket"><span class="red bucket-label">t120</span><span class="bucket-value" id="no-trade-120">-</span></span>
+    </span>
   </div>
 </section>
 <section class="strategy-strip">
   <div class="strategy-panel strategy-panel-cpt">
-    <span class="k">Strategy Bot CPT</span>
+    <span class="k">Strategy CPT Index</span>
     <span class="v" id="strategy-cpt">-</span>
   </div>
   <div class="strategy-panel strategy-panel-trend">
@@ -2007,11 +2119,14 @@ tbody tr:hover { background: var(--bg3); }
         <div class="table-filters">
           <select id="filter-state">
             <option value="all">state: all</option>
+            <option value="queued">state: queued</option>
             <option value="running">state: running</option>
             <option value="recovering">state: recovering</option>
             <option value="blocked">state: blocked</option>
             <option value="error">state: error</option>
             <option value="completed">state: completed</option>
+            <option value="stopped">state: stopped</option>
+            <option value="disconnected">state: disconnected</option>
           </select>
           <select id="filter-strategy">
             <option value="all">strategy: all</option>
@@ -2038,6 +2153,7 @@ tbody tr:hover { background: var(--bg3); }
               <col class="col-strategy">
               <col class="col-sector">
               <col class="col-credits">
+              <col class="col-cpt">
               <col class="col-fuel">
               <col class="col-org">
               <col class="col-equip">
@@ -2054,6 +2170,7 @@ tbody tr:hover { background: var(--bg3); }
                 <th data-sort="strategy">Strat</th>
                 <th data-sort="sector">Sect</th>
                 <th data-sort="credits">Credits</th>
+                <th data-sort="cpt_index">CPT</th>
                 <th data-sort="cargo_fuel_ore">Fuel</th>
                 <th data-sort="cargo_organics">Org</th>
                 <th data-sort="cargo_equipment">Equip</th>

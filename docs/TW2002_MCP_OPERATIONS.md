@@ -33,7 +33,7 @@ Example:
 From repo root:
 
 ```bash
-cd /Users/tim/code/gh/livingstaccato/bbsbot
+cd /path/to/bbsbot
 uv run bbsbot serve --tools tw2002
 ```
 
@@ -72,4 +72,3 @@ When correctly configured, tool names should include:
     `bbsbot_local_tw2002`
 - Manager/hijack calls failing:
   - Ensure swarm manager is reachable at `http://localhost:2272`
-

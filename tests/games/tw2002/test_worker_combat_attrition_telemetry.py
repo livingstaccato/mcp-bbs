@@ -10,14 +10,15 @@ from bbsbot.games.tw2002.worker import WorkerBot
 
 
 class _ScreenStub:
-    def __init__(self, text: str):
+    def __init__(self, text: str, *, prompt_id: str = "prompt.command_generic"):
         self._text = text
+        self._prompt_id = prompt_id
 
     def get_screen(self) -> str:
         return self._text
 
     def snapshot(self) -> dict:
-        return {"prompt_detected": {"prompt_id": "prompt.command_generic"}}
+        return {"prompt_detected": {"prompt_id": self._prompt_id}}
 
     def is_connected(self) -> bool:
         return True
@@ -34,7 +35,7 @@ class _HttpStub:
 
 def test_note_action_completion_attribution_precedence_and_attrition() -> None:
     bot = WorkerBot(bot_id="bot_telemetry", config=BotConfig(), manager_url="http://localhost:9999")
-    bot.session = _ScreenStub("Combat! escape pod ... ferrengi ... your ship was destroyed")
+    bot.session = _ScreenStub("Combat! escape pod ... ferrengi ... your ship was destroyed by mines")
 
     # trade precedence
     bot.note_action_completion(
@@ -86,10 +87,9 @@ def test_note_action_completion_attribution_precedence_and_attrition() -> None:
     assert bot.attrition_telemetry["credits_loss_nontrade"] >= 50
     assert bot.combat_telemetry["combat_context_seen"] >= 1
     assert bot.combat_telemetry["under_attack_reports"] >= 1
-    assert bot.combat_telemetry["combat_prompt_escape_pod"] >= 1
-    assert bot.combat_telemetry["combat_prompt_ferrengi"] >= 1
     assert bot.combat_telemetry["death_prompt_detected"] >= 1
     assert bot.combat_telemetry["combat_destroyed"] >= 1
+    assert bot.combat_telemetry["combat_destroyed_by_mines"] >= 1
 
     # unknown when no stronger evidence
     bot.session = _ScreenStub("")
@@ -126,3 +126,32 @@ def test_report_status_captures_screen_action_tags_and_normalizes_ansi() -> None
     assert payload.get("screen_action_tag_telemetry", {}).get("move", 0) >= 1
     # A bare `41m`/ANSI-prefixed line should not derail command detection.
     assert payload.get("activity_context") == "EXPLORING"
+
+
+def test_report_status_maps_combat_prompt_ids_once_per_transition() -> None:
+    bot = WorkerBot(bot_id="bot_prompt_telemetry", config=BotConfig(), manager_url="http://localhost:9999")
+    session = _ScreenStub("Combat status", prompt_id="prompt.combat_loss")
+    bot.session = session
+    bot._http_client = _HttpStub()
+
+    asyncio.run(bot.report_status())
+    asyncio.run(bot.report_status())  # same prompt should not double count
+    assert bot.combat_telemetry.get("combat_prompt_loss", 0) == 1
+    assert bot.combat_telemetry.get("combat_destroyed", 0) == 1
+
+    session._prompt_id = "prompt.mine_hit"
+    asyncio.run(bot.report_status())
+    assert bot.combat_telemetry.get("combat_prompt_mine_hit", 0) == 1
+
+    session._prompt_id = "prompt.combat_escape_pod"
+    asyncio.run(bot.report_status())
+    assert bot.combat_telemetry.get("combat_prompt_escape_pod", 0) == 1
+
+    session._prompt_id = "prompt.ferrengi_encounter"
+    asyncio.run(bot.report_status())
+    assert bot.combat_telemetry.get("combat_prompt_ferrengi", 0) == 1
+
+    session._prompt_id = "prompt.ship_destroyed"
+    asyncio.run(bot.report_status())
+    assert bot.combat_telemetry.get("combat_prompt_ship_destroyed", 0) == 1
+    assert bot.combat_telemetry.get("death_prompt_detected", 0) >= 2

@@ -8,6 +8,8 @@
   let updateTimer = null;  // Debounce timer for table updates
   let tablePointerActive = false;
   let pendingTableData = null;
+  let tablePointerReleaseTimer = null;
+  const TABLE_POINTER_RELEASE_GRACE_MS = 90;
   let swarmPingTimer = null;
   let swarmPollTimer = null;
   const strategyCptRegistry = new Map();
@@ -21,9 +23,12 @@
   let runBaselineNetWorth = null;
   let runBaselineTurns = null;
   let runBaselineTrades = null;
+  let runtimeUiTimer = null;
+  let runtimeHasActiveBots = false;
   let summary15Cache = null;
   let summary15CacheTs = 0;
   let summary15Inflight = null;
+  const SUMMARY15_CACHE_MS = 120000;
   const latestBotsById = new Map();
   const lastKnownCreditsByBotId = new Map();
 
@@ -72,10 +77,22 @@
   function installTableInteractionGuards() {
     const tbody = $("#bot-table");
     if (!tbody) return;
-    const hold = () => { tablePointerActive = true; };
+    const hold = () => {
+      if (tablePointerReleaseTimer) {
+        clearTimeout(tablePointerReleaseTimer);
+        tablePointerReleaseTimer = null;
+      }
+      tablePointerActive = true;
+    };
     const release = () => {
-      tablePointerActive = false;
-      flushDeferredTableRender();
+      if (tablePointerReleaseTimer) clearTimeout(tablePointerReleaseTimer);
+      // Keep the guard active briefly after pointerup so click handlers run
+      // before a deferred table flush can replace the clicked row/button.
+      tablePointerReleaseTimer = setTimeout(() => {
+        tablePointerReleaseTimer = null;
+        tablePointerActive = false;
+        flushDeferredTableRender();
+      }, TABLE_POINTER_RELEASE_GRACE_MS);
     };
     tbody.addEventListener("pointerdown", hold, true);
     document.addEventListener("pointerup", release, true);
@@ -108,6 +125,40 @@
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     return h + "h" + String(m).padStart(2, "0") + "m";
+  }
+
+  function computeBotCptPresentation(bot) {
+    const turns = Number(bot.turns_executed || 0);
+    const runCpt = Number(bot.credits_per_turn || 0);
+    const adjCpt = Number(bot.cpt_index || 1.0);
+    const baselineRaw = bot.cpt_baseline_credits;
+    const baselineCredits = baselineRaw == null ? null : Number(baselineRaw);
+    const baselineLocked = !!bot.cpt_baseline_locked || (isFinite(baselineCredits) && baselineCredits > 0);
+    const adjustedReady = (bot.adjusted_cpt_ready !== undefined && bot.adjusted_cpt_ready !== null)
+      ? !!bot.adjusted_cpt_ready
+      : baselineLocked;
+    const runReady = (bot.run_cpt_ready !== undefined && bot.run_cpt_ready !== null)
+      ? !!bot.run_cpt_ready
+      : (adjustedReady && turns > 0);
+    const runText = runReady ? formatSigned(runCpt, 2) : "pending";
+    const adjustedText = adjustedReady && isFinite(adjCpt) && adjCpt > 0 ? `${adjCpt.toFixed(2)}x` : "unverified";
+    const adjustedDeltaPct = adjustedReady && isFinite(adjCpt) && adjCpt > 0 ? ((adjCpt - 1.0) * 100.0) : null;
+    const adjustedDeltaText = adjustedDeltaPct == null ? "pending" : `${formatSigned(adjustedDeltaPct, 1)}%`;
+    const baselineText = (baselineLocked && isFinite(Number(baselineCredits)) && Number(baselineCredits) > 0)
+      ? `base ${formatCredits(Math.round(Number(baselineCredits)))}`
+      : "base pending";
+    return {
+      runCpt,
+      adjCpt,
+      runReady,
+      adjustedReady,
+      baselineText,
+      runText,
+      adjustedText,
+      adjustedDeltaText,
+      runColor: runReady ? (runCptColor(runCpt) || "") : "",
+      adjustedColor: adjustedReady ? (strategyCptColor(adjCpt) || "") : "",
+    };
   }
 
   function normalizeTableView(view) {
@@ -184,6 +235,16 @@
     return new Date(Number(ts) * 1000).toLocaleTimeString();
   }
 
+  function renderRuntimeTick(nowS = (Date.now() / 1000)) {
+    const runtimeSec = (activeRunStartTs && runtimeHasActiveBots) ? Math.max(0, nowS - activeRunStartTs) : 0;
+    if (testRuntimeValueEl) testRuntimeValueEl.textContent = formatClockDuration(runtimeSec);
+    if (testRuntimeSinceEl) testRuntimeSinceEl.textContent = activeRunStartTs ? `since ${formatTimeOnly(activeRunStartTs)}` : "since -";
+    if (testRuntimeFillEl) {
+      const pct = Math.max(0, Math.min(100, (runtimeSec / 3600) * 100));
+      testRuntimeFillEl.style.width = `${pct.toFixed(1)}%`;
+    }
+  }
+
   function formatSigned(n, digits = 2) {
     const v = Number(n || 0);
     if (!isFinite(v)) return "-";
@@ -221,6 +282,17 @@
   function strategyCptColor(cpt) {
     const value = Number(cpt);
     if (!isFinite(value)) return "";
+    const min = 0.4;
+    const max = 1.6;
+    const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    const eased = t * t * (3 - 2 * t);
+    const hue = 8 + (132 * eased);
+    return `hsl(${hue.toFixed(1)} 58% 64%)`;
+  }
+
+  function runCptColor(cpt) {
+    const value = Number(cpt);
+    if (!isFinite(value)) return "";
     const min = -1.5;
     const max = 1.5;
     const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
@@ -231,13 +303,13 @@
 
   function computeAggregateMetrics(data) {
     const bots = data.bots || [];
-    const MIN_TURNS_FOR_CPT = 30;
-    const MIN_TRADES_FOR_CPT = 1;
-    const MAX_ABS_CPT_PER_BOT = 100.0;
     let accept = 0;
     let counter = 0;
     let tooHigh = 0;
     let tooLow = 0;
+    let noTrade30 = 0;
+    let noTrade60 = 0;
+    let noTrade90 = 0;
     let noTrade120 = 0;
     const nowS = Date.now() / 1000;
     const activeStates = new Set(["running", "recovering", "blocked"]);
@@ -255,13 +327,16 @@
 
       const turns = Number(b.turns_executed || 0);
       const trades = Number(b.trades_executed || 0);
-      if (turns >= 120 && trades === 0 && String(b.state || "") === "running") {
-        noTrade120 += 1;
+      if (trades === 0 && String(b.state || "") === "running") {
+        if (turns >= 30) noTrade30 += 1;
+        if (turns >= 60) noTrade60 += 1;
+        if (turns >= 90) noTrade90 += 1;
+        if (turns >= 120) noTrade120 += 1;
       }
 
-      const cpt = Number(b.credits_per_turn || 0);
+      const cptMeta = computeBotCptPresentation(b);
+      const cptIndex = Number(b.cpt_index || 1.0);
       const turnsExec = Number(b.turns_executed || 0);
-      const creditsDelta = Number(b.credits_delta || 0);
       const tradesExec = Number(b.trades_executed || 0);
       const sid = (b.strategy_id || b.strategy || "unknown").toString();
       const mode = (b.strategy_mode || "unknown").toString();
@@ -287,17 +362,11 @@
       if (isFinite(tradesExec) && tradesExec > 0) bucket.sumTradesAll += tradesExec;
       if (activeStates.has(state) && isFresh) bucket.activeBots += 1;
 
-      const hasSufficientTurns = isFinite(turnsExec) && turnsExec >= MIN_TURNS_FOR_CPT;
-      const hasTrades = isFinite(tradesExec) && tradesExec >= MIN_TRADES_FOR_CPT;
-      const hasValidDelta = isFinite(creditsDelta) && isFinite(turnsExec) && turnsExec > 0;
-      const perBotCpt = hasValidDelta ? (creditsDelta / turnsExec) : cpt;
-      const isOutlier = !isFinite(perBotCpt) || Math.abs(perBotCpt) > MAX_ABS_CPT_PER_BOT;
-
-      if (hasSufficientTurns && hasTrades && hasValidDelta && !isOutlier) {
-        bucket.sumCpt += perBotCpt;
+      const hasValidIndex = cptMeta.adjustedReady && isFinite(cptIndex) && cptIndex > 0 && cptIndex < 100;
+      if (hasValidIndex) {
+        bucket.sumCpt += cptIndex;
         bucket.n += 1;
-        bucket.sumTurns += turnsExec;
-        bucket.sumDelta += creditsDelta;
+        if (isFinite(turnsExec) && turnsExec > 0) bucket.sumTurns += turnsExec;
       } else {
         bucket.samplesSkipped += 1;
       }
@@ -310,9 +379,7 @@
 
     const strategyRows = Array.from(byStrategy.values())
       .map((v) => {
-        const weighted = v.sumTurns > 0 ? v.sumDelta / v.sumTurns : NaN;
-        const unweighted = v.n > 0 ? v.sumCpt / v.n : 0;
-        const cpt = isFinite(weighted) ? weighted : unweighted;
+        const cpt = v.n > 0 ? v.sumCpt / v.n : 1.0;
         const tradesPer100 = v.sumTurnsAll > 0 ? (v.sumTradesAll * 100) / v.sumTurnsAll : 0;
         return {
           key: v.key,
@@ -328,7 +395,7 @@
       .filter((x) => !(x.key.toLowerCase().includes("(unknown)") && x.n === 0 && x.tradesPer100 === 0))
       .sort((a, b) => b.cpt - a.cpt);
 
-    return { acceptRate, tooHighRate, tooLowRate, noTrade120, strategyRows };
+    return { acceptRate, tooHighRate, tooLowRate, noTrade30, noTrade60, noTrade90, noTrade120, strategyRows };
   }
 
   function renderStrategyCpt(rowsNow) {
@@ -390,7 +457,7 @@
           <thead>
             <tr>
               <th>Strategy</th>
-              <th>Bot CPT</th>
+              <th>CPT Index</th>
               <th>N</th>
               <th>Turns</th>
               <th>T/100</th>
@@ -402,7 +469,7 @@
             ${rows
               .map((row) => {
                 const cpt = Number(row.cpt || 0);
-                const cptText = `${cpt >= 0 ? "+" : ""}${cpt.toFixed(2)}`;
+                const cptText = `${cpt.toFixed(2)}x`;
                 const t100 = Number(row.tradesPer100 || 0).toFixed(1);
                 const color = strategyCptColor(cpt);
                 const stateCls = row.state.toLowerCase();
@@ -438,7 +505,8 @@
 
   function computeRunMetrics(data) {
     const bots = data.bots || [];
-    const includeStates = new Set(["running", "recovering", "blocked", "completed", "error", "disconnected"]);
+    const liveStates = new Set(["running", "recovering", "blocked", "queued"]);
+    const includeStates = new Set(["running", "recovering", "blocked", "queued", "completed", "error", "disconnected"]);
     let turns = 0;
     let trades = 0;
     let runStart = Number.POSITIVE_INFINITY;
@@ -476,7 +544,6 @@
     for (const b of bots) {
       const state = String(b.state || "").toLowerCase();
       if (!includeStates.has(state)) continue;
-      activeBots += 1;
       turns += Number(b.turns_executed || 0);
       trades += Number(b.trades_executed || 0);
       totalCargoFuelOre += Number(b.cargo_fuel_ore || 0);
@@ -513,6 +580,8 @@
       rerouteNoInteraction += Number(tq.reroute_no_interaction || 0);
       verifiedLanes += Number(tq.verified_lanes_count || 0);
       acceptRateHint += Number(tq.opportunity_score_avg_accepted || 0);
+      if (!liveStates.has(state)) continue;
+      activeBots += 1;
       const started = Number(b.started_at || 0);
       if (started > 0 && started < runStart) runStart = started;
     }
@@ -604,7 +673,7 @@
 
   async function refreshSummary15(force = false) {
     const nowMs = Date.now();
-    if (!force && summary15Cache && (nowMs - summary15CacheTs) < 15000) {
+    if (!force && summary15Cache && (nowMs - summary15CacheTs) < SUMMARY15_CACHE_MS) {
       return summary15Cache;
     }
     if (summary15Inflight) return summary15Inflight;
@@ -927,6 +996,103 @@
     return "";
   }
 
+  function normalizeStrategyToken(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  function getLatestRecentAction(bot) {
+    const actions = Array.isArray(bot.recent_actions) ? bot.recent_actions : [];
+    let latest = null;
+    let latestTime = -1;
+    for (const raw of actions) {
+      if (!raw || typeof raw !== "object") continue;
+      const actionTime = Number(raw.time || 0);
+      if (latest === null || actionTime >= latestTime) {
+        latest = raw;
+        latestTime = actionTime;
+      }
+    }
+    return latest;
+  }
+
+  function formatDecisionSourceLabel(source) {
+    const normalized = normalizeStrategyToken(source);
+    switch (normalized) {
+      case "llm_managed":
+        return "llm-managed";
+      case "llm_direct":
+        return "llm-direct";
+      case "supervisor_autopilot":
+        return "autopilot";
+      case "goal_contract":
+        return "goal-contract";
+      case "fallback":
+        return "fallback";
+      default:
+        return String(source || "")
+          .trim()
+          .replace(/_/g, "-");
+    }
+  }
+
+  function getAiDecisionInfo(bot) {
+    const strategyNorm = normalizeStrategyToken(bot.strategy_id || bot.strategy || "");
+    const roleNorm = normalizeStrategyToken(bot.swarm_role || "");
+    const latest = getLatestRecentAction(bot);
+    const decisionSource = String((latest && latest.decision_source) || "").trim();
+    const sourceNorm = normalizeStrategyToken(decisionSource);
+    const sourceLooksAi = (
+      sourceNorm.startsWith("llm")
+      || sourceNorm === "supervisor_autopilot"
+      || sourceNorm === "goal_contract"
+      || sourceNorm === "fallback"
+    );
+    const latestAction = String((latest && latest.action) || "").trim().toUpperCase();
+    const isAi = (
+      strategyNorm === "ai_strategy"
+      || strategyNorm === "ai"
+      || latestAction.startsWith("AI:")
+      || sourceLooksAi
+      || (roleNorm === "ai" && sourceLooksAi)
+    );
+    if (!isAi) return { isAi: false, summary: "", detail: "", tooltip: "" };
+
+    const selectedStrategy = String(
+      (latest && (latest.strategy_id || latest.strategy))
+      || bot.strategy_id
+      || bot.strategy
+      || "unknown"
+    ).trim();
+    const sourceLabel = formatDecisionSourceLabel(decisionSource || "managed");
+    const wakeReason = String((latest && latest.wake_reason) || "").trim();
+    const reviewTurns = Number(latest && latest.review_after_turns);
+    const summaryParts = [`AI ${sourceLabel}`, `-> ${selectedStrategy}`];
+    if (wakeReason) summaryParts.push(`wake=${wakeReason}`);
+    if (Number.isFinite(reviewTurns) && reviewTurns > 0) summaryParts.push(`review=${Math.round(reviewTurns)}t`);
+    const summary = summaryParts.join(" | ");
+
+    const reason = String((latest && (latest.why || latest.details)) || "").trim();
+    const actionLabel = latestAction ? latestAction.replace(/^AI:/, "") : "";
+    const detailParts = [];
+    if (actionLabel) detailParts.push(`act=${actionLabel}`);
+    if (reason) detailParts.push(reason);
+    const detail = detailParts.join(" | ");
+
+    const tooltipParts = [summary];
+    if (detail) tooltipParts.push(detail);
+    if (latest && latest.time) tooltipParts.push(`updated ${formatRelativeStamp(latest.time)}`);
+    return {
+      isAi: true,
+      summary,
+      detail,
+      tooltip: tooltipParts.join(" | "),
+    };
+  }
+
   function matchesTextFilter(bot, q) {
     if (!q) return true;
     const fields = [
@@ -1037,7 +1203,7 @@
       if (returnPerTurnEl) {
         const cptText = formatSigned(displayDelta.trueCpt, 2);
         returnPerTurnEl.textContent = displayDelta.roiLowConfidence ? `~${cptText}` : cptText;
-        returnPerTurnEl.style.color = strategyCptColor(displayDelta.trueCpt) || "";
+        returnPerTurnEl.style.color = runCptColor(displayDelta.trueCpt) || "";
         if (displayDelta.roiLowConfidence) {
           const reasons = (displayDelta.roiConfidenceReasons || []).join(", ") || "insufficient data quality";
           returnPerTurnEl.title = `Low confidence ROI (${Number(displayDelta.roiConfidence || 0).toFixed(2)}): ${reasons}`;
@@ -1104,6 +1270,8 @@
         runBaselineTrades = null;
       }
       if (run.runStart) activeRunStartTs = run.runStart;
+      if (!run.runStart) activeRunStartTs = null;
+      runtimeHasActiveBots = Number(run.activeBots || 0) > 0;
       lastRunTotalTurns = run.turns;
       lastRunTotalBots = totalBotsNow;
       if (run.activeBots > 0 && runBaselineNetWorth == null) {
@@ -1112,18 +1280,15 @@
         runBaselineTrades = Number(run.trades || 0);
       }
       if (run.activeBots <= 0) {
+        activeRunStartTs = null;
+        runtimeHasActiveBots = false;
         runBaselineNetWorth = null;
         runBaselineTurns = null;
         runBaselineTrades = null;
       }
 
-      const runtimeSec = activeRunStartTs ? Math.max(0, nowS - activeRunStartTs) : 0;
-      if (testRuntimeValueEl) testRuntimeValueEl.textContent = formatClockDuration(runtimeSec);
-      if (testRuntimeSinceEl) testRuntimeSinceEl.textContent = activeRunStartTs ? `since ${formatTimeOnly(activeRunStartTs)}` : "since -";
-      if (testRuntimeFillEl) {
-        const pct = Math.max(0, Math.min(100, (runtimeSec / 3600) * 100));
-        testRuntimeFillEl.style.width = `${pct.toFixed(1)}%`;
-      }
+      const runtimeSec = (activeRunStartTs && runtimeHasActiveBots) ? Math.max(0, nowS - activeRunStartTs) : 0;
+      renderRuntimeTick(nowS);
 
       if (runMetricHistory.length < 2) {
         hydrateRunHistoryFromTimeseries();
@@ -1158,11 +1323,17 @@
       const acceptEl = $("#accept-rate");
       const highEl = $("#too-high-rate");
       const lowEl = $("#too-low-rate");
-      const noTradeEl = $("#no-trade-120");
+      const noTrade30El = $("#no-trade-30");
+      const noTrade60El = $("#no-trade-60");
+      const noTrade90El = $("#no-trade-90");
+      const noTrade120El = $("#no-trade-120");
       if (acceptEl) acceptEl.textContent = percent(metrics.acceptRate);
       if (highEl) highEl.textContent = percent(metrics.tooHighRate);
       if (lowEl) lowEl.textContent = percent(metrics.tooLowRate);
-      if (noTradeEl) noTradeEl.textContent = String(metrics.noTrade120);
+      if (noTrade30El) noTrade30El.textContent = String(metrics.noTrade30);
+      if (noTrade60El) noTrade60El.textContent = String(metrics.noTrade60);
+      if (noTrade90El) noTrade90El.textContent = String(metrics.noTrade90);
+      if (noTrade120El) noTrade120El.textContent = String(metrics.noTrade120);
       renderStrategyCpt(metrics.strategyRows);
 
 	    // Throttle (not debounce) table re-render.
@@ -1175,6 +1346,16 @@
 	    }, 300);
 	  }
 
+  function applyUpdate(data) {
+    try {
+      update(data);
+    } catch (err) {
+      dot.className = "dot disconnected";
+      connStatus.textContent = "Update error (see console)";
+      console.error("dashboard_update_error", err);
+    }
+  }
+
   function renderBotTable(data) {
     const allBots = data.bots || [];
     syncStrategyFilterOptions(allBots);
@@ -1183,7 +1364,14 @@
       botListMeta.textContent = `${filteredBots.length} visible / ${allBots.length} total`;
     }
 
+    const inactiveStates = new Set(["stopped", "completed", "error", "disconnected", "dead"]);
+    const isInactiveBot = (bot) => inactiveStates.has(String(bot.state || "").toLowerCase());
+
     const bots = filteredBots.slice().sort((a, b) => {
+      const ai = isInactiveBot(a) ? 1 : 0;
+      const bi = isInactiveBot(b) ? 1 : 0;
+      if (ai !== bi) return ai - bi;
+
       let va = a[sortKey] ?? "";
       let vb = b[sortKey] ?? "";
       if (typeof va === "number" || typeof vb === "number") {
@@ -1295,21 +1483,38 @@
         const equipStateClass = equipValue !== null && equipValue > 0 ? "hold-active" : "hold-empty";
 
         const compact = getStrategyCompact(b);
+        const aiDecision = getAiDecisionInfo(b);
         const strategyNote = getStrategyNote(b);
-        const strategyLine2 = strategyNote || "—";
-        const strategyTitle = strategyNote ? `${compact.full} | ${strategyNote}` : compact.full;
+        const strategyLine2 = aiDecision.summary || strategyNote || "—";
+        const strategyLine3 = aiDecision.detail || "";
+        const strategyTitle = [compact.full, strategyNote, aiDecision.tooltip].filter(Boolean).join(" | ") || compact.full;
         const roleToken = String(b.swarm_role || "").trim().toLowerCase();
         const roleLabel = roleToken === "scout" ? "SCOUT" : (roleToken === "harvester" ? "HARVESTER" : (roleToken === "ai" ? "AI" : ""));
         const roleChip = roleLabel ? `<span class="chip role ${esc(roleToken || "unknown")}">${esc(roleLabel)}</span>` : "";
         const hijackChip = b.is_hijacked ? `<span class="chip role hijacked">HIJACKED</span>` : "";
+        const aiChip = aiDecision.isAi ? `<span class="chip aictrl">AI-CTRL</span>` : "";
+        const cptMeta = computeBotCptPresentation(b);
+        const runCptStyle = cptMeta.runColor ? ` style="color:${cptMeta.runColor}"` : "";
+        const adjCptStyle = cptMeta.adjustedColor ? ` style="color:${cptMeta.adjustedColor}"` : "";
         const strategyHtml = `<div class="strategy-cell" title="${esc(strategyTitle)}">` +
             `<span class="strategy-chip-row">` +
               `<span class="chip sid">${esc(compact.id || "-")}</span>` +
               (compact.mode ? `<span class="chip mode">${esc(compact.mode)}</span>` : "") +
+              aiChip +
               roleChip +
               hijackChip +
             `</span>` +
-            `<div class="strategy-intent${strategyNote ? "" : " subtle-empty"}">${esc(strategyLine2)}</div>` +
+            `<div class="strategy-intent${strategyLine2 === "—" ? " subtle-empty" : ""}">${esc(strategyLine2)}</div>` +
+            (strategyLine3 ? `<div class="strategy-ai-meta">${esc(strategyLine3)}</div>` : "") +
+          `</div>`;
+        const cptHtml = `<div class="cpt-cell">` +
+            `<span class="cpt-primary">` +
+              `<span class="cpt-label">Run</span><strong${runCptStyle}>${esc(cptMeta.runText)}</strong>` +
+            `</span>` +
+            `<span class="cpt-secondary${cptMeta.baselineText === "base pending" ? " subtle-empty" : ""}">` +
+              `<span class="cpt-label">Adj Δ</span><strong${adjCptStyle}>${esc(cptMeta.adjustedDeltaText)}</strong>` +
+              `<span class="cpt-base">${esc(cptMeta.baselineText)}</span>` +
+            `</span>` +
           `</div>`;
 
         const creditsColor = hasLiveCredits ? creditColor(liveCredits) : "";
@@ -1324,6 +1529,7 @@
 	        <td>${strategyHtml}</td>
 	        <td class="numeric">${b.sector}</td>
 	        <td class="numeric ${creditCellClass}"${creditsColor ? ` style="color:${creditsColor}"` : ""}${creditCellTitle ? ` title="${esc(creditCellTitle)}"` : ""}><span class="credit-glyph">${esc(creditGlyph())}</span>${creditsDisplay}</td>
+	        <td>${cptHtml}</td>
 	        <td class="numeric cargo-fuel-cell ${fuelStateClass}">${fuelDisplay}</td>
 	        <td class="numeric cargo-org-cell ${orgStateClass}">${orgDisplay}</td>
 	        <td class="numeric cargo-equip-cell ${equipStateClass}">${equipDisplay}</td>
@@ -1457,15 +1663,28 @@
     const haggleTotal = haggleAccept + haggleCounter + haggleHigh + haggleLow;
     const acceptRate = haggleTotal > 0 ? ((haggleAccept / haggleTotal) * 100).toFixed(1) + "%" : "0.0%";
     const creditsDelta = Number(bot.credits_delta || 0);
-    const cpt = Number(bot.credits_per_turn || 0);
+    const cptMeta = computeBotCptPresentation(bot);
+    const aiDecision = getAiDecisionInfo(bot);
+    const llmWakeups = Number(bot.llm_wakeups || 0);
+    const autopilotTurns = Number(bot.autopilot_turns || 0);
+    const contractFailures = Number(bot.goal_contract_failures || 0);
+    const llmWakeupsPer100 = Number(bot.llm_wakeups_per_100_turns || 0);
+    const showAiStats = aiDecision.isAi || llmWakeups > 0 || autopilotTurns > 0 || contractFailures > 0;
 
     if (errorModalTitle) errorModalTitle.textContent = "Bot Metrics";
     errorModalContent.innerHTML = `
       <div class="field"><div class="label">Bot ID</div><div class="value">${esc(bot.bot_id)}</div></div>
       <div class="field"><div class="label">Strategy</div><div class="value">${esc((bot.strategy || bot.strategy_id || "-") + (bot.strategy_mode ? " (" + bot.strategy_mode + ")" : ""))}</div></div>
+      ${showAiStats ? `<div class="field"><div class="label">AI Decision</div><div class="value">${esc(aiDecision.summary || "-")}</div></div>` : ""}
+      ${showAiStats && aiDecision.detail ? `<div class="field"><div class="label">AI Detail</div><div class="value">${esc(aiDecision.detail)}</div></div>` : ""}
+      ${showAiStats ? `<div class="field"><div class="label">LLM Wakeups</div><div class="value">${esc(String(llmWakeups))} (${esc(llmWakeupsPer100.toFixed(2))}/100t)</div></div>` : ""}
+      ${showAiStats ? `<div class="field"><div class="label">Autopilot Turns</div><div class="value">${esc(String(autopilotTurns))}</div></div>` : ""}
+      ${showAiStats ? `<div class="field"><div class="label">Goal Contract Failures</div><div class="value">${esc(String(contractFailures))}</div></div>` : ""}
       <div class="field"><div class="label">Trades Executed</div><div class="value">${esc(String(bot.trades_executed || 0))}</div></div>
       <div class="field"><div class="label">Credits Delta</div><div class="value">${esc(String(creditsDelta))}</div></div>
-      <div class="field"><div class="label">Credits / Turn</div><div class="value">${esc(cpt.toFixed(2))}</div></div>
+      <div class="field"><div class="label">Run CPT</div><div class="value">${esc(cptMeta.runText)}</div></div>
+      <div class="field"><div class="label">Adjusted CPT</div><div class="value">${esc(cptMeta.adjustedText)}</div></div>
+      <div class="field"><div class="label">CPT Baseline</div><div class="value">${esc(cptMeta.baselineText)}</div></div>
       <div class="field"><div class="label">Haggle Accept</div><div class="value">${esc(String(haggleAccept))}</div></div>
       <div class="field"><div class="label">Haggle Counter</div><div class="value">${esc(String(haggleCounter))}</div></div>
       <div class="field"><div class="label">Haggle Too High</div><div class="value">${esc(String(haggleHigh))}</div></div>
@@ -1640,14 +1859,27 @@
     const haggleTotal = haggleAccept + haggleCounter + haggleHigh + haggleLow;
     const acceptRate = haggleTotal > 0 ? ((haggleAccept / haggleTotal) * 100).toFixed(1) + "%" : "0.0%";
     const creditsDelta = Number(bot.credits_delta || 0);
-    const cpt = Number(bot.credits_per_turn || 0);
+    const cptMeta = computeBotCptPresentation(bot);
+    const aiDecision = getAiDecisionInfo(bot);
+    const llmWakeups = Number(bot.llm_wakeups || 0);
+    const autopilotTurns = Number(bot.autopilot_turns || 0);
+    const contractFailures = Number(bot.goal_contract_failures || 0);
+    const llmWakeupsPer100 = Number(bot.llm_wakeups_per_100_turns || 0);
+    const showAiStats = aiDecision.isAi || llmWakeups > 0 || autopilotTurns > 0 || contractFailures > 0;
     logContent.innerHTML = `
       <div class="field"><div class="label">Bot ID</div><div class="value">${esc(bot.bot_id)}</div></div>
       <div class="field"><div class="label">State</div><div class="value">${esc(bot.state || "-")}</div></div>
       <div class="field"><div class="label">Strategy</div><div class="value">${esc(getStrategyLabel(bot))}</div></div>
+      ${showAiStats ? `<div class="field"><div class="label">AI Decision</div><div class="value">${esc(aiDecision.summary || "-")}</div></div>` : ""}
+      ${showAiStats && aiDecision.detail ? `<div class="field"><div class="label">AI Detail</div><div class="value">${esc(aiDecision.detail)}</div></div>` : ""}
+      ${showAiStats ? `<div class="field"><div class="label">LLM Wakeups</div><div class="value">${esc(String(llmWakeups))} (${esc(llmWakeupsPer100.toFixed(2))}/100t)</div></div>` : ""}
+      ${showAiStats ? `<div class="field"><div class="label">Autopilot Turns</div><div class="value">${esc(String(autopilotTurns))}</div></div>` : ""}
+      ${showAiStats ? `<div class="field"><div class="label">Goal Contract Failures</div><div class="value">${esc(String(contractFailures))}</div></div>` : ""}
       <div class="field"><div class="label">Trades Executed</div><div class="value">${esc(String(bot.trades_executed || 0))}</div></div>
       <div class="field"><div class="label">Credits Delta</div><div class="value">${esc(String(creditsDelta))}</div></div>
-      <div class="field"><div class="label">Credits / Turn</div><div class="value">${esc(cpt.toFixed(2))}</div></div>
+      <div class="field"><div class="label">Run CPT</div><div class="value">${esc(cptMeta.runText)}</div></div>
+      <div class="field"><div class="label">Adjusted CPT</div><div class="value">${esc(cptMeta.adjustedText)}</div></div>
+      <div class="field"><div class="label">CPT Baseline</div><div class="value">${esc(cptMeta.baselineText)}</div></div>
       <div class="field"><div class="label">Haggle Accept</div><div class="value">${esc(String(haggleAccept))}</div></div>
       <div class="field"><div class="label">Haggle Counter</div><div class="value">${esc(String(haggleCounter))}</div></div>
       <div class="field"><div class="label">Haggle Too High</div><div class="value">${esc(String(haggleHigh))}</div></div>
@@ -1753,7 +1985,9 @@
   function buildEventWhat(event) {
     if (event.type === "action") {
       const atSector = event.sector ? " @ " + event.sector : "";
-      return (event.action || "UNKNOWN") + atSector;
+      const repeats = Number(event.repeat_count || 1);
+      const repeatSuffix = repeats > 1 ? " x" + String(repeats) : "";
+      return (event.action || "UNKNOWN") + atSector + repeatSuffix;
     }
     if (event.type === "status_update") {
       const activity = event.activity || "idle";
@@ -1773,6 +2007,7 @@
       if (event.wake_reason) parts.push("wake=" + event.wake_reason);
       if (event.review_after_turns != null) parts.push("review=" + String(event.review_after_turns));
       if (event.decision_source) parts.push("src=" + event.decision_source);
+      if (Number(event.repeat_count || 1) > 1) parts.push("repeated");
       return parts.join(" | ");
     }
     if (event.type === "error") return event.error_message || "";
@@ -1791,42 +2026,109 @@
     return sid || "-";
   }
 
+  function _actionSignature(event) {
+    if (!event || event.type !== "action") return "";
+    return [
+      String(event.action || "").toUpperCase(),
+      String(event.sector || ""),
+      String(event.result || "").toLowerCase(),
+      String(event.why || event.details || ""),
+      String(event.strategy_id || event.strategy || ""),
+      String(event.strategy_mode || ""),
+      String(event.strategy_intent || ""),
+    ].join("|");
+  }
+
+  function _compactActivityEvents(events) {
+    const compacted = [];
+    for (const raw of events || []) {
+      const event = { ...raw };
+      const prev = compacted.length > 0 ? compacted[compacted.length - 1] : null;
+      if (prev && event.type === "action" && prev.type === "action" && _actionSignature(prev) === _actionSignature(event)) {
+        prev.repeat_count = Number(prev.repeat_count || 1) + 1;
+        prev.repeat_first_timestamp = Number(event.timestamp || prev.repeat_first_timestamp || 0);
+        if (event.credits_before != null) prev.credits_before = event.credits_before;
+        if (event.turns_before != null) prev.turns_before = event.turns_before;
+        const prevDelta = Number(prev.result_delta || 0);
+        const curDelta = Number(event.result_delta || 0);
+        if (Number.isFinite(prevDelta) && Number.isFinite(curDelta)) {
+          prev.result_delta = prevDelta + curDelta;
+        }
+        continue;
+      }
+      event.repeat_count = 1;
+      event.repeat_first_timestamp = Number(event.timestamp || 0);
+      compacted.push(event);
+    }
+    return compacted;
+  }
+
+  function _formatActivityCredits(event) {
+    if (event.type === "action") {
+      const before = Number(event.credits_before);
+      const after = Number(event.credits_after);
+      if (Number.isFinite(before) && Number.isFinite(after) && before >= 0 && after >= 0) {
+        if (before === after) return formatCredits(after);
+        return `${formatCredits(before)} -> ${formatCredits(after)}`;
+      }
+      if (Number.isFinite(after) && after >= 0) return formatCredits(after);
+    }
+    if (event.credits != null && Number(event.credits) >= 0) return formatCredits(Number(event.credits));
+    return "-";
+  }
+
+  function _formatActivityTurns(event) {
+    if (event.type === "action") {
+      const before = Number(event.turns_before);
+      const after = Number(event.turns_after);
+      if (Number.isFinite(before) && Number.isFinite(after) && before >= 0 && after >= 0) {
+        return `${String(before)} -> ${String(after)}`;
+      }
+      if (Number.isFinite(after) && after >= 0) return String(after);
+    }
+    if (event.turns_executed != null) return String(event.turns_executed);
+    return "-";
+  }
+
   function renderActivityLedger(events) {
     if (!events.length) {
       logContent.innerHTML = "<div class=\"log-line\" style=\"color: var(--fg2); padding: 12px 16px;\">No activity events yet</div>";
       return;
     }
 
-    const rows = events
+    const compactedEvents = _compactActivityEvents(events);
+    const rows = compactedEvents
       .map((event) => {
         const time = new Date((event.timestamp || 0) * 1000).toLocaleTimeString();
+        const timeAbs = formatAbsoluteTime(event.timestamp || null);
+        const firstSeenAbs = formatAbsoluteTime(event.repeat_first_timestamp || null);
         const eventType = formatEventType(event);
         const what = buildEventWhat(event);
         const why = buildEventWhy(event);
         const strategy = buildEventStrategy(event);
         const sector = event.sector != null ? String(event.sector) : "-";
-        const credits = (event.credits != null && Number(event.credits) >= 0)
-          ? formatCredits(Number(event.credits))
-          : "-";
-        const turns = event.turns_executed != null ? String(event.turns_executed) : "-";
+        const credits = _formatActivityCredits(event);
+        const turns = _formatActivityTurns(event);
         const startedAt = event.started_at || null;
         const stoppedAt = event.stopped_at || null;
         const startedRel = formatRelativeStamp(startedAt);
         const stoppedRel = formatRelativeStamp(stoppedAt);
         const startedAbs = formatAbsoluteTime(startedAt);
         const stoppedAbs = formatAbsoluteTime(stoppedAt);
+        const repeats = Number(event.repeat_count || 1);
         const resultDelta = (event.result_delta != null && Number(event.result_delta) !== 0)
           ? (Number(event.result_delta) > 0 ? ` Δ+${formatCredits(Number(event.result_delta))}` : ` Δ${formatCredits(Number(event.result_delta))}`)
           : "";
         const resultRaw = String(event.result || (event.type === "error" ? "failure" : "")).toLowerCase();
         const resultText = resultRaw || "-";
+        const resultRepeat = repeats > 1 ? ` x${String(repeats)}` : "";
         const resultCls =
           resultRaw === "success" ? "activity-result-success" :
           resultRaw === "failure" || resultRaw === "error" ? "activity-result-failure" :
           resultRaw === "pending" ? "activity-result-pending" : "";
 
         return `<tr>
-          <td class="activity-col-time">${esc(time)}</td>
+          <td class="activity-col-time" title="${esc(timeAbs + (repeats > 1 ? " | first=" + firstSeenAbs : ""))}">${esc(time)}</td>
           <td class="activity-col-type">${esc(eventType)}</td>
           <td class="activity-col-what">${esc(what)}</td>
           <td class="activity-col-why" title="${esc(why)}">${esc(why || "-")}</td>
@@ -1836,7 +2138,7 @@
           <td class="activity-col-turns">${esc(turns)}</td>
           <td class="activity-col-start" title="${esc(startedAbs)}">${esc(startedRel)}</td>
           <td class="activity-col-stop" title="${esc(stoppedAbs)}">${esc(stoppedRel)}</td>
-          <td class="activity-col-result ${resultCls}">${esc(resultText + resultDelta)}</td>
+          <td class="activity-col-result ${resultCls}">${esc(resultText + resultDelta + resultRepeat)}</td>
         </tr>`;
       })
       .join("");
@@ -1886,7 +2188,7 @@
 
     ws.onmessage = (e) => {
       try {
-        update(JSON.parse(e.data));
+        applyUpdate(JSON.parse(e.data));
       } catch (_) {}
     };
 
@@ -1907,7 +2209,7 @@
   async function poll() {
     try {
       const resp = await fetch("/swarm/status");
-      if (resp.ok) update(await resp.json());
+      if (resp.ok) applyUpdate(await resp.json());
     } catch (_) {}
   }
 
@@ -2013,19 +2315,30 @@
     return out;
   }
 
+  function currentSpawnPreset() {
+    return (spawnPreset && spawnPreset.value) ? String(spawnPreset.value) : "preset_20_mixed";
+  }
+
+  function currentSpawnPresetLabel() {
+    if (!spawnPreset || !spawnPreset.selectedOptions || !spawnPreset.selectedOptions.length) {
+      return currentSpawnPreset();
+    }
+    return String(spawnPreset.selectedOptions[0].textContent || currentSpawnPreset()).trim();
+  }
+
   function buildSpawnConfigs() {
-    const preset = (spawnPreset && spawnPreset.value) ? String(spawnPreset.value) : "custom";
-    if (preset === "mix_5_ai_35_dynamic") {
+    const preset = currentSpawnPreset();
+    if (preset === "preset_20_mixed") {
       return [
         ..._buildRange("swarm_demo_ai", 5, 1),
-        ..._buildRange("swarm_demo", 35, 1),
+        ..._buildRange("swarm_demo", 15, 1),
       ];
     }
-    if (preset === "mix_20_ai_20_dynamic") {
-      return [
-        ..._buildRange("swarm_demo_ai", 20, 1),
-        ..._buildRange("swarm_demo", 20, 1),
-      ];
+    if (preset === "preset_20_dynamic") {
+      return _buildRange("swarm_demo", 20, 1);
+    }
+    if (preset === "preset_5_dynamic") {
+      return _buildRange("swarm_demo", 5, 1);
     }
     const count = parseInt(spawnCount.value, 10) || 5;
     const configDir = spawnConfig.value || "swarm_demo";
@@ -2033,10 +2346,18 @@
   }
 
   function syncSpawnPresetUi() {
-    const preset = (spawnPreset && spawnPreset.value) ? String(spawnPreset.value) : "custom";
+    const preset = currentSpawnPreset();
     const custom = preset === "custom";
-    if (spawnCount) spawnCount.disabled = !custom;
-    if (spawnConfig) spawnConfig.disabled = !custom;
+    if (spawnCount) {
+      spawnCount.disabled = !custom;
+      const field = spawnCount.closest(".spawn-field");
+      if (field) field.classList.toggle("is-disabled", !custom);
+    }
+    if (spawnConfig) {
+      spawnConfig.disabled = !custom;
+      const field = spawnConfig.closest(".spawn-field");
+      if (field) field.classList.toggle("is-disabled", !custom);
+    }
   }
 
   async function refreshAccountPool() {
@@ -2170,7 +2491,8 @@
 
   if (btnSpawn) {
     btnSpawn.addEventListener("click", async function () {
-      const preset = (spawnPreset && spawnPreset.value) ? String(spawnPreset.value) : "custom";
+      const preset = currentSpawnPreset();
+      const presetLabel = currentSpawnPresetLabel();
       const count = parseInt(spawnCount.value, 10) || 5;
 
       if (preset === "custom" && (count < 1 || count > 100)) {
@@ -2201,7 +2523,7 @@
 
         const data = await resp.json();
         showToast(
-          `Spawning ${data.total_bots} bots (${preset}) in ${data.total_groups} groups (~${Math.floor(data.estimated_time_seconds / 60)}m)`,
+          `Spawning ${data.total_bots} bots (${presetLabel}) in ${data.total_groups} groups (~${Math.floor(data.estimated_time_seconds / 60)}m)`,
           "success"
         );
 
@@ -2218,6 +2540,9 @@
   }
 
   if (spawnPreset) {
+    if (!spawnPreset.value || String(spawnPreset.value) === "custom") {
+      spawnPreset.value = "preset_20_mixed";
+    }
     spawnPreset.addEventListener("change", syncSpawnPresetUi);
     syncSpawnPresetUi();
   }
@@ -2225,6 +2550,9 @@
   initTableView();
   poll();
 	  connect();
+  if (runtimeUiTimer) clearInterval(runtimeUiTimer);
+  runtimeUiTimer = setInterval(() => renderRuntimeTick(), 1000);
+  renderRuntimeTick();
   if (swarmPollTimer) clearInterval(swarmPollTimer);
   swarmPollTimer = setInterval(poll, 3000);
 	  installTableInteractionGuards();
@@ -2266,15 +2594,18 @@
 	    const creditsDisplay = (bot.credits !== undefined && bot.credits !== null && bot.credits >= 0)
 	      ? formatCredits(bot.credits)
 	      : "-";
-      const cpt = Number(bot.credits_per_turn || 0);
+      const cptMeta = computeBotCptPresentation(bot);
       const trades = Number(bot.trades_executed || 0);
       const haggleTotal = Number(bot.haggle_accept || 0) + Number(bot.haggle_counter || 0) + Number(bot.haggle_too_high || 0) + Number(bot.haggle_too_low || 0);
+      const runCptStyle = cptMeta.runColor ? ` style="color:${cptMeta.runColor}"` : "";
+      const adjCptStyle = cptMeta.adjustedColor ? ` style="color:${cptMeta.adjustedColor}"` : "";
 	    termStats.innerHTML = [
 	      `<span class="stat"><span class="stat-label">Sector</span><span class="stat-value sector">${bot.sector || "-"}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Credits</span><span class="stat-value credits">${esc(creditsDisplay)}</span></span>`,
-	      `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
+        `<span class="stat"><span class="stat-label">Turns</span><span class="stat-value turns">${turnsDisplay}</span></span>`,
         `<span class="stat"><span class="stat-label">Trades</span><span class="stat-value">${esc(String(trades))}</span></span>`,
-        `<span class="stat"><span class="stat-label">C/T</span><span class="stat-value">${esc(cpt.toFixed(2))}</span></span>`,
+        `<span class="stat"><span class="stat-label">Run CPT</span><span class="stat-value"${runCptStyle}>${esc(cptMeta.runText)}</span></span>`,
+        `<span class="stat"><span class="stat-label">Adj CPT</span><span class="stat-value"${adjCptStyle}>${esc(cptMeta.adjustedText)}</span></span>`,
         `<span class="stat"><span class="stat-label">Haggles</span><span class="stat-value">${esc(String(haggleTotal))}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Prompt</span><span class="stat-value">${esc(promptId)}</span></span>`,
 	      `<span class="stat"><span class="stat-label">Strategy</span><span class="stat-value">${esc((bot.strategy || "").trim() || (bot.strategy_id ? (String(bot.strategy_id).trim() + (bot.strategy_mode ? "(" + String(bot.strategy_mode).trim() + ")" : "")) : "-"))}</span></span>`,

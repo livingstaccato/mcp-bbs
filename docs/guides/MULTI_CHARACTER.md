@@ -228,7 +228,7 @@ ModuleNotFoundError: No module named 'bbsbot.tw2002.login'
 ```
 **Solution**: Ensure you're in the bbsbot directory and venv is activated:
 ```bash
-cd /Users/tim/code/gh/livingstaccato/bbsbot
+cd /path/to/bbsbot
 source .venv/bin/activate
 ```
 

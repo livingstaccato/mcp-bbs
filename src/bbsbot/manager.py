@@ -126,6 +126,11 @@ class BotStatus(BaseModel):
     trade_outcomes_by_pair: dict[str, dict[str, int]] = Field(default_factory=dict)
     credits_delta: int = 0
     credits_per_turn: float = 0.0
+    cpt_index: float = 1.0
+    cpt_baseline_locked: bool = False
+    cpt_baseline_credits: int | None = None
+    run_cpt_ready: bool = False
+    adjusted_cpt_ready: bool = False
     turns_since_last_trade: int = 0
     move_streak: int = 0
     zero_delta_action_streak: int = 0
@@ -502,19 +507,54 @@ class SwarmManager:
     def get_timeseries_recent(self, limit: int = 200) -> list[dict]:
         """Return recent built-in timeseries rows."""
         capped = max(1, min(int(limit), 5000))
+        rows = self._read_timeseries_tail(capped)
+        return self._trim_to_latest_timeseries_epoch(rows)
+
+    def _read_timeseries_tail(self, limit: int) -> list[dict]:
+        """Read up to `limit` most recent JSONL timeseries rows efficiently.
+
+        Scans from file end in chunks so summary endpoints stay fast even when
+        the timeseries file grows large over long sessions.
+        """
+        capped = max(1, int(limit))
         if not self._timeseries_path.exists():
             return []
-        rows: deque[dict] = deque(maxlen=capped)
-        with self._timeseries_path.open(encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rows.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-        return self._trim_to_latest_timeseries_epoch(list(rows))
+        try:
+            with self._timeseries_path.open("rb") as f:
+                f.seek(0, os.SEEK_END)
+                pos = f.tell()
+                if pos <= 0:
+                    return []
+                chunk_size = 64 * 1024
+                # Keep a small margin so we don't miss lines around chunk boundaries.
+                target_lines = capped + 32
+                buf = b""
+                newline_count = 0
+                while pos > 0 and newline_count < target_lines:
+                    read_size = min(chunk_size, pos)
+                    pos -= read_size
+                    f.seek(pos, os.SEEK_SET)
+                    chunk = f.read(read_size)
+                    if not chunk:
+                        break
+                    buf = chunk + buf
+                    newline_count = buf.count(b"\n")
+        except Exception:
+            # Fallback: return empty and let caller handle "no rows" gracefully.
+            return []
+
+        rows: list[dict] = []
+        for raw in buf.splitlines()[-capped:]:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line.decode("utf-8"))
+            except Exception:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+        return rows
 
     @staticmethod
     def _trim_to_latest_timeseries_epoch(rows: list[dict]) -> list[dict]:
@@ -556,19 +596,12 @@ class SwarmManager:
 
         now = time.time()
         cutoff = now - (minutes * 60)
-        window_rows: list[dict] = []
-        with self._timeseries_path.open(encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                ts = float(row.get("ts") or 0)
-                if ts >= cutoff:
-                    window_rows.append(row)
+        # Read only enough trailing rows for the requested window (+margin)
+        # instead of scanning the entire file.
+        expected_rows = max(8, int((minutes * 60) / float(max(1, self.timeseries_interval_s))) + 8)
+        tail_limit = min(25000, max(200, expected_rows * 4))
+        tail_rows = self._read_timeseries_tail(tail_limit)
+        window_rows = [row for row in tail_rows if float(row.get("ts") or 0) >= cutoff]
 
         window_rows = self._trim_to_latest_timeseries_epoch(window_rows)
 
@@ -1227,6 +1260,7 @@ class SwarmManager:
                     "trades_per_100_turns": (float(trades) * 100.0 / float(turns)) if turns > 0 else 0.0,
                     "credits_delta": credits_delta,
                     "credits_per_turn": cpt,
+                    "cpt_index": float(bot.get("cpt_index") or 1.0),
                     "strategy_id": bot.get("strategy_id"),
                     "strategy_mode": bot.get("strategy_mode"),
                     "swarm_role": bot.get("swarm_role"),
@@ -1546,6 +1580,11 @@ class SwarmManager:
                             trade_outcomes_by_pair=bot_data.get("trade_outcomes_by_pair", {}),
                             credits_delta=bot_data.get("credits_delta", 0),
                             credits_per_turn=bot_data.get("credits_per_turn", 0.0),
+                            cpt_index=bot_data.get("cpt_index", 1.0),
+                            cpt_baseline_locked=bool(bot_data.get("cpt_baseline_locked", False)),
+                            cpt_baseline_credits=bot_data.get("cpt_baseline_credits"),
+                            run_cpt_ready=bool(bot_data.get("run_cpt_ready", False)),
+                            adjusted_cpt_ready=bool(bot_data.get("adjusted_cpt_ready", False)),
                             turns_since_last_trade=bot_data.get("turns_since_last_trade", 0),
                             move_streak=bot_data.get("move_streak", 0),
                             zero_delta_action_streak=bot_data.get("zero_delta_action_streak", 0),

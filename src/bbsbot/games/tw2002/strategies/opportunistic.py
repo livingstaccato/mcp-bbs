@@ -10,6 +10,7 @@ encountered during exploration. Balances exploration with profit.
 from __future__ import annotations
 
 import random
+from time import time
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -53,6 +54,11 @@ class OpportunisticStrategy(TradingStrategy):
         super().__init__(config, knowledge)
         self._exploration = ExplorationState()
         self._settings = config.trading.opportunistic
+        self._anti_controls = config.trading.anti_collapse
+        self._trade_quality_controls = config.trading.trade_quality
+        self._trade_lane_cooldown_until_by_key: dict[str, float] = {}
+        self._trade_lane_failure_streak_by_key: dict[str, int] = {}
+        self._trade_sector_cooldown_until_by_sector: dict[int, float] = {}
 
     @property
     def name(self) -> str:
@@ -75,7 +81,7 @@ class OpportunisticStrategy(TradingStrategy):
         # If we've failed trades multiple times at this sector, move away
         if self._exploration.consecutive_trade_failures >= 2 and state.warps:
             self._exploration.consecutive_trade_failures = 0
-            target = random.choice(state.warps)
+            target = self._pick_non_blocked_warp(state) or random.choice(state.warps)
             logger.info(
                 "Repeated trade failures at sector %s, exploring sector %s",
                 state.sector,
@@ -99,20 +105,34 @@ class OpportunisticStrategy(TradingStrategy):
             if state.has_port and state.context == "sector_command" and state.port_class:
                 sell_here = self._choose_sell_commodity_here(state, cargo)
                 if sell_here:
-                    qty = int(cargo.get(sell_here, 0) or 0)
-                    opp = TradeOpportunity(
-                        buy_sector=0,
-                        sell_sector=state.sector or 0,
+                    eligible, reason = self._strict_trade_eligibility(
+                        state,
                         commodity=sell_here,
-                        expected_profit=500,  # unknown; positive if sale occurs
-                        distance=0,
-                        confidence=0.8,
+                        expected_side="buying",
                     )
-                    return TradeAction.TRADE, {
-                        "opportunity": opp,
-                        "action": "sell",
-                        "max_quantity": max(1, qty),
-                    }
+                    if not eligible:
+                        self._apply_trade_lane_backoff(state.sector, sell_here, "sell", reason)
+                    else:
+                        qty = int(cargo.get(sell_here, 0) or 0)
+                        opp = TradeOpportunity(
+                            buy_sector=0,
+                            sell_sector=state.sector or 0,
+                            commodity=sell_here,
+                            expected_profit=500,  # unknown; positive if sale occurs
+                            distance=0,
+                            confidence=0.8,
+                        )
+                        return TradeAction.TRADE, {
+                            "opportunity": opp,
+                            "action": "sell",
+                            "max_quantity": max(1, qty),
+                        }
+
+            # Skip cargo liquidation attempts at sectors currently quarantined for structural misses.
+            if self._is_trade_sector_blocked(state.sector):
+                if state.warps:
+                    target = self._pick_non_blocked_warp(state) or random.choice(state.warps)
+                    return TradeAction.EXPLORE, {"direction": target}
 
             # Otherwise, move toward the closest known port that buys one of our cargo commodities.
             target = self._find_best_sell_target(state, cargo)
@@ -121,7 +141,7 @@ class OpportunisticStrategy(TradingStrategy):
 
             # No known buyer yet; explore to discover ports (keep cargo, don't buy more).
             if state.warps:
-                return TradeAction.EXPLORE, {"direction": random.choice(state.warps)}
+                return TradeAction.EXPLORE, {"direction": self._pick_non_blocked_warp(state) or random.choice(state.warps)}
 
         # Check upgrades
         should_upgrade, upgrade_type = self.should_upgrade(state)
@@ -134,17 +154,40 @@ class OpportunisticStrategy(TradingStrategy):
             opportunities = self.find_opportunities(state)
             if opportunities:
                 best = opportunities[0]
+                current_sector = int(state.sector or 0)
                 if best.buy_sector == (state.sector or best.buy_sector):
-                    qty = self._recommended_buy_qty(state, best.commodity)
-                    if qty > 0:
-                        return TradeAction.TRADE, {"opportunity": best, "action": "buy", "max_quantity": qty}
+                    eligible, reason = self._strict_trade_eligibility(
+                        state,
+                        commodity=best.commodity,
+                        expected_side="selling",
+                    )
+                    if not eligible:
+                        self._apply_trade_lane_backoff(current_sector, best.commodity, "buy", reason)
+                    elif not self._is_trade_lane_blocked(current_sector, best.commodity, "buy"):
+                        qty = self._recommended_buy_qty(state, best.commodity)
+                        if qty > 0:
+                            return TradeAction.TRADE, {"opportunity": best, "action": "buy", "max_quantity": qty}
+
                 if best.sell_sector == (state.sector or best.sell_sector):
-                    qty = int(cargo.get(best.commodity, 0) or 0)
-                    if qty > 0:
-                        return TradeAction.TRADE, {"opportunity": best, "action": "sell", "max_quantity": qty}
+                    eligible, reason = self._strict_trade_eligibility(
+                        state,
+                        commodity=best.commodity,
+                        expected_side="buying",
+                    )
+                    if not eligible:
+                        self._apply_trade_lane_backoff(current_sector, best.commodity, "sell", reason)
+                    elif not self._is_trade_lane_blocked(current_sector, best.commodity, "sell"):
+                        qty = int(cargo.get(best.commodity, 0) or 0)
+                        if qty > 0:
+                            return TradeAction.TRADE, {"opportunity": best, "action": "sell", "max_quantity": qty}
+
                 # Otherwise move toward the opportunity sector.
                 if best.buy_sector and state.sector and best.buy_sector in (state.warps or []):
-                    return TradeAction.MOVE, {"target_sector": best.buy_sector, "path": [state.sector, best.buy_sector]}
+                    if not self._is_trade_sector_blocked(best.buy_sector):
+                        return TradeAction.MOVE, {
+                            "target_sector": best.buy_sector,
+                            "path": [state.sector, best.buy_sector],
+                        }
 
         # Check if we've wandered too long.
         # Important: don't just reset the counter; force fresh exploration so we can
@@ -154,7 +197,7 @@ class OpportunisticStrategy(TradingStrategy):
             self._exploration.wanders_without_trade = 0
             direction = self._pick_exploration_direction(state)
             if direction is None and state.warps:
-                direction = random.choice(state.warps)
+                direction = self._pick_non_blocked_warp(state) or random.choice(state.warps)
             if direction is not None:
                 logger.warning(
                     "Max wander without trade reached (%s); forcing exploration to %s",
@@ -178,11 +221,144 @@ class OpportunisticStrategy(TradingStrategy):
 
         # Fallback: if we have warps, just explore somewhere
         if state.warps:
-            target = random.choice(state.warps)
+            target = self._pick_non_blocked_warp(state) or random.choice(state.warps)
             return TradeAction.EXPLORE, {"direction": target}
 
         # Nothing to do
         return TradeAction.WAIT, {}
+
+    @staticmethod
+    def _trade_lane_key(sector: int | None, commodity: str | None, side: str | None) -> str:
+        sector_i = int(sector or 0)
+        comm = str(commodity or "").strip().lower() or "unknown"
+        lane = str(side or "").strip().lower() or "unknown"
+        return f"{sector_i}:{comm}:{lane}"
+
+    def _is_trade_lane_blocked(self, sector: int | None, commodity: str | None, side: str | None) -> bool:
+        key = self._trade_lane_key(sector, commodity, side)
+        until = float(self._trade_lane_cooldown_until_by_key.get(key, 0.0) or 0.0)
+        return until > time()
+
+    def _is_trade_sector_blocked(self, sector: int | None) -> bool:
+        sector_i = int(sector or 0)
+        if sector_i <= 0:
+            return False
+        until = float(self._trade_sector_cooldown_until_by_sector.get(sector_i, 0.0) or 0.0)
+        return until > time()
+
+    def _local_port_side_live(self, state: GameState, commodity: str) -> str | None:
+        idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
+        if idx is None:
+            return None
+        live_port_class = str(state.port_class or "").upper()
+        if len(live_port_class) != 3:
+            return None
+        code = live_port_class[idx]
+        if code == "B":
+            return "buying"
+        if code == "S":
+            return "selling"
+        return None
+
+    def _strict_trade_eligibility(
+        self,
+        state: GameState,
+        *,
+        commodity: str,
+        expected_side: str,
+    ) -> tuple[bool, str]:
+        if not bool(getattr(self._trade_quality_controls, "strict_eligibility_enabled", True)):
+            return True, "ok"
+        require_port = bool(getattr(self._trade_quality_controls, "strict_eligibility_require_port_presence", True))
+        require_side = bool(getattr(self._trade_quality_controls, "strict_eligibility_require_known_side", True))
+        if require_port and not bool(state.has_port):
+            return False, "no_port"
+        if require_side:
+            side = self._local_port_side_live(state, commodity)
+            if side is None:
+                return False, "unknown_side"
+            if side != expected_side:
+                return False, "wrong_side"
+        return True, "ok"
+
+    def _apply_trade_lane_backoff(
+        self,
+        sector: int | None,
+        commodity: str | None,
+        side: str | None,
+        reason: str,
+    ) -> None:
+        if not bool(getattr(self._anti_controls, "enabled", True)):
+            return
+        reason_token = str(reason or "").strip().lower()
+        if reason_token not in {"wrong_side", "no_port", "no_interaction", "no_fill"}:
+            return
+        key = self._trade_lane_key(sector, commodity, side)
+        if key.endswith(":unknown:unknown") or key.startswith("0:"):
+            return
+        streak = int(self._trade_lane_failure_streak_by_key.get(key, 0) or 0) + 1
+        self._trade_lane_failure_streak_by_key[key] = streak
+        if not bool(getattr(self._anti_controls, "lane_backoff_enabled", True)):
+            return
+        exponent = max(0, min(streak - 1, 4))
+        base_seconds = int(getattr(self._anti_controls, "lane_backoff_base_seconds", 240))
+        max_seconds = int(getattr(self._anti_controls, "lane_backoff_max_seconds", 1800))
+        cooldown_s = int(min(max_seconds, base_seconds * (2**exponent)))
+        if reason_token == "wrong_side":
+            cooldown_s = max(cooldown_s, int(getattr(self._trade_quality_controls, "reroute_wrong_side_ttl_s", 300)))
+        elif reason_token == "no_port":
+            cooldown_s = max(cooldown_s, int(getattr(self._trade_quality_controls, "reroute_no_port_ttl_s", 1200)))
+        elif reason_token in {"no_interaction", "no_fill"}:
+            cooldown_s = max(cooldown_s, int(getattr(self._trade_quality_controls, "reroute_no_interaction_ttl_s", 180)))
+        until_ts = time() + cooldown_s
+        self._trade_lane_cooldown_until_by_key[key] = until_ts
+
+        if reason_token in {"wrong_side", "no_port"}:
+            opposite = "sell" if str(side or "").strip().lower() == "buy" else "buy"
+            opposite_key = self._trade_lane_key(sector, commodity, opposite)
+            if not opposite_key.endswith(":unknown:unknown") and not opposite_key.startswith("0:"):
+                self._trade_lane_cooldown_until_by_key[opposite_key] = max(
+                    float(self._trade_lane_cooldown_until_by_key.get(opposite_key, 0.0) or 0.0),
+                    until_ts,
+                )
+            sector_i = int(sector or 0)
+            if sector_i > 0 and bool(getattr(self._anti_controls, "sector_backoff_enabled", True)):
+                base_seconds = int(getattr(self._anti_controls, "sector_backoff_base_seconds", 240))
+                max_seconds = int(getattr(self._anti_controls, "sector_backoff_max_seconds", 1800))
+                sector_cooldown_s = int(min(max_seconds, base_seconds * (2**exponent)))
+                if reason_token == "no_port":
+                    sector_cooldown_s = max(
+                        sector_cooldown_s,
+                        int(getattr(self._trade_quality_controls, "reroute_no_port_ttl_s", 1200)),
+                    )
+                self._trade_sector_cooldown_until_by_sector[sector_i] = max(
+                    float(self._trade_sector_cooldown_until_by_sector.get(sector_i, 0.0) or 0.0),
+                    time() + sector_cooldown_s,
+                )
+
+    def _pick_non_blocked_warp(self, state: GameState) -> int | None:
+        warps = list(state.warps or [])
+        if not warps:
+            return None
+        non_blocked = [w for w in warps if not self._is_trade_sector_blocked(w)]
+        if non_blocked:
+            return random.choice(non_blocked)
+        return random.choice(warps)
+
+    def _next_tradeable_local_sell(self, state: GameState, cargo: dict[str, int]) -> str | None:
+        if not state.port_class or len(state.port_class) != 3:
+            return None
+        current_sector = int(state.sector or 0)
+        mapping = [("fuel_ore", 0), ("organics", 1), ("equipment", 2)]
+        for commodity, idx in mapping:
+            if int(cargo.get(commodity, 0) or 0) <= 0:
+                continue
+            if state.port_class[idx] != "B":
+                continue
+            if self._is_trade_lane_blocked(current_sector, commodity, "sell"):
+                continue
+            return commodity
+        return None
 
     def find_opportunities(self, state: GameState) -> list[TradeOpportunity]:
         """Find trading opportunities from current position.
@@ -199,7 +375,7 @@ class OpportunisticStrategy(TradingStrategy):
         cargo = self._get_cargo(state)
 
         # Current sector opportunity: only buy if we already know a reachable buyer exists.
-        if state.has_port and state.port_class:
+        if state.has_port and state.port_class and not self._is_trade_sector_blocked(current):
             opp = self._evaluate_port(current, state.port_class, 0, cargo)
             if opp:
                 opportunities.append(opp)
@@ -207,6 +383,8 @@ class OpportunisticStrategy(TradingStrategy):
         # Adjacent sectors
         warps = state.warps or []
         for adjacent in warps:
+            if self._is_trade_sector_blocked(adjacent):
+                continue
             info = self.knowledge.get_sector_info(adjacent)
             if info and info.has_port and info.port_class:
                 opp = self._evaluate_port(adjacent, info.port_class, 1, cargo)
@@ -253,6 +431,8 @@ class OpportunisticStrategy(TradingStrategy):
         for i, char in enumerate(port_class):
             commodity = commodities[i]
             if cargo.get(commodity, 0) > 0 and char == "B":
+                if self._is_trade_lane_blocked(sector, commodity, "sell"):
+                    continue
                 return TradeOpportunity(
                     buy_sector=0,
                     sell_sector=sector,
@@ -267,6 +447,8 @@ class OpportunisticStrategy(TradingStrategy):
             for i, char in enumerate(port_class):
                 commodity = commodities[i]
                 if char != "S":
+                    continue
+                if self._is_trade_lane_blocked(sector, commodity, "buy"):
                     continue
                 if not self._has_known_buyer_for(state_sector=sector, commodity=commodity):
                     continue
@@ -338,13 +520,7 @@ class OpportunisticStrategy(TradingStrategy):
 
     def _choose_sell_commodity_here(self, state: GameState, cargo: dict[str, int]) -> str | None:
         """If the current port buys something we have onboard, sell that first."""
-        if not state.port_class or len(state.port_class) != 3:
-            return None
-        mapping = [("fuel_ore", 0), ("organics", 1), ("equipment", 2)]
-        for commodity, idx in mapping:
-            if cargo.get(commodity, 0) > 0 and state.port_class[idx] == "B":
-                return commodity
-        return None
+        return self._next_tradeable_local_sell(state, cargo)
 
     def _has_known_buyer_for(self, state_sector: int, commodity: str, max_hops: int = 8) -> bool:
         """Return True if we know at least one reachable port that buys commodity.
@@ -357,10 +533,14 @@ class OpportunisticStrategy(TradingStrategy):
         if idx is None:
             return False
         for sector in range(1, 1001):
+            if self._is_trade_sector_blocked(sector):
+                continue
             info = self.knowledge.get_sector_info(sector)
             if not info or not info.has_port or not info.port_class or len(info.port_class) != 3:
                 continue
             if info.port_class[idx] != "B":
+                continue
+            if self._is_trade_lane_blocked(sector, commodity, "sell"):
                 continue
             path = self.knowledge.find_path(state_sector, sector, max_hops=max_hops)
             if path:
@@ -378,12 +558,16 @@ class OpportunisticStrategy(TradingStrategy):
 
         best: dict | None = None
         for sector in range(1, 1001):
+            if self._is_trade_sector_blocked(sector):
+                continue
             info = self.knowledge.get_sector_info(sector)
             if not info or not info.has_port or not info.port_class or len(info.port_class) != 3:
                 continue
             for commodity in want:
                 idx = idx_map[commodity]
                 if info.port_class[idx] != "B":
+                    continue
+                if self._is_trade_lane_blocked(sector, commodity, "sell"):
                     continue
                 path = self.knowledge.find_path(state.sector, sector, max_hops=max_hops)
                 if not path:
@@ -447,6 +631,8 @@ class OpportunisticStrategy(TradingStrategy):
         idx_map = {"fuel_ore": 0, "organics": 1, "equipment": 2}
         candidates = []
         for sector in range(1, 1001):  # Typical TW2002 universe size
+            if self._is_trade_sector_blocked(sector):
+                continue
             info = self.knowledge.get_sector_info(sector)
             if info and info.has_port:
                 port_class = (info.port_class or "").upper()
@@ -513,13 +699,25 @@ class OpportunisticStrategy(TradingStrategy):
                 self._exploration.wanders_without_trade = 0
                 self._exploration.consecutive_trade_failures = 0
                 self._exploration.last_trade_sector = result.new_sector
+                trade_sector = getattr(result, "trade_sector", None)
+                trade_commodity = str(getattr(result, "trade_commodity", "") or "").strip().lower()
+                trade_side = str(getattr(result, "trade_side", "") or "").strip().lower()
+                lane_key = self._trade_lane_key(trade_sector, trade_commodity, trade_side)
+                self._trade_lane_failure_streak_by_key[lane_key] = 0
+                self._trade_lane_cooldown_until_by_key.pop(lane_key, None)
             else:
                 # Trade attempted but failed or no profit
                 self._exploration.consecutive_trade_failures += 1
+                reason = str(getattr(result, "trade_failure_reason", "") or "").strip().lower()
+                trade_sector = getattr(result, "trade_sector", None) or getattr(result, "new_sector", None)
+                trade_commodity = str(getattr(result, "trade_commodity", "") or "").strip().lower()
+                trade_side = str(getattr(result, "trade_side", "") or "").strip().lower()
+                self._apply_trade_lane_backoff(trade_sector, trade_commodity, trade_side, reason)
                 logger.info(
-                    "Trade failure #%d at sector %s",
+                    "Trade failure #%d at sector %s (reason=%s)",
                     self._exploration.consecutive_trade_failures,
                     result.new_sector,
+                    reason or "unknown",
                 )
         elif result.action in (TradeAction.MOVE, TradeAction.EXPLORE):
             self._exploration.wanders_without_trade += 1

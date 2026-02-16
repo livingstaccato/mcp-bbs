@@ -96,6 +96,10 @@ class AIStrategy(TradingStrategy):
 
         # Ollama verification: warm up model on first call
         self._ollama_verified: bool = False
+        self._ollama_disabled: bool = False
+        self._ollama_disabled_reason: str = ""
+        self._ollama_next_retry_turn: int = 1
+        self._ollama_retry_interval_turns: int = 12
 
         # LLM activity status (for dashboard visibility)
         self._is_thinking: bool = False
@@ -104,6 +108,8 @@ class AIStrategy(TradingStrategy):
         self._conversation_history: list[ChatMessage] = []
         self._max_history_turns: int = 20
         self._last_reasoning: str = ""
+        self._session_start_credits: int | None = None
+        self._last_seen_credits: int | None = None
 
         # Feedback loop
         self._recent_events: deque = deque(maxlen=100)  # Rolling window
@@ -162,6 +168,17 @@ class AIStrategy(TradingStrategy):
         out["goal_contract_failures"] = int(self._goal_contract_failures)
         out["last_wake_reason"] = str(self._last_wake_reason)
         out["last_review_after_turns"] = int(self._last_review_after_turns)
+        out["llm_provider_verified"] = bool(self._ollama_verified)
+        out["llm_provider_disabled"] = bool(self._ollama_disabled)
+        out["llm_provider_retry_turn"] = int(self._ollama_next_retry_turn)
+        if self._ollama_disabled_reason:
+            out["llm_provider_disabled_reason"] = str(self._ollama_disabled_reason)
+        base = int(self._session_start_credits or 0)
+        current = int(self._last_seen_credits or 0)
+        if base > 0:
+            out["session_credit_index"] = float(current) / float(base)
+        else:
+            out["session_credit_index"] = 1.0
         return out
 
     def get_next_action(self, state: GameState) -> tuple[TradeAction, dict]:
@@ -206,6 +223,13 @@ class AIStrategy(TradingStrategy):
         Returns:
             Tuple of (action, parameters)
         """
+        with contextlib.suppress(Exception):
+            if state.credits is not None:
+                credits_now = int(state.credits)
+                if credits_now >= 0:
+                    self._last_seen_credits = credits_now
+                if self._session_start_credits is None and credits_now > 0:
+                    self._session_start_credits = credits_now
         return await orchestration.orchestrate_decision(self, state)
 
     async def _make_llm_decision(

@@ -104,6 +104,9 @@ class ProfitablePairsStrategy(TradingStrategy):
         self._trade_quality_attempt_turns: deque[int] = deque(maxlen=256)
         self._wrong_side_failure_turns: deque[int] = deque(maxlen=256)
         self._wrong_side_storm_until_turn: int = 0
+        self._commodity_failure_streak: dict[str, int] = defaultdict(int)
+        self._last_selected_commodity: str | None = None
+        self._same_selected_commodity_count: int = 0
 
     @property
     def name(self) -> str:
@@ -172,6 +175,11 @@ class ProfitablePairsStrategy(TradingStrategy):
             wrong_side_storm_active=self._is_wrong_side_storm_active(int(getattr(self, "_turns_used", 0) or 0)),
             trigger_wrong_side_storm=self._trade_quality_trigger_wrong_side_storm,
         )
+        payload["commodity_failure_streak"] = dict(self._commodity_failure_streak)
+        payload["commodity_selection"] = {
+            "last": str(self._last_selected_commodity or ""),
+            "repeat_count": int(self._same_selected_commodity_count),
+        }
         return payload
 
     def _verified_lane_count(self) -> int:
@@ -280,7 +288,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         if not self._anti_controls.enabled:
             return
         reason_token = str(reason or "").strip().lower()
-        if reason_token not in {"wrong_side", "no_port", "no_interaction"}:
+        if reason_token not in {"wrong_side", "no_port", "no_interaction", "no_fill"}:
             return
         key = self._trade_lane_key(sector, commodity, side)
         if key.endswith(":unknown:unknown") or key.startswith("0:"):
@@ -302,7 +310,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         elif reason_token == "no_port":
             cooldown_s = max(cooldown_s, int(self._trade_quality_controls.reroute_no_port_ttl_s))
             self._trade_quality_reroute_no_port += 1
-        elif reason_token == "no_interaction":
+        elif reason_token in {"no_interaction", "no_fill"}:
             cooldown_s = max(cooldown_s, int(self._trade_quality_controls.reroute_no_interaction_ttl_s))
             self._trade_quality_reroute_no_interaction += 1
         until_ts = time() + cooldown_s
@@ -361,7 +369,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         reasons = list(self._recent_trade_failure_reasons)
         if len(reasons) < int(self._anti_controls.structural_storm_min_samples):
             return False
-        structural = {"wrong_side", "no_port", "no_interaction", "action_mismatch"}
+        structural = {"wrong_side", "no_port", "no_interaction", "no_fill", "action_mismatch"}
         structural_hits = sum(1 for r in reasons if r in structural)
         rate = float(structural_hits) / float(max(1, len(reasons)))
         return rate >= float(self._anti_controls.structural_storm_structural_ratio_gte)
@@ -370,7 +378,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         reasons = list(self._recent_trade_failure_reasons)
         if len(reasons) < 24:
             return False
-        structural = {"wrong_side", "no_port", "no_interaction", "action_mismatch"}
+        structural = {"wrong_side", "no_port", "no_interaction", "no_fill", "action_mismatch"}
         structural_hits = sum(1 for r in reasons if r in structural)
         rate = float(structural_hits) / float(max(1, len(reasons)))
         return rate >= 0.85
@@ -541,6 +549,57 @@ class ProfitablePairsStrategy(TradingStrategy):
             "equipment": int(getattr(state, "cargo_equipment", 0) or 0),
         }
 
+    @staticmethod
+    def _commodity_order() -> tuple[str, str, str]:
+        return ("fuel_ore", "organics", "equipment")
+
+    def _commodity_selection_bias(self, commodity: str) -> float:
+        token = str(commodity or "").strip().lower()
+        base = {"fuel_ore": 1.25, "organics": 1.0, "equipment": 0.75}.get(token, 1.0)
+        fail_streak = int(self._commodity_failure_streak.get(token, 0) or 0)
+        # Repeated commodity-specific failures should quickly downrank that commodity.
+        fail_penalty = max(0.2, 1.0 - (0.20 * min(fail_streak, 4)))
+
+        repeat_penalty = 1.0
+        if self._last_selected_commodity == token and self._same_selected_commodity_count >= 4:
+            repeat_penalty = max(0.45, 1.0 - (0.12 * float(self._same_selected_commodity_count - 3)))
+        elif (
+            self._last_selected_commodity
+            and token != self._last_selected_commodity
+            and self._same_selected_commodity_count >= 4
+        ):
+            repeat_penalty = 1.12
+
+        return max(0.15, float(base) * float(fail_penalty) * float(repeat_penalty))
+
+    def _note_selected_commodity(self, commodity: str) -> None:
+        token = str(commodity or "").strip().lower()
+        if token not in self._commodity_order():
+            return
+        if token == self._last_selected_commodity:
+            self._same_selected_commodity_count = int(self._same_selected_commodity_count) + 1
+        else:
+            self._last_selected_commodity = token
+            self._same_selected_commodity_count = 1
+
+    def _allow_multi_commodity_sweep(self) -> bool:
+        """Gate multi-commodity same-port sweeps to low-risk conditions."""
+        turns_used = int(getattr(self, "_turns_used", 0) or 0)
+        if self._is_trade_throughput_degraded():
+            return False
+        if self._is_structural_failure_storm():
+            return False
+        if self._is_wrong_side_storm_active(turns_used):
+            return False
+        recent = list(self._recent_trade_attempt_successes)
+        if len(recent) >= 10:
+            success_rate = float(sum(1 for ok in recent if ok)) / float(max(1, len(recent)))
+            # Allow sweeps unless trade quality is in a severe collapse.
+            # A strict 25% gate forces persistent single-commodity loops.
+            if success_rate < 0.05:
+                return False
+        return True
+
     def _local_port_side(self, state: GameState, commodity: str) -> str | None:
         """Best-effort local port side for one commodity: buying/selling/None."""
         idx = {"fuel_ore": 0, "organics": 1, "equipment": 2}.get(commodity)
@@ -615,9 +674,22 @@ class ProfitablePairsStrategy(TradingStrategy):
         state: GameState,
         cargo: dict[str, int],
     ) -> str | None:
-        for commodity in ("fuel_ore", "organics", "equipment"):
-            if cargo.get(commodity, 0) > 0 and self._local_port_side(state, commodity) == "buying":
-                return commodity
+        current_sector = int(state.sector or 0)
+        best: tuple[float, int, str] | None = None
+        for commodity in self._commodity_order():
+            qty = int(cargo.get(commodity, 0) or 0)
+            if qty <= 0:
+                continue
+            if self._local_port_side(state, commodity) != "buying":
+                continue
+            if self._is_trade_lane_blocked(current_sector, commodity, "sell"):
+                continue
+            score = float(qty) * max(0.5, float(self._commodity_selection_bias(commodity)))
+            candidate = (score, qty, commodity)
+            if best is None or candidate[0] > best[0]:
+                best = candidate
+        if best is not None:
+            return best[2]
         return None
 
     def _find_best_sell_target(self, state: GameState, cargo: dict[str, int], max_hops: int = 16) -> dict | None:
@@ -644,6 +716,8 @@ class ProfitablePairsStrategy(TradingStrategy):
                         is_buyer = port_class[idx] == "B"
                 if not is_buyer:
                     continue
+                if self._is_trade_lane_blocked(int(sector), commodity, "sell"):
+                    continue
                 path = self.knowledge.find_path(int(state.sector), int(sector), max_hops=max_hops)
                 if not path:
                     continue
@@ -653,8 +727,17 @@ class ProfitablePairsStrategy(TradingStrategy):
                     "path": path,
                     "distance": len(path) - 1,
                 }
-                if best is None or cand["distance"] < best["distance"]:
+                if best is None:
                     best = cand
+                    continue
+                if int(cand["distance"]) < int(best["distance"]):
+                    best = cand
+                    continue
+                if int(cand["distance"]) == int(best["distance"]):
+                    cand_bias = float(self._commodity_selection_bias(str(cand["commodity"])))
+                    best_bias = float(self._commodity_selection_bias(str(best["commodity"])))
+                    if cand_bias > best_bias:
+                        best = cand
         return best
 
     def _is_sector_ping_pong(self) -> bool:
@@ -706,6 +789,44 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         current_sector = int(state.sector or 0)
         if state.has_port:
+            sellable_here: list[str] = []
+            for comm in self._commodity_order():
+                qty = int(cargo.get(comm, 0) or 0)
+                if qty > 0 and self._local_port_side(state, comm) == "buying":
+                    if self._is_trade_lane_blocked(current_sector, comm, "sell"):
+                        continue
+                    sellable_here.append(comm)
+            if len(sellable_here) >= 2 and self._allow_multi_commodity_sweep():
+                sellable_here.sort(
+                    key=lambda comm: (
+                        -(int(cargo.get(comm, 0) or 0) * max(0.25, float(self._commodity_selection_bias(comm)))),
+                        comm,
+                    )
+                )
+                lead = str(sellable_here[0])
+                opp = TradeOpportunity(
+                    buy_sector=current_sector,
+                    sell_sector=current_sector,
+                    commodity=lead,
+                    expected_profit=0,
+                    distance=0,
+                )
+                qty_by_commodity = {comm: max(1, int(cargo.get(comm, 0) or 0)) for comm in sellable_here}
+                logger.info(
+                    "Cargo liquidation sweep: selling commodities=%s sector=%s",
+                    ",".join(sellable_here),
+                    current_sector,
+                )
+                self._note_selected_commodity(lead)
+                return TradeAction.TRADE, {
+                    "opportunity": opp,
+                    "action": "sell",
+                    "commodity_sequence": list(sellable_here),
+                    "allow_commodities": list(sellable_here),
+                    "max_quantity_by_commodity": qty_by_commodity,
+                    "urgency": "cargo_liquidation_sweep",
+                }
+
             sell_here = self._choose_sell_commodity_here(state, cargo)
             if sell_here:
                 qty = int(cargo.get(sell_here, 0) or 0)
@@ -1360,7 +1481,9 @@ class ProfitablePairsStrategy(TradingStrategy):
                 # Keep strict minimum only after bankroll leaves early bootstrap.
                 if ppt < float(min_ppt) and int(state.credits or 0) >= 5_000:
                     continue
-                score = float(price_profit) / float(max(turns, 1))
+                score = (float(price_profit) * float(self._commodity_selection_bias(str(pair.commodity)))) / float(
+                    max(turns, 1)
+                )
                 if score > best_priced_score:
                     best_priced_score = score
                     best_priced_pair = pair
@@ -1381,7 +1504,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                 est_qty = self._estimated_affordable_qty_without_quotes(state, pair.commodity)
                 if est_qty <= 0:
                     continue
-                commodity_bias = {"fuel_ore": 1.25, "organics": 1.0, "equipment": 0.75}.get(pair.commodity, 1.0)
+                commodity_bias = float(self._commodity_selection_bias(str(pair.commodity)))
                 score = (float(est_qty) * float(commodity_bias)) / float(max(turns, 1))
                 if score > best_unpriced_score:
                     best_unpriced_score = score
@@ -1391,9 +1514,11 @@ class ProfitablePairsStrategy(TradingStrategy):
 
         if best_priced_pair is not None:
             self._record_attempt_budget_use(turns_used)
+            self._note_selected_commodity(str(best_priced_pair.commodity))
             return best_priced_pair
         if best_unpriced_pair is not None:
             self._record_attempt_budget_use(turns_used)
+            self._note_selected_commodity(str(best_unpriced_pair.commodity))
         return best_unpriced_pair
 
     @staticmethod
@@ -1419,7 +1544,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         streak = int(self._pair_failure_streak_by_signature.get(token, 0) or 0) + 1
         self._pair_failure_streak_by_signature[token] = streak
         reason_token = str(reason or "").strip().lower()
-        if reason_token in {"no_port", "no_interaction", "wrong_side", "action_mismatch"}:
+        if reason_token in {"no_port", "no_interaction", "no_fill", "wrong_side", "action_mismatch"}:
             exponent = max(0, min(streak - 1, 3))
             cooldown_s = int(min(1800, 180 * (2**exponent)))
             self._pair_cooldown_until_by_signature[token] = time() + cooldown_s
@@ -1525,7 +1650,7 @@ class ProfitablePairsStrategy(TradingStrategy):
         units = dict(getattr(info, "port_trading_units", {}) or {})
         candidates: list[tuple[int, str, int | None]] = []
         rank = {"fuel_ore": 0, "organics": 1, "equipment": 2}
-        for comm in ("fuel_ore", "organics", "equipment"):
+        for comm in self._commodity_order():
             if str(statuses.get(comm, "")).lower() != "selling":
                 continue
             supply = units.get(comm)
@@ -1538,9 +1663,12 @@ class ProfitablePairsStrategy(TradingStrategy):
                 if quote is not None:
                     quote_int = int(quote)
             price_rank = int(quote_int) if quote_int and quote_int > 0 else (10**9 + rank.get(comm, 99))
-            candidates.append((price_rank, comm, quote_int))
+            bias = max(0.2, float(self._commodity_selection_bias(comm)))
+            priority = float(price_rank) / bias
+            candidates.append((priority, price_rank, comm, quote_int))
 
-        for _price_rank, comm, quote in sorted(candidates, key=lambda x: x[0]):
+        viable_buys: list[tuple[str, int, dict, int | None]] = []
+        for _priority, _price_rank, comm, quote in sorted(candidates, key=lambda x: (x[0], x[1])):
             # Require a known nearby buyer to avoid speculative dead-end holds.
             target = self._find_best_sell_target(
                 state,
@@ -1570,6 +1698,39 @@ class ProfitablePairsStrategy(TradingStrategy):
 
             if qty <= 0:
                 continue
+            viable_buys.append((str(comm), int(qty), dict(target), quote))
+
+        if len(viable_buys) >= 2 and self._allow_multi_commodity_sweep():
+            # Keep sweep small and focused: at most 2 commodities per same-port pass.
+            chosen = list(viable_buys[:2])
+            lead_comm, lead_qty, lead_target, _lead_quote = chosen[0]
+            opp = TradeOpportunity(
+                buy_sector=int(state.sector),
+                sell_sector=int(lead_target["sector"]),
+                commodity=lead_comm,
+                expected_profit=0,
+                distance=int(lead_target.get("distance") or 0),
+                path_to_buy=[],
+                path_to_sell=list(lead_target.get("path") or []),
+            )
+            allow_commodities = [item[0] for item in chosen]
+            qty_by_commodity = {item[0]: max(1, int(item[1])) for item in chosen}
+            logger.info(
+                "Bootstrap multi-commodity sweep: commodities=%s sector=%s",
+                ",".join(allow_commodities),
+                state.sector,
+            )
+            self._note_selected_commodity(lead_comm)
+            return TradeAction.TRADE, {
+                "opportunity": opp,
+                "action": "buy",
+                "commodity_sequence": list(allow_commodities),
+                "allow_commodities": list(allow_commodities),
+                "max_quantity_by_commodity": qty_by_commodity,
+                "urgency": "bootstrap_multi_sweep",
+            }
+
+        for comm, qty, target, _quote in viable_buys:
             opp = TradeOpportunity(
                 buy_sector=int(state.sector),
                 sell_sector=int(target["sector"]),
@@ -1587,6 +1748,7 @@ class ProfitablePairsStrategy(TradingStrategy):
                 target["sector"],
                 target.get("distance"),
             )
+            self._note_selected_commodity(comm)
             return TradeAction.TRADE, {"opportunity": opp, "action": "buy", "max_quantity": int(qty)}
 
         return None
@@ -1612,6 +1774,10 @@ class ProfitablePairsStrategy(TradingStrategy):
             trade_side = str(getattr(result, "trade_side", "") or "").strip().lower()
             self._record_trade_attempt_sample(False)
             self._record_trade_failure_reason(reason)
+            if trade_commodity in self._commodity_order():
+                self._commodity_failure_streak[trade_commodity] = int(
+                    self._commodity_failure_streak.get(trade_commodity, 0) or 0
+                ) + 1
             self._pairs_dirty = True
             self._current_pair = None
             self._pair_phase = "idle"
@@ -1648,6 +1814,8 @@ class ProfitablePairsStrategy(TradingStrategy):
             lane_key = self._trade_lane_key(trade_sector, trade_commodity, trade_side)
             self._trade_lane_failure_streak_by_key[lane_key] = 0
             self._trade_lane_cooldown_until_by_key.pop(lane_key, None)
+            if trade_commodity in self._commodity_order():
+                self._commodity_failure_streak[trade_commodity] = 0
             if int(getattr(result, "profit", 0) or 0) > 0:
                 self._explore_since_profit = 0
             else:

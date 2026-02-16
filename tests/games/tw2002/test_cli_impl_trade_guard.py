@@ -5,16 +5,21 @@ from collections import deque
 
 from bbsbot.games.tw2002.anti_collapse import resolve_anti_collapse_controls
 from bbsbot.games.tw2002.cli_impl import (
+    _choose_no_trade_guard_strategy,
     _choose_guard_reroute_action,
     _choose_no_trade_guard_action,
     _choose_ping_pong_break_action,
+    _clear_market_structure_mismatch,
     _compute_no_trade_guard_flags,
     _get_zero_trade_streak,
     _is_effective_trade_change,
     _is_futile_sell_trade,
     _is_move_stall_recent_actions,
     _is_sector_ping_pong,
+    _maybe_reset_market_intel,
+    _record_market_structure_mismatch,
     _resolve_no_trade_guard_thresholds,
+    _should_reset_market_intel,
     _should_count_trade_completion,
     _should_disable_guard_forced_trade,
     _should_force_bootstrap_trade,
@@ -1273,6 +1278,114 @@ def test_should_not_force_bootstrap_trade_when_guard_active_or_trade_done() -> N
         )
         is False
     )
+
+
+def test_no_trade_guard_strategy_preserves_spread_deterministically() -> None:
+    cfg = BotConfig()
+    cfg.trading.dynamic_policy.spread_enabled = True
+    cfg.trading.trade_quality.role_scout_ratio = 0.20
+
+    class _Bot:
+        def __init__(self, bot_id: str):
+            self.bot_id = bot_id
+
+    scout_bot = _Bot("bot_000")
+    harvester_bot = _Bot("bot_002")
+
+    scout_choice = _choose_no_trade_guard_strategy(
+        config=cfg,
+        bot=scout_bot,
+        preferred_strategy="profitable_pairs",
+        current_strategy="profitable_pairs",
+    )
+    harvester_choice = _choose_no_trade_guard_strategy(
+        config=cfg,
+        bot=harvester_bot,
+        preferred_strategy="profitable_pairs",
+        current_strategy="opportunistic",
+    )
+
+    assert scout_choice == "opportunistic"
+    assert harvester_choice == "profitable_pairs"
+
+
+def test_no_trade_guard_strategy_falls_back_to_preferred_when_spread_disabled() -> None:
+    cfg = BotConfig()
+    cfg.trading.dynamic_policy.spread_enabled = False
+
+    class _Bot:
+        bot_id = "bot_000"
+
+    choice = _choose_no_trade_guard_strategy(
+        config=cfg,
+        bot=_Bot(),
+        preferred_strategy="profitable_pairs",
+        current_strategy="opportunistic",
+    )
+    assert choice == "profitable_pairs"
+
+
+def test_market_intel_reset_triggers_on_structural_mismatch_storm() -> None:
+    class _Knowledge:
+        def __init__(self):
+            self.clear_calls = 0
+
+        def clear_port_intel(self, *, clear_has_port: bool = True) -> int:
+            assert clear_has_port is True
+            self.clear_calls += 1
+            return 37
+
+    class _Strategy:
+        def __init__(self):
+            self.invalidate_calls = 0
+
+        def invalidate_pairs(self) -> None:
+            self.invalidate_calls += 1
+
+    class _Bot:
+        def __init__(self):
+            self.sector_knowledge = _Knowledge()
+            self._strategy = _Strategy()
+
+    bot = _Bot()
+    samples = [
+        (101, "wrong_side"),
+        (102, "wrong_side"),
+        (103, "wrong_side"),
+        (104, "wrong_side"),
+        (205, "no_port"),
+        (206, "no_port"),
+    ]
+    for sector, reason in samples:
+        _record_market_structure_mismatch(bot, sector=sector, reason=reason)
+
+    assert _should_reset_market_intel(bot) is True
+    assert _maybe_reset_market_intel(bot, trigger_reason="wrong_side") is True
+    assert bool(getattr(bot, "_market_intel_reset_done", False)) is True
+    assert bot.sector_knowledge.clear_calls == 1
+    assert bot._strategy.invalidate_calls == 1
+    assert _maybe_reset_market_intel(bot, trigger_reason="wrong_side") is False
+    assert bot.sector_knowledge.clear_calls == 1
+
+
+def test_clear_market_structure_mismatch_resets_counters() -> None:
+    class _Bot:
+        pass
+
+    bot = _Bot()
+    bot._market_mismatch_count = 7
+    bot._market_mismatch_sectors = {1, 2, 3}
+    bot._market_mismatch_reasons = {"wrong_side": 5}
+    bot._port_mismatch_count = 3
+    bot._port_mismatch_sectors = {9}
+
+    _clear_market_structure_mismatch(bot)
+
+    assert bot._market_mismatch_count == 0
+    assert bot._market_mismatch_sectors == set()
+    assert bot._market_mismatch_reasons == {}
+    assert bot._port_mismatch_count == 0
+    assert bot._port_mismatch_sectors == set()
 
 
 def test_is_effective_trade_change_is_directional() -> None:

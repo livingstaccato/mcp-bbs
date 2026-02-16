@@ -210,6 +210,8 @@ def _get_actual_prompt(screen: str) -> str:
     # Join last 5 lines for analysis
     last_lines = "\n".join(lines[-5:]).lower()
     last_line = lines[-1].lower() if lines else ""
+    last4 = [line.lower() for line in lines[-4:]]
+    last4_text = "\n".join(last4)
 
     # Check prompts in priority order (most specific first)
 
@@ -261,9 +263,15 @@ def _get_actual_prompt(screen: str) -> str:
     if "(n)ew name or (b)bs name" in last_lines and "alias" not in last_line:
         return "name_selection"
 
-    # Private game password prompt - MUST check before generic password prompt
-    # Variations: "private game", "password is required to enter this game"
-    if ("private game" in last_lines or "required to enter this game" in last_lines) and ("password" in last_line):
+    # Private game password prompt - MUST check before generic password prompt.
+    # Only trust private-game banners when they appear in the immediate prompt context.
+    # Old "required to enter this game" text can linger in buffer and otherwise
+    # cause character-password prompts to be misclassified as game-password prompts.
+    if (
+        "password" in last_line
+        and "invalid password" not in last4_text
+        and ("private game" in last4_text or "required to enter this game" in last4_text)
+    ):
         return "private_game_password"
 
     # Password prompt (check last line only to avoid matching completed passwords)
@@ -305,6 +313,10 @@ def _get_actual_prompt(screen: str) -> str:
     if "use ansi graphics" in last_line:
         return "use_ansi"
 
+    # Press ENTER to begin your adventure!
+    if "press" in last_line and "begin" in last_line and "adventure" in last_line:
+        return "begin_adventure"
+
     # [ANY KEY] style prompts
     if "[any key]" in last_line:
         return "any_key"
@@ -322,6 +334,16 @@ def _get_actual_prompt(screen: str) -> str:
         return "description_mode"
 
     return ""
+
+
+def _normalize_phase3_prompt(prompt_id: str, actual_prompt: str) -> str:
+    """Resolve known stale-buffer mismatches between detector prompt_id and heuristics."""
+    if prompt_id in {"prompt.character_password", "prompt.game_password", "prompt.private_game_password"}:
+        if actual_prompt in {"", "password_prompt", "private_game_password"}:
+            # Route all password handling through the generic password branch so it can
+            # disambiguate using prompt_id/state instead of stale screen text.
+            return "password_prompt"
+    return actual_prompt
 
 
 async def login_sequence(
@@ -641,6 +663,8 @@ async def login_sequence(
         ):
             actual_prompt = "planet_name_prompt"
 
+        actual_prompt = _normalize_phase3_prompt(prompt_id, actual_prompt)
+
         print(f"  [{step}] pattern:{prompt_id} actual:{actual_prompt} ({input_type}) {validation_msg}", flush=True)
 
         # Debug: Show screen content periodically (more frequently now)
@@ -895,6 +919,11 @@ async def login_sequence(
             await bot.session.send(game_letter)
             # Increase delay between retries to avoid overwhelming server
             await asyncio.sleep(0.5 if menu_reentries <= 3 else 1.0)
+
+        elif actual_prompt == "begin_adventure":
+            print("      → Begin adventure prompt, pressing Enter")
+            await bot.session.send("\r")
+            await asyncio.sleep(0.3)
 
         elif actual_prompt in ("any_key", "pause"):
             print("      → Pressing space to continue")

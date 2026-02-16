@@ -421,10 +421,10 @@ class TW2002_1000TurnBot:
     async def save_results(self):
         """Save playthrough results."""
         timestamp = int(time.time())
-        json_file = Path(".provide") / f"tw2002-1000turns-{timestamp}.json"
-        md_file = Path(".provide") / f"tw2002-1000turns-{timestamp}.md"
+        json_file = Path("logs/reports") / f"tw2002-1000turns-{timestamp}.json"
+        md_file = Path("logs/reports") / f"tw2002-1000turns-{timestamp}.md"
 
-        json_file.parent.mkdir(exist_ok=True)
+        json_file.parent.mkdir(parents=True, exist_ok=True)
 
         # JSON
         results = {

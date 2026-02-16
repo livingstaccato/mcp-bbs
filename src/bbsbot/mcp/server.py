@@ -330,12 +330,23 @@ async def bbs_connect(
 
 
 @app.tool()
-async def bbs_read(timeout_ms: int = 250, max_bytes: int = 8192) -> dict[str, Any]:
-    """Read output and return the current screen buffer."""
+async def bbs_read(
+    timeout_ms: int = 250,
+    max_bytes: int = 8192,
+    clean: bool = False,
+) -> dict[str, Any]:
+    """Read output and return the current screen buffer.
+
+    Args:
+        timeout_ms: How long to wait for new data.
+        max_bytes: Maximum bytes to read from transport.
+        clean: Strip ANSI codes and control chars to save tokens.
+    """
     _require_knowledge_root()
     _, session = await _get_session()
     await session.wait_for_update(timeout_ms=timeout_ms)
-    return cast("dict[str, Any]", session.snapshot())
+    snap = cast("dict[str, Any]", session.snapshot())
+    return _clean_snapshot(snap) if clean else snap
 
 
 @app.tool()
@@ -360,11 +371,24 @@ async def bbs_list_resumable_games(
     return {"game": game, "entries": _resume_as_dict(entries)}
 
 
+def _clean_snapshot(snap: dict[str, Any]) -> dict[str, Any]:
+    """Strip ANSI codes from snapshot screen text to save tokens."""
+    import hashlib
+
+    from bbsbot.terminal.screen_utils import normalize_terminal_text
+
+    if snap.get("screen"):
+        snap["screen"] = normalize_terminal_text(snap["screen"])
+        snap["screen_hash"] = hashlib.sha256(snap["screen"].encode()).hexdigest()
+    return snap
+
+
 @app.tool()
 async def bbs_read_until_nonblank(
     timeout_ms: int = 5000,
     interval_ms: int = 250,
     max_bytes: int = 8192,
+    clean: bool = False,
 ) -> dict[str, Any]:
     """Read until the screen buffer contains non-whitespace content."""
     _require_knowledge_root()
@@ -377,12 +401,13 @@ async def bbs_read_until_nonblank(
         await session.wait_for_update(timeout_ms=interval_ms)
         last_snapshot = session.snapshot()
         if last_snapshot.get("disconnected"):
-            return last_snapshot
+            return _clean_snapshot(last_snapshot) if clean else last_snapshot
         screen = last_snapshot.get("screen", "")
         if screen and screen.strip():
-            return last_snapshot
+            return _clean_snapshot(last_snapshot) if clean else last_snapshot
 
-    return last_snapshot or session.snapshot()
+    result = last_snapshot or session.snapshot()
+    return _clean_snapshot(result) if clean else result
 
 
 @app.tool()
@@ -391,6 +416,7 @@ async def bbs_read_until_pattern(
     timeout_ms: int = 8000,
     interval_ms: int = 250,
     max_bytes: int = 8192,
+    clean: bool = False,
 ) -> dict[str, Any]:
     """Read until the screen matches a regex pattern."""
     _require_knowledge_root()
@@ -405,15 +431,15 @@ async def bbs_read_until_pattern(
         last_snapshot = session.snapshot()
         if last_snapshot.get("disconnected"):
             last_snapshot["matched"] = False
-            return last_snapshot
+            return _clean_snapshot(last_snapshot) if clean else last_snapshot
         screen = last_snapshot.get("screen", "")
         if screen and regex.search(screen):
             last_snapshot["matched"] = True
-            return last_snapshot
+            return _clean_snapshot(last_snapshot) if clean else last_snapshot
 
     if last_snapshot:
         last_snapshot["matched"] = False
-        return last_snapshot
+        return _clean_snapshot(last_snapshot) if clean else last_snapshot
 
     await session.wait_for_update(timeout_ms=interval_ms)
     result = cast("dict[str, Any]", session.snapshot())

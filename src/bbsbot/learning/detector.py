@@ -410,7 +410,12 @@ class PromptDetector:
         """
         self._patterns.append(pattern)
         # Recompile patterns
-        self._compiled = self._compile_patterns()
+        self._compiled_all = self._compile_patterns()
+        self._compiled_no_cursor_end_req = [
+            (regex, pattern)
+            for (regex, pattern) in self._compiled_all
+            if not bool(pattern.get("expect_cursor_at_end", True))
+        ]
 
     def reload_patterns(self, patterns: list[dict[str, Any]]) -> None:
         """Replace all patterns with new set.
@@ -419,4 +424,9 @@ class PromptDetector:
             patterns: New list of pattern dictionaries
         """
         self._patterns = patterns
-        self._compiled = self._compile_patterns()
+        self._compiled_all = self._compile_patterns()
+        self._compiled_no_cursor_end_req = [
+            (regex, pattern)
+            for (regex, pattern) in self._compiled_all
+            if not bool(pattern.get("expect_cursor_at_end", True))
+        ]

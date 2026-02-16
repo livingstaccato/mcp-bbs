@@ -171,6 +171,112 @@ async def test_ai_strategy_llm_can_delegate_managed_strategy(ai_strategy, game_s
 
 
 @pytest.mark.asyncio
+async def test_ai_strategy_bootstrap_override_sets_selected_strategy_to_opportunistic(ai_strategy, game_state):
+    """Low-bankroll early bootstrap should override profitable_pairs to opportunistic."""
+    mock_response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"strategy":"profitable_pairs","action":"MOVE","parameters":{"target_sector":2}}',
+        ),
+        model="llama2",
+    )
+    managed = MagicMock()
+    managed.get_next_action.return_value = (TradeAction.MOVE, {"target_sector": 2, "path": [1, 2]})
+    managed.set_policy.return_value = None
+
+    ai_strategy._turns_used = 8
+    ai_strategy._trades_executed = 0
+    game_state.credits = 800
+
+    with (
+        patch.object(ai_strategy.llm_manager, "chat", return_value=mock_response),
+        patch.object(ai_strategy, "_get_managed_strategy", return_value=managed) as get_managed,
+    ):
+        action, params = await ai_strategy._get_next_action_async(game_state)
+
+    assert action == TradeAction.MOVE
+    assert params["target_sector"] == 2
+    assert params["__meta"]["decision_source"] == "llm_managed"
+    assert params["__meta"]["selected_strategy"] == "opportunistic"
+    assert ai_strategy.active_managed_strategy == "opportunistic"
+    get_managed.assert_any_call("opportunistic")
+
+
+@pytest.mark.asyncio
+async def test_ai_strategy_ollama_unavailable_uses_disabled_fallback_with_retry_cadence(ai_strategy, game_state):
+    ai_strategy._ollama_verified = False
+    ai_strategy._ollama_retry_interval_turns = 10
+
+    with patch.object(
+        ai_strategy.llm_manager,
+        "verify_model",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("connection refused"),
+    ) as verify_model:
+        action1, params1 = await ai_strategy._get_next_action_async(game_state)
+        action2, params2 = await ai_strategy._get_next_action_async(game_state)
+
+    assert action1 is not None
+    assert action2 is not None
+    assert verify_model.await_count == 1
+    assert ai_strategy._ollama_verified is False
+    assert ai_strategy._ollama_disabled is True
+    assert ai_strategy._ollama_disabled_reason == "connection refused"
+    assert "AI_DISABLED: OLLAMA_UNAVAILABLE" in ai_strategy._last_reasoning
+
+    meta1 = params1["__meta"]
+    meta2 = params2["__meta"]
+    assert meta1["decision_source"] == "fallback"
+    assert meta1["wake_reason"] == "ollama_not_available"
+    assert meta1["provider_disabled"] is True
+    assert "AI_DISABLED: OLLAMA_UNAVAILABLE" in meta1["provider_status"]
+    assert int(meta1["provider_retry_turn"]) == int(meta2["provider_retry_turn"])
+
+
+@pytest.mark.asyncio
+async def test_ai_strategy_ollama_retry_recovers_after_cooldown(ai_strategy, game_state):
+    ai_strategy._ollama_verified = False
+    ai_strategy._ollama_retry_interval_turns = 2
+
+    mock_response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content='{"strategy":"opportunistic","action":"MOVE","parameters":{"target_sector":2}}',
+        ),
+        model="llama2",
+    )
+    managed = MagicMock()
+    managed.get_next_action.return_value = (TradeAction.MOVE, {"target_sector": 2, "path": [1, 2]})
+    managed.set_policy.return_value = None
+
+    with (
+        patch.object(
+            ai_strategy.llm_manager,
+            "verify_model",
+            new_callable=AsyncMock,
+            side_effect=[RuntimeError("down"), {"name": "gemma3"}],
+        ) as verify_model,
+        patch.object(ai_strategy.llm_manager, "chat", new_callable=AsyncMock, return_value=mock_response) as llm_chat,
+        patch.object(ai_strategy, "_get_managed_strategy", return_value=managed),
+    ):
+        _, params1 = await ai_strategy._get_next_action_async(game_state)
+        _, params2 = await ai_strategy._get_next_action_async(game_state)
+        action3, params3 = await ai_strategy._get_next_action_async(game_state)
+
+    assert params1["__meta"]["provider_disabled"] is True
+    assert params2["__meta"]["provider_disabled"] is True
+    assert verify_model.await_count == 2
+    assert llm_chat.await_count == 1
+    assert action3 == TradeAction.MOVE
+    assert params3["__meta"]["decision_source"] == "llm_managed"
+    assert params3["__meta"]["selected_strategy"] == "opportunistic"
+    assert params3["__meta"]["wake_reason"] == "scheduled_review"
+    assert ai_strategy._ollama_verified is True
+    assert ai_strategy._ollama_disabled is False
+    assert ai_strategy._ollama_disabled_reason == ""
+
+
+@pytest.mark.asyncio
 async def test_ai_strategy_supervisor_autopilot_uses_llm_periodically(ai_strategy, game_state):
     """LLM decides a plan, then supervisor runs managed strategy without re-calling LLM each turn."""
     mock_response = ChatResponse(

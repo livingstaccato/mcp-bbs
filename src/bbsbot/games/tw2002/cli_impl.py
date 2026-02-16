@@ -45,6 +45,10 @@ def _is_port_qty_prompt(line: str) -> bool:
         return False
     if "how many" not in ll:
         return False
+    # Real servers sometimes emit truncated quantity lines (missing closing
+    # bracket/question mark), especially under rapid screen updates.
+    if re.search(r"(?i)\bhow\s+many\s+holds?\s+of\b.*\bdo\s+you\s+want\s+to\s+(buy|sell)\b", ll):
+        return True
     return bool(re.search(r"(?i)\bhow\s+many\b.*\[[\d,]+\]\s*\?\s*$", ll))
 
 
@@ -66,9 +70,22 @@ def _extract_port_qty_cap(
 
     cap: int | None = None
     m_default = re.search(r"\[([\d,]+)\]", ll)
+    if not m_default:
+        # Truncated prompt fallback: "... [20" with no closing bracket.
+        m_default = re.search(r"\[([\d,]+)\s*$", ll)
     if m_default:
         with contextlib.suppress(Exception):
             cap = max(0, int(m_default.group(1).replace(",", "")))
+
+    if cap is None and screen_text:
+        # Scan full screen as fallback when active line is clipped.
+        m_screen = re.findall(
+            r"(?i)how\s+many\s+holds?\s+of[^\n]*?\[\s*([\d,]+)\s*\]?\s*\??",
+            str(screen_text or ""),
+        )
+        if m_screen:
+            with contextlib.suppress(Exception):
+                cap = max(0, int(str(m_screen[-1]).replace(",", "")))
 
     if is_sell is None:
         is_sell = " sell" in ll
@@ -806,6 +823,142 @@ def _get_zero_trade_streak(bot, sector: int, commodity: str | None = None, trade
     return max(0, best)
 
 
+def _deterministic_lane_fraction(bot_id: str | None) -> float:
+    """Stable 0..1 bucket from bot_id for spread-preserving assignments."""
+    token = str(bot_id or "").strip()
+    m = re.search(r"(\d+)\s*$", token)
+    if m:
+        # Use a coprime stride so sequential bot IDs are spread across 0..1.
+        idx = int(m.group(1))
+        mixed = (idx * 137) % 1000
+        return float(mixed) / 1000.0
+    if token:
+        # Deterministic fallback across process restarts.
+        acc = 0
+        for ch in token:
+            acc = ((acc * 131) + ord(ch)) % 1000
+        return float(acc) / 1000.0
+    return 0.0
+
+
+def _choose_no_trade_guard_strategy(
+    *,
+    config: BotConfig,
+    bot,
+    preferred_strategy: str,
+    current_strategy: str | None = None,
+) -> str:
+    """Pick a guard strategy while preserving deterministic swarm spread."""
+    preferred = str(preferred_strategy or "").strip().lower()
+    allowed = {"profitable_pairs", "opportunistic"}
+    if preferred not in allowed:
+        return preferred or "profitable_pairs"
+
+    spread_enabled = bool(getattr(getattr(config.trading, "dynamic_policy", None), "spread_enabled", True))
+    if not spread_enabled:
+        return preferred
+
+    ratio_raw = float(getattr(getattr(config.trading, "trade_quality", None), "role_scout_ratio", 0.20) or 0.20)
+    alt_ratio = max(0.05, min(0.45, ratio_raw))
+    lane = _deterministic_lane_fraction(getattr(bot, "bot_id", None))
+    alternate = "opportunistic" if preferred == "profitable_pairs" else "profitable_pairs"
+    assigned = alternate if lane < alt_ratio else preferred
+
+    current = str(current_strategy or "").strip().lower()
+    if current in allowed and current == assigned:
+        return current
+    return assigned
+
+
+def _record_market_structure_mismatch(
+    bot,
+    *,
+    sector: int | None,
+    reason: str,
+) -> None:
+    """Track structural market mismatches that indicate stale universe intel."""
+    token = str(reason or "").strip().lower()
+    if token not in {"wrong_side", "no_port", "no_interaction", "no_fill", "action_mismatch"}:
+        return
+    mismatch_count = int(getattr(bot, "_market_mismatch_count", 0) or 0) + 1
+    mismatch_sectors = set(getattr(bot, "_market_mismatch_sectors", set()) or set())
+    mismatch_reasons = dict(getattr(bot, "_market_mismatch_reasons", {}) or {})
+    mismatch_reasons[token] = int(mismatch_reasons.get(token, 0) or 0) + 1
+    sector_i = int(sector or 0)
+    if sector_i > 0:
+        mismatch_sectors.add(sector_i)
+
+    bot._market_mismatch_count = mismatch_count
+    bot._market_mismatch_sectors = mismatch_sectors
+    bot._market_mismatch_reasons = mismatch_reasons
+
+
+def _clear_market_structure_mismatch(bot) -> None:
+    """Clear mismatch counters after confirmed successful trade execution."""
+    bot._market_mismatch_count = 0
+    bot._market_mismatch_sectors = set()
+    bot._market_mismatch_reasons = {}
+    bot._port_mismatch_count = 0
+    bot._port_mismatch_sectors = set()
+
+
+def _should_reset_market_intel(bot) -> bool:
+    """Heuristic detector for stale per-universe port intel."""
+    if bool(getattr(bot, "_market_intel_reset_done", False)):
+        return False
+    count = int(getattr(bot, "_market_mismatch_count", 0) or 0)
+    sectors = set(getattr(bot, "_market_mismatch_sectors", set()) or set())
+    reasons = dict(getattr(bot, "_market_mismatch_reasons", {}) or {})
+    wrong_side = int(reasons.get("wrong_side", 0) or 0)
+    no_port = int(reasons.get("no_port", 0) or 0)
+    no_interaction = int(reasons.get("no_interaction", 0) or 0)
+
+    if no_port >= 3 and len(sectors) >= 2:
+        return True
+    if wrong_side >= 6 and len(sectors) >= 3:
+        return True
+    if wrong_side >= 4 and no_port >= 2 and len(sectors) >= 3:
+        return True
+    if count >= 8 and len(sectors) >= 3 and (wrong_side + no_port + no_interaction) >= 6:
+        return True
+    return False
+
+
+def _maybe_reset_market_intel(
+    bot,
+    *,
+    trigger_reason: str | None = None,
+) -> bool:
+    """Clear stale market intel once when structural mismatch detector fires."""
+    if not _should_reset_market_intel(bot):
+        return False
+    sector_knowledge = getattr(bot, "sector_knowledge", None)
+    if sector_knowledge is None:
+        return False
+
+    changed = int(sector_knowledge.clear_port_intel(clear_has_port=True) or 0)
+    bot._market_intel_reset_done = True
+    bot._market_intel_reset_trigger = str(trigger_reason or "").strip().lower() or "structural_mismatch"
+    bot._market_intel_reset_at = float(time.time())
+
+    with contextlib.suppress(Exception):
+        if hasattr(getattr(bot, "_strategy", None), "invalidate_pairs"):
+            bot._strategy.invalidate_pairs()
+
+    reasons = dict(getattr(bot, "_market_mismatch_reasons", {}) or {})
+    logger.warning(
+        "market_intel_reset_due_to_structural_mismatches: mismatches=%s sectors=%s wrong_side=%s no_port=%s no_interaction=%s trigger=%s cleared=%s",
+        int(getattr(bot, "_market_mismatch_count", 0) or 0),
+        len(set(getattr(bot, "_market_mismatch_sectors", set()) or set())),
+        int(reasons.get("wrong_side", 0) or 0),
+        int(reasons.get("no_port", 0) or 0),
+        int(reasons.get("no_interaction", 0) or 0),
+        str(trigger_reason or ""),
+        changed,
+    )
+    return True
+
+
 def _is_sector_ping_pong(recent_sectors: list[int] | deque[int]) -> bool:
     """Detect short repeating movement loops (ABAB, ABCABC)."""
     seq = list(recent_sectors)
@@ -1405,7 +1558,7 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
         # Anti-waste guardrail: if we have burned many turns with very few trades,
         # force a profit-first strategy/mode to avoid long explore-only runs.
         guard_min_trades = int(getattr(config.trading, "no_trade_guard_min_trades", 1))
-        guard_strategy = str(getattr(config.trading, "no_trade_guard_strategy", "profitable_pairs"))
+        guard_strategy_preferred = str(getattr(config.trading, "no_trade_guard_strategy", "profitable_pairs"))
         guard_mode = str(getattr(config.trading, "no_trade_guard_mode", "balanced"))
         trades_done = int(getattr(bot, "trades_executed", 0) or 0)
         trade_attempts_done = int(getattr(bot, "trade_attempts", 0) or 0)
@@ -1500,6 +1653,12 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
 
         if force_guard:
             current_name = getattr(strategy, "name", "unknown")
+            guard_strategy = _choose_no_trade_guard_strategy(
+                config=config,
+                bot=bot,
+                preferred_strategy=guard_strategy_preferred,
+                current_strategy=current_name,
+            )
             if current_name != guard_strategy:
                 logger.warning(
                     "no_trade_guard_switch: turns=%s trades=%s from=%s to=%s",
@@ -1911,6 +2070,17 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
             or getattr(strategy, "name", "")
             or ""
         )
+        provider_disabled = bool(decision_meta.get("provider_disabled"))
+        provider_status = str(decision_meta.get("provider_status") or "")
+        if provider_disabled and wake_reason == "ollama_not_available":
+            intent = f"AI_DISABLED | {intent or action.name}"
+            with contextlib.suppress(Exception):
+                if hasattr(strategy, "set_intent"):
+                    strategy.set_intent(intent)
+            with contextlib.suppress(Exception):
+                bot.strategy_intent = intent
+            with contextlib.suppress(Exception):
+                bot.ai_activity = (provider_status or "AI_DISABLED: OLLAMA_UNAVAILABLE")[:120]
 
         credits_before = int(getattr(state, "credits", 0) or 0)
         turns_before = int(turns_used)
@@ -1953,7 +2123,10 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                     turns_before=turns_before,
                 )
                 # Set activity context with AI reasoning for dashboard
-                bot.ai_activity = f"AI: {action.name} ({ai_reasoning[:80]})"
+                if provider_disabled and wake_reason == "ollama_not_available":
+                    bot.ai_activity = (provider_status or "AI_DISABLED: OLLAMA_UNAVAILABLE")[:120]
+                else:
+                    bot.ai_activity = f"AI: {action.name} ({ai_reasoning[:80]})"
 
         # Execute action with error recovery
         trades_before_action = int(getattr(bot, "trades_executed", 0) or 0)
@@ -1975,6 +2148,9 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                 opportunity = params.get("opportunity")
                 trade_action = params.get("action")  # "buy" or "sell" for pair trading
                 commodity = opportunity.commodity if opportunity else params.get("commodity")
+                commodity_sequence = params.get("commodity_sequence")
+                allow_commodities = params.get("allow_commodities")
+                max_quantity_by_commodity = params.get("max_quantity_by_commodity")
                 pair_signature = None
                 if opportunity is not None:
                     with contextlib.suppress(Exception):
@@ -1984,7 +2160,34 @@ async def run_trading_loop(bot, config: BotConfig, char_state) -> None:
                             f":{str(getattr(opportunity, 'commodity', '') or '').strip().lower() or 'unknown'}"
                         )
 
-                if commodity:
+                if commodity_sequence:
+                    seq = [str(c) for c in list(commodity_sequence or []) if str(c).strip()]
+                    print(
+                        f"  Trading commodity sweep at sector {state.sector} (credits: {bot.current_credits or 0:,}) "
+                        f"[{', '.join(seq)}]"
+                    )
+                    max_qty = 0
+                    try:
+                        max_qty = int(params.get("max_quantity") or 0)
+                    except Exception:
+                        max_qty = 0
+                    profit = await execute_port_trade(
+                        bot,
+                        commodity=None,
+                        trade_action=trade_action,
+                        max_quantity=max_qty,
+                        pair_signature=pair_signature,
+                        commodity_allowlist=allow_commodities or seq,
+                        max_quantity_by_commodity=max_quantity_by_commodity,
+                    )
+                    if profit != 0:
+                        char_state.record_trade(profit)
+                        print(f"  Result: {profit:+,} credits")
+                        result_delta = int(profit)
+                    else:
+                        print("  No trade executed")
+                        success = False
+                elif commodity:
                     print(f"  Trading {commodity} at sector {state.sector} (credits: {bot.current_credits or 0:,})")
                     max_qty = 0
                     try:
@@ -2240,6 +2443,8 @@ async def execute_port_trade(
     max_quantity: int = 0,
     trade_action: str | None = None,  # "buy" | "sell" (best-effort)
     pair_signature: str | None = None,
+    commodity_allowlist: list[str] | None = None,
+    max_quantity_by_commodity: dict[str, int] | None = None,
 ) -> int:
     """Execute a trade at the current port.
 
@@ -2255,6 +2460,8 @@ async def execute_port_trade(
         commodity: Target commodity ("fuel_ore", "organics", "equipment") or None for all
         max_quantity: Max quantity to trade (0 = accept game default/max)
         trade_action: If set, only act on prompts matching this action ("buy" or "sell")
+        commodity_allowlist: Optional commodity filter for trade-all mode
+        max_quantity_by_commodity: Optional per-commodity qty caps
 
     Returns:
         Credit change (positive = profit, negative = loss)
@@ -2273,6 +2480,18 @@ async def execute_port_trade(
             start_sector = int(getattr(getattr(bot, "game_state", None), "sector", 0) or 0)
     pending_trade = False
     target_re = _COMMODITY_PATTERNS.get(commodity) if commodity else None
+    allow_commodities = {
+        str(c).strip().lower()
+        for c in list(commodity_allowlist or [])
+        if str(c).strip().lower() in {"fuel_ore", "organics", "equipment"}
+    }
+    per_commodity_qty: dict[str, int] = {}
+    for comm, qty in dict(max_quantity_by_commodity or {}).items():
+        token = str(comm).strip().lower()
+        if token not in {"fuel_ore", "organics", "equipment"}:
+            continue
+        with contextlib.suppress(Exception):
+            per_commodity_qty[token] = max(0, int(qty))
     credits_available: int | None = None
     last_trade_commodity: str | None = None
     last_trade_is_buy: bool | None = None  # True when we are buying from port (port sells)
@@ -2296,6 +2515,8 @@ async def execute_port_trade(
     target_action_mismatch_limit: int = 2
     non_target_prompt_count: int = 0
     non_target_prompt_limit: int = 3
+    intentional_skip_count: int = 0
+    intentional_skip_limit: int = 4
     trade_failure_reason: str | None = None
 
     def _set_trade_failure_reason(reason: str | None) -> None:
@@ -2479,30 +2700,8 @@ async def execute_port_trade(
                     if hasattr(getattr(bot, "_strategy", None), "invalidate_pairs"):
                         bot._strategy.invalidate_pairs()
                 if was_known_port:
-                    mismatch_count = int(getattr(bot, "_port_mismatch_count", 0) or 0) + 1
-                    mismatch_sectors = set(getattr(bot, "_port_mismatch_sectors", set()) or set())
-                    mismatch_sectors.add(sector_now)
-                    bot._port_mismatch_count = mismatch_count
-                    bot._port_mismatch_sectors = mismatch_sectors
-
-                    # Repeated "known port -> no port" mismatches indicate stale market cache
-                    # (common after server reset). Reset cached port intel once per session.
-                    if (
-                        not bool(getattr(bot, "_market_intel_reset_done", False))
-                        and mismatch_count >= 3
-                        and len(mismatch_sectors) >= 2
-                    ):
-                        changed = int(bot.sector_knowledge.clear_port_intel(clear_has_port=True) or 0)
-                        bot._market_intel_reset_done = True
-                        with contextlib.suppress(Exception):
-                            if hasattr(getattr(bot, "_strategy", None), "invalidate_pairs"):
-                                bot._strategy.invalidate_pairs()
-                        logger.warning(
-                            "market_intel_reset_due_to_port_mismatch: mismatches=%s sectors=%s cleared=%s",
-                            mismatch_count,
-                            len(mismatch_sectors),
-                            changed,
-                        )
+                    _record_market_structure_mismatch(bot, sector=sector_now, reason="no_port")
+                    _maybe_reset_market_intel(bot, trigger_reason="no_port")
         await bot.recover()
         if hasattr(bot, "note_trade_telemetry"):
             bot.note_trade_telemetry("trade_attempts", 1)
@@ -2559,6 +2758,9 @@ async def execute_port_trade(
         # Quantity prompt: "How many holds of X do you want to buy/sell?"
         if _is_qty_prompt(last_line):
             attempted_trade = True
+            # Seeing an active quantity prompt means trade interaction happened,
+            # even when we intentionally submit 0 for non-target commodities.
+            trade_interaction_seen = True
             offered_all_credits = False
             insufficient_haggle_loops = 0
             haggle_attempts = 0
@@ -2671,6 +2873,7 @@ async def execute_port_trade(
                             # quantity hint so quote parsing can still derive unit price.
                             last_requested_qty = max(0, int(prompt_qty_cap))
                             trade_interaction_seen = last_requested_qty > 0
+                    intentional_skip_count = 0
                     await bot.session.send(f"{qty_str}\r")
                     pending_trade = True
                     logger.debug("Trading %s (qty=%s)", commodity, qty_str or "max")
@@ -2679,9 +2882,9 @@ async def execute_port_trade(
                     # buying/selling unintended commodities (and getting stuck haggling).
                     # Non-target prompts are normal; they should not be counted as wrong-side
                     # failures for the selected commodity pair.
-                    trade_interaction_seen = True
+                    intentional_skip_count += 1
                     non_target_prompt_count += 1
-                    if non_target_prompt_count >= non_target_prompt_limit:
+                    if non_target_prompt_count >= non_target_prompt_limit or intentional_skip_count >= intentional_skip_limit:
                         logger.warning(
                             "Aborting targeted trade after repeated non-target prompts: target=%s action=%s count=%s",
                             commodity,
@@ -2697,8 +2900,37 @@ async def execute_port_trade(
                     logger.debug("Skipping non-target commodity (target=%s)", commodity)
             else:
                 # Trade all: avoid buys when credits are very low; still allow sells.
-                if max_quantity > 0:
-                    effective_max_quantity = max_quantity
+                commodity_key = str(last_trade_commodity or "").strip().lower()
+                if allow_commodities and commodity_key and commodity_key not in allow_commodities:
+                    intentional_skip_count += 1
+                    await bot.session.send("0\r")
+                    pending_trade = False
+                    logger.debug("Skipping non-allowed commodity (allow=%s target=%s)", sorted(allow_commodities), commodity_key)
+                    if intentional_skip_count >= intentional_skip_limit:
+                        _set_trade_failure_reason("no_target_commodity")
+                        await bot.session.send("Q\r")
+                        await asyncio.sleep(0.5)
+                        break
+                    await asyncio.sleep(0.5)
+                    continue
+
+                has_specific_cap = commodity_key in per_commodity_qty
+                specific_cap = int(per_commodity_qty.get(commodity_key, 0) or 0)
+                if has_specific_cap and specific_cap <= 0:
+                    intentional_skip_count += 1
+                    await bot.session.send("0\r")
+                    pending_trade = False
+                    logger.debug("Skipping commodity due to explicit qty cap=0 (commodity=%s)", commodity_key)
+                    if intentional_skip_count >= intentional_skip_limit:
+                        _set_trade_failure_reason("no_target_commodity")
+                        await bot.session.send("Q\r")
+                        await asyncio.sleep(0.5)
+                        break
+                    await asyncio.sleep(0.5)
+                    continue
+
+                if max_quantity > 0 or (has_specific_cap and specific_cap > 0):
+                    effective_max_quantity = specific_cap if (has_specific_cap and specific_cap > 0) else max_quantity
                     if prompt_qty_cap is not None:
                         effective_max_quantity = min(effective_max_quantity, int(prompt_qty_cap))
                     if is_buy:
@@ -2738,6 +2970,7 @@ async def execute_port_trade(
                             last_requested_qty = max(0, int(prompt_qty_cap))
                             trade_interaction_seen = last_requested_qty > 0
                     await bot.session.send(f"{qty_str}\r")
+                intentional_skip_count = 0
                 pending_trade = True
 
             await asyncio.sleep(0.5)
@@ -3096,14 +3329,33 @@ async def execute_port_trade(
         bot.note_trade_telemetry("trade_attempts", 1)
     if attempted_trade and not trade_success:
         if not trade_failure_reason:
-            if not trade_interaction_seen:
+            if intentional_skip_count > 0:
+                # We saw qty prompts but intentionally skipped non-target/non-allowed
+                # commodities. For targeted trades, treat this as side mismatch so
+                # lane backoff can reroute away from bad ports.
+                if target_re is not None:
+                    _set_trade_failure_reason("wrong_side")
+                else:
+                    _set_trade_failure_reason("no_target_commodity")
+            elif not trade_interaction_seen:
                 _set_trade_failure_reason("no_interaction")
             elif int(credit_change) == 0:
-                _set_trade_failure_reason("wrong_side")
+                # Zero credit delta after a detected trade interaction is not always
+                # a literal side mismatch; track it separately to avoid inflating
+                # wrong-side diagnostics.
+                _set_trade_failure_reason("no_fill")
             else:
                 _set_trade_failure_reason("other")
         if hasattr(bot, "note_trade_telemetry"):
             bot.note_trade_telemetry(f"trade_fail_{trade_failure_reason or 'other'}", 1)
+        with contextlib.suppress(Exception):
+            mismatch_sector = int(getattr(new_state, "sector", 0) or int(start_sector or 0))
+            _record_market_structure_mismatch(
+                bot,
+                sector=mismatch_sector,
+                reason=str(trade_failure_reason or ""),
+            )
+            _maybe_reset_market_intel(bot, trigger_reason=str(trade_failure_reason or ""))
     if hasattr(bot, "note_trade_outcome"):
         with contextlib.suppress(Exception):
             side = "unknown"
@@ -3161,8 +3413,7 @@ async def execute_port_trade(
     with contextlib.suppress(Exception):
         # Successful trades imply current market intel is live.
         if int(credit_change) != 0:
-            bot._port_mismatch_count = 0
-            bot._port_mismatch_sectors = set()
+            _clear_market_structure_mismatch(bot)
     return credit_change
 
 

@@ -37,9 +37,9 @@ echo ""
 
 # Check 3: Test configs exist
 echo "3. Checking test configurations..."
-if [ -f "config/test_opportunistic_stuck.yaml" ] && \
-   [ -f "config/test_ai_intervention.yaml" ] && \
-   [ -f "config/test_ai_manual_intervention.yaml" ]; then
+if [ -f "examples/configs/test_opportunistic_stuck.yaml" ] && \
+   [ -f "examples/configs/test_ai_intervention.yaml" ] && \
+   [ -f "examples/configs/test_ai_manual_intervention.yaml" ]; then
     echo "   ✅ All 3 test configs present"
 else
     echo "   ❌ Missing test configs"
@@ -49,8 +49,8 @@ echo ""
 
 # Check 4: Documentation
 echo "4. Checking documentation..."
-if [ -f ".provide/TESTING_GUIDE.md" ] && \
-   [ -f ".provide/READY_FOR_TESTING.md" ]; then
+if [ -f "docs/guides/QUICK_START.md" ] && \
+   [ -f "docs/guides/INTELLIGENT_BOT.md" ]; then
     echo "   ✅ Testing documentation present"
 else
     echo "   ⚠️  Missing documentation files"
@@ -69,8 +69,8 @@ if nc -z $HOST $PORT 2>/dev/null; then
     echo "=============================================="
     echo ""
     echo "Next steps:"
-    echo "  1. Run: ./scripts/test_intervention_live.sh"
-    echo "  2. Or manually: python -m bbsbot.main --config config/test_opportunistic_stuck.yaml --host $HOST --port $PORT"
+    echo "  1. Run: ./scripts/archive/test_intervention_live.sh"
+    echo "  2. Or manually: uv run bbsbot tw2002 bot -c examples/configs/test_opportunistic_stuck.yaml --host $HOST --port $PORT"
     echo "  3. Monitor: tail -f ~/.bbsbot/sessions/*.jsonl | grep '\"event\": \"llm.intervention\"'"
 else
     echo "   ⚠️  Server not reachable at $HOST:$PORT"

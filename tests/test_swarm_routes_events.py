@@ -315,6 +315,58 @@ def test_bot_events_include_structured_action_metadata(tmp_path: Path) -> None:
     assert action_event["result_delta"] == 30
 
 
+def test_restart_preserves_bot_entry_when_respawn_fails(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_restart"] = BotStatus(
+        bot_id="bot_restart",
+        pid=0,
+        config="config/swarm_demo/bot_01.yaml",
+        state="stopped",
+    )
+
+    async def _fail_spawn(config_path: str, bot_id: str) -> str:  # pragma: no cover - exercised via API call
+        raise RuntimeError("spawn exploded")
+
+    manager.spawn_bot = _fail_spawn  # type: ignore[assignment]
+
+    with TestClient(manager.app) as client:
+        resp = client.post("/bot/bot_restart/restart")
+        assert resp.status_code == 500
+
+    assert "bot_restart" in manager.bots
+    bot = manager.bots["bot_restart"]
+    assert bot.state == "error"
+    assert "Failed to restart: spawn exploded" in str(bot.error_message or "")
+    assert bot.exit_reason == "restart_failed"
+
+
+def test_swarm_status_keeps_non_running_bots_visible(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    manager.bots["bot_done"] = BotStatus(
+        bot_id="bot_done",
+        pid=0,
+        config="config/swarm_demo/bot_done.yaml",
+        state="completed",
+    )
+    manager.bots["bot_drop"] = BotStatus(
+        bot_id="bot_drop",
+        pid=0,
+        config="config/swarm_demo/bot_drop.yaml",
+        state="stopped",
+    )
+
+    with TestClient(manager.app) as client:
+        resp = client.get("/swarm/status")
+        assert resp.status_code == 200
+        payload = resp.json()
+
+    bot_ids = {str(b.get("bot_id")) for b in payload.get("bots", [])}
+    assert "bot_done" in bot_ids
+    assert "bot_drop" in bot_ids
+    assert int(payload.get("completed", 0)) >= 1
+    assert int(payload.get("stopped", 0)) >= 1
+
+
 def test_bot_session_data_endpoint_returns_persisted_identity(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path)
     swarm_routes._identity_store = BotIdentityStore(data_dir=tmp_path / "sessions")

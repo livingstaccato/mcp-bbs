@@ -35,17 +35,21 @@ def test_spawn_presets_and_pool_panel_present() -> None:
     html = _dashboard_html()
     js = _dashboard_js()
     assert 'id="spawn-preset"' in html
-    assert "Mix" in html
+    assert "Preset" in html
     assert "Count" in html
     assert "Config" in html
-    assert "mix_5_ai_35_dynamic" in html
-    assert "tw2002_mix_5_ai_35_dynamic" in html
+    assert "preset_20_mixed" in html
+    assert "20 mixed (5 AI + 15 dynamic)" in html
+    assert "preset_20_dynamic" in html
+    assert "preset_5_dynamic" in html
+    assert "manual" in html
     assert "tw2002_dynamic" in html
     assert "tw2002_ai" in html
     assert 'id="filter-layout"' in html
     assert 'id="pool-summary"' in html
     assert 'id="pool-table"' in html
     assert "buildSpawnConfigs" in js
+    assert "currentSpawnPreset" in js
     assert "refreshAccountPool" in js
     assert "TABLE_VIEW_STORAGE_KEY" in js
     assert "applyTableView" in js
@@ -53,9 +57,9 @@ def test_spawn_presets_and_pool_panel_present() -> None:
 
 def test_strategy_cpt_filters_small_samples_and_outliers() -> None:
     js = _dashboard_js()
-    assert "MIN_TURNS_FOR_CPT" in js
-    assert "MIN_TRADES_FOR_CPT" in js
-    assert "MAX_ABS_CPT_PER_BOT" in js
+    assert "hasValidIndex" in js
+    assert "cptIndex < 100" in js
+    assert "lowConfidence: v.n < 3 || v.sumTurns < 200" in js
     assert "samplesSkipped" in js
 
 
@@ -126,3 +130,14 @@ def test_dashboard_uses_cached_credits_with_unverified_style() -> None:
     assert "credit-cell-unverified" in js
     assert "Last known credits shown while reconnecting" in js
     assert ".credit-cell.credit-cell-unverified" in html
+
+
+def test_dashboard_surfaces_ai_decision_telemetry() -> None:
+    html = _dashboard_html()
+    js = _dashboard_js()
+    assert "getAiDecisionInfo" in js
+    assert "AI-CTRL" in js
+    assert "AI Decision" in js
+    assert "llm_wakeups_per_100_turns" in js
+    assert ".strategy-ai-meta" in html
+    assert ".chip.aictrl" in html

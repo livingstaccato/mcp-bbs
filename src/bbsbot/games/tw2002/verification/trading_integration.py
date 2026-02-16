@@ -11,7 +11,7 @@ This test proves the full trading integration works:
 4. Verify via both terminal parsing AND twerk file read
 
 Usage:
-    python scripts/test_trading_integration.py
+    bbsbot script test_trading_integration
 
 Requirements:
     - TW2002 server running on localhost:3003 (Docker container tw2002-dev)

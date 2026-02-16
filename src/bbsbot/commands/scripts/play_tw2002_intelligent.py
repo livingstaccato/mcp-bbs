@@ -477,10 +477,10 @@ class IntelligentTW2002Bot:
     async def save_results(self):
         """Save test results to files."""
         timestamp = int(time.time())
-        json_file = Path(".provide") / f"intelligent-bot-{timestamp}.json"
-        md_file = Path(".provide") / f"intelligent-bot-{timestamp}.md"
+        json_file = Path("logs/reports") / f"intelligent-bot-{timestamp}.json"
+        md_file = Path("logs/reports") / f"intelligent-bot-{timestamp}.md"
 
-        json_file.parent.mkdir(exist_ok=True)
+        json_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Save JSON
         results = {

@@ -451,6 +451,18 @@ async def update_status(bot_id: str, update: dict):
         bot.credits_delta = int(update["credits_delta"])
     if "credits_per_turn" in update:
         bot.credits_per_turn = float(update["credits_per_turn"])
+    if "cpt_index" in update:
+        val = float(update["cpt_index"])
+        bot.cpt_index = val if val > 0 else 1.0
+    if "cpt_baseline_locked" in update:
+        bot.cpt_baseline_locked = bool(update["cpt_baseline_locked"])
+    if "cpt_baseline_credits" in update:
+        raw = update["cpt_baseline_credits"]
+        bot.cpt_baseline_credits = int(raw) if raw is not None else None
+    if "run_cpt_ready" in update:
+        bot.run_cpt_ready = bool(update["run_cpt_ready"])
+    if "adjusted_cpt_ready" in update:
+        bot.adjusted_cpt_ready = bool(update["adjusted_cpt_ready"])
     if "turns_since_last_trade" in update:
         bot.turns_since_last_trade = max(0, int(update["turns_since_last_trade"] or 0))
     if "move_streak" in update:
@@ -686,15 +698,18 @@ async def get_bot_events(bot_id: str):
         )
 
     bot = _manager.bots[bot_id]
-    import time as time_module
-
     events = []
-    time_module.time()
 
     # Add state/activity-based events from recent actions
     if bot.recent_actions:
         for action in bot.recent_actions:
-            action_time = action.get("time", 0)
+            action_time = float(action.get("time", 0) or 0)
+            credits_after = action.get("credits_after")
+            if credits_after is None:
+                credits_after = bot.credits
+            turns_after = action.get("turns_after")
+            if turns_after is None:
+                turns_after = bot.turns_executed
             events.append(
                 {
                     "timestamp": action_time,
@@ -716,8 +731,8 @@ async def get_bot_events(bot_id: str):
                     "strategy_id": action.get("strategy_id") or bot.strategy_id,
                     "strategy_mode": action.get("strategy_mode") or bot.strategy_mode,
                     "strategy_intent": action.get("strategy_intent") or bot.strategy_intent,
-                    "credits": bot.credits,
-                    "turns_executed": bot.turns_executed,
+                    "credits": credits_after,
+                    "turns_executed": turns_after,
                     "started_at": bot.started_at,
                     "stopped_at": bot.stopped_at,
                 }
@@ -753,8 +768,9 @@ async def get_bot_events(bot_id: str):
             }
         )
 
-    # Add state change event
-    if bot.last_update_time:
+    # Add state change event when it is not just duplicating the latest action timestamp.
+    include_status_update = bool(bot.last_update_time) and (not bot.recent_actions)
+    if include_status_update:
         events.append(
             {
                 "timestamp": bot.last_update_time,
@@ -815,8 +831,12 @@ async def restart_bot(bot_id: str):
         await _manager.kill_bot(bot_id)
         await asyncio.sleep(1)
 
-    # Remove old status entry
-    _manager.bots.pop(bot_id, None)
+    # Keep status entry on restart attempts so the bot never disappears from
+    # the dashboard if respawn fails.
+    _manager.bots[bot_id].state = "queued"
+    _manager.bots[bot_id].status_detail = "RESTARTING"
+    _manager.bots[bot_id].stopped_at = None
+    await _manager._broadcast_status()
 
     # Respawn
     try:
@@ -827,4 +847,10 @@ async def restart_bot(bot_id: str):
             "pid": _manager.bots[bot_id].pid,
         }
     except Exception as e:
+        # Preserve row in bot list and mark as failed restart.
+        _manager.bots[bot_id].state = "error"
+        _manager.bots[bot_id].error_message = f"Failed to restart: {e}"
+        _manager.bots[bot_id].exit_reason = "restart_failed"
+        _manager.bots[bot_id].stopped_at = time.time()
+        await _manager._broadcast_status()
         return JSONResponse({"error": f"Failed to restart: {e}"}, status_code=500)

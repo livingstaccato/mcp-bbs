@@ -374,10 +374,10 @@ class PatternValidator:
     async def save_results(self):
         """Save validation results."""
         timestamp = int(time.time())
-        results_file = Path(".provide") / "pattern-validation-results.json"
-        report_file = Path(".provide") / "pattern-validation-results.md"
+        results_file = Path("logs/reports") / "pattern-validation-results.json"
+        report_file = Path("logs/reports") / "pattern-validation-results.md"
 
-        results_file.parent.mkdir(exist_ok=True)
+        results_file.parent.mkdir(parents=True, exist_ok=True)
 
         # JSON results
         data = {
