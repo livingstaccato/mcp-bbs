@@ -69,9 +69,8 @@ if nc -z $HOST $PORT 2>/dev/null; then
     echo "=============================================="
     echo ""
     echo "Next steps:"
-    echo "  1. Run: ./scripts/archive/test_intervention_live.sh"
-    echo "  2. Or manually: uv run bbsbot tw2002 bot -c examples/configs/test_opportunistic_stuck.yaml --host $HOST --port $PORT"
-    echo "  3. Monitor: tail -f ~/.bbsbot/sessions/*.jsonl | grep '\"event\": \"llm.intervention\"'"
+    echo "  1. Run: uv run bbsbot tw2002 bot -c examples/configs/test_opportunistic_stuck.yaml --host $HOST --port $PORT"
+    echo "  2. Monitor: tail -f ~/.bbsbot/sessions/*.jsonl | grep '\"event\": \"llm.intervention\"'"
 else
     echo "   ⚠️  Server not reachable at $HOST:$PORT"
     echo ""

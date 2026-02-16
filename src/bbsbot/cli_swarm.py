@@ -98,7 +98,7 @@ def spawn_impl(config: str, bot_id: str | None = None) -> None:
 
 def spawn_swarm_impl(
     count: int = 111,
-    pattern: str = "config/test_matrix/*.yaml",
+    pattern: str = "config/swarm_demo/*.yaml",
     stagger: float = 0.5,
 ) -> None:
     """Spawn multiple bots."""
@@ -366,7 +366,7 @@ def spawn(config: str, bot_id: str | None) -> None:
 
 @swarm_commands.command("spawn-swarm")
 @click.option("--count", default=111, help="Number of bots to spawn")
-@click.option("--pattern", default="config/test_matrix/*.yaml", help="Config file pattern")
+@click.option("--pattern", default="config/swarm_demo/*.yaml", help="Config file pattern")
 @click.option("--stagger", default=0.5, type=float, help="Delay between spawns")
 def spawn_swarm(count: int, pattern: str, stagger: float) -> None:
     """Spawn multiple bots (swarm)."""
