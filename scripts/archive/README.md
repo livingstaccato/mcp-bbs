@@ -9,3 +9,8 @@ Use supported commands instead:
 - `bbsbot script <script_name> [args...]` for scripts kept under `src/bbsbot/commands/scripts/`
 
 Archived on 2026-02-16 during script inventory cleanup.
+
+Superseded release preflight:
+
+- `check_test_readiness.sh` (archived)
+  - replaced by `scripts/e2e_swarm_ai_smoke_gate.sh`

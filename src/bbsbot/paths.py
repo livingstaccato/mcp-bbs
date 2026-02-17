@@ -34,12 +34,12 @@ def validate_knowledge_root(knowledge_root: Path) -> Path:
     return knowledge_root
 
 
-def find_repo_games_root(start: Path | None = None) -> Path | None:
+def find_repo_games_root(start: Path | None = None, *, include_package_fallback: bool = True) -> Path | None:
     """Locate a repo-local games directory (optional override for knowledge files).
 
     Search order:
     1. Walk up from *start* (or cwd) looking for .git + games/
-    2. Walk up from the bbsbot package source directory
+    2. (Optional) Walk up from the bbsbot package source directory
     """
     base = (start or Path.cwd()).resolve()
     for candidate in (base, *base.parents):
@@ -48,6 +48,9 @@ def find_repo_games_root(start: Path | None = None) -> Path | None:
             if games_dir.exists():
                 return games_dir
             break  # Found .git but no games/ — continue to fallback
+
+    if not include_package_fallback:
+        return None
 
     # Fallback: check relative to the bbsbot package source directory.
     # This handles running from a different repo (e.g. a game server project

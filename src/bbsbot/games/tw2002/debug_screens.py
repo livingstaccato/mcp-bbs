@@ -62,8 +62,11 @@ async def analyze_screen(bot: TradingBot) -> ScreenAnalysis:
 
     # Run prompt detection to see what matched
     detection = None
+    patterns_partially_matched: list[dict[str, Any]] = []
     if bot.session.learning and bot.session.learning._prompt_detector:
-        detection = bot.session.learning._prompt_detector.detect_prompt(snapshot)
+        diagnostics = bot.session.learning._prompt_detector.detect_prompt_with_diagnostics(snapshot)
+        detection = diagnostics.match
+        patterns_partially_matched = diagnostics.regex_matched_but_failed
 
     # Extract results
     prompt_id = detection.prompt_id if detection else None
@@ -76,12 +79,14 @@ async def analyze_screen(bot: TradingBot) -> ScreenAnalysis:
     if kv_extract:
         from bbsbot.learning.extractor import extract_kv
 
-        kv_data = extract_kv(screen_text, kv_extract)
+        kv_data = extract_kv(screen_text, kv_extract) or {}
 
     # Get list of all patterns that were checked
     all_patterns = []
     if bot.session.learning and bot.session.learning._prompt_detector:
-        all_patterns = [p.get("id", "unknown") for _, p in bot.session.learning._prompt_detector._compiled]
+        detector = bot.session.learning._prompt_detector
+        compiled = getattr(detector, "_compiled_all", getattr(detector, "_compiled", []))
+        all_patterns = [p.get("id", "unknown") for _, p in compiled]
 
     # Generate recommendation
     recommendation = _generate_recommendation(
@@ -101,7 +106,7 @@ async def analyze_screen(bot: TradingBot) -> ScreenAnalysis:
         cursor_at_end=cursor_at_end,
         has_trailing_space=has_trailing_space,
         all_patterns_checked=all_patterns,
-        patterns_partially_matched=[],  # TODO: Track this in detector
+        patterns_partially_matched=patterns_partially_matched,
         recommendation=recommendation,
     )
 

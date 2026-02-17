@@ -22,6 +22,8 @@ Use this checklist before cutting a release branch/tag.
 
 ## 3. AI/Ollama Gates
 
+- Run the one-command smoke gate:
+  - `./scripts/e2e_swarm_ai_smoke_gate.sh`
 - With Ollama reachable, AI bot shows non-zero `llm_wakeups` and managed decisions.
 - With Ollama intentionally unreachable, fallback is graceful:
   - `decision_source=fallback`

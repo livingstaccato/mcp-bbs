@@ -26,6 +26,8 @@ Active script modules under `src/bbsbot/commands/scripts/`:
 
 - Legacy top-level utility scripts moved to `scripts/archive/`
 - Legacy debug/test command modules moved to `src/bbsbot/commands/scripts/archive/`
+- Legacy shell preflight moved to `scripts/archive/check_test_readiness.sh`
+  - replacement: `scripts/e2e_swarm_ai_smoke_gate.sh`
 
 ## Supported usage
 

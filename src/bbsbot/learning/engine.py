@@ -11,7 +11,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from bbsbot.learning.buffer import BufferManager
-from bbsbot.learning.detector import PromptDetection, PromptDetector
+from bbsbot.learning.detector import PromptDetection, PromptDetector, PromptMatch
 from bbsbot.learning.discovery import discover_menu
 from bbsbot.learning.extractor import extract_kv
 from bbsbot.learning.knowledge import append_md
@@ -214,6 +214,64 @@ class LearningEngine:
 
         logger.debug(f"[RULES LOAD] Namespace: {self._namespace}")
 
+        # Prefer explicit knowledge-root rules for determinism in tests and custom deployments.
+        rules_file = self._knowledge_root / "games" / self._namespace / "rules.json"
+        if rules_file.exists():
+            try:
+                rules = RuleSet.from_json_file(rules_file)
+                return RuleLoadResult(
+                    source=str(rules_file),
+                    patterns=rules.to_prompt_patterns(),
+                    metadata={"game": rules.game, "version": rules.version, **rules.metadata},
+                )
+            except (json.JSONDecodeError, OSError, ValueError):
+                # Legacy rules.json support (minimal prompt list).
+                try:
+                    data = json.loads(rules_file.read_text())
+                    legacy_patterns: list[dict[str, Any]] = []
+                    for prompt in data.get("prompts", []):
+                        prompt_id = prompt.get("prompt_id")
+                        regex = prompt.get("regex")
+                        if not prompt_id or not regex:
+                            continue
+                        input_type = prompt.get("input_type", "multi_key")
+                        legacy_patterns.append(
+                            {
+                                "id": prompt_id,
+                                "regex": regex,
+                                "input_type": input_type,
+                                "expect_cursor_at_end": True,
+                                "kv_extract": prompt.get("kv_extract"),
+                            }
+                        )
+                    if legacy_patterns:
+                        return RuleLoadResult(
+                            source=str(rules_file),
+                            patterns=legacy_patterns,
+                            metadata=data.get("metadata", {}),
+                        )
+                except Exception:
+                    pass
+                return RuleLoadResult(source=str(rules_file), patterns=[], metadata={})
+
+        patterns_file = self._knowledge_root / "games" / self._namespace / "prompts.json"
+        if patterns_file.exists():
+            try:
+                data = json.loads(patterns_file.read_text())
+                return RuleLoadResult(
+                    source=str(patterns_file),
+                    patterns=data.get("prompts", []),
+                    metadata=data.get("metadata", {}),
+                )
+            except (json.JSONDecodeError, OSError):
+                return RuleLoadResult(source=str(patterns_file), patterns=[], metadata={})
+
+        # Resolve both paths for accurate comparison
+        is_default_knowledge_root = self._knowledge_root.resolve() == default_knowledge_root().resolve()
+        logger.debug(f"[RULES LOAD] knowledge_root: {self._knowledge_root.resolve()}")
+        logger.debug(f"[RULES LOAD] default_knowledge_root: {default_knowledge_root().resolve()}")
+        logger.debug(f"[RULES LOAD] is_default: {is_default_knowledge_root}")
+
         # Look for a repo-local rules override relative to the knowledge root.
         # For tests: knowledge_root is a temp dir (may or may not have .git)
         # For production: knowledge_root is user data dir, NOT in git repo
@@ -221,8 +279,9 @@ class LearningEngine:
         #   1. Try finding git repo from knowledge_root (tests with .git)
         #   2. Check knowledge_root/games directly (tests without .git)
         #   3. Fallback to finding git repo from cwd (production)
+        repo_games_root = None
         try:
-            repo_games_root = find_repo_games_root(self._knowledge_root)
+            repo_games_root = find_repo_games_root(self._knowledge_root, include_package_fallback=False)
             logger.debug(f"[RULES LOAD] Searched from knowledge_root, found: {repo_games_root}")
         except TypeError:
             # Backwards compatibility for monkeypatched callers
@@ -232,40 +291,18 @@ class LearningEngine:
             logger.error(f"[RULES LOAD] Error finding repo games root: {e}")
             repo_games_root = None
 
-        # If no git repo found from knowledge_root, check if games dir exists directly
-        # (for tests that don't set up .git but do create games/namespace/rules.json)
-        # IMPORTANT: Only use it if the actual rules.json file exists there!
-        if repo_games_root is None:
-            direct_games = self._knowledge_root / "games"
-            direct_rules = direct_games / self._namespace / "rules.json"
-            logger.debug(f"[RULES LOAD] Checking direct games dir: {direct_games}")
-            logger.debug(f"[RULES LOAD] Checking for rules at: {direct_rules}")
-            logger.debug(f"[RULES LOAD] Rules file exists: {direct_rules.exists()}")
-            if direct_rules.exists():
-                logger.debug(f"[RULES LOAD] Found games directory with rules: {direct_games}")
-                repo_games_root = direct_games
-            else:
-                logger.debug("[RULES LOAD] No rules.json in knowledge_root games dir")
-
         # If still nothing, try searching from current working directory (production case ONLY)
         # Only do this if knowledge_root is the default production directory, not a test temp dir
-        if repo_games_root is None:
-            # Resolve both paths for accurate comparison
-            is_default_knowledge_root = self._knowledge_root.resolve() == default_knowledge_root().resolve()
-            logger.debug(f"[RULES LOAD] knowledge_root: {self._knowledge_root.resolve()}")
-            logger.debug(f"[RULES LOAD] default_knowledge_root: {default_knowledge_root().resolve()}")
-            logger.debug(f"[RULES LOAD] is_default: {is_default_knowledge_root}")
-
-            if is_default_knowledge_root:
-                logger.debug("[RULES LOAD] Using default knowledge_root in production, trying cwd")
-                try:
-                    repo_games_root = find_repo_games_root()
-                    logger.debug(f"[RULES LOAD] Searched from cwd, found: {repo_games_root}")
-                except Exception as e:
-                    logger.error(f"[RULES LOAD] Error finding repo games root from cwd: {e}")
-                    repo_games_root = None
-            else:
-                logger.debug("[RULES LOAD] Custom knowledge_root (test mode), not falling back to cwd")
+        if repo_games_root is None and is_default_knowledge_root:
+            logger.debug("[RULES LOAD] Using default knowledge_root in production, trying cwd")
+            try:
+                repo_games_root = find_repo_games_root()
+                logger.debug(f"[RULES LOAD] Searched from cwd, found: {repo_games_root}")
+            except Exception as e:
+                logger.error(f"[RULES LOAD] Error finding repo games root from cwd: {e}")
+                repo_games_root = None
+        elif repo_games_root is None:
+            logger.debug("[RULES LOAD] Custom knowledge_root (test mode), not falling back to cwd/package")
 
         if repo_games_root:
             repo_rules = repo_games_root / self._namespace / "rules.json"
@@ -337,57 +374,6 @@ class LearningEngine:
                     )
                 except (json.JSONDecodeError, OSError):
                     return RuleLoadResult(source=str(repo_prompts), patterns=[], metadata={})
-
-        rules_file = self._knowledge_root / "games" / self._namespace / "rules.json"
-        if rules_file.exists():
-            try:
-                rules = RuleSet.from_json_file(rules_file)
-                return RuleLoadResult(
-                    source=str(rules_file),
-                    patterns=rules.to_prompt_patterns(),
-                    metadata={"game": rules.game, "version": rules.version, **rules.metadata},
-                )
-            except (json.JSONDecodeError, OSError, ValueError):
-                # Legacy rules.json support (minimal prompt list).
-                try:
-                    data = json.loads(rules_file.read_text())
-                    legacy_patterns: list[dict[str, Any]] = []
-                    for prompt in data.get("prompts", []):
-                        prompt_id = prompt.get("prompt_id")
-                        regex = prompt.get("regex")
-                        if not prompt_id or not regex:
-                            continue
-                        input_type = prompt.get("input_type", "multi_key")
-                        legacy_patterns.append(
-                            {
-                                "id": prompt_id,
-                                "regex": regex,
-                                "input_type": input_type,
-                                "expect_cursor_at_end": True,
-                                "kv_extract": prompt.get("kv_extract"),
-                            }
-                        )
-                    if legacy_patterns:
-                        return RuleLoadResult(
-                            source=str(rules_file),
-                            patterns=legacy_patterns,
-                            metadata=data.get("metadata", {}),
-                        )
-                except Exception:
-                    pass
-                return RuleLoadResult(source=str(rules_file), patterns=[], metadata={})
-
-        patterns_file = self._knowledge_root / "games" / self._namespace / "prompts.json"
-        if patterns_file.exists():
-            try:
-                data = json.loads(patterns_file.read_text())
-                return RuleLoadResult(
-                    source=str(patterns_file),
-                    patterns=data.get("prompts", []),
-                    metadata=data.get("metadata", {}),
-                )
-            except (json.JSONDecodeError, OSError):
-                return RuleLoadResult(source=str(patterns_file), patterns=[], metadata={})
 
         return RuleLoadResult(source="none", patterns=[], metadata={})
 

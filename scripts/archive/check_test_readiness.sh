@@ -8,6 +8,8 @@ echo "=============================================="
 echo "Intervention System Test Readiness Check"
 echo "=============================================="
 echo ""
+echo "NOTE: This script is archived. Use ./scripts/e2e_swarm_ai_smoke_gate.sh for release gating."
+echo ""
 
 # Check 1: Tests passing
 echo "1. Running unit tests..."
@@ -79,6 +81,6 @@ else
     echo "=============================================="
     echo ""
     echo "Start TW2002 server on $HOST:$PORT or specify different host/port:"
-    echo "  ./scripts/check_test_readiness.sh <host> <port>"
+    echo "  ./scripts/e2e_swarm_ai_smoke_gate.sh"
 fi
 echo ""

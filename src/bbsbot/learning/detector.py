@@ -14,9 +14,9 @@ import hashlib
 import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from bbsbot.learning.buffer import ScreenBuffer
+from bbsbot.learning.buffer import ScreenBuffer  # noqa: TC001
 from bbsbot.logging import get_logger
 
 logger = get_logger(__name__)
@@ -46,6 +46,13 @@ class PromptDetection(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+class PromptDetectionDiagnostics(BaseModel):
+    """Prompt detection result with partial-match diagnostics."""
+
+    match: PromptMatch | None = None
+    regex_matched_but_failed: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class PromptDetector:
     """Intelligent prompt detection with cursor-awareness."""
 
@@ -65,6 +72,8 @@ class PromptDetector:
             for (regex, pattern) in self._compiled_all
             if not bool(pattern.get("expect_cursor_at_end", True))
         ]
+        # Backward compatibility for legacy debug helpers that still reference `_compiled`.
+        self._compiled = self._compiled_all
 
     def _compile_patterns(self) -> list[tuple[re.Pattern[str], dict[str, Any]]]:
         """Compile regex patterns for efficient matching.
@@ -250,11 +259,25 @@ class PromptDetector:
     def detect_prompt(self, snapshot: dict[str, Any]) -> PromptMatch | None:
         """Detect if snapshot contains a prompt waiting for input.
 
+        This method keeps the legacy API and returns only the match.
+        Use `detect_prompt_with_diagnostics()` to also get partial-match reasons.
+
         Args:
             snapshot: Screen snapshot with timing and cursor metadata
 
         Returns:
             PromptMatch if a prompt pattern matches, None otherwise
+        """
+        return self.detect_prompt_with_diagnostics(snapshot).match
+
+    def detect_prompt_with_diagnostics(self, snapshot: dict[str, Any]) -> PromptDetectionDiagnostics:
+        """Detect prompt and include partial-match diagnostics.
+
+        Args:
+            snapshot: Screen snapshot with timing and cursor metadata
+
+        Returns:
+            PromptDetectionDiagnostics containing both match and partial-match failures
         """
         screen = snapshot.get("screen", "") or ""
         # Most callers supply cursor metadata; tests/legacy callers may not.
@@ -295,7 +318,7 @@ class PromptDetector:
                 logger.info(
                     f"[PROMPT DETECTION] ✓✓✓ MATCHED (region): {match.prompt_id} (input_type: {match.input_type})"
                 )
-                return match
+                return PromptDetectionDiagnostics(match=match, regex_matched_but_failed=regex_matched_but_failed)
 
         if not cursor_in_region:
             match = self._detect_in_text(
@@ -310,7 +333,7 @@ class PromptDetector:
                 logger.info(
                     f"[PROMPT DETECTION] ✓✓✓ MATCHED (full): {match.prompt_id} (input_type: {match.input_type})"
                 )
-                return match
+                return PromptDetectionDiagnostics(match=match, regex_matched_but_failed=regex_matched_but_failed)
 
         # Fallback: if we matched prompt regexes but the cursor heuristic disagreed, prefer progress.
         # Gate this on "trailing space" which strongly correlates with an active input field.
@@ -319,7 +342,7 @@ class PromptDetector:
             logger.warning(
                 f"[PROMPT DETECTION] Cursor-at-end heuristic blocked prompt match; falling back to {cand.prompt_id}"
             )
-            return cand
+            return PromptDetectionDiagnostics(match=cand, regex_matched_but_failed=regex_matched_but_failed)
 
         # NO PATTERNS MATCHED - Emit diagnostic
         if regex_matched_but_failed:
@@ -336,7 +359,7 @@ class PromptDetector:
                 f"  Screen preview: {screen[-150:]!r}"
             )
 
-        return None
+        return PromptDetectionDiagnostics(match=None, regex_matched_but_failed=regex_matched_but_failed)
 
     def auto_detect_input_type(self, screen: str) -> str:
         """Heuristically detect input type from prompt text.
@@ -416,6 +439,7 @@ class PromptDetector:
             for (regex, pattern) in self._compiled_all
             if not bool(pattern.get("expect_cursor_at_end", True))
         ]
+        self._compiled = self._compiled_all
 
     def reload_patterns(self, patterns: list[dict[str, Any]]) -> None:
         """Replace all patterns with new set.
@@ -430,3 +454,4 @@ class PromptDetector:
             for (regex, pattern) in self._compiled_all
             if not bool(pattern.get("expect_cursor_at_end", True))
         ]
+        self._compiled = self._compiled_all

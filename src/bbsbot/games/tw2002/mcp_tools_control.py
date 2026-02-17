@@ -207,9 +207,10 @@ async def recover_bot(
             - 'restart_strategy': Re-initialize current strategy
             - 'reset_knowledge': Clear and rebuild knowledge base
             - 'change_strategy': Switch strategy (requires strategy_name parameter)
-            - 'manual_command': Send game command (requires command parameter)
+            - 'manual_command': Send single-key command (requires command parameter, no CR appended)
+            - 'send_line': Send text input with CR/Enter (requires command parameter, for passwords/amounts)
         strategy_name: Strategy name for 'change_strategy' action
-        command: Game command for 'manual_command' action
+        command: Game command for 'manual_command' or text for 'send_line'
 
     Returns:
         Recovery status and results
@@ -273,7 +274,7 @@ async def recover_bot(
                 }
 
             case "manual_command":
-                # Send game command via session
+                # Send game command via session (no CR appended - use for single-key commands)
                 if not command:
                     return {
                         "success": False,
@@ -287,10 +288,31 @@ async def recover_bot(
                     }
 
                 await bot.session.send(command)
-                logger.info(f"Manual command sent: {command}")
+                logger.info(f"Manual command sent: {command!r}")
                 return {
                     "success": True,
-                    "message": f"Command sent: {command}",
+                    "message": f"Command sent: {command!r}",
+                }
+
+            case "send_line":
+                # Send text input with CR (for passwords, amounts, names, etc.)
+                if not command:
+                    return {
+                        "success": False,
+                        "error": "command parameter required for send_line",
+                    }
+
+                if not bot.session:
+                    return {
+                        "success": False,
+                        "error": "No active session to send command",
+                    }
+
+                await bot.session.send(command + "\r")
+                logger.info(f"Line sent: {command!r}")
+                return {
+                    "success": True,
+                    "message": f"Line sent: {command!r}",
                 }
 
             case _:

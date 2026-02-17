@@ -519,7 +519,7 @@ async def bbs_wait_for_prompt(
 
 
 @app.tool()
-async def bbs_send(keys: str) -> str:
+async def bbs_send(keys: str, force: bool = False) -> str:
     """Send keystrokes (include control codes like \\r or \\x1b).
 
     Escape sequences are decoded before sending:
@@ -528,13 +528,17 @@ async def bbs_send(keys: str) -> str:
     - \\t -> tab
     - \\x## -> hex byte (e.g., \\x1b for ESC)
     - \\\\ -> literal backslash
+
+    Args:
+        keys: The keys to send
+        force: If True, bypass flow control and send immediately (use with caution)
     """
     _, session = await _get_session()
 
     # Decode escape sequences (e.g., literal "\\r" -> actual CR)
     decoded_keys = decode_escape_sequences(keys)
 
-    log.debug("bbs_send", keys_raw=keys, keys_decoded=repr(decoded_keys), keys_len=len(decoded_keys))
+    log.debug("bbs_send", keys_raw=keys, keys_decoded=repr(decoded_keys), keys_len=len(decoded_keys), force=force)
 
     normalized = decoded_keys.replace("\r\n", "\n")
     newline_count = normalized.count("\n") + normalized.count("\r")
@@ -547,7 +551,7 @@ async def bbs_send(keys: str) -> str:
     ):
         return "error: newline must be the final character in a send"
 
-    if session.is_awaiting_read():
+    if not force and session.is_awaiting_read():
         return "error: send blocked until remote output arrives (one prompt -> one input -> wait)"
 
     try:
