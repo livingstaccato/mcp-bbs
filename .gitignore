@@ -69,6 +69,11 @@ sessions/
 *.jsonl
 games/tw2002/session.jsonl
 
+<<<<<<< Updated upstream
 # Local Playwright MCP artifacts
 .playwright-mcp/
 logs/
+=======
+.gemini/
+gha-creds-*.json
+>>>>>>> Stashed changes
